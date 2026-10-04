@@ -97,15 +97,13 @@ export default function MachineMenu({
           }}
         />
       )}
-      {node.expired && modal === "expire" ? undefined : (
-        <Expire
-          isOpen={modal === "expire"}
-          machine={node}
-          setIsOpen={(isOpen) => {
-            if (!isOpen) setModal(null);
-          }}
-        />
-      )}
+      <Expire
+        isOpen={modal === "expire"}
+        machine={node}
+        setIsOpen={(isOpen) => {
+          if (!isOpen) setModal(null);
+        }}
+      />
 
       {supportsTailscaleSSH ? (
         isFullButton ? (
@@ -189,11 +187,12 @@ export default function MachineMenu({
             <MenuItem onClick={() => setModal("move")}>{t("machines.menu.changeOwner")}</MenuItem>
           )}
           <MenuSeparator />
-          {!isNoExpiry(node.expiry) && (
-            <MenuItem variant="danger" disabled={node.expired} onClick={() => setModal("expire")}>
-              {t("machines.menu.expire")}
-            </MenuItem>
-          )}
+          {/* The chooser also offers "never" and "default", so it stays
+              reachable for machines that currently have no expiry (and for
+              expired ones, where it is how you give the key a new date). */}
+          <MenuItem variant="danger" onClick={() => setModal("expire")}>
+            {t("machines.menu.expire")}
+          </MenuItem>
           <MenuItem variant="danger" onClick={() => setModal("remove")}>
             {t("machines.menu.remove")}
           </MenuItem>

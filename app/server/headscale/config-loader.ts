@@ -127,6 +127,29 @@ const extraRecordsConflictSchema = v.object({
   ),
 });
 
+export interface OIDCSettingsView {
+  issuer: string;
+  clientId: string;
+  // The secret itself is never returned to the browser; the page only needs to
+  // know whether one is configured.
+  hasClientSecret: boolean;
+  scope: string[];
+  emailVerifiedRequired: boolean;
+  useExpiryFromToken: boolean;
+  onlyStartIfOIDCIsAvailable: boolean;
+  pkceEnabled: boolean;
+  pkceMethod: string;
+  allowedDomains: string[];
+  allowedGroups: string[];
+  allowedUsers: string[];
+}
+
+export interface TailnetSettingsView {
+  policyMode: "file" | "database";
+  policyPath: string;
+  trustedProxies: string[];
+}
+
 interface HeadscaleConfigState {
   document?: Document;
   config: unknown;
@@ -143,6 +166,8 @@ interface HeadscaleConfig {
   getMagicDNSBaseDomain: () => string | undefined;
   getOIDCConfig: () => OIDCConfigView | undefined;
   hasOIDCConfig: () => boolean;
+  getOIDCSettings: () => OIDCSettingsView | undefined;
+  getTailnetSettings: () => TailnetSettingsView;
   dnsRecords: () => DNSRecord[];
   patch: (patches: PatchConfig[]) => Promise<void>;
   addDNS: (record: DNSRecord) => Promise<boolean | void>;
@@ -171,6 +196,8 @@ function createHeadscaleConfig(
     getMagicDNSBaseDomain: () => getMagicDNSBaseDomain(state),
     getOIDCConfig: () => getOIDCConfig(state),
     hasOIDCConfig: () => hasOIDCConfig(state),
+    getOIDCSettings: () => getOIDCSettings(state),
+    getTailnetSettings: () => getTailnetSettings(state),
     dnsRecords: () => dnsRecords(state),
     patch: (patches) => patchHeadscaleConfig(state, patches),
     addDNS: (record) => addDNS(state, record),
@@ -220,6 +247,73 @@ function getOIDCConfig(config: HeadscaleConfigState): OIDCConfigView | undefined
 
 function hasOIDCConfig(config: HeadscaleConfigState) {
   return getOIDCConfig(config) !== undefined;
+}
+
+// The full OIDC block, for the settings page. Values are read defensively so a
+// hand-written config with unexpected types cannot break the page.
+function getOIDCSettings(config: HeadscaleConfigState): OIDCSettingsView | undefined {
+  const root = readObject(config.config);
+  const oidc = root ? readObject(root.oidc) : undefined;
+  if (!oidc) {
+    return undefined;
+  }
+
+  const pkce = readObject(oidc.pkce);
+  const scope = readStringList(oidc.scope);
+  return {
+    issuer: readString(oidc.issuer),
+    clientId: readString(oidc.client_id),
+    hasClientSecret:
+      readString(oidc.client_secret).length > 0 || readString(oidc.client_secret_path).length > 0,
+    // Headscale defaults these to the OIDC standard scopes.
+    scope: scope.length > 0 ? scope : ["openid", "profile", "email"],
+    emailVerifiedRequired: readBoolean(oidc.email_verified_required, true),
+    useExpiryFromToken: readBoolean(oidc.use_expiry_from_token, false),
+    // Headscale defaults `only_start_if_oidc_is_available` to true.
+    onlyStartIfOIDCIsAvailable: readBoolean(oidc.only_start_if_oidc_is_available, true),
+    pkceEnabled: pkce ? readBoolean(pkce.enabled, false) : false,
+    pkceMethod: pkce ? readString(pkce.method, "S256") : "S256",
+    allowedDomains: readStringList(oidc.allowed_domains),
+    allowedGroups: readStringList(oidc.allowed_groups),
+    allowedUsers: readStringList(oidc.allowed_users),
+  };
+}
+
+// Tailnet-wide settings that live outside `dns` and `oidc`.
+function getTailnetSettings(config: HeadscaleConfigState): TailnetSettingsView {
+  const root = readObject(config.config) ?? {};
+  const policy = readObject(root.policy) ?? {};
+
+  return {
+    policyMode: readString(policy.mode, "file") === "database" ? "database" : "file",
+    policyPath: readString(policy.path),
+    trustedProxies: readStringList(root.trusted_proxies),
+  };
+}
+
+function readObject(value: unknown): Record<string, unknown> | undefined {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function readString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function readStringList(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string");
 }
 
 function dnsRecords(config: HeadscaleConfigState) {

@@ -176,4 +176,114 @@ describe("Headscale config loader", () => {
     expect(config.getOIDCConfig()).toBeUndefined();
     expect(config.hasOIDCConfig()).toBe(false);
   });
+
+  test("exposes the full OIDC block with Headscale's defaults", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "oidc:",
+        "  issuer: https://issuer.example.com",
+        "  client_id: headplane",
+        "  client_secret_path: /run/secrets/oidc",
+        "  use_expiry_from_token: true",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getOIDCSettings()).toEqual({
+      issuer: "https://issuer.example.com",
+      clientId: "headplane",
+      // A secret file counts as "configured"; the value itself is never read.
+      hasClientSecret: true,
+      scope: ["openid", "profile", "email"],
+      emailVerifiedRequired: true,
+      useExpiryFromToken: true,
+      onlyStartIfOIDCIsAvailable: true,
+      pkceEnabled: false,
+      pkceMethod: "S256",
+      allowedDomains: [],
+      allowedGroups: [],
+      allowedUsers: [],
+    });
+  });
+
+  test("reads hand-written OIDC values verbatim", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "oidc:",
+        "  issuer: https://issuer.example.com",
+        "  client_id: headplane",
+        "  client_secret: super-secret",
+        "  scope: [openid, email]",
+        "  email_verified_required: false",
+        "  only_start_if_oidc_is_available: false",
+        "  pkce:",
+        "    enabled: true",
+        "    method: plain",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    const settings = config.getOIDCSettings();
+
+    expect(settings).toMatchObject({
+      clientId: "headplane",
+      hasClientSecret: true,
+      scope: ["openid", "email"],
+      emailVerifiedRequired: false,
+      onlyStartIfOIDCIsAvailable: false,
+      pkceEnabled: true,
+      pkceMethod: "plain",
+    });
+    // The secret is never handed to the UI.
+    expect(JSON.stringify(settings)).not.toContain("super-secret");
+  });
+
+  test("reports no OIDC settings when the block is missing", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getOIDCSettings()).toBeUndefined();
+  });
+
+  test("reads the tailnet settings Headplane can now edit", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "policy:",
+        "  mode: database",
+        "  path: /etc/headscale/policy.hujson",
+        "trusted_proxies:",
+        "  - 10.0.0.0/8",
+        "  - 127.0.0.1/32",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getTailnetSettings()).toEqual({
+      policyMode: "database",
+      policyPath: "/etc/headscale/policy.hujson",
+      trustedProxies: ["10.0.0.0/8", "127.0.0.1/32"],
+    });
+  });
+
+  test("defaults to file policy mode and no trusted proxies", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getTailnetSettings()).toEqual({
+      policyMode: "file",
+      policyPath: "",
+      trustedProxies: [],
+    });
+  });
 });

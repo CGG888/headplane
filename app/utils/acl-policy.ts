@@ -25,13 +25,38 @@ export interface SshRule {
 // The SSH actions the editor offers; anything else is kept and shown as-is.
 export const KNOWN_SSH_ACTIONS = ["accept", "check"];
 
+// Grants are the modern replacement for `acls`: `ip` selects the ports.
+export interface GrantRule {
+  src: string[];
+  dst: string[];
+  ip: string[];
+  extra: Record<string, unknown>;
+}
+
+// Automatic route approval: `routes` maps a subnet to the users/tags that may
+// advertise it without manual approval, `exitNode` lists the same for exit nodes.
+export interface AutoApprovers {
+  routes: Record<string, string[]>;
+  exitNode: string[];
+  extra: Record<string, unknown>;
+}
+
+export interface NodeAttr {
+  target: string[];
+  attr: string[];
+  extra: Record<string, unknown>;
+}
+
 export interface Policy {
   groups: Record<string, string[]>;
   tagOwners: Record<string, string[]>;
   hosts: Record<string, string>;
   acls: AclRule[];
   ssh: SshRule[];
-  // Top-level keys Headplane does not model (autoApprovers, nodeAttrs, ...)
+  grants: GrantRule[];
+  autoApprovers: AutoApprovers;
+  nodeAttrs: NodeAttr[];
+  // Top-level keys Headplane does not model (postures, ipSets, ...)
   extra: Record<string, unknown>;
   // The order the top-level keys appeared in, so serializing keeps it.
   keyOrder: string[];
@@ -47,11 +72,23 @@ export const EMPTY_POLICY: Policy = {
   hosts: {},
   acls: [],
   ssh: [],
+  grants: [],
+  autoApprovers: { routes: {}, exitNode: [], extra: {} },
+  nodeAttrs: [],
   extra: {},
   keyOrder: [],
 };
 
-const KNOWN_KEYS = ["groups", "tagOwners", "hosts", "acls", "ssh"];
+export const KNOWN_KEYS = [
+  "groups",
+  "tagOwners",
+  "hosts",
+  "acls",
+  "ssh",
+  "grants",
+  "autoApprovers",
+  "nodeAttrs",
+];
 
 export function parsePolicy(raw: string): ParseResult {
   if (raw.trim().length === 0) {
@@ -90,6 +127,9 @@ export function parsePolicy(raw: string): ParseResult {
       hosts: toStringMap(record.hosts),
       acls: toAclRules(record.acls),
       ssh: toSshRules(record.ssh),
+      grants: toGrantRules(record.grants),
+      autoApprovers: toAutoApprovers(record.autoApprovers),
+      nodeAttrs: toNodeAttrs(record.nodeAttrs),
       extra,
       keyOrder: Object.keys(record),
     },
@@ -105,6 +145,11 @@ export function serializePolicy(policy: Policy): string {
   if (Object.keys(policy.hosts).length > 0) sections.hosts = policy.hosts;
   if (policy.acls.length > 0) sections.acls = policy.acls.map(compactAclRule);
   if (policy.ssh.length > 0) sections.ssh = policy.ssh.map(compactSshRule);
+  if (policy.grants.length > 0) sections.grants = policy.grants.map(compactGrantRule);
+  if (hasAutoApprovers(policy.autoApprovers)) {
+    sections.autoApprovers = compactAutoApprovers(policy.autoApprovers);
+  }
+  if (policy.nodeAttrs.length > 0) sections.nodeAttrs = policy.nodeAttrs.map(compactNodeAttr);
   for (const [key, value] of Object.entries(policy.extra)) {
     sections[key] = value;
   }
@@ -385,10 +430,81 @@ function extraKeys(entry: Record<string, unknown>, known: string[]): Record<stri
   return out;
 }
 
+const GRANT_KEYS = ["src", "dst", "ip"];
+const AUTO_APPROVER_KEYS = ["routes", "exitNode"];
+const NODE_ATTR_KEYS = ["target", "attr"];
+
+function toGrantRules(value: unknown): GrantRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => entry != null && typeof entry === "object")
+    .map((entry) => ({
+      src: toStringList(entry.src),
+      dst: toStringList(entry.dst),
+      ip: toStringList(entry.ip),
+      extra: extraKeys(entry, GRANT_KEYS),
+    }));
+}
+
+function toAutoApprovers(value: unknown): AutoApprovers {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return { routes: {}, exitNode: [], extra: {} };
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    routes: toStringListMap(record.routes),
+    exitNode: toStringList(record.exitNode),
+    extra: extraKeys(record, AUTO_APPROVER_KEYS),
+  };
+}
+
+function toNodeAttrs(value: unknown): NodeAttr[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => entry != null && typeof entry === "object")
+    .map((entry) => ({
+      target: toStringList(entry.target),
+      attr: toStringList(entry.attr),
+      extra: extraKeys(entry, NODE_ATTR_KEYS),
+    }));
+}
+
 function compactAclRule(rule: AclRule): Record<string, unknown> {
   const out: Record<string, unknown> = { action: rule.action, src: rule.src, dst: rule.dst };
   if (rule.proto) out.proto = rule.proto;
   return { ...out, ...rule.extra };
+}
+
+export function hasAutoApprovers(autoApprovers: AutoApprovers): boolean {
+  return (
+    Object.keys(autoApprovers.routes).length > 0 ||
+    autoApprovers.exitNode.length > 0 ||
+    Object.keys(autoApprovers.extra).length > 0
+  );
+}
+
+function compactGrantRule(rule: GrantRule): Record<string, unknown> {
+  const out: Record<string, unknown> = { src: rule.src, dst: rule.dst };
+  if (rule.ip.length > 0) out.ip = rule.ip;
+  return { ...out, ...rule.extra };
+}
+
+function compactAutoApprovers(autoApprovers: AutoApprovers): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (Object.keys(autoApprovers.routes).length > 0) out.routes = autoApprovers.routes;
+  if (autoApprovers.exitNode.length > 0) out.exitNode = autoApprovers.exitNode;
+  return { ...out, ...autoApprovers.extra };
+}
+
+function compactNodeAttr(attr: NodeAttr): Record<string, unknown> {
+  return { target: attr.target, attr: attr.attr, ...attr.extra };
 }
 
 function compactSshRule(rule: SshRule): Record<string, unknown> {

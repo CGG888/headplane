@@ -21,6 +21,12 @@ export interface NodeApi {
   setTags(id: string, tags: string[]): Promise<void>;
   toggleExpiry(nodeId: string, disableExpiry: boolean): Promise<void>;
   /**
+   * Set an explicit expiry timestamp for a node. The `expiry` field exists on
+   * `POST /api/v1/node/{node_id}/expire` in every Headscale release Headplane
+   * supports (0.27.0+).
+   */
+  setExpiry(nodeId: string, expiry: Date): Promise<void>;
+  /**
    * Reassign a node to a different user. Only present when
    * `capabilities.nodeOwnerIsImmutable` is false (Headscale < 0.28).
    */
@@ -109,6 +115,17 @@ export function makeNodeApi(
       await transport.request({
         method: "POST",
         path: `v1/node/${nodeId}/expire?disableExpiry=${disableExpiry}`,
+        apiKey,
+      });
+    },
+    setExpiry: async (nodeId, expiry) => {
+      // Headscale's REST gateway binds `expiry` as a query parameter for this
+      // endpoint (the proto request has no `body` annotation), so it travels in
+      // the path like `disableExpiry` above rather than as a JSON body.
+      // https://github.com/juanfont/headscale/blob/v0.29.4/gen/openapiv2/headscale/v1/headscale.swagger.json
+      await transport.request({
+        method: "POST",
+        path: `v1/node/${nodeId}/expire?expiry=${encodeURIComponent(expiry.toISOString())}`,
         apiKey,
       });
     },

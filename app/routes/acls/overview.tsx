@@ -4,6 +4,7 @@ import {
   Eye,
   FlaskConical,
   Pencil,
+  Route as RouteIcon,
   Shield,
   TagsIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { aclLoader } from "./acl-loader";
 import Fallback from "./components/fallback";
 import RulesEditor from "./components/rules-editor";
 import TagsGroupsEditor from "./components/tags-groups-editor";
+import TailnetPolicyEditor from "./components/tailnet-policy-editor";
 
 const LazyEditor = lazy(() =>
   import("./components/cm.client").then((m) => ({ default: m.Editor })),
@@ -162,6 +164,12 @@ export default function Page({
               <span>{t("acls.editor.tabs.rules")}</span>
             </div>
           </TabsTab>
+          <TabsTab value="grants">
+            <div className="flex items-center gap-2">
+              <RouteIcon className="p-1" />
+              <span>{t("acls.editor.tabs.grants")}</span>
+            </div>
+          </TabsTab>
           <TabsTab value="tags">
             <div className="flex items-center gap-2">
               <TagsIcon className="p-1" />
@@ -190,6 +198,17 @@ export default function Page({
         <TabsPanel value="rules">
           {structuredPanel((value) => (
             <RulesEditor
+              destinations={destinations}
+              isDisabled={disabled}
+              onChange={applyPolicy}
+              policy={value}
+              sources={sources}
+            />
+          ))}
+        </TabsPanel>
+        <TabsPanel value="grants">
+          {structuredPanel((value) => (
+            <TailnetPolicyEditor
               destinations={destinations}
               isDisabled={disabled}
               onChange={applyPolicy}

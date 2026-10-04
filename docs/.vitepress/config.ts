@@ -57,6 +57,8 @@ export default defineConfig({
                 items: [{ text: "Proxy Authentication", link: "/features/proxy-auth" }],
               },
               { text: "Access Control", link: "/features/acls" },
+              { text: "API Keys", link: "/features/api-keys" },
+              { text: "Headscale Settings", link: "/features/headscale-settings" },
               { text: "Headplane Agent", link: "/features/agent" },
               { text: "Browser SSH", link: "/features/ssh" },
               { text: "Languages", link: "/features/languages" },

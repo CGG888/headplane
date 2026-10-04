@@ -45,6 +45,16 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
         </div>
       </Link>
       <div className="flex w-full flex-col sm:w-2/3">
+        <h1 className="mb-4 text-2xl font-medium">{t("settings.overview.apiKeysTitle")}</h1>
+        <p>{t("settings.overview.apiKeysBody")}</p>
+      </div>
+      <Link to="/settings/api-keys">
+        <div className="flex items-center text-lg font-medium">
+          {t("settings.overview.manageApiKeys")}
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </div>
+      </Link>
+      <div className="flex w-full flex-col sm:w-2/3">
         <h1 className="mb-4 text-2xl font-medium">{t("settings.overview.agentTitle")}</h1>
         <p>{t("settings.overview.agentBody")}</p>
       </div>
@@ -54,6 +64,20 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
           <ArrowRight className="ml-2 h-5 w-5" />
         </div>
       </Link>
+      {config ? (
+        <>
+          <div className="flex w-full flex-col sm:w-2/3">
+            <h1 className="mb-4 text-2xl font-medium">{t("settings.overview.headscaleTitle")}</h1>
+            <p>{t("settings.overview.headscaleBody")}</p>
+          </div>
+          <Link to="/settings/headscale">
+            <div className="flex items-center text-lg font-medium">
+              {t("settings.overview.manageHeadscale")}
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </div>
+          </Link>
+        </>
+      ) : undefined}
       {config && isOidcEnabled ? (
         <>
           <div className="flex w-full flex-col sm:w-2/3">

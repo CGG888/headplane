@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   asUserReference,
+  EMPTY_POLICY,
   groupsForUser,
   hasPortSpec,
   isValidGroupName,
@@ -34,7 +35,18 @@ const POLICY = `{
     { "action": "check", "src": ["group:ops"], "dst": ["tag:server"], "users": ["root"], "checkPeriod": "12h" }
   ],
   "autoApprovers": {
-    "routes": { "10.0.0.0/8": ["group:ops"] }
+    "routes": { "10.0.0.0/8": ["group:ops"] },
+    "exitNode": ["group:ops"]
+  },
+  "grants": [
+    { "src": ["group:eng"], "dst": ["tag:server"], "ip": ["tcp:443"] }
+  ],
+  "nodeAttrs": [
+    { "target": ["tag:server"], "attr": ["drive:share"] }
+  ],
+  // A top-level key Headplane does not model at all
+  "postures": {
+    "posture:latest": ["node:latest"]
   }
 }`;
 
@@ -49,15 +61,7 @@ function parseOrThrow(raw: string) {
 describe("parsePolicy", () => {
   test("parses an empty policy into an empty model", () => {
     const result = parseOrThrow("");
-    expect(result.policy).toEqual({
-      groups: {},
-      tagOwners: {},
-      hosts: {},
-      acls: [],
-      ssh: [],
-      extra: {},
-      keyOrder: [],
-    });
+    expect(result.policy).toEqual(EMPTY_POLICY);
     expect(result.hasComments).toBe(false);
   });
 
@@ -100,6 +104,39 @@ describe("parsePolicy", () => {
         extra: {},
       },
     ]);
+    expect(policy.grants).toEqual([
+      { src: ["group:eng"], dst: ["tag:server"], ip: ["tcp:443"], extra: {} },
+    ]);
+    expect(policy.autoApprovers).toEqual({
+      routes: { "10.0.0.0/8": ["group:ops"] },
+      exitNode: ["group:ops"],
+      extra: {},
+    });
+    expect(policy.nodeAttrs).toEqual([
+      { target: ["tag:server"], attr: ["drive:share"], extra: {} },
+    ]);
+  });
+
+  test("round-trips grants, autoApprovers and nodeAttrs", () => {
+    const { policy } = parseOrThrow(POLICY);
+    const serialized = serializePolicy(policy);
+    const reparsed = parseOrThrow(serialized);
+
+    expect(reparsed.policy.grants).toEqual(policy.grants);
+    expect(reparsed.policy.autoApprovers).toEqual(policy.autoApprovers);
+    expect(reparsed.policy.nodeAttrs).toEqual(policy.nodeAttrs);
+    // Unknown keys inside a modelled section survive too.
+    expect(serialized).toContain('"ip": ["tcp:443"]');
+  });
+
+  test("keeps unknown keys inside grants and nodeAttrs", () => {
+    const { policy } = parseOrThrow(`{
+      "grants": [{ "src": ["alice@"], "dst": ["tag:web"], "srcPosture": ["posture:latest"] }],
+      "nodeAttrs": [{ "target": ["tag:web"], "attr": ["drive:share"], "comment": "keep me" }]
+    }`);
+
+    expect(policy.grants[0].extra).toEqual({ srcPosture: ["posture:latest"] });
+    expect(policy.nodeAttrs[0].extra).toEqual({ comment: "keep me" });
   });
 
   test("keeps rule actions and unknown rule keys as they were written", () => {
@@ -128,7 +165,7 @@ describe("parsePolicy", () => {
   test("keeps unknown top-level keys in extra", () => {
     const { policy } = parseOrThrow(POLICY);
     expect(policy.extra).toEqual({
-      autoApprovers: { routes: { "10.0.0.0/8": ["group:ops"] } },
+      postures: { "posture:latest": ["node:latest"] },
     });
   });
 

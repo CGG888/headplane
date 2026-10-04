@@ -220,7 +220,20 @@ const en = {
     },
     expire: {
       title: "Expire {name}",
-      body: "This will disconnect the machine from your Tailnet. In order to reconnect, you will need to re-authenticate from the device.",
+      body: "Key expiry controls when this machine must re-authenticate to stay connected to your Tailnet.",
+      modeLabel: "Key expiry",
+      modeNever: "Never expires",
+      modeNeverBody: "This machine will never need to re-authenticate.",
+      modeDefault: "Default expiry",
+      modeDefaultBody: "Use Headscale's default behaviour and expire the key now.",
+      modeCustom: "Specific date and time",
+      modeCustomBody: "Choose exactly when this machine's key expires.",
+      dateLabel: "Expiration date",
+      dateDescription: "The machine must re-authenticate after this date to stay connected.",
+      errors: {
+        invalidDate: "Enter a valid date and time.",
+        pastDate: "The expiration must be in the future.",
+      },
     },
     routes: {
       title: "Edit route settings of {name}",
@@ -430,6 +443,7 @@ const en = {
       noChanges: "No changes",
       tabs: {
         rules: "Rules",
+        grants: "Grants",
         tagsGroups: "Tags & Groups",
         editFile: "Edit file",
         diff: "Preview changes",
@@ -562,6 +576,79 @@ const en = {
       description: "Named IP addresses and CIDR ranges that can be referenced from rules.",
       empty: "No hosts are defined yet.",
     },
+    grants: {
+      title: "Grants",
+      description:
+        "Grants are the modern replacement for access rules: the destination decides where traffic goes and the ip list decides which ports are allowed.",
+      empty: "No grants are defined yet.",
+    },
+    grantRule: {
+      editTitle: "Edit grant",
+      newTitle: "New grant",
+      body: "A grant allows traffic from a set of sources to a set of destinations. Unlike access rules, ports are chosen by the ip list instead of the destination.",
+      sourcesDescription:
+        "Groups, tags, hosts, users or autogroups allowed to initiate the connection.",
+      sourcesPlaceholder: "group:eng",
+      destinationsDescription:
+        "Where the traffic is allowed to go. Unlike access rules, no port is appended here.",
+      destinationsPlaceholder: "tag:web",
+      ipLabel: "IPs and ports",
+      ipDescription:
+        "Ports this grant allows, optionally prefixed with tcp: or udp:, for example tcp:443, 80,443 or 1000-2000.",
+      ipPlaceholder: "tcp:443",
+      ipEmpty: "No ports yet",
+      ipRequired: "A grant without an app must allow at least one port.",
+      appNote: "This grant defines an app, so the port list may stay empty.",
+    },
+    autoApprovers: {
+      title: "Auto-approvers",
+      description:
+        "Users, groups and tags that may advertise a subnet route or an exit node without manual approval.",
+      routesEmpty: "No subnet routes are auto-approved yet.",
+      exitNodeLabel: "Exit nodes",
+      noApprovers: "No approvers",
+    },
+    autoApprover: {
+      editTitle: "Edit auto-approved route {route}",
+      newTitle: "New auto-approved route",
+      body: "Anyone listed here can advertise this subnet route without an administrator approving it.",
+      routeLabel: "Route",
+      routePlaceholder: "10.0.0.0/24",
+      routeInvalid: "Enter an IPv4 or IPv6 CIDR range, for example 10.0.0.0/24.",
+      duplicate: "This route already has auto-approvers.",
+      approversLabel: "Approvers",
+      approversDescription: "Users, groups or tags allowed to advertise this route.",
+      approversEmpty: "No approvers yet",
+      approversPlaceholder: "group:admin",
+    },
+    exitNode: {
+      editTitle: "Edit exit node approvers",
+      body: "Anyone listed here can advertise an exit node without an administrator approving it.",
+      approversLabel: "Approvers",
+      approversDescription: "Users, groups or tags allowed to advertise an exit node.",
+      approversEmpty: "No approvers yet",
+      approversPlaceholder: "group:admin",
+    },
+    nodeAttrs: {
+      title: "Node attributes",
+      description:
+        "Node attributes enable features on the nodes, users, groups or tags they target.",
+      empty: "No node attributes are defined yet.",
+    },
+    nodeAttr: {
+      editTitle: "Edit node attribute",
+      newTitle: "New node attribute",
+      body: "Attributes are applied to every node matched by a target, for example drive:share or magicdns-aaaa.",
+      targetsLabel: "Targets",
+      targetsDescription: "Nodes, users, groups or tags that receive these attributes.",
+      targetsPlaceholder: "tag:server",
+      targetsEmpty: "No targets yet",
+      attrsLabel: "Attributes",
+      attrsDescription:
+        "For example drive:share or magicdns-aaaa. Replace the profile in nextdns:<profile> with a real NextDNS profile ID.",
+      attrsPlaceholder: "drive:share",
+      attrsEmpty: "No attributes yet",
+    },
   },
   dns: {
     readOnlyNotice:
@@ -638,6 +725,10 @@ const en = {
         "Headscale fully supports pre-authentication keys in order to easily add devices to your Tailnet. To learn more about using pre-authentication keys, visit the {link}",
       tailscaleDocs: "Tailscale documentation",
       manageAuthKeys: "Manage Auth Keys",
+      apiKeysTitle: "API Keys",
+      apiKeysBody:
+        "API keys let tools and integrations authenticate against the Headscale API. The full key is shown only once, when it is created.",
+      manageApiKeys: "Manage API Keys",
       agentTitle: "Headplane Agent",
       agentBody:
         "The Headplane Agent syncs node information like OS version and connectivity details from your Tailnet.",
@@ -646,6 +737,89 @@ const en = {
       restrictionsBody:
         "Headscale supports restricting OIDC authentication to only allow certain email domains, groups, or users to authenticate. This can be used to limit access to your Tailnet to only certain users or groups and Headplane will also respect these settings when authenticating. {link}",
       manageRestrictions: "Manage Restrictions",
+      headscaleTitle: "Headscale Settings",
+      headscaleBody:
+        "Edit the parts of Headscale's own configuration file that Headplane can safely change: OpenID Connect, trusted proxies, and where the Access Control policy is stored.",
+      manageHeadscale: "Manage Headscale Settings",
+    },
+    headscale: {
+      breadcrumb: "Headscale Settings",
+      title: "Headscale Settings",
+      body: "These settings are written directly to Headscale's config.yaml, and only take effect after Headscale is restarted.",
+      notWritableTitle: "Configuration Locked",
+      notWritableBody:
+        "Headplane can only change these settings when Headscale's configuration file is mounted read-write. Mount {file} into the Headplane container with write access and restart Headplane.",
+      readOnlyTitle: "Read-only Access",
+      oidcTitle: "OpenID Connect",
+      oidcBody:
+        "Sign-in through your identity provider. The permitted email domains, groups, and users are managed on the {link} page.",
+      restrictionsLink: "Authentication Restrictions",
+      oidcMissingTitle: "OIDC Is Not Configured",
+      oidcMissingBody:
+        "Headscale has no oidc: block in its configuration file yet. Saving this form creates one.",
+      issuerLabel: "Issuer",
+      issuerDescription:
+        "The discovery URL of your identity provider, for example https://accounts.example.com. Leave it empty to disable OIDC.",
+      clientIdLabel: "Client ID",
+      clientSecretLabel: "Client Secret",
+      clientSecretSet:
+        "A client secret is already configured. Leave this field empty to keep the current secret.",
+      clientSecretUnset: "No client secret is configured yet.",
+      scopeLabel: "Scope",
+      scopeDescription: "Scopes requested from the provider, separated by commas or spaces.",
+      emailVerifiedRequiredLabel: "Require verified email",
+      emailVerifiedRequiredDescription:
+        "Only accept sign-ins whose email address the provider reports as verified.",
+      useExpiryFromTokenLabel: "Use expiry from token",
+      useExpiryFromTokenDescription:
+        "Take the node expiry from the OIDC token instead of the Headscale defaults.",
+      onlyStartIfOidcLabel: "Only start if OIDC is available",
+      onlyStartIfOidcDescription:
+        "Refuse to start Headscale when the identity provider cannot be reached.",
+      pkceEnabledLabel: "Enable PKCE",
+      pkceEnabledDescription: "Use Proof Key for Code Exchange when talking to the provider.",
+      pkceMethodLabel: "PKCE method",
+      pkceMethodPlain: "plain",
+      pkceMethodS256: "S256",
+      saveOidc: "Save OIDC settings",
+      trustedProxiesTitle: "Trusted Proxies",
+      trustedProxiesBody:
+        "Address ranges whose X-Forwarded-For headers Headscale trusts. Add the addresses your reverse proxy connects from; headers from anywhere else are ignored.",
+      trustedProxiesEmpty: "No trusted proxies are configured.",
+      addProxy: "Add proxy",
+      proxyLabel: "CIDR",
+      proxyPlaceholder: "10.0.0.0/8",
+      removeProxy: "Remove",
+      policyTitle: "Policy Mode",
+      policyBody: "Where Headscale reads its Access Control policy from.",
+      policyModeLabel: "Mode",
+      policyModeFile: "File",
+      policyModeFileDescription:
+        "Headscale reads the policy from the file below. The Access Control editor cannot save through the API.",
+      policyModeDatabase: "Database",
+      policyModeDatabaseDescription:
+        "Headscale stores the policy in its database, so the Access Control editor can save through the API.",
+      policyPathLabel: "Policy path",
+      policyWarning:
+        "Switching the mode does not copy the policy. When you switch from file to database, the policy starts out empty (which allows everything) until you import it with {command} after restarting Headscale. Every change here needs a Headscale restart.",
+      savePolicy: "Save policy mode",
+      saved: "Saved.",
+      fatalTitle: "Unsupported OIDC keys",
+      fatalBody:
+        "This configuration still contains {keys}. Headscale 0.29 refuses to start when any of these keys are present; remove them and set node lifetime with the top-level {setting} instead.",
+      errors: {
+        invalidAction: "The request was invalid. Reload the page and try again.",
+        invalidIssuer: "Enter a valid http(s) issuer URL, or leave it empty to disable OIDC.",
+        invalidClientId: "An issuer requires the client ID registered with your identity provider.",
+        invalidScope: "Enter at least one scope, for example openid profile email.",
+        invalidPkceMethod: "Choose either plain or S256 as the PKCE method.",
+        invalidCidr: "Enter a valid IPv4 or IPv6 CIDR, for example 10.0.0.0/8.",
+        unspecifiedCidr:
+          "Headscale treats 0.0.0.0/0 and ::/0 as a configuration error, and trusting every address would defeat the purpose of this setting.",
+        duplicateProxy: "This CIDR is already in the trusted list.",
+        proxyNotFound: "This CIDR is not in the trusted proxy list.",
+        invalidPolicyMode: "Choose either the file or the database policy mode.",
+      },
     },
     agent: {
       title: "Headplane Agent",
@@ -665,6 +839,34 @@ const en = {
       syncErrorTitle: "Sync Error",
       syncing: "Syncing…",
       syncNow: "Sync Now",
+    },
+    apiKeys: {
+      breadcrumb: "API Keys",
+      title: "API Keys",
+      body: "API keys authenticate tools against the Headscale API. A key is only shown in full once, when it is created.",
+      create: "Create API key",
+      createTitle: "Create an API key",
+      createBody:
+        "Choose how long this key stays valid. The key is shown once, right after it is created.",
+      expirationLabel: "Key expiration (days)",
+      expirationDescription: "The key stops working after this many days.",
+      createdTitle: "API key created",
+      createdBody: "Copy this key now. It cannot be shown again after you close this dialog.",
+      empty: "No API keys have been created yet.",
+      prefix: "Prefix",
+      created: "Created",
+      expiration: "Expiration",
+      lastSeen: "Last seen",
+      never: "Never",
+      expire: "Expire key",
+      expireTitle: "Expire API key {prefix}?",
+      expireBody:
+        "Expiring this key immediately prevents it from authenticating with the Headscale API. This cannot be undone.",
+      errors: {
+        invalidExpiration: "Enter a whole number of days between 1 and 3650.",
+        invalidPrefix: "The API key prefix is missing or invalid.",
+        notFound: "No API key with this prefix was found. It may have already been removed.",
+      },
     },
     authKeys: {
       breadcrumb: "Pre-Auth Keys",
@@ -904,6 +1106,8 @@ const en = {
     },
   },
   errors: {
+    headscaleConfigNotWritable:
+      "Headplane cannot write to the Headscale configuration file. Mount it read-write and restart Headplane.",
     policyNotWritable:
       "Headscale is reading its ACL policy from a file, so the policy cannot be saved through the API. Ask your administrator to run Headscale with the `database` policy mode, or edit the policy file directly.",
     generic: {

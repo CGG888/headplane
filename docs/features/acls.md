@@ -65,6 +65,29 @@ Group membership can also be edited from the **Users** page: the row menu has an
 **Edit groups** entry, and the groups a user belongs to are shown under their
 name. Both surfaces write to the same `groups` section of the policy.
 
+## Grants, auto-approvers and node attributes
+
+Beyond ACL rules, the structured editor also covers the sections Headscale uses
+for its newer policy features:
+
+- **Grants** — the syntax Headscale recommends over `acls`. A grant is a
+  `src` → `dst` pair plus the `ip` it allows, written the way Headscale parses
+  it: `*`, a port (`443`), a list or range (`80,443`, `1000-2000`) or a protocol
+  and port (`tcp:443`, `udp:*`). An empty `ip` is only valid when the grant
+  carries an `app` field, which the editor keeps untouched but does not build.
+- **Auto-approvers** — subnet routes advertised by the listed users, groups or
+  tags are approved without an admin clicking anything, and the same list
+  controls who may advertise an exit node.
+- **Node attributes** — `nodeAttrs` grants a capability to a set of targets, for
+  example Taildrive (`drive:share`, `drive:access`), NextDNS
+  (`nextdns:<profile>`), MagicDNS AAAA records (`magicdns-aaaa`) or
+  `randomize-client-port`. Targets accept users, groups, tags, hosts, prefixes
+  and the `autogroup:*` values, exactly like an ACL source.
+
+Anything Headplane does not model inside these sections — a grant's `app` or
+`via`, a future key inside `autoApprovers`, and any unknown top-level section
+such as `postures` — is preserved verbatim when a policy is saved.
+
 ## Editing the file directly
 
 The **Edit file** tab is the original CodeMirror editor over the raw policy, and

@@ -1,4 +1,4 @@
-﻿import { data, redirect } from "react-router";
+import { data, redirect } from "react-router";
 
 import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -7,6 +7,12 @@ import { Capabilities } from "~/server/web/roles";
 import { normalizeRegistrationKey } from "~/utils/register-key";
 
 import type { Route } from "./+types/machine";
+
+/**
+ * Stable error codes returned to the machine expiry dialog. The UI maps these
+ * onto localized messages so the server never emits user-facing English text.
+ */
+export type MachineExpiryErrorCode = "invalidExpiry" | "expiryInPast";
 
 export async function machineAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
@@ -124,6 +130,51 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
       await api.nodes.toggleExpiry(nodeId, disableExpiry);
       await headscaleLiveStore.refresh(nodesResource, api);
       return { message: "Machine expired" };
+    }
+
+    case "set_expiry": {
+      // Three modes: "never" disables key expiry, "default" restores the
+      // Headscale default (a key that expires now), and "custom" pins an
+      // explicit timestamp chosen by the user.
+      const mode = formData.get("expiry_mode")?.toString();
+
+      if (mode === "never") {
+        await api.nodes.toggleExpiry(nodeId, true);
+      } else if (mode === "default") {
+        await api.nodes.toggleExpiry(nodeId, false);
+      } else if (mode === "custom") {
+        const raw = formData.get("expiry")?.toString();
+        const expiry = raw ? new Date(raw) : new Date(Number.NaN);
+        if (!raw || Number.isNaN(expiry.getTime())) {
+          return data(
+            { success: false as const, errorCode: "invalidExpiry" as const },
+            {
+              status: 400,
+            },
+          );
+        }
+
+        if (expiry.getTime() <= Date.now()) {
+          return data(
+            { success: false as const, errorCode: "expiryInPast" as const },
+            {
+              status: 400,
+            },
+          );
+        }
+
+        await api.nodes.setExpiry(nodeId, expiry);
+      } else {
+        return data(
+          { success: false as const, errorCode: "invalidExpiry" as const },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      await headscaleLiveStore.refresh(nodesResource, api);
+      return { success: true as const, message: "Machine expiry updated" };
     }
 
     case "update_tags": {
