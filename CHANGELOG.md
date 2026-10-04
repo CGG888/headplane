@@ -1,8 +1,12 @@
 # Next
 
+# 0.8.1 (October 4, 2026)
+
 ## Fixes
 
 - Fixed switching the language or color scheme when Headplane runs behind a reverse proxy that drops the body of a POST. The switch is now sent as a GET request, and a request that arrives without a usable body is ignored (with a warning in the logs) instead of failing, so the browser can no longer end up on an API URL showing a server error.
+
+---
 
 # 0.8.0 (October 4, 2026)
 
