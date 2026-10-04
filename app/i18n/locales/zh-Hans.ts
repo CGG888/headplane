@@ -50,8 +50,10 @@ const zhHans = {
     logout: "退出登录",
   },
   footer: {
-    sponsor: "Headplane 是免费的开源软件，欢迎{link}以支持项目开发。",
-    sponsorLink: "赞助",
+    about:
+      "Headplane 是免费的开源软件（原项目见 {upstream}），欢迎使用与支持开发；本仓库是它的修改版，代码与问题反馈见 {fork}。",
+    upstreamLink: "原项目",
+    forkLink: "CGG888/headplane",
     debug: "调试",
     showServerUrl: "显示服务器地址",
     hideServerUrl: "隐藏服务器地址",

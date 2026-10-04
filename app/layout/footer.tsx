@@ -24,10 +24,15 @@ export default function Footer({ isDebug, baseUrl }: FooterProps) {
     >
       <div className="container flex items-center justify-between py-2">
         <p className="text-xs">
-          {tr("footer.sponsor", {
-            link: (
-              <Link external styled to="https://tale.me/sponsor">
-                {t("footer.sponsorLink")}
+          {tr("footer.about", {
+            upstream: (
+              <Link external styled to="https://github.com/tale/headplane">
+                {t("footer.upstreamLink")}
+              </Link>
+            ),
+            fork: (
+              <Link external styled to="https://github.com/CGG888/headplane">
+                {t("footer.forkLink")}
               </Link>
             ),
           })}

@@ -53,8 +53,10 @@ const en = {
     logout: "Logout",
   },
   footer: {
-    sponsor: "Headplane is free and open-source. Please consider {link} to support development.",
-    sponsorLink: "sponsoring",
+    about:
+      "Headplane is free and open-source software (upstream: {upstream}) — please use it and support its development. This fork is maintained at {fork}.",
+    upstreamLink: "the upstream project",
+    forkLink: "CGG888/headplane",
     debug: "Debug",
     showServerUrl: "Show server URL",
     hideServerUrl: "Hide server URL",

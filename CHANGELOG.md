@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- Reworded the footer in all three languages: it now credits the upstream Headplane project (linking to it) and links to this repository, and the upstream sponsorship link was removed.
+
 # 0.8.5 (October 4, 2026)
 
 ## Fixes

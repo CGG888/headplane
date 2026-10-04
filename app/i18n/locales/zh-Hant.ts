@@ -50,8 +50,10 @@ const zhHant = {
     logout: "登出",
   },
   footer: {
-    sponsor: "Headplane 是免費的開源軟體，歡迎{link}以支持專案開發。",
-    sponsorLink: "贊助",
+    about:
+      "Headplane 是免費的開源軟體（原專案見 {upstream}），歡迎使用與支持開發；本倉庫是它的修改版，程式碼與問題回報見 {fork}。",
+    upstreamLink: "原專案",
+    forkLink: "CGG888/headplane",
     debug: "除錯",
     showServerUrl: "顯示伺服器網址",
     hideServerUrl: "隱藏伺服器網址",

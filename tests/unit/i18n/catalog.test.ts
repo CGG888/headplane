@@ -106,8 +106,27 @@ describe("translate", () => {
 
 describe("translateRich", () => {
   test("interpolates nodes into the sentence", () => {
-    const nodes = translateRich("en", "footer.sponsor", { link: "LINK" });
+    const nodes = translateRich("en", "footer.about", {
+      upstream: "UPSTREAM",
+      fork: "FORK",
+    });
+    const text = JSON.stringify(nodes);
+
     expect(Array.isArray(nodes)).toBe(true);
-    expect(JSON.stringify(nodes)).toContain("LINK");
+    expect(text).toContain("UPSTREAM");
+    expect(text).toContain("FORK");
+  });
+
+  test("keeps the surrounding text of every locale", () => {
+    for (const locale of ["en", "zh-Hans", "zh-Hant"] as const) {
+      const nodes = translateRich(locale, "footer.about", {
+        upstream: "U",
+        fork: "F",
+      });
+      const text = JSON.stringify(nodes);
+
+      expect(text, locale).toContain("U");
+      expect(text, locale).toContain("F");
+    }
   });
 });
