@@ -128,7 +128,9 @@ const PROBES_FOR_CHECK: Partial<
   // "unavailable" whenever the directory is missing.
   configDatabase: (probes) => [probes.databaseDir],
   configPolicy: (probes) => [probes.policyFile],
-  configNoiseKey: (probes) => [probes.noiseKey],
+  // The noise key verdict also reads the database file ("first start creates
+  // it"), so an invisible database file makes that conclusion unsound too.
+  configNoiseKey: (probes) => [probes.noiseKey, probes.databaseFile],
 };
 
 export function computeConfigChecks({ config, probes }: ConfigChecksInput): ConfigCheck[] {
@@ -151,11 +153,13 @@ export function computeConfigChecks({ config, probes }: ConfigChecksInput): Conf
   ];
 
   // A container that mounts Headscale's config file but not the directories the
-  // file points at sees those paths as missing. Failing the check would be a
-  // false alarm about a healthy server, so an unverifiable path is reported as
-  // such instead.
+  // file points at sees those paths as missing. Reporting that as a failure —
+  // or as "Headscale has not created it yet" — would be a false alarm about a
+  // healthy server, so anything an unverifiable path contributed to is replaced
+  // with "cannot check this". Verdicts that do not read such a path (a passing
+  // check, the OIDC rules, the trusted-proxy rules) are left alone.
   return checks.map((entry) => {
-    if (entry.status !== "fail") {
+    if (entry.status === "pass") {
       return entry;
     }
 

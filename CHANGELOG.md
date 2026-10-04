@@ -1,5 +1,9 @@
 # Next
 
+## Fixes
+
+- The configuration checks no longer call an unmounted host directory a **first start**. A path whose whole tree is missing (the usual case for a container that is only given `config.yaml`) is reported as unverifiable, while a directory that exists but has not been populated yet is still treated as a first start — which is what the noise-key check now says.
+
 # 0.14.0 (October 5, 2026)
 
 ## Changes

@@ -120,14 +120,35 @@ async function probePath(path: string, options: { writable?: boolean } = {}): Pr
   }
 }
 
-/** Whether the directory that would contain `path` can be inspected at all. */
+/**
+ * Whether the directory tree holding `path` is visible to this process at all.
+ *
+ * Walking up matters: a config pointing at `…/data/db.sqlite` where `data/` has
+ * simply not been created yet is a genuine "not there yet" (Headscale creates
+ * it), and the nearest existing ancestor proves the tree is reachable. A path
+ * whose whole tree is missing all the way to the filesystem root is a host
+ * directory the container was never given — the common case for a Headplane
+ * container that only mounts `config.yaml`.
+ */
 async function parentVisible(path: string): Promise<boolean> {
-  try {
-    await stat(dirname(path));
-    return true;
-  } catch {
-    return false;
+  let current = dirname(path);
+
+  for (let depth = 0; depth < 64; depth++) {
+    const parent = dirname(current);
+    if (parent === current) {
+      // Only the filesystem root exists: nothing of this tree is visible.
+      return false;
+    }
+
+    try {
+      await stat(current);
+      return true;
+    } catch {
+      current = parent;
+    }
   }
+
+  return false;
 }
 
 async function canAccess(path: string, mode: number): Promise<boolean> {

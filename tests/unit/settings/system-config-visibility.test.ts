@@ -103,6 +103,40 @@ describe("unverifiable config paths", () => {
 
     expect(find(checks, "configPolicy").status).toBe("pass");
   });
+
+  // The noise key verdict reads the database file to tell "first start" from
+  // "the key is gone", so an invisible database file must not turn into
+  // "Headscale will create it on its first start" on a running server.
+  test("an invisible database file does not make the noise key look like a first start", () => {
+    const checks = computeConfigChecks({
+      config: { ...SQLITE_CONFIG, noise: { private_key_path: "/var/lib/headscale/noise.key" } },
+      probes: {
+        databaseDir: probe("/data/headscale", { unavailable: true, writable: false }),
+        databaseFile: probe("/data/headscale/db.sqlite", { unavailable: true }),
+        noiseKey: probe("/var/lib/headscale/noise.key", { unavailable: true }),
+      },
+    });
+
+    const noise = find(checks, "configNoiseKey");
+    expect(noise.status).toBe("warning");
+    expect(noise.bodyKey).toBe("settings.system.configChecks.pathUnavailable");
+  });
+
+  test("a passing noise verdict is left alone even when the database file is invisible", () => {
+    const checks = computeConfigChecks({
+      config: { ...SQLITE_CONFIG },
+      probes: {
+        databaseDir: probe("/data/headscale", { unavailable: true, writable: false }),
+        databaseFile: probe("/data/headscale/db.sqlite", { unavailable: true }),
+      },
+    });
+
+    // No noise key is configured, so there is nothing to doubt: the check keeps
+    // whatever it concluded rather than blaming an unrelated invisible path.
+    const noise = find(checks, "configNoiseKey");
+    expect(noise.status).toBe("pass");
+    expect(noise.bodyKey).not.toBe("settings.system.configChecks.pathUnavailable");
+  });
 });
 
 describe("probing paths from inside a container", () => {
@@ -122,12 +156,13 @@ describe("probing paths from inside a container", () => {
       configPath,
       [
         "server_url: http://localhost:8080",
-        // `missing-parent` is never created, which is what an unmounted host
-        // directory looks like from inside the container.
+        // Nothing under this tree exists, all the way up to the root: that is
+        // what an unmounted host directory looks like from inside a container
+        // (a Headplane container is normally only given `config.yaml`).
         "database:",
         "  type: sqlite",
         "  sqlite:",
-        `    path: ${join(dir, "missing-parent", "deeper", "db.sqlite")}`,
+        "    path: /vol1/@appdata/headscale/db.sqlite",
       ].join("\n"),
     );
 
