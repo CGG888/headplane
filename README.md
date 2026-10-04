@@ -5,6 +5,12 @@
 > **本仓库在原版基础上新增了完整的三语界面（English / 简体中文 / 繁體中文）与一系列兼容性修复**，
 > 在「飞牛 fnOS（fpk 原生 headscale）+ Lucky 反向代理」这类部署下开箱可用。
 
+> **快速入口**：
+> [**📦 fnOS 完整安装说明**](./docs/install/fnos.md)（含 `config.yaml` 与 `docker-compose.yml` 全文）
+> · [🌏 多语言 / 翻译指南](./docs/features/languages.md)
+> · [🔧 常见问题排查](./docs/configuration/common-issues.md)
+> · [📝 变更日志](./CHANGELOG.md)
+
 ![机器列表：状态、地址、在线时间、路由与标签](./docs/assets/1.png)
 
 ## 中文说明
@@ -55,6 +61,8 @@ Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、D
 ### 部署
 
 官方安装文档：<https://headplane.net>　本仓库镜像：
+
+> **飞牛 fnOS（fpk 原生 headscale + Lucky 反代）的完整安装说明，见 [docs/install/fnos.md](./docs/install/fnos.md)** —— 含两份可直接使用的设置文件（`config.yaml` 与 `docker-compose.yml`）与全部常见问题排查。
 
 ```bash
 docker pull ghcr.io/cgg888/headplane:latest
@@ -139,6 +147,8 @@ English because the UI does not produce them.
 ### Deployment
 
 Refer to the [website](https://headplane.net) for detailed installation instructions.
+A step-by-step guide for fnOS (native Headscale + Docker) is available at
+[docs/install/fnos.md](./docs/install/fnos.md).
 
 ### Versioning
 

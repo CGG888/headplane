@@ -31,6 +31,7 @@ export default defineConfig({
               { text: "Limited Mode", link: "/install/limited-mode" },
               { text: "Native Mode", link: "/install/native-mode" },
               { text: "Docker", link: "/install/docker" },
+              { text: "fnOS (飞牛)", link: "/install/fnos" },
             ],
           },
           {
