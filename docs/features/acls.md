@@ -21,9 +21,12 @@ policy:
   mode: database
 ```
 
-In `file` mode the page is read-only and shows a notice explaining why. Editing
-also requires the `write_policy` capability, which the `owner`, `admin` and
-`network_admin` roles have.
+In `file` mode the policy lives in a file that only Headscale reads, so its API
+refuses the write. Headplane cannot tell which mode Headscale uses without being
+able to read Headscale's configuration, so the editor stays usable and the save
+is rejected with an explanation of how to switch modes or edit the file
+directly. Editing also requires the `write_policy` capability, which the
+`owner`, `admin` and `network_admin` roles have.
 
 ## Rules
 
