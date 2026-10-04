@@ -1,5 +1,7 @@
 # Next
 
+# 0.12.0 (October 5, 2026)
+
 ## Changes
 
 - Added a **DERP** section to the Headscale settings page: custom DERP map URLs and files, the automatic update interval, and the embedded DERP server (region, STUN address, key and verification). The page also lists which relay region each machine is using, with latency, when the Headplane Agent is enabled.
@@ -9,6 +11,8 @@
 ## Fixes
 
 - The configuration checks no longer report a Headscale directory as missing when the container simply cannot see it. A path whose parent is invisible to Headplane (the usual case when only `config.yaml` is mounted) is now reported as **unverifiable**, with a hint to mount the directory, instead of claiming a healthy server has lost its database. Real missing paths are still reported.
+
+---
 
 # 0.11.0 (October 5, 2026)
 
