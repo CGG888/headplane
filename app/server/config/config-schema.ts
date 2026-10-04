@@ -35,6 +35,10 @@ const serverConfig = type({
   host: 'string.ip = "0.0.0.0"',
   port: "number.integer = 3000",
   base_url: "string.url?",
+  // Extra hosts allowed to submit actions, on top of `base_url`. Only needed
+  // when a reverse proxy rewrites the `Host` header to an internal address:
+  // React Router then rejects form submissions as potential CSRF attacks.
+  allowed_action_origins: "string[]?",
   data_path: 'string = "/var/lib/headplane/"',
   info_secret: "string?",
 
@@ -65,6 +69,7 @@ const partialServerConfig = type({
   host: "string.ip?",
   port: "number.integer?",
   base_url: "string.url?",
+  allowed_action_origins: "string[]?",
   data_path: "string?",
   info_secret: "string?",
 

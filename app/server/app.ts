@@ -18,6 +18,7 @@ import * as build from "virtual:react-router/server-build";
 
 import log from "~/utils/log";
 
+import { allowedActionOrigins } from "./allowed-origins";
 import type { HeadplaneConfig } from "./config/config-schema";
 import { ConfigError } from "./config/error";
 import { loadConfig } from "./config/load";
@@ -99,7 +100,16 @@ interface ClientAddress {
 }
 
 const listener = createRequestListener({
-  build,
+  build: {
+    ...build,
+    // Reverse proxies that rewrite `Host` would otherwise make React Router
+    // reject every form submission as a potential CSRF attack.
+    allowedActionOrigins: allowedActionOrigins(
+      Array.isArray(build.allowedActionOrigins) ? build.allowedActionOrigins : undefined,
+      config.server.base_url,
+      ...(config.server.allowed_action_origins ?? []),
+    ),
+  },
   mode: import.meta.env.MODE,
   getLoadContext,
 });
