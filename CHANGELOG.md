@@ -1,8 +1,12 @@
 # Next
 
+# 0.13.1 (October 5, 2026)
+
 ## Fixes
 
 - When Headscale rejects the API key in **Headplane's own configuration** (`401 Unauthorized`), the Headplane Agent page now says exactly that, with a link to the API keys page, instead of leaving the operator with a raw request dump. The rest of the UI keeps working in this state — a signed-in user authenticates with their own key — which is what made the failure easy to miss.
+
+---
 
 # 0.13.0 (October 5, 2026)
 
