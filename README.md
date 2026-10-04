@@ -1,24 +1,97 @@
 # Headplane
 
-> [!TIP]
-> **🇨🇳 中文用户请看：本仓库已内置中英文界面切换**
+> 一个功能完整的 [Headscale](https://headscale.net) Web 管理界面
 >
-> 本仓库在原版 Headplane 基础上**新增了完整的界面多语言支持**，可在 **English / 简体中文 / 繁體中文** 之间一键切换，**无需任何配置**。
->
-> - **在哪里切换**：登录后点击右上角**头像菜单**里的语言项；未登录时点击**登录页右上角的地球按钮**。
-> - **切换后全站生效**：选择保存在 `locale` cookie 中并由服务端渲染，所以页头、表格、对话框、**登录页、404 与权限错误提示**都会变成中文；时间格式也会跟随所选语言。
-> - **首次访问自动匹配**：读取浏览器的 `Accept-Language`，`zh-TW / zh-HK` 等自动使用繁体，其余中文使用简体，匹配不到时使用英文。
-> - **想参与翻译**：词条位于 `app/i18n/locales`，术语表与新增语言的完整步骤见 [多语言文档](./docs/features/languages.md)。
->
-> 详细说明见下方 [Languages](#languages) 章节（English）。
+> **本仓库在原版基础上新增了完整的三语界面（English / 简体中文 / 繁體中文）与一系列兼容性修复**，
+> 在「飞牛 fnOS（fpk 原生 headscale）+ Lucky 反向代理」这类部署下开箱可用。
+
+![机器列表：状态、地址、在线时间、路由与标签](./docs/assets/1.png)
+
+## 中文说明
+
+### 这是什么
+
+Headscale 是 Tailscale 的开源自托管控制端（基于 WireGuard），官方**不带** Web 界面。
+Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、DNS 与 Headscale 设置。
+
+![语言与主题切换：右上角用户菜单里的语言项与浅色/深色/跟随系统](./docs/assets/2.png)
+
+### 本仓库相对原版做了什么
+
+| 版本      | 内容                                                                                                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.8.0** | **完整三语界面**：切换菜单、`locale` cookie、`Accept-Language` 自动匹配；登录页、错误页、权限提示、对话框、表格全部本地化                      |
+| 0.8.1     | 修复「切换语言/配色报 Unexpected Server Error」：切换改走 GET，不再依赖 POST 请求体                                                            |
+| 0.8.2     | 修复「退出登录报错」：改为导航式退出；OIDC 单点登出失败不再阻断本地退出；拒绝跨站退出                                                          |
+| 0.8.3     | 修复「所有表单保存报错」：反代剥掉 `Content-Type` 时自动补回，并在服务端日志中记录                                                             |
+| 0.8.4     | 修复「保存/切换报 403 / Unexpected Server Error」：反代改写 `Host` 会触发 React Router 的 CSRF 校验，现在额外接受 `server.base_url` 声明的来源 |
+| 0.8.5     | ACL 不可写（Headscale 为文件模式）时，给出中文可读的原因与解决办法                                                                             |
+
+### 界面语言
+
+| 语言     | 标识      |
+| -------- | --------- |
+| English  | `en`      |
+| 简体中文 | `zh-Hans` |
+| 繁體中文 | `zh-Hant` |
+
+- **切换位置**：登录后点右上角**头像菜单**里的语言项；未登录时点**登录页右上角的地球按钮**。
+- **生效方式**：选择写入 `locale` cookie 并由**服务端渲染** → 页头、表格、对话框、登录页、404 与权限错误提示全部跟随；时间格式也跟随所选语言。
+- **首次访问**：读取浏览器 `Accept-Language` 自动匹配（`zh-TW` / `zh-HK` / `zh-MO` → 繁體中文，其余中文 → 简体中文），匹配不到时用英文。
+- **词条位置**：`app/i18n/locales`；术语表、新增语言的完整步骤与自动化检查见 [多语言文档](./docs/features/languages.md)。
+
+### 功能一览
+
+- **机器管理**：过期时间、路由/子网、改名、转移与重新分配所有者、标签
+- **访问控制**：ACL 规则、SSH 规则、主机、标签与组（**需 Headscale 使用 `policy.mode: database`**，文件模式下只能查看）
+- **用户与预授权密钥**管理
+- **DNS 与 Headscale 设置**编辑（**需把 Headscale 的 `config.yaml` 读写挂载给 Headplane**）
+- **OIDC 单点登录**、**代理认证**（`server.proxy_auth`）
+- **浏览器 SSH**（需 Agent 集成 + 目标节点 `tailscale up --ssh` + **OIDC 登录**）
+- 不含 VNC / RDP：如需网页版，可另外部署 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Apache Guacamole
+
+![机器详情：子网与路由、Tailscale 地址、密钥过期时间](./docs/assets/3.png)
+
+### 部署
+
+官方安装文档：<https://headplane.net>　本仓库镜像：
+
+```bash
+docker pull ghcr.io/cgg888/headplane:latest
+# 国内加速：docker pull v6.gh-proxy.org/docker/ghcr.io/cgg888/headplane:latest
+```
+
+**飞牛 fnOS（fpk 原生 headscale + Lucky 反代）关键三点**
+
+1. **先确定 Headscale 的「生效配置」**：fnOS 上是 `/vol1/@appdata/headscale/config.yaml`
+   （程序与 CLI 在 `/vol1/@appcenter/headscale/`，其启动脚本执行的是 `headscale serve --config <上面那份>`；
+   `@appcenter/headscale/config/config.yaml` 只是**首次安装用的种子模板**，改了不生效）。
+2. **Headplane 侧三件套**：`headscale.config_path` 指向容器内路径 + 把该配置**读写**挂进容器（如 `/etc/headscale/config.yaml`，**不要 `:ro`**）+ `server.base_url` 填浏览器访问的公网地址（如 `https://你的域名:8443`，**不带 `/admin`**）。
+3. **想让网页能保存**：ACL 需 Headscale `policy.mode: database` 并**重启 headscale 进程**；DNS 与设置保存后要生效，需要 `integration.proc`（Headscale 为原生进程时）或容器化后的 `integration.docker`。
+
+### 版本与镜像标签
+
+采用语义化版本（自 v0.6.0）。本仓库由推送 git tag 触发构建，产物标签为
+`x.y.z`、`latest`、`x.y.z-shell`（带 shell/curl 的调试镜像）。
+
+### 安全提醒
+
+- `server.cookie_secret` 必须是 32 字符并保密（`openssl rand -base64 24`）。
+- Headscale 的 API Key 只在创建时显示一次；一旦泄漏，用
+  `headscale apikeys expire --prefix <前缀>` 撤销后重建。
+- 不要把 `/var/run/docker.sock` 随意挂进容器 —— 那等于把宿主机的 root 权限交给容器（本仓库文档中仅在内网场景建议，并推荐使用 socket-proxy）。
+
+### 贡献
+
+欢迎提交 issue 与 PR；规范见 [contributor guidelines](./docs/CONTRIBUTING.md)，文档站源码在 `docs/`。
+
+---
+
+## English
 
 > A feature-complete web UI for [Headscale](https://headscale.net)
 
-<img
-alt="Machine management in Headplane, shown in Simplified Chinese"
-src="./docs/assets/1.png"
-
->
+_Screenshots are shown in the Chinese section above._
 
 Headscale is the de-facto self-hosted version of Tailscale, a popular Wireguard
 based VPN service. By default, it does not ship with a web UI, which is where
@@ -36,7 +109,7 @@ These are some of the features that Headplane offers:
 - Configurability for Headscale's settings
 - A language switcher for English, Simplified Chinese, and Traditional Chinese
 
-## Languages
+### Languages
 
 The interface ships in three languages and needs no configuration to use them:
 
@@ -63,34 +136,22 @@ the glossary and the full contributor guide.
 Headscale API errors, server logs, and internal validation messages stay in
 English because the UI does not produce them.
 
-## Deployment
+### Deployment
 
 Refer to the [website](https://headplane.net) for detailed installation instructions.
 
-## Versioning
+### Versioning
 
 Headplane uses [semantic versioning](https://semver.org/) for its releases (since v0.6.0).
 Pre-release builds are available under the `next` tag and get updated when a new release
 PR is opened and actively in testing.
 
-## Contributing
+### Contributing
 
 Headplane is an open-source project and contributions are welcome! If you have
 any suggestions, bug reports, or feature requests, please open an issue. Also
 refer to the [contributor guidelines](./docs/CONTRIBUTING.md) for more info.
 
 ---
-
-<img
-alt="Access control editor with the language and theme switcher open"
-src="./docs/assets/2.png"
-
->
-
-<img
-alt="Machine details, subnet routes and Tailscale addresses"
-src="./docs/assets/3.png"
-
->
 
 > Copyright (c) 2025 Aarnav Tale
