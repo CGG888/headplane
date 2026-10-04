@@ -1,8 +1,12 @@
 # Next
 
+# 0.8.5 (October 4, 2026)
+
 ## Fixes
 
 - The ACL editor now explains what happened when Headscale refuses to save a policy because it is reading it from a file (`Policy is not writable`), instead of showing the raw status text in every language.
+
+---
 
 # 0.8.4 (October 4, 2026)
 
