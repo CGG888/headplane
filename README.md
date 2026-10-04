@@ -31,6 +31,34 @@ These are some of the features that Headplane offers:
 - Support for OpenID Connect (OIDC) as a login provider
 - The ability to edit DNS settings and automatically provision Headscale
 - Configurability for Headscale's settings
+- A language switcher for English, Simplified Chinese, and Traditional Chinese
+
+## Languages
+
+The interface ships in three languages and needs no configuration to use them:
+
+| Locale    | Language                       |
+| --------- | ------------------------------ |
+| `en`      | English                        |
+| `zh-Hans` | 简体中文 (Simplified Chinese)  |
+| `zh-Hant` | 繁體中文 (Traditional Chinese) |
+
+Pick a language from the account menu in the header, or from the globe button on
+the login page. The choice is stored in a `locale` cookie and resolved on the
+server, so the entire interface — including the login page, error pages, and
+permission failures — renders in the selected language, and timestamps follow it
+too. A first-time visitor is matched against the browser's `Accept-Language`
+header before falling back to English.
+
+Translations live in `app/i18n/locales`. Adding a locale means adding a catalog,
+registering it in `app/i18n/index.ts` and `app/utils/locale.ts`, then running the
+unit tests, which assert that every catalog defines the same key space, keeps the
+placeholders aligned, and that Traditional Chinese contains no simplified
+characters. See the [language documentation](./docs/features/languages.md) for
+the glossary and the full contributor guide.
+
+Headscale API errors, server logs, and internal validation messages stay in
+English because the UI does not produce them.
 
 ## Deployment
 
