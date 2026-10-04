@@ -1,6 +1,7 @@
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import { useI18n } from "~/i18n/provider";
 import type { Machine, User } from "~/types";
 
 interface DeleteProps {
@@ -11,24 +12,21 @@ interface DeleteProps {
 }
 
 export default function DeleteUser({ user, machines, isOpen, setIsOpen }: DeleteProps) {
-  const name = user.name || user.displayName;
+  const { t } = useI18n();
+  const name = user.name || user.displayName || user.id;
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
       <DialogPanel variant={machines.length > 0 ? "unactionable" : "normal"}>
-        <Title>Delete {name}?</Title>
+        <Title>{t("users.delete.title", { name })}</Title>
         {machines.length > 0 ? (
-          <Text className="mb-6">
-            Users cannot be deleted if they have machines. Please delete or re-assign their machines
-            to other users before proceeding.
-          </Text>
+          <Text className="mb-6">{t("users.delete.hasMachines")}</Text>
         ) : (
           <Text className="mb-6">
-            Deleted users cannot be recovered.
+            {t("users.delete.body")}
             {user.provider === "oidc" && (
               <p className="mt-4 text-sm text-mist-600 dark:text-mist-300">
-                Since this user is authenticated via an external provider, they will be recreated if
-                they sign in again.
+                {t("users.delete.oidcNotice")}
               </p>
             )}
           </Text>

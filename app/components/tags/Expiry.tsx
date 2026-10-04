@@ -1,3 +1,5 @@
+import { useI18n } from "~/i18n/provider";
+
 import Chip from "../chip";
 import Tooltip from "../tooltip";
 
@@ -7,7 +9,8 @@ export interface ExpiryTagProps {
 }
 
 export function ExpiryTag({ variant, expiry }: ExpiryTagProps) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const { t, locale } = useI18n();
+  const formatter = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -17,18 +20,17 @@ export function ExpiryTag({ variant, expiry }: ExpiryTagProps) {
     <Tooltip
       content={
         variant === "expired" ? (
-          <>
-            This machine is expired and will not be able to connect to the network. Re-authenticate
-            with Tailscale on the machine to re-enable it.
-          </>
+          <>{t("machines.chip.expiredTooltip")}</>
         ) : (
-          <>This machine has key expiry disabled and will never need to re-authenticate.</>
+          <>{t("machines.chip.noExpiryTooltip")}</>
         )
       }
     >
       <Chip
         text={
-          variant === "expired" ? `Expired ${formatter.format(new Date(expiry!))}` : "No expiry"
+          variant === "expired"
+            ? t("machines.chip.expiredOn", { date: formatter.format(new Date(expiry!)) })
+            : t("machines.chip.noExpiry")
         }
         className="bg-mist-200 text-mist-800 dark:bg-mist-800 dark:text-mist-200"
       />

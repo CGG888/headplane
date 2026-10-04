@@ -1,5 +1,6 @@
 import { Check, Copy, Info } from "lucide-react";
 
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 import { copyToClipboard } from "~/utils/copy";
 import toast from "~/utils/toast";
@@ -14,6 +15,8 @@ export interface AttributeProps {
 }
 
 export default function Attribute({ name, value, tooltip, isCopyable }: AttributeProps) {
+  const { t } = useI18n();
+
   return (
     <dl className="group/attr flex items-baseline gap-1 text-sm">
       <dt
@@ -50,7 +53,7 @@ export default function Attribute({ name, value, tooltip, isCopyable }: Attribut
               const svgs = event.currentTarget.querySelectorAll("svg");
               const isCopied = await copyToClipboard(value);
               if (!isCopied) {
-                toast("Copy failed. Please copy the text manually.");
+                toast(t("common.copyFailed"));
                 return;
               }
 
@@ -58,7 +61,7 @@ export default function Attribute({ name, value, tooltip, isCopyable }: Attribut
                 svg.toggleAttribute("data-copied", true);
               }
 
-              toast(`Copied ${name} to clipboard`);
+              toast(t("common.copiedName", { name }));
 
               setTimeout(() => {
                 for (const svg of svgs) {

@@ -21,7 +21,7 @@ function mockRequest(formData: FormData): Request {
 // Types for test clarity
 interface LoginResult {
   success: boolean;
-  message: string;
+  error: string;
 }
 
 interface MockApiKey {
@@ -81,7 +81,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("Missing");
+    expect(result.error).toBe("missingKey");
   });
 
   test("returns error when api_key is empty string", async () => {
@@ -101,7 +101,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("empty");
+    expect(result.error).toBe("emptyKey");
   });
 
   test("returns error when api key not found in database", async () => {
@@ -127,7 +127,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("not found");
+    expect(result.error).toBe("notFound");
   });
 
   test("returns error when api key has expired", async () => {
@@ -154,7 +154,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("expired");
+    expect(result.error).toBe("expired");
   });
 
   test("returns error when api key has no expiration field", async () => {
@@ -181,7 +181,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.message).toContain("malformed");
+    expect(result.error).toBe("malformed");
   });
 
   test("handles asterisks in api key prefix from headscale 0.28+", async () => {

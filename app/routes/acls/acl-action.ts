@@ -1,4 +1,4 @@
-import { data } from "react-router";
+﻿import { data } from "react-router";
 
 import { authContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -16,9 +16,12 @@ export async function aclAction({ request, context }: Route.ActionArgs) {
   const principal = await auth.require(request);
   const check = auth.can(principal, Capabilities.write_policy);
   if (!check) {
-    throw data("You do not have permission to write to the ACL policy", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.writePolicy" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   // Try to write to the ACL policy via the API or via config file (TODO).

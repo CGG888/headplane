@@ -6,6 +6,7 @@ import Link from "~/components/link";
 import Notice from "~/components/notice";
 import Select from "~/components/select";
 import TableList from "~/components/table-list";
+import { useI18n } from "~/i18n/provider";
 import {
   appConfigContext,
   authContext,
@@ -127,6 +128,7 @@ export default function Page({
     currentSubject,
   },
 }: Route.ComponentProps) {
+  const { t, tr } = useI18n();
   const [selectedUser, setSelectedUser] = useState("__headplane_all");
   const [status, setStatus] = useState<Status>("active");
   const isDisabled = !access || keys.flatMap(({ preAuthKeys }) => preAuthKeys).length === 0;
@@ -191,34 +193,35 @@ export default function Page({
     <div className="flex flex-col md:w-2/3">
       <p className="text-md mb-8">
         <Link className="font-medium" to="/settings">
-          Settings
+          {t("settings.overview.title")}
         </Link>
-        <span className="mx-2">/</span> Pre-Auth Keys
+        <span className="mx-2">/</span> {t("settings.authKeys.breadcrumb")}
       </p>
       {!access ? (
-        <Notice title="Pre-auth key permissions restricted" variant="warning">
-          You do not have the necessary permissions to generate pre-auth keys. Please contact your
-          administrator to request access or to generate a pre-auth key for you.
+        <Notice title={t("settings.authKeys.restrictedTitle")} variant="warning">
+          {t("settings.authKeys.restrictedBody")}
         </Notice>
       ) : missing.length > 0 ? (
-        <Notice title="Missing authentication keys" variant="error">
-          An error occurred while fetching the authentication keys for the following users:{" "}
+        <Notice title={t("settings.authKeys.missingTitle")} variant="error">
+          {t("settings.authKeys.missingBody")}
           {missing.map(({ user }, index) => (
             <>
-              <Code key={user.id}>{getUserDisplayName(user)}</Code>
+              <Code key={user.id}>{getUserDisplayName(user, t("machines.common.tagOwned"))}</Code>
               {index < missing.length - 1 ? ", " : ". "}
             </>
           ))}
-          Their keys may not be listed correctly. Please check the server logs for more information.
+          {t("settings.authKeys.missingFooter")}
         </Notice>
       ) : undefined}
-      <h1 className="mb-2 text-2xl font-medium">Pre-Auth Keys</h1>
+      <h1 className="mb-2 text-2xl font-medium">{t("settings.authKeys.title")}</h1>
       <p className="mb-4">
-        Headscale fully supports pre-authentication keys in order to easily add devices to your
-        Tailnet. To learn more about using pre-authentication keys, visit the{" "}
-        <Link external styled to="https://tailscale.com/kb/1085/auth-keys/">
-          Tailscale documentation
-        </Link>
+        {tr("settings.overview.preAuthBody", {
+          link: (
+            <Link external styled to="https://tailscale.com/kb/1085/auth-keys/">
+              {t("settings.overview.tailscaleDocs")}
+            </Link>
+          ),
+        })}
       </p>
       <AddAuthKey
         currentHeadscaleUserId={currentHeadscaleUserId}
@@ -232,16 +235,19 @@ export default function Page({
           className="w-full"
           defaultValue="__headplane_all"
           disabled={isDisabled}
-          label="User"
+          label={t("settings.authKeys.userLabel")}
           onValueChange={(value) => setSelectedUser(value ?? "")}
-          placeholder="Select a user"
+          placeholder={t("settings.authKeys.userPlaceholder")}
           items={[
-            { value: "__headplane_all", label: "All" },
+            { value: "__headplane_all", label: t("settings.authKeys.all") },
             ...keys
               .filter((k): k is { user: User; preAuthKeys: PreAuthKey[] } => k.user !== null)
-              .map(({ user }) => ({ value: user.id, label: getUserDisplayName(user) })),
+              .map(({ user }) => ({
+                value: user.id,
+                label: getUserDisplayName(user, t("machines.common.tagOwned")),
+              })),
             ...(keys.some(({ user }) => user === null)
-              ? [{ value: "__headplane_tag_only", label: "Tag Only" }]
+              ? [{ value: "__headplane_tag_only", label: t("settings.authKeys.tagOnly") }]
               : []),
           ]}
         />
@@ -249,15 +255,15 @@ export default function Page({
           className="w-full"
           defaultValue="active"
           disabled={isDisabled}
-          label="Status"
+          label={t("settings.authKeys.statusLabel")}
           onValueChange={(value) => setStatus((value ?? "active") as Status)}
-          placeholder="Select a status"
+          placeholder={t("settings.authKeys.statusPlaceholder")}
           items={[
-            { value: "all", label: "All" },
-            { value: "active", label: "Active" },
-            { value: "expired", label: "Used/Expired" },
-            { value: "reusable", label: "Reusable" },
-            { value: "ephemeral", label: "Ephemeral" },
+            { value: "all", label: t("settings.authKeys.statusAll") },
+            { value: "active", label: t("settings.authKeys.statusActive") },
+            { value: "expired", label: t("settings.authKeys.statusUsedExpired") },
+            { value: "reusable", label: t("settings.authKeys.statusReusable") },
+            { value: "ephemeral", label: t("settings.authKeys.statusEphemeral") },
           ]}
         />
       </div>
@@ -265,12 +271,12 @@ export default function Page({
         {keys.flatMap(({ preAuthKeys }) => preAuthKeys).length === 0 ? (
           <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
             <FileKey2 />
-            <p className="font-semibold">No pre-auth keys have been created yet.</p>
+            <p className="font-semibold">{t("settings.authKeys.empty")}</p>
           </TableList.Item>
         ) : filteredKeys.length === 0 ? (
           <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
             <FileKey2 />
-            <p className="font-semibold">No pre-auth keys match the selected filters.</p>
+            <p className="font-semibold">{t("settings.authKeys.emptyFiltered")}</p>
           </TableList.Item>
         ) : (
           filteredKeys.map((key) => {

@@ -11,6 +11,7 @@ import Select from "~/components/select";
 import Switch from "~/components/switch";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import { useI18n } from "~/i18n/provider";
 import type { User } from "~/types";
 import { getUserDisplayName } from "~/utils/user";
 
@@ -53,6 +54,7 @@ export default function AddAuthKey({
   currentHeadscaleUserId,
   currentSubject,
 }: AddAuthKeyProps) {
+  const { t, tr } = useI18n();
   const fetcher = useFetcher();
   const submittingRef = useRef(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -87,9 +89,9 @@ export default function AddAuthKey({
 
   const parsedTags = tags
     .split(",")
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
-    .map((t) => (t.startsWith("tag:") ? t : `tag:${t}`));
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => (entry.startsWith("tag:") ? entry : `tag:${entry}`));
 
   const canSubmit = tagOnly ? parsedTags.length > 0 : userId != null;
 
@@ -104,14 +106,14 @@ export default function AddAuthKey({
       }}
     >
       <Button className="my-4" onClick={() => setIsOpen(true)}>
-        Create pre-auth key
+        {t("settings.addKey.create")}
       </Button>
       {createdKey ? (
         <DialogPanel variant="unactionable">
-          <Title>Pre-auth key created</Title>
-          <Text>Copy this key now. You will not be able to see the full key again.</Text>
+          <Title>{t("settings.addKey.createdTitle")}</Title>
+          <Text>{t("settings.addKey.createdBody")}</Text>
           <CodeBlock className="mt-4">{createdKey}</CodeBlock>
-          <Text className="mt-4 text-sm">To register a device with this key:</Text>
+          <Text className="mt-4 text-sm">{t("settings.addKey.registerBody")}</Text>
           <CodeBlock className="mt-1">
             {`tailscale up --login-server=${url} --authkey ${createdKey}`}
           </CodeBlock>
@@ -131,17 +133,17 @@ export default function AddAuthKey({
           }}
           isDisabled={fetcher.state !== "idle" || !canSubmit}
         >
-          <Title>Generate auth key</Title>
+          <Title>{t("settings.addKey.title")}</Title>
 
           {!selfServiceOnly && (
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
-                <Text className="font-semibold">Tag-only key</Text>
-                <Text className="text-sm">Create a key owned by ACL tags instead of a user.</Text>
+                <Text className="font-semibold">{t("settings.addKey.tagOnlyTitle")}</Text>
+                <Text className="text-sm">{t("settings.addKey.tagOnlyBody")}</Text>
               </div>
               <Switch
                 defaultChecked={tagOnly}
-                label="Tag-only"
+                label={t("settings.addKey.tagOnlyLabel")}
                 onCheckedChange={() => setTagOnly(!tagOnly)}
               />
             </div>
@@ -152,65 +154,67 @@ export default function AddAuthKey({
               className="mb-2"
               description={
                 selfServiceOnly
-                  ? "You can only create keys for your own user."
-                  : "Machines will belong to this user when they authenticate."
+                  ? t("settings.addKey.userDescriptionSelf")
+                  : t("settings.addKey.userDescription")
               }
               disabled={selfServiceOnly}
               required
-              label="User"
+              label={t("settings.authKeys.userLabel")}
               onValueChange={(value) => setUserId(value)}
-              placeholder="Select a user"
+              placeholder={t("settings.authKeys.userPlaceholder")}
               value={userId}
               items={availableUsers.map((user) => ({
                 value: user.id,
-                label: getUserDisplayName(user),
+                label: getUserDisplayName(user, t("machines.common.tagOwned")),
               }))}
             />
           )}
 
           <Input
             className="mb-2"
-            description="Comma-separated tags (e.g. server, prod). The tag: prefix is added automatically."
+            description={t("settings.addKey.tagsDescription")}
             required={tagOnly}
-            label="ACL Tags"
+            label={t("settings.addKey.tagsLabel")}
             onChange={(value) => setTags(value)}
-            placeholder="server, prod"
+            placeholder={t("settings.addKey.tagsPlaceholder")}
             value={tags}
           />
           <NumberInput
             defaultValue={90}
-            description="Set this key to expire after a certain number of days."
+            description={t("settings.addKey.expiryDescription")}
             required
-            label="Key Expiration"
+            label={t("settings.addKey.expiryLabel")}
             max={365_000}
             min={1}
             name="expiry"
           />
           <div className="mt-6 flex items-center justify-between gap-2">
             <div>
-              <Text className="font-semibold">Reusable</Text>
-              <Text className="text-sm">Use this key to authenticate more than one device.</Text>
+              <Text className="font-semibold">{t("settings.addKey.reusableTitle")}</Text>
+              <Text className="text-sm">{t("settings.addKey.reusableBody")}</Text>
             </div>
             <Switch
               defaultChecked={reusable}
-              label="Reusable"
+              label={t("settings.addKey.reusableTitle")}
               onCheckedChange={() => setReusable(!reusable)}
             />
           </div>
           <div className="mt-6 flex items-center justify-between gap-2">
             <div>
-              <Text className="font-semibold">Ephemeral</Text>
+              <Text className="font-semibold">{t("settings.addKey.ephemeralTitle")}</Text>
               <Text className="text-sm">
-                Devices authenticated with this key will be automatically removed once they go
-                offline.{" "}
-                <Link external styled to="https://tailscale.com/kb/1111/ephemeral-nodes">
-                  Learn more
-                </Link>
+                {tr("settings.addKey.ephemeralBody", {
+                  link: (
+                    <Link external styled to="https://tailscale.com/kb/1111/ephemeral-nodes">
+                      {t("common.learnMore")}
+                    </Link>
+                  ),
+                })}
               </Text>
             </div>
             <Switch
               defaultChecked={ephemeral}
-              label="Ephemeral"
+              label={t("settings.addKey.ephemeralTitle")}
               onCheckedChange={() => setEphemeral(!ephemeral)}
             />
           </div>

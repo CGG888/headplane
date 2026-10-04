@@ -6,6 +6,24 @@ import log from "~/utils/log";
 
 import type { Route } from "./+types/page";
 
+/**
+ * Stable error codes returned to the login page. The UI maps these onto
+ * localized messages so the server never emits user-facing English text.
+ */
+export type LoginErrorCode =
+  | "missingKey"
+  | "emptyKey"
+  | "notFound"
+  | "malformed"
+  | "expired"
+  | "invalid"
+  | "unknown";
+
+export interface LoginFailure {
+  success: false;
+  error: LoginErrorCode;
+}
+
 export async function loginAction({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
   const headscale = context.get(headscaleContext);
@@ -21,8 +39,8 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
     );
     return {
       success: false,
-      message: "Missing API key. Please enter your API key.",
-    };
+      error: "missingKey",
+    } satisfies LoginFailure;
   }
 
   if (apiKey.length === 0) {
@@ -33,8 +51,8 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
     );
     return {
       success: false,
-      message: "API key cannot be empty. Please enter a valid API key.",
-    };
+      error: "emptyKey",
+    } satisfies LoginFailure;
   }
 
   // Build a client with the candidate API key the user just submitted, so the
@@ -52,24 +70,24 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
     if (!lookup) {
       return {
         success: false,
-        message: "API key was not found in the Headscale database",
-      };
+        error: "notFound",
+      } satisfies LoginFailure;
     }
 
     if (lookup.expiration === null || lookup.expiration === undefined) {
       log.error("auth", "Got an API key without an expiration");
       return {
         success: false,
-        message: "API key is malformed (missing expiration). Please generate a new API key.",
-      };
+        error: "malformed",
+      } satisfies LoginFailure;
     }
 
     const expiry = new Date(lookup.expiration);
     if (expiry.getTime() < Date.now()) {
       return {
         success: false,
-        message: "API key has expired",
-      };
+        error: "expired",
+      } satisfies LoginFailure;
     }
 
     return redirect("/machines", {
@@ -93,8 +111,8 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
       ) {
         return {
           success: false,
-          message: "API key is invalid (it may be incorrect or expired)",
-        };
+          error: "invalid",
+        } satisfies LoginFailure;
       }
     }
 
@@ -102,7 +120,7 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
     log.debug("auth", "Error details: %o", error);
     return {
       success: false,
-      message: "Error while validating API key (see logs for details)",
-    };
+      error: "unknown",
+    } satisfies LoginFailure;
   }
 }

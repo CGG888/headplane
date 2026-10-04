@@ -1,6 +1,7 @@
 import { AlertCircle, CloudOff, Info, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
 
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 type Variant = "info" | "warning" | "error" | "critical";
@@ -27,6 +28,7 @@ export default function StatusBanner({
   dismissable = true,
   className,
 }: StatusBannerProps) {
+  const { t } = useI18n();
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed) {
@@ -65,7 +67,7 @@ export default function StatusBanner({
       {dismissable && (
         <button
           type="button"
-          aria-label="Dismiss"
+          aria-label={t("common.dismiss")}
           onClick={() => setDismissed(true)}
           className={cn(
             "shrink-0 rounded p-0.5 transition-colors",

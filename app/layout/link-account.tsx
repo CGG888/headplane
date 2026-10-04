@@ -2,6 +2,7 @@ import { Form } from "react-router";
 
 import Button from "~/components/button";
 import Card from "~/components/card";
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 interface LinkAccountProps {
@@ -9,14 +10,13 @@ interface LinkAccountProps {
 }
 
 export default function LinkAccount({ headscaleUsers }: LinkAccountProps) {
+  const { t } = useI18n();
+
   return (
     <div className="mx-auto mt-6 flex max-w-xl flex-col items-center justify-center py-36">
       <Card variant="flat" className="max-w-xl items-center gap-4">
-        <Card.Title>Link your Headscale account</Card.Title>
-        <Card.Text>
-          Headplane could not automatically match your SSO identity to an existing Headscale user.
-          Please select your user from the list below to link your account and continue.
-        </Card.Text>
+        <Card.Title>{t("home.link.title")}</Card.Title>
+        <Card.Text>{t("home.link.body")}</Card.Text>
         <Form method="POST" className="mt-4">
           <select
             className={cn(
@@ -27,7 +27,7 @@ export default function LinkAccount({ headscaleUsers }: LinkAccountProps) {
             name="headscale_user_id"
             required
           >
-            <option value="">Select a user...</option>
+            <option value="">{t("home.link.selectPlaceholder")}</option>
             {headscaleUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -35,13 +35,11 @@ export default function LinkAccount({ headscaleUsers }: LinkAccountProps) {
             ))}
           </select>
           <Button className="w-full" type="submit" variant="heavy">
-            Link and Continue
+            {t("home.link.button")}
           </Button>
         </Form>
         <Card.Text className="mt-8 text-center text-xs text-mist-600 dark:text-mist-300">
-          If you don't see your user listed, please contact your administrator. To automatically
-          link new users in the future, ensure that the Headscale user has the same email address as
-          the SSO identity.
+          {t("home.link.footer")}
         </Card.Text>
       </Card>
     </div>

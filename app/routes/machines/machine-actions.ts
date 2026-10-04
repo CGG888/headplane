@@ -1,4 +1,4 @@
-import { data, redirect } from "react-router";
+﻿import { data, redirect } from "react-router";
 
 import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -27,9 +27,12 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
   // Fast track register since it doesn't require an existing machine
   if (action === "register") {
     if (!auth.can(principal, Capabilities.write_machines)) {
-      throw data("You do not have permission to manage machines", {
-        status: 403,
-      });
+      throw data(
+        { localized: { key: "errors.permission.manageMachines" } },
+        {
+          status: 403,
+        },
+      );
     }
 
     const registrationKeyInput = formData.get("register_key")?.toString();
@@ -74,9 +77,12 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
   }
 
   if (!auth.canManageNode(principal, node)) {
-    throw data("You do not have permission to act on this machine", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.actOnMachine" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   switch (action) {
@@ -138,12 +144,15 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
         return { success: true as const, message: "Tags updated" };
       } catch (error) {
         if (isDataWithApiError(error) && error.data.statusCode === 400) {
+          // The API message is passed through; when there is none, the UI
+          // translates `tagsNotInPolicy` itself.
+          const apiMessage = extractApiErrorMessage(error.data);
           return data(
             {
               success: false as const,
-              error:
-                extractApiErrorMessage(error.data) ??
-                "One or more tags are not defined in your ACL policy. Please add them to your policy before assigning them to a machine.",
+              ...(apiMessage !== undefined
+                ? { error: apiMessage }
+                : { errorCode: "tagsNotInPolicy" as const }),
             },
             { status: 400 },
           );

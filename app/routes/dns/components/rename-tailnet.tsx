@@ -4,6 +4,7 @@ import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import { useI18n } from "~/i18n/provider";
 
 interface Props {
   name: string;
@@ -11,17 +12,20 @@ interface Props {
 }
 
 export default function RenameTailnet({ name, isDisabled }: Props) {
+  const { t, tr } = useI18n();
+
   return (
     <div className="flex w-full flex-col gap-y-4 sm:w-2/3">
-      <h1 className="mb-2 text-2xl font-medium">Tailnet Name</h1>
+      <h1 className="mb-2 text-2xl font-medium">{t("dns.rename.title")}</h1>
       <p>
-        This is the base domain name of your Tailnet. Devices are accessible at{" "}
-        <Code>[device].{name}</Code> when Magic DNS is enabled.
+        {tr("dns.rename.body", {
+          code: <Code>[device].{name}</Code>,
+        })}
       </p>
       <Input
         className="w-3/5 text-sm font-medium"
         readOnly
-        label="Tailnet name"
+        label={t("dns.rename.label")}
         labelHidden
         onFocus={(event) => {
           (event.target as HTMLInputElement).select();
@@ -29,20 +33,17 @@ export default function RenameTailnet({ name, isDisabled }: Props) {
         value={name}
       />
       <Dialog>
-        <Button disabled={isDisabled}>Rename Tailnet</Button>
+        <Button disabled={isDisabled}>{t("dns.rename.button")}</Button>
         <DialogPanel isDisabled={isDisabled}>
-          <Title>Rename Tailnet</Title>
-          <Text className="mb-8">
-            Keep in mind that changing this can lead to all sorts of unexpected behavior and may
-            break existing devices in your tailnet.
-          </Text>
+          <Title>{t("dns.rename.button")}</Title>
+          <Text className="mb-8">{t("dns.rename.dialogBody")}</Text>
           <input name="action_id" type="hidden" value="rename_tailnet" />
           <Input
             defaultValue={name}
             required
-            label="Tailnet name"
+            label={t("dns.rename.label")}
             name="new_name"
-            placeholder="ts.net"
+            placeholder={t("dns.rename.placeholder")}
           />
         </DialogPanel>
       </Dialog>

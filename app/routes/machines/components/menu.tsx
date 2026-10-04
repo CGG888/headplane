@@ -4,6 +4,7 @@ import { useSubmit } from "react-router";
 
 import Button from "~/components/button";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "~/components/menu";
+import { useI18n } from "~/i18n/provider";
 import type { User } from "~/types";
 import cn from "~/utils/cn";
 import { isNoExpiry, type PopulatedNode } from "~/utils/node-info";
@@ -41,6 +42,7 @@ export default function MachineMenu({
   supportsDisablingKeyExpiry,
 }: MenuProps) {
   const submit = useSubmit();
+  const { t } = useI18n();
   const [modal, setModal] = useState<Modal>(null);
   const supportsTailscaleSSH = node.hostInfo?.sshHostKeys && node.hostInfo?.sshHostKeys.length > 0;
 
@@ -122,7 +124,7 @@ export default function MachineMenu({
             variant="heavy"
           >
             <SquareTerminal className="h-5" />
-            <p>SSH</p>
+            <p>{t("machines.menu.ssh")}</p>
           </Button>
         ) : (
           <Button
@@ -140,7 +142,7 @@ export default function MachineMenu({
               );
             }}
           >
-            SSH
+            {t("machines.menu.ssh")}
           </Button>
         )
       ) : undefined}
@@ -155,14 +157,14 @@ export default function MachineMenu({
           {isFullButton ? (
             <>
               <Cog className="h-5" />
-              <p>Machine Settings</p>
+              <p>{t("machines.menu.settings")}</p>
             </>
           ) : (
             <Ellipsis className="h-5" />
           )}
         </MenuTrigger>
         <MenuContent>
-          <MenuItem onClick={() => setModal("rename")}>Edit machine name</MenuItem>
+          <MenuItem onClick={() => setModal("rename")}>{t("machines.menu.editName")}</MenuItem>
           {supportsDisablingKeyExpiry && (
             <MenuItem
               onClick={() =>
@@ -176,22 +178,24 @@ export default function MachineMenu({
                 )
               }
             >
-              {isNoExpiry(node.expiry) ? "Enable" : "Disable"} key expiry
+              {isNoExpiry(node.expiry)
+                ? t("machines.menu.enableKeyExpiry")
+                : t("machines.menu.disableKeyExpiry")}
             </MenuItem>
           )}
-          <MenuItem onClick={() => setModal("routes")}>Edit route settings</MenuItem>
-          <MenuItem onClick={() => setModal("tags")}>Edit ACL tags</MenuItem>
+          <MenuItem onClick={() => setModal("routes")}>{t("machines.menu.editRoutes")}</MenuItem>
+          <MenuItem onClick={() => setModal("tags")}>{t("machines.menu.editTags")}</MenuItem>
           {supportsNodeOwnerChange && (
-            <MenuItem onClick={() => setModal("move")}>Change owner</MenuItem>
+            <MenuItem onClick={() => setModal("move")}>{t("machines.menu.changeOwner")}</MenuItem>
           )}
           <MenuSeparator />
           {!isNoExpiry(node.expiry) && (
             <MenuItem variant="danger" disabled={node.expired} onClick={() => setModal("expire")}>
-              Expire
+              {t("machines.menu.expire")}
             </MenuItem>
           )}
           <MenuItem variant="danger" onClick={() => setModal("remove")}>
-            Remove
+            {t("machines.menu.remove")}
           </MenuItem>
         </MenuContent>
       </Menu>

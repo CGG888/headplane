@@ -5,6 +5,8 @@ import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
 import TokenList from "~/components/token-list";
+import type { TranslationKey } from "~/i18n";
+import { useI18n } from "~/i18n/provider";
 import { isValidGroupName, isValidTagName } from "~/utils/acl-policy";
 
 export type NamedListKind = "group" | "tag";
@@ -23,26 +25,41 @@ interface NamedListDialogProps {
 
 const COPY = {
   group: {
-    title: "group",
+    kindKey: "acls.namedList.group",
     prefix: "group:",
-    field: "Members",
-    fieldDescription: "Headscale users that belong to this group.",
-    empty: "No members yet",
-    placeholder: "alice@",
+    fieldKey: "acls.namedList.membersLabel",
+    fieldDescriptionKey: "acls.namedList.membersDescription",
+    emptyKey: "acls.namedList.membersEmpty",
+    placeholderKey: "acls.namedList.membersPlaceholder",
     validate: isValidGroupName,
-    hint: "Group names must start with group: and may only contain lowercase letters, numbers and dashes.",
+    hintKey: "acls.namedList.groupHint",
+    duplicateKey: "acls.namedList.duplicate",
   },
   tag: {
-    title: "tag",
+    kindKey: "acls.namedList.tag",
     prefix: "tag:",
-    field: "Tag owners",
-    fieldDescription: "Users and groups allowed to assign this tag to a node.",
-    empty: "No owners yet",
-    placeholder: "group:ops",
+    fieldKey: "acls.namedList.ownersLabel",
+    fieldDescriptionKey: "acls.namedList.ownersDescription",
+    emptyKey: "acls.namedList.ownersEmpty",
+    placeholderKey: "acls.namedList.ownersPlaceholder",
     validate: isValidTagName,
-    hint: "Tag names must start with tag: and may only contain lowercase letters, numbers and dashes.",
+    hintKey: "acls.namedList.tagHint",
+    duplicateKey: "acls.namedList.duplicate",
   },
-} as const;
+} as const satisfies Record<
+  NamedListKind,
+  {
+    kindKey: TranslationKey;
+    prefix: string;
+    fieldKey: TranslationKey;
+    fieldDescriptionKey: TranslationKey;
+    emptyKey: TranslationKey;
+    placeholderKey: TranslationKey;
+    validate: (name: string) => boolean;
+    hintKey: TranslationKey;
+    duplicateKey: TranslationKey;
+  }
+>;
 
 export default function NamedListDialog({
   isOpen,
@@ -54,7 +71,10 @@ export default function NamedListDialog({
   suggestions,
   onSave,
 }: NamedListDialogProps) {
+  const { t } = useI18n();
   const copy = COPY[kind];
+  const kindLabel = t(copy.kindKey);
+  const hint = t(copy.hintKey);
   const [draftName, setDraftName] = useState(name ?? copy.prefix);
   const [draftMembers, setDraftMembers] = useState<string[]>(members ?? []);
 
@@ -83,22 +103,26 @@ export default function NamedListDialog({
           setIsOpen(false);
         }}
       >
-        <Title>{name ? `Edit ${copy.title} ${name}` : `New ${copy.title}`}</Title>
-        <Text>{copy.hint}</Text>
+        <Title>
+          {name
+            ? t("acls.namedList.editTitle", { kind: kindLabel, name })
+            : t("acls.namedList.newTitle", { kind: kindLabel })}
+        </Title>
+        <Text>{hint}</Text>
         <Input
-          errorMessage={isDuplicate ? `A ${copy.title} with this name already exists.` : copy.hint}
+          errorMessage={isDuplicate ? t(copy.duplicateKey, { kind: kindLabel }) : hint}
           invalid={showNameError}
-          label="Name"
+          label={t("acls.common.nameLabel")}
           onChange={setDraftName}
-          placeholder={`${copy.prefix}example`}
+          placeholder={copy.prefix + t("acls.namedList.examplePlaceholder")}
           value={draftName}
         />
         <TokenList
-          description={copy.fieldDescription}
-          emptyText={copy.empty}
-          label={copy.field}
+          description={t(copy.fieldDescriptionKey)}
+          emptyText={t(copy.emptyKey)}
+          label={t(copy.fieldKey)}
           onChange={setDraftMembers}
-          placeholder={copy.placeholder}
+          placeholder={t(copy.placeholderKey)}
           suggestions={suggestions}
           values={draftMembers}
         />

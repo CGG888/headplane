@@ -1,4 +1,4 @@
-import { data } from "react-router";
+﻿import { data } from "react-router";
 
 import {
   authContext,
@@ -20,9 +20,12 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
   const check = auth.can(principal, Capabilities.configure_iam);
 
   if (!check) {
-    throw data("You do not have permission to modify IAM settings.", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.modifyIam" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   if (!headscaleConfig.writable()) {

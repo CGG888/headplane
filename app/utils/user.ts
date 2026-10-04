@@ -1,8 +1,8 @@
-import type { User } from "~/types/User";
+﻿import type { User } from "~/types/User";
 
-export function getUserDisplayName(user: User): string {
+export function getUserDisplayName(user: User, tagOwnedLabel = "Tag-owned"): string {
   if (user.name === "tagged-devices") {
-    return "Tag-owned";
+    return tagOwnedLabel;
   }
 
   return user.name || user.displayName || user.email || user.id;

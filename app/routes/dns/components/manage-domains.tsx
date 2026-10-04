@@ -14,6 +14,7 @@ import { Form } from "react-router";
 import Button from "~/components/button";
 import Input from "~/components/input";
 import TableList from "~/components/table-list";
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function ManageDomains({ searchDomains, isDisabled, magic }: Props) {
+  const { t } = useI18n();
   const [activeId, setActiveId] = useState<number | string | null>(null);
   const [localDomains, setLocalDomains] = useState(searchDomains);
 
@@ -32,11 +34,8 @@ export default function ManageDomains({ searchDomains, isDisabled, magic }: Prop
 
   return (
     <div className="flex w-full flex-col sm:w-2/3">
-      <h1 className="mb-4 text-2xl font-medium">Search Domains</h1>
-      <p className="mb-4">
-        Set custom DNS search domains for your Tailnet. When using Magic DNS, your tailnet domain is
-        used as the first search domain.
-      </p>
+      <h1 className="mb-4 text-2xl font-medium">{t("dns.domains.title")}</h1>
+      <p className="mb-4">{t("dns.domains.body")}</p>
       <DndContext
         collisionDetection={closestCorners}
         modifiers={[restrictToVerticalAxis, restrictToParentElement]}
@@ -104,17 +103,17 @@ export default function ManageDomains({ searchDomains, isDisabled, magic }: Prop
                     "rounded-none focus:ring-0 w-full ml-1",
                   )}
                   required
-                  label="Search Domain"
+                  label={t("dns.domains.label")}
                   labelHidden
                   name="domain"
-                  placeholder="Search Domain"
+                  placeholder={t("dns.domains.label")}
                   type="text"
                 />
                 <Button
                   className={cn("px-2 py-1 rounded-md", "text-blue-500 dark:text-blue-400")}
                   type="submit"
                 >
-                  Add
+                  {t("dns.domains.add")}
                 </Button>
               </Form>
             </TableList.Item>
@@ -133,6 +132,7 @@ interface DomainProps {
 }
 
 function Domain({ domain, id, isDragging, isDisabled }: DomainProps) {
+  const { t } = useI18n();
   const {
     attributes,
     listeners,
@@ -173,7 +173,7 @@ function Domain({ domain, id, isDragging, isDisabled }: DomainProps) {
             disabled={isDisabled}
             type="submit"
           >
-            Remove
+            {t("dns.remove")}
           </Button>
         </Form>
       )}

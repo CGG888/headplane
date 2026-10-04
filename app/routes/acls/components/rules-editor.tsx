@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import Chip from "~/components/chip";
 import TableList from "~/components/table-list";
+import { useI18n } from "~/i18n/provider";
 import type { AclRule, Policy, SshRule } from "~/utils/acl-policy";
 
 import AclRuleDialog from "../dialogs/acl-rule";
@@ -31,6 +32,7 @@ export default function RulesEditor({
   sources,
   destinations,
 }: RulesEditorProps) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState<Editing>(null);
 
   const aclRule =
@@ -110,13 +112,13 @@ export default function RulesEditor({
       ) : null}
 
       <Section
-        description="Rules are evaluated top to bottom. Traffic is denied unless a rule allows it."
+        description={t("acls.rules.description")}
         isDisabled={isDisabled}
         onAdd={() => setEditing({ kind: "acl", index: null })}
-        title="Access rules"
+        title={t("acls.rules.title")}
       >
         {policy.acls.length === 0 ? (
-          <Empty text="No access rules are defined yet." />
+          <Empty text={t("acls.rules.empty")} />
         ) : (
           policy.acls.map((rule, index) => (
             <TableList.Item
@@ -126,7 +128,7 @@ export default function RulesEditor({
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {/* An unknown action is shown verbatim, never relabelled. */}
                 <span className="text-xs font-semibold uppercase opacity-60">
-                  {rule.action === "accept" ? "Allow" : rule.action}
+                  {rule.action === "accept" ? t("acls.rules.allow") : rule.action}
                 </span>
                 <ChipRow values={rule.src} />
                 <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
@@ -146,13 +148,13 @@ export default function RulesEditor({
       </Section>
 
       <Section
-        description="Control which nodes can be reached over Tailscale SSH and as which local user."
+        description={t("acls.sshSection.description")}
         isDisabled={isDisabled}
         onAdd={() => setEditing({ kind: "ssh", index: null })}
-        title="SSH rules"
+        title={t("acls.sshSection.title")}
       >
         {policy.ssh.length === 0 ? (
-          <Empty text="No SSH rules are defined yet." />
+          <Empty text={t("acls.sshSection.empty")} />
         ) : (
           policy.ssh.map((rule, index) => (
             <TableList.Item
@@ -165,7 +167,7 @@ export default function RulesEditor({
                 <ChipRow values={rule.src} />
                 <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
                 <ChipRow values={rule.dst} />
-                <span className="text-xs opacity-60">as</span>
+                <span className="text-xs opacity-60">{t("acls.sshSection.as")}</span>
                 <ChipRow values={rule.users} />
               </div>
               <RowActions
@@ -181,13 +183,13 @@ export default function RulesEditor({
       </Section>
 
       <Section
-        description="Named IP addresses and CIDR ranges that can be referenced from rules."
+        description={t("acls.hostsSection.description")}
         isDisabled={isDisabled}
         onAdd={() => setEditing({ kind: "host", name: null })}
-        title="Hosts"
+        title={t("acls.hostsSection.title")}
       >
         {hostEntries.length === 0 ? (
-          <Empty text="No hosts are defined yet." />
+          <Empty text={t("acls.hostsSection.empty")} />
         ) : (
           hostEntries.map(([name, value]) => (
             <TableList.Item key={name}>

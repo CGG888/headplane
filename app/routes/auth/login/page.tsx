@@ -6,14 +6,17 @@ import Button from "~/components/button";
 import Card from "~/components/card";
 import Code from "~/components/code";
 import Input from "~/components/input";
+import { LanguageSwitcher } from "~/components/language-switcher";
 import Link from "~/components/link";
+import type { TranslationKey } from "~/i18n";
+import { useI18n } from "~/i18n/provider";
 import { appConfigContext, authContext, oidcContext } from "~/server/context";
 import type { OidcError, OidcService } from "~/server/oidc/provider";
 import { useLiveData } from "~/utils/live-data";
 import log from "~/utils/log";
 
 import type { Route } from "./+types/page";
-import { loginAction } from "./action";
+import { loginAction, type LoginErrorCode } from "./action";
 import { OidcConfigErrorNotice, OidcDiscoveryFailedNotice } from "./config-error";
 import Logout from "./logout";
 import { OidcErrorNotice } from "./oidc-error";
@@ -76,9 +79,20 @@ function logLoginOidcError(context: string, error: OidcError): void {
   }
 }
 
+const LOGIN_ERROR_KEYS: Record<LoginErrorCode, TranslationKey> = {
+  missingKey: "login.errors.missingKey",
+  emptyKey: "login.errors.emptyKey",
+  notFound: "login.errors.notFound",
+  malformed: "login.errors.malformed",
+  expired: "login.errors.expired",
+  invalid: "login.errors.invalid",
+  unknown: "login.errors.unknown",
+};
+
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { isCookieSecureEnabled, isOidcConnectorEnabled, oidcErrorCodes, urlState } = loaderData;
 
+  const { t, tr } = useI18n();
   const [showCookieWarning, setShowCookieWarning] = useState(false);
   const [params] = useSearchParams();
   const { pause } = useLiveData();
@@ -115,7 +129,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   }
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center">
+    <div className="relative flex h-screen w-screen items-center justify-center">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <div>
         {urlState?.startsWith("error_") ? (
           <OidcErrorNotice code={urlState} />
@@ -126,53 +143,56 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         ) : showCookieWarning ? (
           <Card className="m-4 mb-4 max-w-md border border-red-500 sm:m-0 sm:mb-4">
             <div className="flex items-center justify-between gap-4">
-              <Card.Title className="text-red-500">Configuration Issue</Card.Title>
+              <Card.Title className="text-red-500">{t("login.cookieWarning.title")}</Card.Title>
               <AlertCircle className="mb-2 h-6 w-6 text-red-500" />
             </div>
             {showCookieWarning ? (
               <Card.Text className="text-sm">
-                Headplane is configured to use secure cookies, but this site is being served over an
-                insecure connection and login will not work correctly.{" "}
-                <Link
-                  external
-                  styled
-                  to="https://headplane.net/configuration/common-issues#issue-logging-in-does-not-do-anything"
-                >
-                  Learn more.
-                </Link>
+                {tr("login.cookieWarning.body", {
+                  link: (
+                    <Link
+                      external
+                      styled
+                      to="https://headplane.net/configuration/common-issues#issue-logging-in-does-not-do-anything"
+                    >
+                      {t("common.learnMore")}
+                    </Link>
+                  ),
+                })}
               </Card.Text>
             ) : undefined}
           </Card>
         ) : undefined}
         <Card className="m-4 max-w-md sm:m-0">
-          <Card.Title>Welcome to Headplane</Card.Title>
+          <Card.Title>{t("login.welcome")}</Card.Title>
           <Form method="POST">
             <Card.Text>
-              Enter an API key to authenticate with Headplane. You can generate one by running{" "}
-              <Code>headscale apikeys create</Code> in your terminal.
+              {tr("login.apiKeyDescription", {
+                command: <Code>headscale apikeys create</Code>,
+              })}
             </Card.Text>
             <Input
               className="mt-8 mb-2"
               required
-              label="API Key"
+              label={t("login.apiKeyLabel")}
               labelHidden
               name="api_key"
-              placeholder="API Key"
+              placeholder={t("login.apiKeyLabel")}
               type="password"
             />
             {actionData?.success === false ? (
               <Card.Text className="mb-2 text-sm text-red-600 dark:text-red-300">
-                {actionData.message}
+                {t(LOGIN_ERROR_KEYS[actionData.error])}
               </Card.Text>
             ) : undefined}
             <Button className="w-full" type="submit" variant="heavy">
-              Sign In
+              {t("login.signIn")}
             </Button>
           </Form>
           {isOidcConnectorEnabled ? (
             <RouterLink to="/oidc/start" prefetch="none" reloadDocument>
               <Button className="mt-2 w-full" disabled={oidcErrorCodes.length > 0} variant="light">
-                Single Sign-On
+                {t("login.sso")}
               </Button>
             </RouterLink>
           ) : undefined}

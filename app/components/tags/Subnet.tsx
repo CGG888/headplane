@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 import Chip from "../chip";
@@ -10,21 +11,20 @@ export interface SubnetTagProps {
 }
 
 export function SubnetTag({ isEnabled }: SubnetTagProps) {
+  const { t } = useI18n();
+
   return (
     <Tooltip
       content={
         isEnabled ? (
-          <>This machine advertises subnet routes.</>
+          <>{t("machines.chip.subnetEnabled")}</>
         ) : (
-          <>
-            This machine has unadvertised subnet routes. Review this from the "Edit route
-            settings..." option in the machine's menu.
-          </>
+          <>{t("machines.chip.subnetPending")}</>
         )
       }
     >
       <Chip
-        text="Subnets"
+        text={t("machines.chip.subnets")}
         className={cn("bg-blue-300 text-blue-900 dark:bg-blue-900 dark:text-blue-300")}
         rightIcon={isEnabled ? undefined : <Info className="h-full w-fit" />}
       />

@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 import Chip from "../chip";
@@ -10,21 +11,20 @@ export interface ExitNodeTagProps {
 }
 
 export function ExitNodeTag({ isEnabled }: ExitNodeTagProps) {
+  const { t } = useI18n();
+
   return (
     <Tooltip
       content={
         isEnabled ? (
-          <>This machine is acting as an exit node.</>
+          <>{t("machines.chip.exitNodeEnabled")}</>
         ) : (
-          <>
-            This machine is requesting to be used as an exit node. Review this from the "Edit route
-            settings..." option in the machine's menu.
-          </>
+          <>{t("machines.chip.exitNodePending")}</>
         )
       }
     >
       <Chip
-        text="Exit Node"
+        text={t("machines.chip.exitNode")}
         className={cn("bg-blue-300 text-blue-900 dark:bg-blue-900 dark:text-blue-300")}
         rightIcon={isEnabled ? undefined : <Info className="h-full w-fit" />}
       />

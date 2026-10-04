@@ -1,4 +1,4 @@
-import { data } from "react-router";
+﻿import { data } from "react-router";
 
 import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -19,9 +19,12 @@ export async function userAction({ request, context }: Route.ActionArgs) {
   const principal = await auth.require(request);
   const check = await auth.can(principal, Capabilities.write_users);
   if (!check) {
-    throw data("You do not have permission to update users", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.updateUsers" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   const formData = await request.formData();
@@ -147,7 +150,7 @@ export async function userAction({ request, context }: Route.ActionArgs) {
     case "update_user_groups": {
       // Group membership lives in the policy, so `write_policy` is needed too.
       if (!auth.can(principal, Capabilities.write_policy)) {
-        throw data("You do not have permission to write to the ACL policy", { status: 403 });
+        throw data({ localized: { key: "errors.permission.writePolicy" } }, { status: 403 });
       }
 
       const userName = formData.get("user_name")?.toString();
@@ -178,13 +181,8 @@ export async function userAction({ request, context }: Route.ActionArgs) {
         // then, but a stale page can still reach this point.
         const message = isDataWithApiError(error) ? error.data.rawData : String(error);
         if (message.includes("update is disabled")) {
-          return data(
-            {
-              error:
-                "The ACL policy is read-only. Set `policy.mode` to `database` in your Headscale configuration to edit groups.",
-            },
-            403,
-          );
+          // The UI translates this code; the raw API message stays in the logs.
+          return data({ errorCode: "policyReadOnly" }, 403);
         }
 
         return data({ error: `Could not update the ACL policy: ${message}` }, 500);

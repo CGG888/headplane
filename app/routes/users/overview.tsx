@@ -1,6 +1,9 @@
-import { createHash } from "node:crypto";
+﻿import { createHash } from "node:crypto";
+
+import { data } from "react-router";
 
 import PageError from "~/components/page-error";
+import { useI18n } from "~/i18n/provider";
 import {
   appConfigContext,
   authContext,
@@ -55,9 +58,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const principal = await auth.require(request);
   const check = await auth.can(principal, Capabilities.read_users);
   if (!check) {
-    throw new Error(
-      "You do not have permission to view this page. Please contact your administrator.",
-    );
+    throw data({ localized: { key: "errors.permission.view" } }, { status: 403 });
   }
 
   const writablePermission = await auth.can(principal, Capabilities.write_users);
@@ -68,7 +69,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // Secondary data: Headscale API (may fail)
   let apiUsers: User[] = [];
   let nodes: Machine[] = [];
-  let apiError: string | undefined;
+  // The UI translates this flag, so the loader never emits user-facing text.
+  let apiUnavailable = false;
   let policyGroups: string[] = [];
   let groupsByUser = new Map<string, string[]>();
   // `write_policy` is a role capability; `file` mode refuses the write anyway.
@@ -102,8 +104,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     }
   } catch (error) {
     log.warn("api", "Failed to fetch Headscale API data: %s", String(error));
-    apiError =
-      "Could not connect to the Headscale API. Headscale user data and machine information are unavailable.";
+    apiUnavailable = true;
   }
 
   const useGravatar = config.oidc?.profile_picture_source === "gravatar";
@@ -179,7 +180,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     isOwner,
     oidc: config.oidc ? { issuer: config.oidc.issuer } : undefined,
     magic,
-    apiError,
+    apiUnavailable,
     headplaneUsers,
     unlinkedHeadscaleUsers,
     headscaleUsersForLink,
@@ -189,13 +190,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export const action = userAction;
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const { t } = useI18n();
+
   return (
     <>
-      <h1 className="mb-1.5 text-2xl font-medium">Users</h1>
-      <p className="text-md mb-8">Manage the users in your network and their permissions.</p>
+      <h1 className="mb-1.5 text-2xl font-medium">{t("users.list.title")}</h1>
+      <p className="text-md mb-8">{t("users.list.subtitle")}</p>
       <ManageBanner isDisabled={!loaderData.writable} oidc={loaderData.oidc} />
 
-      {loaderData.apiError && (
+      {loaderData.apiUnavailable && (
         <div
           className={cn(
             "mb-6 flex items-start gap-3 rounded-lg border p-4",
@@ -203,27 +206,29 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             "dark:border-red-800 dark:bg-red-950 dark:text-red-200",
           )}
         >
-          <p className="text-sm">{loaderData.apiError}</p>
+          <p className="text-sm">{t("users.list.apiError")}</p>
         </div>
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-medium">Headplane Users</h2>
+        <h2 className="mb-3 text-lg font-medium">{t("users.list.headplaneSection")}</h2>
         {loaderData.headplaneUsers.length === 0 ? (
-          <p className="text-sm text-mist-600 dark:text-mist-300">
-            No users have signed into Headplane yet.
-          </p>
+          <p className="text-sm text-mist-600 dark:text-mist-300">{t("users.list.empty")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] table-auto rounded-lg">
               <thead className="text-mist-600 dark:text-mist-300">
                 <tr className="px-0.5 text-left">
-                  <th className="pb-2 text-xs font-bold uppercase">User</th>
-                  <th className="pb-2 text-xs font-bold uppercase">Role</th>
-                  <th className="pb-2 text-xs font-bold uppercase">Last Login</th>
-                  <th className="pb-2 text-xs font-bold uppercase">Status</th>
+                  <th className="pb-2 text-xs font-bold uppercase">{t("users.list.columnUser")}</th>
+                  <th className="pb-2 text-xs font-bold uppercase">{t("users.list.columnRole")}</th>
+                  <th className="pb-2 text-xs font-bold uppercase">
+                    {t("users.list.columnLastLogin")}
+                  </th>
+                  <th className="pb-2 text-xs font-bold uppercase">
+                    {t("users.list.columnStatus")}
+                  </th>
                   <th className="w-12 pb-2">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("users.list.actions")}</span>
                   </th>
                 </tr>
               </thead>
@@ -251,22 +256,25 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         )}
       </section>
 
-      {!loaderData.apiError && loaderData.unlinkedHeadscaleUsers.length > 0 && (
+      {!loaderData.apiUnavailable && loaderData.unlinkedHeadscaleUsers.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-1 text-lg font-medium">Unlinked Headscale Users</h2>
+          <h2 className="mb-1 text-lg font-medium">{t("users.list.unlinkedSection")}</h2>
           <p className="mb-3 text-sm text-mist-600 dark:text-mist-300">
-            These Headscale users are not linked to a Headplane account and cannot be managed
-            through Headplane.
+            {t("users.list.unlinkedBody")}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] table-auto rounded-lg">
               <thead className="text-mist-600 dark:text-mist-300">
                 <tr className="px-0.5 text-left">
-                  <th className="pb-2 text-xs font-bold uppercase">User</th>
-                  <th className="pb-2 text-xs font-bold uppercase">Created At</th>
-                  <th className="pb-2 text-xs font-bold uppercase">Status</th>
+                  <th className="pb-2 text-xs font-bold uppercase">{t("users.list.columnUser")}</th>
+                  <th className="pb-2 text-xs font-bold uppercase">
+                    {t("users.list.columnCreatedAt")}
+                  </th>
+                  <th className="pb-2 text-xs font-bold uppercase">
+                    {t("users.list.columnStatus")}
+                  </th>
                   <th className="w-12 pb-2">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("users.list.actions")}</span>
                   </th>
                 </tr>
               </thead>

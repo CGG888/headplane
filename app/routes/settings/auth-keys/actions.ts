@@ -1,4 +1,4 @@
-import { data } from "react-router";
+﻿import { data } from "react-router";
 
 import { authContext, requestApiContext } from "~/server/context";
 import { isUserPrincipal } from "~/server/web/auth";
@@ -18,9 +18,12 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
   const canGenerateOwn = auth.can(principal, Capabilities.generate_own_authkeys);
 
   if (!canGenerateAny && !canGenerateOwn) {
-    throw data("You do not have permission to manage pre-auth keys", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.managePreAuthKeys" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   async function checkSelfServiceOwnership(userId: string) {
@@ -34,9 +37,12 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
       isUserPrincipal(principal) &&
       (principal.user.headscaleUserId === userId || targetSubject === principal.user.subject);
     if (!ownsTarget) {
-      throw data("You do not have permission to manage this user's pre-auth keys", {
-        status: 403,
-      });
+      throw data(
+        { localized: { key: "errors.permission.manageUserPreAuthKeys" } },
+        {
+          status: 403,
+        },
+      );
     }
   }
 

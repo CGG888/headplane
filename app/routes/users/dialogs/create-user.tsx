@@ -3,7 +3,8 @@ import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
-import { USERNAME_PATTERN, USERNAME_RULE } from "~/utils/user";
+import { useI18n } from "~/i18n/provider";
+import { USERNAME_PATTERN } from "~/utils/user";
 
 interface CreateUserProps {
   isOidc?: boolean;
@@ -11,32 +12,40 @@ interface CreateUserProps {
 }
 
 export default function CreateUser({ isOidc, isDisabled }: CreateUserProps) {
+  const { t } = useI18n();
+  const usernameRule = t("users.create.usernameRule");
+
   return (
     <Dialog>
-      <Button disabled={isDisabled}>Add user</Button>
+      <Button disabled={isDisabled}>{t("users.create.addUser")}</Button>
       <DialogPanel>
-        <Title>Create a Headscale user</Title>
-        <Text className="mb-6">
-          This creates a new user in Headscale. The user will appear in the &ldquo;Unlinked
-          Headscale Users&rdquo; section until they sign in
-          {isOidc ? " through your OIDC provider" : ""} and are automatically linked to a Headplane
-          account.
-        </Text>
+        <Title>{t("users.create.title")}</Title>
+        <Text className="mb-6">{isOidc ? t("users.create.bodyOidc") : t("users.create.body")}</Text>
         <input name="action_id" type="hidden" value="create_user" />
         <div className="flex flex-col gap-4">
           <Input
-            description={USERNAME_RULE}
+            description={usernameRule}
             minLength={2}
             pattern={USERNAME_PATTERN}
             required
-            title={USERNAME_RULE}
-            label="Username"
+            title={usernameRule}
+            label={t("users.create.username")}
             name="username"
-            placeholder="my-new-user"
+            placeholder={t("users.create.placeholderUsername")}
             type="text"
           />
-          <Input label="Display Name" name="display_name" placeholder="John Doe" type="text" />
-          <Input label="Email" name="email" placeholder="name@example.com" type="email" />
+          <Input
+            label={t("users.create.displayName")}
+            name="display_name"
+            placeholder={t("users.create.placeholderDisplayName")}
+            type="text"
+          />
+          <Input
+            label={t("users.create.email")}
+            name="email"
+            placeholder={t("users.create.placeholderEmail")}
+            type="email"
+          />
         </div>
       </DialogPanel>
     </Dialog>

@@ -9,6 +9,7 @@ import Link from "~/components/link";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import { useI18n } from "~/i18n/provider";
 import type { Machine } from "~/types";
 import cn from "~/utils/cn";
 
@@ -22,6 +23,7 @@ interface TagsProps {
 }
 
 export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyTags }: TagsProps) {
+  const { t, tr } = useI18n();
   const fetcher = useFetcher();
   const submittingRef = useRef(false);
   const [tags, setTags] = useState([...machine.tags]);
@@ -39,7 +41,12 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
     [policyTags, tags],
   );
 
-  const error = fetcher.data && !fetcher.data.success ? fetcher.data.error : null;
+  const error =
+    fetcher.data && !fetcher.data.success
+      ? fetcher.data.errorCode
+        ? t("machines.tags.notInPolicy")
+        : fetcher.data.error
+      : null;
 
   useEffect(() => {
     if (fetcher.data?.success) {
@@ -75,18 +82,20 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
           const form = new FormData();
           form.set("action_id", "update_tags");
           form.set("node_id", machine.id);
-          form.set("tags", tags.filter((t) => t !== "").join(","));
+          form.set("tags", tags.filter((entry) => entry !== "").join(","));
           fetcher.submit(form, { method: "POST" });
         }}
         isDisabled={fetcher.state !== "idle"}
       >
-        <Title>Edit ACL tags for {machine.givenName}</Title>
+        <Title>{t("machines.tags.title", { name: machine.givenName })}</Title>
         <Text>
-          ACL tags can be used to reference machines in your ACL policies. See the{" "}
-          <Link external styled to="https://tailscale.com/kb/1068/acl-tags">
-            Tailscale documentation
-          </Link>{" "}
-          for more information.
+          {tr("machines.tags.description", {
+            link: (
+              <Link external styled to="https://tailscale.com/kb/1068/acl-tags">
+                {t("machines.tags.tailscaleDocs")}
+              </Link>
+            ),
+          })}
         </Text>
         {error ? (
           <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -97,7 +106,7 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
           {tags.length === 0 ? (
             <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
               <TagsIcon />
-              <p className="font-semibold">No tags are set on this machine</p>
+              <p className="font-semibold">{t("machines.tags.empty")}</p>
             </TableList.Item>
           ) : (
             tags.map((item) => (
@@ -124,13 +133,13 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
 
         <div className="mt-2 flex items-center gap-2">
           <Input
-            aria-label="Add a tag"
+            aria-label={t("machines.tags.addLabel")}
             className="w-full"
             value={tag}
             onChange={setTag}
             invalid={tag.length > 0 && tagIsInvalid}
-            placeholder="tag:example"
-            label="Tag"
+            placeholder={t("machines.tags.placeholder")}
+            label={t("machines.tags.tagLabel")}
             labelHidden
           />
           <Button
@@ -162,20 +171,19 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
         ) : null}
         {undeclaredTags.length > 0 ? (
           <p className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-            {undeclaredTags.join(", ")} {undeclaredTags.length === 1 ? "is" : "are"} not declared
-            under <code className="font-mono">tagOwners</code> in your policy, so no rule will match{" "}
-            {undeclaredTags.length === 1 ? "it" : "them"}. Declare{" "}
-            {undeclaredTags.length === 1 ? "it" : "them"} in{" "}
-            <Link styled to="/acls">
-              Access Control
-            </Link>
-            .
+            {tr("machines.tags.undeclared", {
+              count: undeclaredTags.length,
+              tags: undeclaredTags.join(", "),
+              tagOwners: <code className="font-mono">tagOwners</code>,
+              accessControl: (
+                <Link styled to="/acls">
+                  {t("pages.Access Control")}
+                </Link>
+              ),
+            })}
           </p>
         ) : null}
-        <p className="mt-2 text-sm opacity-50">
-          Not seeing the tags you expect? Tags need to be defined in your access control policy
-          before they can be assigned to machines.
-        </p>
+        <p className="mt-2 text-sm opacity-50">{t("machines.tags.undeclaredHint")}</p>
       </DialogPanel>
     </Dialog>
   );

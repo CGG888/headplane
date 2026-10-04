@@ -7,6 +7,7 @@ import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import { useI18n } from "~/i18n/provider";
 import { PopulatedNode } from "~/utils/node-info";
 
 interface RoutesProps {
@@ -17,6 +18,7 @@ interface RoutesProps {
 
 // TODO: Support deleting routes
 export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
+  const { t } = useI18n();
   const fetcher = useFetcher();
 
   const subnets = [
@@ -27,20 +29,19 @@ export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
   return (
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
       <DialogPanel variant="unactionable">
-        <Title>Edit route settings of {node.givenName}</Title>
-        <Text className="font-bold">Subnet routes</Text>
+        <Title>{t("machines.routes.title", { name: node.givenName })}</Title>
+        <Text className="font-bold">{t("machines.routes.subnetTitle")}</Text>
         <Text>
-          Connect to devices you can&apos;t install Tailscale on by advertising IP ranges as subnet
-          routes.{" "}
+          {t("machines.routes.subnetBody")}{" "}
           <Link external styled to="https://tailscale.com/kb/1019/subnets">
-            Learn More
+            {t("common.learnMore")}
           </Link>
         </Text>
         <TableList className="mt-4">
           {subnets.length === 0 ? (
             <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
               <RouteOff />
-              <p className="font-semibold">No routes are advertised by this machine</p>
+              <p className="font-semibold">{t("machines.routes.subnetEmpty")}</p>
             </TableList.Item>
           ) : undefined}
           {subnets.map((route) => (
@@ -48,7 +49,7 @@ export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
               <p>{route}</p>
               <Switch
                 defaultChecked={node.approvedRoutes.includes(route)}
-                label="Enabled"
+                label={t("machines.routes.enabled")}
                 onCheckedChange={(checked) => {
                   const form = new FormData();
                   form.set("action_id", "update_routes");
@@ -64,25 +65,25 @@ export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
             </TableList.Item>
           ))}
         </TableList>
-        <Text className="mt-8 font-bold">Exit nodes</Text>
+        <Text className="mt-8 font-bold">{t("machines.routes.exitTitle")}</Text>
         <Text>
-          Allow your network to route internet traffic through this machine.{" "}
+          {t("machines.routes.exitBody")}{" "}
           <Link external styled to="https://tailscale.com/kb/1103/exit-nodes">
-            Learn More
+            {t("common.learnMore")}
           </Link>
         </Text>
         <TableList className="mt-4">
           {node.customRouting.exitRoutes.length === 0 ? (
             <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
               <GlobeLock />
-              <p className="font-semibold">This machine is not an exit node</p>
+              <p className="font-semibold">{t("machines.routes.exitEmpty")}</p>
             </TableList.Item>
           ) : (
             <TableList.Item>
-              <p>Use as exit node</p>
+              <p>{t("machines.routes.useAsExitNode")}</p>
               <Switch
                 defaultChecked={node.customRouting.exitApproved}
-                label="Enabled"
+                label={t("machines.routes.enabled")}
                 onCheckedChange={(checked) => {
                   const form = new FormData();
                   form.set("action_id", "update_routes");

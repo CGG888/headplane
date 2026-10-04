@@ -1,4 +1,4 @@
-import { data } from "react-router";
+﻿import { data } from "react-router";
 
 import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -23,9 +23,12 @@ export async function aclLoader({ request, context }: Route.LoaderArgs) {
   const principal = await auth.require(request);
   const check = auth.can(principal, Capabilities.read_policy);
   if (!check) {
-    throw data("You do not have permission to read the ACL policy.", {
-      status: 403,
-    });
+    throw data(
+      { localized: { key: "errors.permission.readPolicy" } },
+      {
+        status: 403,
+      },
+    );
   }
 
   const flags = {

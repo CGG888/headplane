@@ -1,12 +1,13 @@
-import { ChevronDown, ChevronUp, Info, X } from "lucide-react";
+﻿import { ChevronDown, ChevronUp, Info, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { data, useSearchParams } from "react-router";
 
 import Code from "~/components/code";
 import Input from "~/components/input";
 import Link from "~/components/link";
 import PageError from "~/components/page-error";
 import Tooltip from "~/components/tooltip";
+import { useI18n } from "~/i18n/provider";
 import {
   agentsContext,
   appConfigContext,
@@ -46,9 +47,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const principal = await auth.require(request);
 
   if (!auth.can(principal, Capabilities.read_machines)) {
-    throw new Error(
-      "You do not have permission to view this page. Please contact your administrator.",
-    );
+    throw data({ localized: { key: "errors.permission.view" } }, { status: 403 });
   }
 
   const writablePermission = auth.can(principal, Capabilities.write_machines);
@@ -118,6 +117,7 @@ const ROUTE_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const { t, tr } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -242,11 +242,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col">
-          <h1 className="mb-2 text-2xl font-medium">Machines</h1>
+          <h1 className="mb-2 text-2xl font-medium">{t("machines.list.title")}</h1>
           <p>
-            Manage the devices connected to your Tailnet.{" "}
+            {t("machines.list.subtitle")}{" "}
             <Link external styled to="https://tailscale.com/kb/1372/manage-devices">
-              Learn more
+              {t("common.learnMore")}
             </Link>
           </p>
         </div>
@@ -260,16 +260,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-64">
           <Input
-            label="Search machines"
+            label={t("machines.list.searchLabel")}
             labelHidden
             maxLength={100}
             onChange={setSearchQuery}
-            placeholder="Search by name or IP address..."
+            placeholder={t("machines.list.searchPlaceholder")}
             value={searchQuery}
           />
           {searchQuery && (
             <button
-              aria-label="Clear search"
+              aria-label={t("machines.list.clearSearch")}
               className={cn(
                 "absolute right-2 top-1/2 -translate-y-1/2",
                 "p-1 rounded-full",
@@ -287,8 +287,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <MachineFilters users={loaderData.users} populatedNodes={loaderData.populatedNodes} />
         <span className="ml-auto text-sm whitespace-nowrap text-mist-500">
           {searchQuery || hasActiveFilters
-            ? `Showing ${filteredAndSortedNodes.length} of ${loaderData.populatedNodes.length} machines`
-            : `${loaderData.populatedNodes.length} machines`}
+            ? t("machines.list.showing", {
+                count: filteredAndSortedNodes.length,
+                total: loaderData.populatedNodes.length,
+              })
+            : t("machines.list.total", { count: loaderData.populatedNodes.length })}
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -306,7 +309,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 className="pb-2 text-xs font-bold uppercase"
               >
                 <button
-                  aria-label="Sort by name"
+                  aria-label={t("machines.list.sortByName")}
                   className={cn(
                     "flex items-center gap-x-1 cursor-pointer",
                     "hover:text-mist-900 dark:hover:text-mist-100",
@@ -314,7 +317,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   onClick={() => handleSort("name")}
                   type="button"
                 >
-                  Name
+                  {t("machines.list.columnName")}
                   {sortField === "name" &&
                     (sortDirection === "asc" ? (
                       <ChevronUp className="h-3 w-3" />
@@ -335,7 +338,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               >
                 <div className="flex items-center gap-x-1">
                   <button
-                    aria-label="Sort by IP address"
+                    aria-label={t("machines.list.sortByIp")}
                     className={cn(
                       "flex items-center gap-x-1 cursor-pointer uppercase text-xs font-bold",
                       "hover:text-mist-900 dark:hover:text-mist-100",
@@ -343,7 +346,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     onClick={() => handleSort("ip")}
                     type="button"
                   >
-                    Addresses
+                    {t("machines.list.columnAddresses")}
                     {sortField === "ip" &&
                       (sortDirection === "asc" ? (
                         <ChevronUp className="h-3 w-3" />
@@ -355,12 +358,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     <Tooltip
                       content={
                         <span className="font-normal">
-                          Since MagicDNS is enabled, you can access devices based on their name and
-                          also at{" "}
-                          <Code>
-                            [name].
-                            {loaderData.magic}
-                          </Code>
+                          {tr("machines.list.magicDnsTooltip", {
+                            code: (
+                              <Code>
+                                [name].
+                                {loaderData.magic}
+                              </Code>
+                            ),
+                          })}
                         </span>
                       }
                     >
@@ -382,7 +387,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   className="pb-2 text-xs font-bold uppercase"
                 >
                   <button
-                    aria-label="Sort by version"
+                    aria-label={t("machines.list.sortByVersion")}
                     className={cn(
                       "flex items-center gap-x-1 cursor-pointer",
                       "hover:text-mist-900 dark:hover:text-mist-100",
@@ -390,7 +395,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     onClick={() => handleSort("version")}
                     type="button"
                   >
-                    Version
+                    {t("machines.list.columnVersion")}
                     {sortField === "version" &&
                       (sortDirection === "asc" ? (
                         <ChevronUp className="h-3 w-3" />
@@ -411,7 +416,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 className="pb-2 text-xs font-bold uppercase"
               >
                 <button
-                  aria-label="Sort by last seen"
+                  aria-label={t("machines.list.sortByLastSeen")}
                   className={cn(
                     "flex items-center gap-x-1 cursor-pointer",
                     "hover:text-mist-900 dark:hover:text-mist-100",
@@ -419,7 +424,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   onClick={() => handleSort("lastSeen")}
                   type="button"
                 >
-                  Last Seen
+                  {t("machines.list.columnLastSeen")}
                   {sortField === "lastSeen" &&
                     (sortDirection === "asc" ? (
                       <ChevronUp className="h-3 w-3" />
@@ -429,7 +434,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 </button>
               </th>
               <th className="w-12 pb-2">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t("machines.list.actions")}</span>
               </th>
             </tr>
           </thead>
@@ -445,7 +450,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   className="py-8 text-center text-mist-500"
                   colSpan={loaderData.agent !== undefined ? 6 : 5}
                 >
-                  No machines match the current filters
+                  {t("machines.list.empty")}
                 </td>
               </tr>
             ) : (

@@ -58,6 +58,7 @@ export default defineConfig({
               { text: "Access Control", link: "/features/acls" },
               { text: "Headplane Agent", link: "/features/agent" },
               { text: "Browser SSH", link: "/features/ssh" },
+              { text: "Languages", link: "/features/languages" },
             ],
           },
           {

@@ -1,6 +1,7 @@
 import { Building2, House } from "lucide-react";
 
 import Link from "~/components/link";
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 import CreateUser from "../dialogs/create-user";
@@ -11,6 +12,8 @@ interface ManageBannerProps {
 }
 
 export default function ManageBanner({ oidc, isDisabled }: ManageBannerProps) {
+  const { t, tr } = useI18n();
+
   return (
     <div
       className={cn(
@@ -21,22 +24,21 @@ export default function ManageBanner({ oidc, isDisabled }: ManageBannerProps) {
       <div className="flex items-center gap-3">
         {oidc ? <Building2 className="h-5 w-5 shrink-0" /> : <House className="h-5 w-5 shrink-0" />}
         <p className="text-sm text-mist-600 dark:text-mist-300">
-          {oidc ? (
-            <>
-              Users are managed through your{" "}
-              <Link external styled to={oidc.issuer}>
-                OIDC provider
-              </Link>
-              .
-            </>
-          ) : (
-            <>
-              Users are managed locally.{" "}
-              <Link styled to="https://headscale.net/stable/ref/oidc">
-                Set up OIDC
-              </Link>
-            </>
-          )}
+          {oidc
+            ? tr("users.banner.oidc", {
+                link: (
+                  <Link external styled to={oidc.issuer}>
+                    {t("users.banner.oidcLink")}
+                  </Link>
+                ),
+              })
+            : tr("users.banner.local", {
+                link: (
+                  <Link styled to="https://headscale.net/stable/ref/oidc">
+                    {t("users.banner.setupOidc")}
+                  </Link>
+                ),
+              })}
         </p>
       </div>
       <CreateUser isDisabled={isDisabled} isOidc={oidc !== undefined} />

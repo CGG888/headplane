@@ -21,7 +21,11 @@
 
   --height-editor: calc(100vh - 20rem);
 
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Inter has no CJK glyphs, so the CJK families are listed explicitly to get
+   * a consistent fallback for Simplified and Traditional Chinese. */
+  --font-sans:
+    "Inter Variable", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
 
   --transition-duration-25: 25ms;
   --transition-duration-50: 50ms;

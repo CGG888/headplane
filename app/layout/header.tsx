@@ -13,8 +13,11 @@ import {
 } from "lucide-react";
 import { NavLink, unstable_useRoute as useRoute, useLocation, useSubmit } from "react-router";
 
+import { LanguageMenuItems } from "~/components/language-switcher";
 import Link from "~/components/link";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "~/components/menu";
+import type { TranslationKey } from "~/i18n";
+import { useI18n } from "~/i18n/provider";
 import logoBg from "~/logo/dark-bg.svg";
 import logoDark from "~/logo/dark.svg";
 import logoLight from "~/logo/light.svg";
@@ -41,25 +44,31 @@ export interface HeaderProps {
 }
 
 const tabs = [
-  { to: "/machines", icon: Server, label: "Machines", key: "machines" },
-  { to: "/users", icon: Users, label: "Users", key: "users" },
-  { to: "/acls", icon: Lock, label: "Access Control", key: "policy" },
-  { to: "/dns", icon: Globe, label: "DNS", key: "dns" },
-  { to: "/settings", icon: Settings, label: "Settings", key: "settings" },
-] as const;
+  { to: "/machines", icon: Server, labelKey: "header.tabs.machines", key: "machines" },
+  { to: "/users", icon: Users, labelKey: "header.tabs.users", key: "users" },
+  { to: "/acls", icon: Lock, labelKey: "header.tabs.policy", key: "policy" },
+  { to: "/dns", icon: Globe, labelKey: "header.tabs.dns", key: "dns" },
+  { to: "/settings", icon: Settings, labelKey: "header.tabs.settings", key: "settings" },
+] as const satisfies ReadonlyArray<{
+  to: string;
+  icon: typeof Server;
+  labelKey: TranslationKey;
+  key: keyof HeaderProps["access"];
+}>;
 
 const colorSchemes = [
-  { value: "system", label: "System", icon: Monitor },
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", labelKey: "header.colorScheme.system", icon: Monitor },
+  { value: "light", labelKey: "header.colorScheme.light", icon: Sun },
+  { value: "dark", labelKey: "header.colorScheme.dark", icon: Moon },
 ] as const satisfies ReadonlyArray<{
   value: ColorScheme;
-  label: string;
+  labelKey: TranslationKey;
   icon: typeof Monitor;
 }>;
 
 export default function Header({ user, access, configAvailable }: HeaderProps) {
   const submit = useSubmit();
+  const { t } = useI18n();
   const showTabs = access.ui;
   const rootRoute = useRoute("root");
   const currentColorScheme: ColorScheme = rootRoute?.loaderData?.colorScheme ?? "system";
@@ -82,7 +91,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
             <picture className="min-w-8">
               <source srcSet={logoLight} media="(prefers-color-scheme: dark)" />
               <source srcSet={logoDark} media="(prefers-color-scheme: light)" />
-              <img src={logoBg} alt="Headplane logo" />
+              <img src={logoBg} alt={t("header.logoAlt")} />
             </picture>
             <h1 className="text-2xl font-semibold">headplane</h1>
           </div>
@@ -110,7 +119,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                     to={tab.to}
                   >
                     <tab.icon className="w-4" />
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </NavLink>
                 );
               })}
@@ -125,17 +134,17 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
             <MenuContent align="end">
               <MenuItem>
                 <Link external to="https://headplane.net">
-                  Docs
+                  {t("header.help.docs")}
                 </Link>
               </MenuItem>
               <MenuItem>
                 <Link external to="https://headscale.net">
-                  Headscale
+                  {t("header.help.headscale")}
                 </Link>
               </MenuItem>
               <MenuItem>
                 <Link external to="https://tailscale.com/download">
-                  Download
+                  {t("header.help.download")}
                 </Link>
               </MenuItem>
             </MenuContent>
@@ -153,7 +162,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                 <div className="text-mist-900 dark:text-mist-50">
                   {user.subject === "api_key" ? (
                     <>
-                      <p className="font-bold">API Key</p>
+                      <p className="font-bold">{t("header.apiKey")}</p>
                       <p>{user.name}</p>
                     </>
                   ) : (
@@ -165,7 +174,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                 </div>
               </MenuItem>
               <MenuSeparator />
-              {colorSchemes.map(({ value, label, icon: Icon }) => (
+              {colorSchemes.map(({ value, labelKey, icon: Icon }) => (
                 <MenuItem
                   key={value}
                   onClick={() =>
@@ -177,17 +186,19 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                 >
                   <div className="flex items-center gap-x-2">
                     <Icon className="size-4" />
-                    <span className="flex-1">{label}</span>
+                    <span className="flex-1">{t(labelKey)}</span>
                     {currentColorScheme === value && <Check className="size-4" />}
                   </div>
                 </MenuItem>
               ))}
               <MenuSeparator />
+              <LanguageMenuItems />
+              <MenuSeparator />
               <MenuItem
                 variant="danger"
                 onClick={() => submit({}, { action: "/logout", method: "POST" })}
               >
-                Logout
+                {t("header.logout")}
               </MenuItem>
             </MenuContent>
           </Menu>
@@ -218,7 +229,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                   to={tab.to}
                 >
                   <tab.icon className="w-4" />
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </NavLink>
               );
             })}

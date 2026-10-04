@@ -2,6 +2,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
 import Link from "~/components/link";
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 export interface FooterProps {
@@ -11,6 +12,7 @@ export interface FooterProps {
 
 export default function Footer({ isDebug, baseUrl }: FooterProps) {
   const [urlVisible, setUrlVisible] = useState(false);
+  const { t, tr } = useI18n();
 
   return (
     <footer
@@ -22,11 +24,13 @@ export default function Footer({ isDebug, baseUrl }: FooterProps) {
     >
       <div className="container flex items-center justify-between py-2">
         <p className="text-xs">
-          Headplane is free and open-source. Please consider{" "}
-          <Link external styled to="https://tale.me/sponsor">
-            sponsoring
-          </Link>{" "}
-          to support development.
+          {tr("footer.sponsor", {
+            link: (
+              <Link external styled to="https://tale.me/sponsor">
+                {t("footer.sponsorLink")}
+              </Link>
+            ),
+          })}
         </p>
         <div className="flex items-center gap-2 text-xs">
           {isDebug && (
@@ -37,7 +41,7 @@ export default function Footer({ isDebug, baseUrl }: FooterProps) {
                 "dark:bg-amber-900/50 dark:text-amber-300",
               )}
             >
-              Debug
+              {t("footer.debug")}
             </span>
           )}
           <p className="text-mist-500 dark:text-mist-400">
@@ -49,7 +53,7 @@ export default function Footer({ isDebug, baseUrl }: FooterProps) {
             )}
             <button
               type="button"
-              aria-label={urlVisible ? "Hide server URL" : "Show server URL"}
+              aria-label={urlVisible ? t("footer.hideServerUrl") : t("footer.showServerUrl")}
               className={cn(
                 "ml-1 inline-flex align-middle rounded-xs p-0.5",
                 "text-mist-400 hover:text-mist-600",

@@ -1,6 +1,7 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, ChevronDown } from "lucide-react";
 
+import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 export interface SelectItem {
@@ -39,6 +40,7 @@ export default function Select({
   name,
   ...props
 }: SelectProps) {
+  const { t } = useI18n();
   const selectedItem =
     value !== undefined ? (items.find((i) => i.value === value) ?? null) : undefined;
   const defaultSelectedItem =
@@ -103,7 +105,7 @@ export default function Select({
               )}
             >
               <Combobox.Empty className="px-3 py-2 text-sm text-mist-500 empty:hidden">
-                No results found.
+                {t("common.noResults")}
               </Combobox.Empty>
               <Combobox.List>
                 {(item: SelectItem) => (

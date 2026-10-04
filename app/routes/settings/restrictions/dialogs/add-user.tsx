@@ -6,6 +6,7 @@ import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
 import { useForm } from "~/hooks/use-form";
+import { useI18n } from "~/i18n/provider";
 
 const userSchema = type({
   user: "string > 0",
@@ -17,6 +18,7 @@ interface AddUserProps {
 }
 
 export default function AddUser({ users, isDisabled }: AddUserProps) {
+  const { t } = useI18n();
   const form = useForm({
     schema: userSchema,
     validate: (values) => {
@@ -24,7 +26,7 @@ export default function AddUser({ users, isDisabled }: AddUserProps) {
       if (user.length === 0) return undefined;
 
       if (users.includes(user)) {
-        return { user: "This user already exists in the list." };
+        return { user: t("settings.addUser.duplicate") };
       }
 
       return undefined;
@@ -33,19 +35,17 @@ export default function AddUser({ users, isDisabled }: AddUserProps) {
 
   return (
     <Dialog>
-      <Button disabled={isDisabled}>Add user</Button>
+      <Button disabled={isDisabled}>{t("settings.addUser.button")}</Button>
       <DialogPanel>
-        <Title>Add user</Title>
-        <Text className="mb-4">
-          Add this user to a list of allowed users that can authenticate with Headscale via OIDC.
-        </Text>
+        <Title>{t("settings.addUser.title")}</Title>
+        <Text className="mb-4">{t("settings.addUser.body")}</Text>
         <input name="action_id" type="hidden" value="add_user" />
         <Input
           {...form.field("user")}
-          description="The user to allow for OIDC authentication."
+          description={t("settings.addUser.description")}
           required
-          label="User"
-          placeholder="john_doe"
+          label={t("settings.addUser.label")}
+          placeholder={t("settings.addUser.placeholder")}
         />
       </DialogPanel>
     </Dialog>

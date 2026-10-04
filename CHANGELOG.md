@@ -4,6 +4,7 @@ Building Headplane from source now requires Go 1.27.1 or newer.
 
 ## Changes
 
+- Added a language switcher for English, Simplified Chinese, and Traditional Chinese. The choice is cached in a `locale` cookie and applied server-side, so the whole interface — including the login page, error pages, and permission failures — renders in the selected language, and timestamps follow the selected locale. On a first visit the language is picked from the browser's `Accept-Language` header.
 - Added `config.oidc.jwks_endpoint` to allow manually setting the JWKs keyset for OIDC (via [#620](https://github.com/tale/headplane/pull/620)).
 
 ## Fixes
