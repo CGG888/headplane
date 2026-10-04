@@ -1,11 +1,15 @@
 # Next
 
+# 0.9.0 (October 4, 2026)
+
 ## Changes
 
 - Added a **Headscale API key** page under Settings: list the keys, create one (the full key is shown once) and expire the ones you no longer need, without dropping into the server shell.
 - Machine expiry can now be set to a **specific date and time**, alongside the existing "never expires" and "default expiry" choices.
 - The Access Control editor can now edit **`grants`** (the policy syntax Headscale recommends over `acls`), **`autoApprovers`** (automatic route and exit-node approval) and **`nodeAttrs`** (Taildrive, NextDNS, MagicDNS AAAA and the other node attributes). Unknown keys inside those sections and everywhere else are still preserved untouched.
 - Added a **Headscale settings** page: the full OIDC block (issuer, client ID, secret, scopes, PKCE, login restrictions), `trusted_proxies`, and switching `policy.mode` between `file` and `database` so the ACL editor can write through the API.
+
+---
 
 # 0.8.6 (October 4, 2026)
 
