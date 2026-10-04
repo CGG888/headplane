@@ -90,6 +90,13 @@ export interface ConfigProbe {
   isFile?: boolean;
   /** Size in bytes of a regular file, used to spot an empty policy. */
   size?: number;
+  /**
+   * The path (or its parent) is not visible to this process at all, which is
+   * what a container without that host directory mounted looks like. A missing
+   * path cannot be told apart from an unmounted one, so these are reported as
+   * unverifiable instead of as a failure.
+   */
+  unavailable?: boolean;
 }
 
 export interface ConfigProbeResults {
@@ -107,6 +114,23 @@ export interface ConfigChecksInput {
   probes: ConfigProbeResults;
 }
 
+/**
+ * Which probes back which check, so a verdict that is only "bad" because nobody
+ * could look at the path can be downgraded in one place instead of in every
+ * rule.
+ */
+const PROBES_FOR_CHECK: Partial<
+  Record<ConfigCheck["id"], (probes: ConfigProbeResults) => (ConfigProbe | undefined)[]>
+> = {
+  configTls: (probes) => [probes.tlsCert, probes.tlsKey],
+  // Only the directory decides: a missing database file inside a directory this
+  // process *can* see is a real "not created yet", and its own probe is
+  // "unavailable" whenever the directory is missing.
+  configDatabase: (probes) => [probes.databaseDir],
+  configPolicy: (probes) => [probes.policyFile],
+  configNoiseKey: (probes) => [probes.noiseKey],
+};
+
 export function computeConfigChecks({ config, probes }: ConfigChecksInput): ConfigCheck[] {
   // A missing or unparseable file leaves nothing to check. The page already
   // reports that through the `configAccess` diagnostic, so degrading to an
@@ -115,7 +139,7 @@ export function computeConfigChecks({ config, probes }: ConfigChecksInput): Conf
     return [];
   }
 
-  return [
+  const checks = [
     oidcKeysCheck(config),
     trustedProxiesCheck(config),
     tlsCheck(config, probes),
@@ -125,6 +149,19 @@ export function computeConfigChecks({ config, probes }: ConfigChecksInput): Conf
     oidcCheck(config),
     noiseKeyCheck(config, probes),
   ];
+
+  // A container that mounts Headscale's config file but not the directories the
+  // file points at sees those paths as missing. Failing the check would be a
+  // false alarm about a healthy server, so an unverifiable path is reported as
+  // such instead.
+  return checks.map((entry) => {
+    if (entry.status !== "fail") {
+      return entry;
+    }
+
+    const invisible = firstUnavailable(...(PROBES_FOR_CHECK[entry.id]?.(probes) ?? []));
+    return invisible ? unavailableCheck(entry.id, invisible.path) : entry;
+  });
 }
 
 /**
@@ -200,6 +237,23 @@ function check(
   extra: { vars?: Record<string, string | number>; link?: DiagnosticLink } = {},
 ): ConfigCheck {
   return { id, status, titleKey: TITLES[id], bodyKey, ...extra };
+}
+
+/**
+ * The first probe that could not be inspected from this process, if any.
+ *
+ * A container normally mounts Headscale's config file but not the directories it
+ * points at, so `stat` fails for those host paths. A path nobody can look at
+ * cannot be called missing, so the checks report it as unverifiable instead.
+ */
+function firstUnavailable(...probes: (ConfigProbe | undefined)[]): ConfigProbe | undefined {
+  return probes.find((probe) => probe?.unavailable === true);
+}
+
+function unavailableCheck(id: ConfigCheck["id"], path: string): ConfigCheck {
+  return check(id, "warning", "settings.system.configChecks.pathUnavailable", {
+    vars: { path },
+  });
 }
 
 function oidcKeysCheck(config: unknown): ConfigCheck {

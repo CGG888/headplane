@@ -62,6 +62,8 @@ export default defineConfig({
               { text: "DNS", link: "/features/dns" },
               { text: "Headscale Settings", link: "/features/headscale-settings" },
               { text: "System Status", link: "/features/system-status" },
+              { text: "Audit Log", link: "/features/audit" },
+              { text: "Snapshots", link: "/features/snapshots" },
               { text: "Headplane Agent", link: "/features/agent" },
               { text: "Browser SSH", link: "/features/ssh" },
               { text: "Languages", link: "/features/languages" },

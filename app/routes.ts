@@ -12,6 +12,10 @@ export default [
   ]),
   ...prefix("/events", [route("/live", "routes/util/live.ts")]),
 
+  // Snapshot downloads stream a file straight to the browser, so they sit
+  // outside the application layout instead of rendering the UI around them.
+  route("/settings/snapshots/download", "routes/settings/snapshots/download.ts"),
+
   // Authentication Routes
   route("/login", "routes/auth/login/page.tsx"),
   route("/logout", "routes/auth/logout.ts"),
@@ -39,6 +43,8 @@ export default [
       route("/agent", "routes/settings/agent.tsx"),
       route("/headscale", "routes/settings/headscale/overview.tsx"),
       route("/system", "routes/settings/system/overview.tsx"),
+      route("/audit", "routes/settings/audit/overview.tsx"),
+      route("/snapshots", "routes/settings/snapshots/overview.tsx"),
     ]),
   ]),
 

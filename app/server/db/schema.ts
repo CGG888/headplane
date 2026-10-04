@@ -1,5 +1,6 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+import type { AuditActorType, AuditResult } from "~/server/audit/types";
 import { HostInfo } from "~/types";
 
 export const hostInfo = sqliteTable("host_info", {
@@ -43,3 +44,22 @@ export const authSessions = sqliteTable("auth_sessions", {
 
 export type AuthSessionRecord = typeof authSessions.$inferSelect;
 export type AuthSessionInsert = typeof authSessions.$inferInsert;
+
+/**
+ * Append-only operation log. Rows are trimmed to the newest
+ * `MAX_AUDIT_ENTRIES` after every insert, so the table cannot grow without
+ * bound.
+ */
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(),
+  at: integer("at", { mode: "timestamp" }).notNull(),
+  actor: text("actor").notNull(),
+  actor_type: text("actor_type").$type<AuditActorType>().notNull(),
+  action: text("action").notNull(),
+  target: text("target").notNull(),
+  detail: text("detail"),
+  result: text("result").$type<AuditResult>().notNull(),
+});
+
+export type AuditLogRecord = typeof auditLog.$inferSelect;
+export type AuditLogInsert = typeof auditLog.$inferInsert;

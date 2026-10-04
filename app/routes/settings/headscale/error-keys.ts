@@ -20,7 +20,18 @@ export type HeadscaleSettingsErrorCode =
   | "invalidEphemeralInactivity"
   | "invalidLogLevel"
   | "invalidLogFormat"
-  | "invalidBooleanValue";
+  | "invalidBooleanValue"
+  | "invalidDerpUrl"
+  | "duplicateDerpUrl"
+  | "derpUrlNotFound"
+  | "invalidDerpPath"
+  | "duplicateDerpPath"
+  | "derpPathNotFound"
+  | "invalidDerpUpdateFrequency"
+  | "invalidDerpRegionId"
+  | "invalidDerpRegionCode"
+  | "missingDerpStunAddr"
+  | "derpPathsRequired";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -38,6 +49,17 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidLogLevel: "settings.headscale.errors.invalidLogLevel",
   invalidLogFormat: "settings.headscale.errors.invalidLogFormat",
   invalidBooleanValue: "settings.headscale.errors.invalidBooleanValue",
+  invalidDerpUrl: "settings.headscale.errors.invalidDerpUrl",
+  duplicateDerpUrl: "settings.headscale.errors.duplicateDerpUrl",
+  derpUrlNotFound: "settings.headscale.errors.derpUrlNotFound",
+  invalidDerpPath: "settings.headscale.errors.invalidDerpPath",
+  duplicateDerpPath: "settings.headscale.errors.duplicateDerpPath",
+  derpPathNotFound: "settings.headscale.errors.derpPathNotFound",
+  invalidDerpUpdateFrequency: "settings.headscale.errors.invalidDerpUpdateFrequency",
+  invalidDerpRegionId: "settings.headscale.errors.invalidDerpRegionId",
+  invalidDerpRegionCode: "settings.headscale.errors.invalidDerpRegionCode",
+  missingDerpStunAddr: "settings.headscale.errors.missingDerpStunAddr",
+  derpPathsRequired: "settings.headscale.errors.derpPathsRequired",
 };
 
 export interface HeadscaleSettingsSuccess {

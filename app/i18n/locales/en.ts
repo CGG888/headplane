@@ -892,6 +892,14 @@ const en = {
       systemBody:
         "Check whether the Headscale server Headplane manages is healthy, which version it runs, and whether a newer release is available.",
       systemStatus: "View System Status",
+      auditTitle: "Operation Log",
+      auditBody:
+        "See who changed what through Headplane, with filters for the actor, the action and how far back to look.",
+      manageAudit: "View Operation Log",
+      snapshotsTitle: "Configuration Snapshots",
+      snapshotsBody:
+        "Copy Headscale's configuration files before they are changed, then download or restore an earlier version if something goes wrong.",
+      manageSnapshots: "Manage Snapshots",
     },
     system: {
       breadcrumb: "System Status",
@@ -994,6 +1002,8 @@ const en = {
         body: "These checks read Headscale's own config.yaml and the files it points at, the same way headscale configtest does. Fix them in the file before Headscale is restarted.",
         unavailable:
           "Headplane could not read Headscale's configuration file, so the configuration checks are unavailable.",
+        pathUnavailable:
+          "Cannot check {path}: it is not visible to this process, which normally means the container running Headplane does not mount that directory. Mount it to have this verified.",
         oidcKeys: {
           title: "Unsupported OIDC keys",
           pass: "The configuration does not contain any of the OIDC keys that Headscale 0.29 refuses to start with.",
@@ -1168,6 +1178,73 @@ const en = {
       checkUpdatesDescription:
         "Let Headscale look for a newer release when it starts. Stored as Headscale's inverse disable_check_updates, which defaults to false, so this switch is on by default.",
       saveFeatureSettings: "Save feature settings",
+      derp: {
+        statusTitle: "DERP Relays",
+        statusBody:
+          "Where each machine connects through Headscale's DERP relays. Live relay data comes from the Headplane Agent.",
+        statusAgentRequired:
+          "Live relay data needs the Headplane Agent. Enable the agent so Headplane can read each machine's home region, preferred region, and DERP latency.",
+        statusEmpty: "No machines have reported DERP relay information yet.",
+        machine: "Machine",
+        homeRegion: "Home region",
+        preferredRegion: "Preferred region",
+        latency: "Best latency",
+        unknown: "Unknown",
+        noLatency: "No data",
+        urlsTitle: "DERP Map Sources",
+        urlsBody:
+          "URLs of DERP map files that Headscale merges and hands to every client. The public Tailscale map is a common entry.",
+        urlsEmpty: "No DERP map URLs are configured.",
+        urlLabel: "DERP map URL",
+        urlPlaceholder: "https://controlplane.tailscale.com/derpmap/default",
+        addUrl: "Add URL",
+        removeUrl: "Remove",
+        pathsTitle: "Local DERP Map Files",
+        pathsBody:
+          "Paths to DERP map files on the Headscale host. Headscale merges them with the URLs above.",
+        pathsEmpty: "No local DERP map files are configured.",
+        pathLabel: "DERP map path",
+        pathPlaceholder: "/etc/headscale/derp-example.yaml",
+        addPath: "Add path",
+        removePath: "Remove",
+        refreshTitle: "DERP Map Updates",
+        refreshBody:
+          "How often Headscale refreshes the DERP map from the sources above. Changes take effect after Headscale is restarted.",
+        autoUpdateLabel: "Refresh the DERP map",
+        autoUpdateDescription:
+          "Let a background worker re-read the DERP sources periodically. Headscale's default is false.",
+        updateFrequencyLabel: "Update frequency",
+        updateFrequencyDescription:
+          "How often the DERP sources are refreshed, for example 3h or 30m. Headscale's default is 3h.",
+        saveRefresh: "Save DERP updates",
+        serverTitle: "Embedded DERP Server",
+        serverBody:
+          "Run a DERP relay inside Headscale itself. It requires Headscale's server_url to use https, because DERP runs over TLS.",
+        serverEnabledLabel: "Enable the embedded server",
+        serverEnabledDescription:
+          "Start the embedded DERP server and merge it into the DERP map. Headscale's default is false.",
+        regionIdLabel: "Region ID",
+        regionIdDescription:
+          "Region ID reserved for this server. Headscale only accepts 900 to 999; its example uses 999.",
+        regionCodeLabel: "Region code",
+        regionCodeDescription: "Short code shown in the Tailscale client, for example headscale.",
+        regionNameLabel: "Region name",
+        regionNameDescription: "Display name of the region in the Tailscale client.",
+        stunListenAddrLabel: "STUN listen address",
+        stunListenAddrDescription:
+          "UDP address that answers STUN requests for NAT traversal, for example 0.0.0.0:3478. Headscale requires it when the embedded server is enabled.",
+        verifyClientsLabel: "Verify clients",
+        verifyClientsDescription:
+          "Only let clients registered with this Headscale use the embedded relay. Headscale's default is true.",
+        autoAddRegionLabel: "Add the region automatically",
+        autoAddRegionDescription:
+          "Merge the embedded server into the DERP map. Turn it off to describe it yourself in a local DERP map file. Headscale's default is true.",
+        keyConfigured: "A private key path is configured for the embedded server.",
+        keyMissing: "No derp.server.private_key_path is configured for the embedded server.",
+        serverKeyWarning:
+          "The embedded DERP server needs the private key file configured in derp.server.private_key_path. Headscale creates the key there when it can, so the directory must be writable, and an existing file must be readable by Headscale.",
+        saveServer: "Save embedded server",
+      },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
         invalidIssuer: "Enter a valid http(s) issuer URL, or leave it empty to disable OIDC.",
@@ -1186,6 +1263,20 @@ const en = {
         invalidLogLevel: "Choose debug, info, warn, or error as the log level.",
         invalidLogFormat: "Choose text or json as the log format.",
         invalidBooleanValue: "This setting only accepts true or false.",
+        invalidDerpUrl: "Enter a valid http(s) URL of a DERP map file.",
+        duplicateDerpUrl: "This DERP map URL is already in the list.",
+        derpUrlNotFound: "This DERP map URL is not in the list.",
+        invalidDerpPath: "Enter the path of a DERP map file on the Headscale host.",
+        duplicateDerpPath: "This DERP map path is already in the list.",
+        derpPathNotFound: "This DERP map path is not in the list.",
+        invalidDerpUpdateFrequency:
+          "Enter a duration such as 3h or 30m. Headscale reads this with Go's duration parser.",
+        invalidDerpRegionId: "Enter a region ID between 900 and 999.",
+        invalidDerpRegionCode: "The embedded server needs both a region code and a region name.",
+        missingDerpStunAddr:
+          "Headscale requires a STUN listen address when the embedded server is enabled.",
+        derpPathsRequired:
+          "Headscale requires at least one DERP map path when the embedded server is enabled and its region is not added automatically.",
       },
     },
     agent: {
@@ -1345,6 +1436,81 @@ const en = {
       duplicate: "This user already exists in the list.",
       label: "User",
       placeholder: "john_doe",
+    },
+    audit: {
+      breadcrumb: "Operation Log",
+      title: "Operation Log",
+      body: "Every change made through Headplane is recorded here, newest first.",
+      retentionTitle: "Retention",
+      retentionBody:
+        "Only the newest {count} operations are kept; older entries are dropped automatically.",
+      showingCount: "Showing {shown} of {total} operations",
+      empty: "No operations match these filters.",
+      loadMore: "Load more",
+      filterActor: "Actor",
+      filterActorPlaceholder: "Name or API key",
+      filterAction: "Action",
+      filterRange: "Time range",
+      filterAll: "All actions",
+      filterApply: "Apply filters",
+      filterReset: "Reset",
+      range1h: "Last hour",
+      range24h: "Last 24 hours",
+      range7d: "Last 7 days",
+      range30d: "Last 30 days",
+      rangeAll: "All time",
+      resultSuccess: "Success",
+      resultFailure: "Failed",
+      actorType: {
+        user: "User",
+        apiKey: "API key",
+        system: "System",
+      },
+      actions: {
+        apiKeyCreate: "Create API key",
+        apiKeyExpire: "Expire API key",
+        restrictionAddDomain: "Allow domain",
+        restrictionRemoveDomain: "Remove domain",
+        restrictionAddGroup: "Allow group",
+        restrictionRemoveGroup: "Remove group",
+        restrictionAddUser: "Allow user",
+        restrictionRemoveUser: "Remove user",
+        snapshotCreate: "Take snapshot",
+        snapshotRestore: "Restore snapshot",
+      },
+    },
+    snapshots: {
+      breadcrumb: "Configuration Snapshots",
+      title: "Configuration Snapshots",
+      body: "Headplane copies Headscale's configuration file, and its policy file when one is used, before it changes them. A snapshot can be downloaded or restored later.",
+      destructiveTitle: "Restoring overwrites configuration",
+      destructiveBody:
+        "Restoring a snapshot writes the files back to their configured paths and asks Headscale to reload. The current configuration is lost, so download a copy first if you may need it.",
+      takeTitle: "Take a snapshot now",
+      takeBody: "Copy the current configuration files into the snapshot directory.",
+      take: "Take snapshot",
+      takePending: "Taking snapshot…",
+      takeSuccess: "Snapshot created.",
+      storedAt: "Snapshots are stored in {path}",
+      totalSize: "{size} total",
+      restore: "Restore",
+      restoreTitle: "Restore this snapshot?",
+      restoreBody: "This overwrites {files} with the contents from {time}. This cannot be undone.",
+      empty: "No snapshots have been taken yet.",
+      reasons: {
+        manual: "Manual snapshot",
+        restrictionChange: "Authentication restrictions changed",
+      },
+      errors: {
+        notFound: "That snapshot or file no longer exists.",
+        unexpectedPath:
+          "The snapshot does not belong to the configured configuration file, so nothing was restored.",
+        noTargets:
+          "No Headscale configuration file is configured, so there is nothing to snapshot.",
+        unavailable:
+          "The snapshot directory could not be used. Check that Headplane can write to its data directory.",
+        copyFailed: "None of the configuration files could be read.",
+      },
     },
   },
   ssh: {

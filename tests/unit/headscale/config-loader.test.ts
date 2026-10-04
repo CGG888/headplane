@@ -398,4 +398,161 @@ describe("Headscale config loader", () => {
     expect(written.logtail).toEqual({ enabled: true });
     expect(written.disable_check_updates).toBe(true);
   });
+
+  test("exposes the DERP settings with Headscale's defaults", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getDERPSettings()).toEqual({
+      urls: [],
+      paths: [],
+      autoUpdateEnabled: false,
+      updateFrequency: "3h",
+      server: {
+        enabled: false,
+        regionId: 999,
+        regionCode: "headscale",
+        regionName: "Headscale Embedded DERP",
+        stunListenAddr: "0.0.0.0:3478",
+        hasPrivateKey: false,
+        verifyClients: true,
+        automaticallyAddEmbeddedDerpRegion: true,
+      },
+    });
+  });
+
+  test("reads hand-written DERP settings verbatim", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "derp:",
+        "  urls:",
+        "    - https://controlplane.tailscale.com/derpmap/default",
+        "  paths:",
+        "    - /etc/headscale/derp.yaml",
+        "  auto_update_enabled: false",
+        "  update_frequency: 30m",
+        "  server:",
+        "    enabled: true",
+        "    region_id: 901",
+        "    region_code: home",
+        "    region_name: Home DERP",
+        "    stun_listen_addr: 0.0.0.0:3478",
+        "    private_key_path: /var/lib/headscale/derp_server_private.key",
+        "    verify_clients: false",
+        "    automatically_add_embedded_derp_region: false",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getDERPSettings()).toEqual({
+      urls: ["https://controlplane.tailscale.com/derpmap/default"],
+      paths: ["/etc/headscale/derp.yaml"],
+      autoUpdateEnabled: false,
+      updateFrequency: "30m",
+      server: {
+        enabled: true,
+        regionId: 901,
+        regionCode: "home",
+        regionName: "Home DERP",
+        stunListenAddr: "0.0.0.0:3478",
+        hasPrivateKey: true,
+        verifyClients: false,
+        automaticallyAddEmbeddedDerpRegion: false,
+      },
+    });
+  });
+
+  test("falls back to DERP defaults for values with the wrong type", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "derp:",
+        "  urls: 42",
+        "  paths: 42",
+        "  auto_update_enabled: enabled",
+        "  update_frequency:",
+        "    hours: 3",
+        "  server: not-a-map",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getDERPSettings()).toEqual({
+      urls: [],
+      paths: [],
+      autoUpdateEnabled: false,
+      updateFrequency: "3h",
+      server: {
+        enabled: false,
+        regionId: 999,
+        regionCode: "headscale",
+        regionName: "Headscale Embedded DERP",
+        stunListenAddr: "0.0.0.0:3478",
+        hasPrivateKey: false,
+        verifyClients: true,
+        automaticallyAddEmbeddedDerpRegion: true,
+      },
+    });
+  });
+
+  test("falls back to the default region ID when it is not a number", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "derp:",
+        "  server:",
+        "    region_id: nine-hundred",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getDERPSettings().server.regionId).toBe(999);
+  });
+
+  test("patches the DERP settings onto their top-level dotted paths", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080", "node:", "  expiry: 0"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    await config.patch([
+      { path: "derp.urls", value: ["https://controlplane.tailscale.com/derpmap/default"] },
+      { path: "derp.paths", value: ["/etc/headscale/derp.yaml"] },
+      { path: "derp.auto_update_enabled", value: true },
+      { path: "derp.update_frequency", value: "30m" },
+      { path: "derp.server.enabled", value: true },
+      { path: "derp.server.region_id", value: 901 },
+      { path: "derp.server.region_code", value: "home" },
+      { path: "derp.server.region_name", value: "Home DERP" },
+      { path: "derp.server.stun_listen_addr", value: "0.0.0.0:3478" },
+      { path: "derp.server.verify_clients", value: false },
+      { path: "derp.server.automatically_add_embedded_derp_region", value: false },
+    ]);
+
+    const written = parse(await readFile(path, "utf8"));
+    // DERP is a top-level block, so this must not land under `node`.
+    expect(written.derp).toEqual({
+      urls: ["https://controlplane.tailscale.com/derpmap/default"],
+      paths: ["/etc/headscale/derp.yaml"],
+      auto_update_enabled: true,
+      update_frequency: "30m",
+      server: {
+        enabled: true,
+        region_id: 901,
+        region_code: "home",
+        region_name: "Home DERP",
+        stun_listen_addr: "0.0.0.0:3478",
+        verify_clients: false,
+        automatically_add_embedded_derp_region: false,
+      },
+    });
+    expect(written.node).toEqual({ expiry: 0 });
+  });
 });

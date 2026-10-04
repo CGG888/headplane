@@ -1,14 +1,70 @@
-﻿import { data } from "react-router";
+import { data } from "react-router";
 
+import { AUDIT_ACTIONS, auditActorOf, type AuditService } from "~/server/audit";
 import {
+  auditContext,
   authContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
+  snapshotContext,
+  type AppContext,
 } from "~/server/context";
+import { SNAPSHOT_REASONS } from "~/server/snapshots/reasons";
+import { snapshotBeforeMutation, type SnapshotService } from "~/server/snapshots/service.server";
+import type { Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
+import log from "~/utils/log";
 
 import type { Route } from "./+types/overview";
+
+interface RestrictionServices {
+  audit: AuditService | undefined;
+  snapshots: SnapshotService | undefined;
+}
+
+/** Records one operation; never throws, so it cannot break the mutation. */
+async function recordOperation(
+  services: RestrictionServices,
+  principal: Principal,
+  action: string,
+  target: string,
+  result: "success" | "failure",
+  detail?: string,
+) {
+  await services.audit?.record({
+    ...auditActorOf(principal),
+    action,
+    target,
+    detail: detail ?? null,
+    result,
+  });
+}
+
+/**
+ * Every restriction change rewrites Headscale's configuration file, so a
+ * snapshot is taken first. A failed snapshot is logged and does not block the
+ * change.
+ */
+async function snapshotConfig(services: RestrictionServices) {
+  await snapshotBeforeMutation(services.snapshots, SNAPSHOT_REASONS.restrictionChange);
+}
+
+/**
+ * Asks the configured integration to reload Headscale. The configuration is
+ * already written at this point, so a failing reload is logged rather than
+ * reported as a failed change.
+ */
+async function reloadHeadscale(
+  integration: AppContext["integration"],
+  headscale: AppContext["headscale"],
+) {
+  try {
+    await integration?.onConfigChange(headscale);
+  } catch (error) {
+    log.warn("config", "Failed to reload Headscale after a settings change: %s", String(error));
+  }
+}
 
 export async function restrictionAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
@@ -18,6 +74,10 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
 
   const principal = await auth.require(request);
   const check = auth.can(principal, Capabilities.configure_iam);
+  const services: RestrictionServices = {
+    audit: context.get(auditContext),
+    snapshots: context.get(snapshotContext),
+  };
 
   if (!check) {
     throw data(
@@ -55,6 +115,7 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         ...new Set([...(headscaleConfig.getOIDCConfig()?.allowedDomains ?? []), domain]),
       ];
 
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_domains",
@@ -62,7 +123,14 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         },
       ]);
 
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(
+        services,
+        principal,
+        AUDIT_ACTIONS.restrictionAddDomain,
+        domain,
+        "success",
+      );
       return data("Domain added successfully.");
     }
 
@@ -77,6 +145,15 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       const storedDomains = headscaleConfig.getOIDCConfig()?.allowedDomains ?? [];
       if (!storedDomains.includes(domain)) {
         // Domain not found in the list
+        await recordOperation(
+          services,
+          principal,
+          AUDIT_ACTIONS.restrictionRemoveDomain,
+          domain,
+          "failure",
+          "notFound",
+        );
+
         throw data(`Domain "${domain}" not found in allowed domains.`, {
           status: 400,
         });
@@ -84,13 +161,21 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
 
       // Filter out the domain to remove it from the list
       const domains = storedDomains.filter((d: string) => d !== domain);
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_domains",
           value: domains,
         },
       ]);
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(
+        services,
+        principal,
+        AUDIT_ACTIONS.restrictionRemoveDomain,
+        domain,
+        "success",
+      );
       return data("Domain removed successfully.");
     }
 
@@ -106,6 +191,7 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         ...new Set([...(headscaleConfig.getOIDCConfig()?.allowedGroups ?? []), group]),
       ];
 
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_groups",
@@ -113,7 +199,14 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         },
       ]);
 
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(
+        services,
+        principal,
+        AUDIT_ACTIONS.restrictionAddGroup,
+        group,
+        "success",
+      );
       return data("Group added successfully.");
     }
 
@@ -128,6 +221,15 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       const storedGroups = headscaleConfig.getOIDCConfig()?.allowedGroups ?? [];
       if (!storedGroups.includes(group)) {
         // Group not found in the list
+        await recordOperation(
+          services,
+          principal,
+          AUDIT_ACTIONS.restrictionRemoveGroup,
+          group,
+          "failure",
+          "notFound",
+        );
+
         throw data(`Group "${group}" not found in allowed groups.`, {
           status: 400,
         });
@@ -135,6 +237,7 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
 
       // Filter out the group to remove it from the list
       const groups = storedGroups.filter((d: string) => d !== group);
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_groups",
@@ -142,7 +245,14 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         },
       ]);
 
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(
+        services,
+        principal,
+        AUDIT_ACTIONS.restrictionRemoveGroup,
+        group,
+        "success",
+      );
       return data("Group removed successfully.");
     }
 
@@ -156,6 +266,7 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
 
       const users = [...new Set([...(headscaleConfig.getOIDCConfig()?.allowedUsers ?? []), user])];
 
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_users",
@@ -163,7 +274,8 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         },
       ]);
 
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(services, principal, AUDIT_ACTIONS.restrictionAddUser, user, "success");
       return data("User added successfully.");
     }
 
@@ -178,6 +290,15 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       const storedUsers = headscaleConfig.getOIDCConfig()?.allowedUsers ?? [];
       if (!storedUsers.includes(user)) {
         // User not found in the list
+        await recordOperation(
+          services,
+          principal,
+          AUDIT_ACTIONS.restrictionRemoveUser,
+          user,
+          "failure",
+          "notFound",
+        );
+
         throw data(`User "${user}" not found in allowed users.`, {
           status: 400,
         });
@@ -185,6 +306,7 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
 
       // Filter out the user to remove it from the list
       const users = storedUsers.filter((d: string) => d !== user);
+      await snapshotConfig(services);
       await headscaleConfig.patch([
         {
           path: "oidc.allowed_users",
@@ -192,7 +314,14 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         },
       ]);
 
-      integration?.onConfigChange(headscale);
+      await reloadHeadscale(integration, headscale);
+      await recordOperation(
+        services,
+        principal,
+        AUDIT_ACTIONS.restrictionRemoveUser,
+        user,
+        "success",
+      );
       return data("User removed successfully.");
     }
 

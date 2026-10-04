@@ -1,9 +1,10 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { createContext } from "react-router";
 
 import log from "~/utils/log";
 
+import { createAuditService } from "./audit";
 import type { HeadplaneConfig } from "./config/config-schema";
 import { loadIntegration } from "./config/integration";
 import { createDbClient } from "./db/client.server";
@@ -13,11 +14,15 @@ import { loadHeadscaleConfig } from "./headscale/config-loader";
 import { createLiveStore, nodesResource, usersResource } from "./headscale/live-store";
 import { type AgentManager, createAgentManager } from "./hp-agent";
 import { createOidcService, type OidcService } from "./oidc/provider";
+import { resolveTargetPath } from "./snapshots/paths";
+import { createSnapshotService } from "./snapshots/service.server";
+import type { SnapshotTarget } from "./snapshots/types";
 import { createAuthService, type Principal } from "./web/auth";
 
 export type AppContext = Awaited<ReturnType<typeof createAppContext>>;
 export const agentsContext = createContext<AppContext["agents"]>();
 export const appConfigContext = createContext<AppContext["config"]>();
+export const auditContext = createContext<AppContext["audit"]>();
 export const authContext = createContext<AppContext["auth"]>();
 export const dbContext = createContext<AppContext["db"]>();
 export const headscaleContext = createContext<AppContext["headscale"]>();
@@ -27,9 +32,11 @@ export const headscaleLiveStoreContext = createContext<AppContext["hsLive"]>();
 export const integrationContext = createContext<AppContext["integration"]>();
 export const oidcContext = createContext<AppContext["oidc"]>();
 export const requestApiContext = createContext<AppContext["apiForRequest"]>();
+export const snapshotContext = createContext<AppContext["snapshots"]>();
 
 export async function createAppContext(config: HeadplaneConfig) {
   const db = await createDbClient(join(config.server.data_path, "hp_persist.db"));
+  const audit = createAuditService(db);
   const headscale = await createHeadscale({
     url: config.headscale.url,
     certPath: config.headscale.tls_cert_path,
@@ -79,6 +86,29 @@ export async function createAppContext(config: HeadplaneConfig) {
   );
   const integration = await loadIntegration(config.integration);
 
+  // Snapshot targets are resolved on demand: the policy file can be configured
+  // either in the Headscale config file or switched to database mode while
+  // Headplane is running. Relative paths are resolved against the Headscale
+  // config file, which is where Headscale itself reads them from.
+  const snapshots = createSnapshotService({
+    dataPath: config.server.data_path,
+    getTargets: () => {
+      const configPath = config.headscale.config_path;
+      const baseDir = configPath ? dirname(configPath) : undefined;
+      const targets: SnapshotTarget[] = [];
+      if (configPath) {
+        targets.push({ path: resolveTargetPath(configPath, baseDir), kind: "headscale_config" });
+      }
+
+      const tailnet = hs.getTailnetSettings();
+      if (tailnet.policyMode === "file" && tailnet.policyPath) {
+        targets.push({ path: resolveTargetPath(tailnet.policyPath, baseDir), kind: "policy" });
+      }
+
+      return targets;
+    },
+  });
+
   // Disposers run in reverse-registration order on shutdown.
   const disposers: Array<() => Promise<void> | void> = [
     () => auth.stop(),
@@ -114,6 +144,7 @@ export async function createAppContext(config: HeadplaneConfig) {
   return {
     config,
     db,
+    audit,
     headscale,
     headscaleApiKey,
     agents,
@@ -121,6 +152,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     oidc,
     hsLive,
     hs,
+    snapshots,
     integration,
     apiForRequest,
     startServices,

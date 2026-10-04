@@ -75,6 +75,31 @@ Values shown are Headscale's own defaults when a key is absent, so the page
 describes what your server is actually doing rather than only what the file
 happens to say.
 
+## DERP
+
+Tailscale clients reach each other through DERP relays when a direct connection
+is impossible. Headscale ships with Tailscale's public DERP map, and this section
+edits how that map is used:
+
+| Setting                                              | What it does                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                  |
+| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk.                                                                                                                                                                                                       |
+| `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
+| `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
+
+Below the form, the page lists which relay region each machine is currently
+using, with the latency it measured. That live view needs the Headplane Agent,
+because the Headscale API does not expose client measurements; without the agent
+the section explains that instead of showing nothing.
+
+::: tip Running your own relay
+Enable the embedded server when your machines cannot reach Tailscale's public
+DERP servers, or when you would rather relay through your own network. Keep the
+private key file outside the config directory and make sure Headscale can read
+it — the page warns when it cannot.
+:::
+
 ## Policy mode
 
 | Mode             | Meaning                                                                                                                                                           |

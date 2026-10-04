@@ -105,12 +105,28 @@ async function probePath(path: string, options: { writable?: boolean } = {}): Pr
 
     return probe;
   } catch {
+    // A failing `stat` cannot be told apart from a path this process simply
+    // cannot see: a container running Headplane is usually given the config file
+    // but not the host directories the file points at. When the directory that
+    // would hold the path is invisible too, say "unverifiable" rather than
+    // claiming a healthy server is missing its database.
     return {
       path,
       exists: false,
       readable: false,
       ...(options.writable ? { writable: false } : {}),
+      ...((await parentVisible(path)) ? {} : { unavailable: true }),
     };
+  }
+}
+
+/** Whether the directory that would contain `path` can be inspected at all. */
+async function parentVisible(path: string): Promise<boolean> {
+  try {
+    await stat(dirname(path));
+    return true;
+  } catch {
+    return false;
   }
 }
 

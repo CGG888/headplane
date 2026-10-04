@@ -5,21 +5,35 @@ import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
 import { useI18n } from "~/i18n/provider";
-import { appConfigContext, authContext, headscaleConfigContext } from "~/server/context";
+import {
+  agentsContext,
+  appConfigContext,
+  authContext,
+  headscaleConfigContext,
+  headscaleLiveStoreContext,
+  requestApiContext,
+} from "~/server/context";
+import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
 import { headscaleSettingsAction } from "./actions";
 import AdvancedSettings from "./components/advanced-settings";
+import DerpSettings from "./components/derp-settings";
+import DerpStatus from "./components/derp-status";
 import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
+import { buildDerpRelayRows, type DerpRelayRow } from "./derp-status";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
+  const agentsFeature = context.get(agentsContext);
   const auth = context.get(authContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const appConfig = context.get(appConfigContext);
+  const getRequestApi = context.get(requestApiContext);
+  const headscaleLiveStore = context.get(headscaleLiveStoreContext);
 
   if (!headscaleConfig.readable()) {
     throw new Error("No configuration is available");
@@ -32,12 +46,31 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     throw data({ localized: { key: "errors.permission.viewIam" } }, { status: 403 });
   }
 
+  // Relay data comes from the Headplane Agent, so it is only read when the
+  // agent is running and the viewer may see machines.
+  const agents = agentsFeature.state === "enabled" ? agentsFeature.value : undefined;
+  let derpRelay: DerpRelayRow[] = [];
+  if (agents && auth.can(principal, Capabilities.read_machines)) {
+    try {
+      const { api } = await getRequestApi(request);
+      const nodesSnap = await headscaleLiveStore.get(nodesResource, api);
+      const stats = await agents.lookup(nodesSnap.data.map((node) => node.nodeKey));
+      derpRelay = buildDerpRelayRows(nodesSnap.data, stats);
+    } catch {
+      // Best-effort: an unreachable agent or API leaves the table empty.
+      derpRelay = [];
+    }
+  }
+
   const { policyMode, policyPath, trustedProxies } = headscaleConfig.getTailnetSettings();
   return {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
+    derp: headscaleConfig.getDERPSettings(),
+    derpRelay,
+    agentEnabled: agents !== undefined,
     policyMode,
     policyPath,
     trustedProxies,
@@ -54,6 +87,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     writable,
     oidc,
     advanced,
+    derp,
+    derpRelay,
+    agentEnabled,
     policyMode,
     policyPath,
     trustedProxies,
@@ -95,6 +131,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
       <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
       <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
+      <DerpSettings isDisabled={isDisabled} settings={derp} />
+      <DerpStatus agentEnabled={agentEnabled} rows={derpRelay} />
     </div>
   );
 }

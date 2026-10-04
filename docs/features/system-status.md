@@ -40,6 +40,16 @@ The page also reads Headscale's configuration file itself and reports the
 problems that otherwise only show up as a server that will not start or a
 setting that quietly does nothing:
 
+::: tip Paths a container cannot see
+Headplane can only inspect the paths it can actually reach. When it is given
+Headscale's `config.yaml` but not the directories that file points at, a path
+like `/vol1/@appdata/headscale/db.sqlite` does not exist _inside the container_
+even though it is perfectly healthy on the host. Those checks are reported as
+**unverifiable** — with the path and a hint to mount the directory — instead of
+being called failures. Mount the directory read-only into the container to turn
+them into real checks.
+:::
+
 | Check                | Why it matters                                                                                                                                                           |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Removed keys         | `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are gone in 0.29 and Headscale **refuses to start** while they are present.                         |

@@ -170,6 +170,33 @@ export interface AdvancedSettingsView {
   disableCheckUpdates: boolean;
 }
 
+/**
+ * The optional DERP server embedded in Headscale. `region_id`, `region_code`,
+ * `region_name`, `stun_listen_addr` and `private_key_path` have no viper
+ * default in `hscontrol/types/config.go` (they read the Go zero value), so the
+ * values below are the ones Headscale's own `config-example.yaml` documents.
+ */
+export interface DERPEmbeddedServerView {
+  enabled: boolean;
+  regionId: number;
+  regionCode: string;
+  regionName: string;
+  stunListenAddr: string;
+  // The key path itself is never returned; the page only needs to know whether
+  // one is configured.
+  hasPrivateKey: boolean;
+  verifyClients: boolean;
+  automaticallyAddEmbeddedDerpRegion: boolean;
+}
+
+export interface DERPSettingsView {
+  urls: string[];
+  paths: string[];
+  autoUpdateEnabled: boolean;
+  updateFrequency: string;
+  server: DERPEmbeddedServerView;
+}
+
 interface HeadscaleConfigState {
   document?: Document;
   config: unknown;
@@ -189,6 +216,7 @@ interface HeadscaleConfig {
   getOIDCSettings: () => OIDCSettingsView | undefined;
   getTailnetSettings: () => TailnetSettingsView;
   getAdvancedSettings: () => AdvancedSettingsView;
+  getDERPSettings: () => DERPSettingsView;
   dnsRecords: () => DNSRecord[];
   patch: (patches: PatchConfig[]) => Promise<void>;
   addDNS: (record: DNSRecord) => Promise<boolean | void>;
@@ -220,6 +248,7 @@ function createHeadscaleConfig(
     getOIDCSettings: () => getOIDCSettings(state),
     getTailnetSettings: () => getTailnetSettings(state),
     getAdvancedSettings: () => getAdvancedSettings(state),
+    getDERPSettings: () => getDERPSettings(state),
     dnsRecords: () => dnsRecords(state),
     patch: (patches) => patchHeadscaleConfig(state, patches),
     addDNS: (record) => addDNS(state, record),
@@ -372,6 +401,61 @@ function getAdvancedSettings(config: HeadscaleConfigState): AdvancedSettingsView
   };
 }
 
+/**
+ * DERP defaults, matching Headscale v0.29.2. `derp.server.verify_clients`,
+ * `derp.server.automatically_add_embedded_derp_region` and
+ * `derp.update_frequency` are `viper.SetDefault` values from
+ * `hscontrol/types/config.go`; the remaining embedded-server values have no
+ * viper default and fall back to what `config-example.yaml` documents.
+ */
+const DERP_SETTINGS_DEFAULTS = {
+  urls: [] as string[],
+  paths: [] as string[],
+  autoUpdateEnabled: false,
+  updateFrequency: "3h",
+  server: {
+    enabled: false,
+    regionId: 999,
+    regionCode: "headscale",
+    regionName: "Headscale Embedded DERP",
+    stunListenAddr: "0.0.0.0:3478",
+    verifyClients: true,
+    automaticallyAddEmbeddedDerpRegion: true,
+  },
+};
+
+// DERP settings live at the top level (`derp.*`, not under `node`). Every value
+// is read defensively so a hand-written config with unexpected types falls back
+// to Headscale's default instead of breaking the page.
+function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
+  const root = readObject(config.config) ?? {};
+  const derp = readObject(root.derp) ?? {};
+  const server = readObject(derp.server) ?? {};
+  const defaults = DERP_SETTINGS_DEFAULTS;
+
+  return {
+    urls: readStringList(derp.urls),
+    paths: readStringList(derp.paths),
+    autoUpdateEnabled: readBoolean(derp.auto_update_enabled, defaults.autoUpdateEnabled),
+    updateFrequency: readString(derp.update_frequency, defaults.updateFrequency),
+    server: {
+      enabled: readBoolean(server.enabled, defaults.server.enabled),
+      regionId: readNumber(server.region_id, defaults.server.regionId),
+      regionCode: readString(server.region_code, defaults.server.regionCode),
+      regionName: readString(server.region_name, defaults.server.regionName),
+      stunListenAddr: readString(server.stun_listen_addr, defaults.server.stunListenAddr),
+      // Headscale generates the key file when the path is missing, so the page
+      // only needs to know whether a path is configured at all.
+      hasPrivateKey: readString(server.private_key_path).length > 0,
+      verifyClients: readBoolean(server.verify_clients, defaults.server.verifyClients),
+      automaticallyAddEmbeddedDerpRegion: readBoolean(
+        server.automatically_add_embedded_derp_region,
+        defaults.server.automaticallyAddEmbeddedDerpRegion,
+      ),
+    },
+  };
+}
+
 function readObject(value: unknown): Record<string, unknown> | undefined {
   if (value == null || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -381,6 +465,10 @@ function readObject(value: unknown): Record<string, unknown> | undefined {
 
 function readString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {

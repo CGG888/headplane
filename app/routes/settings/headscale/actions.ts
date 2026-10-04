@@ -16,6 +16,7 @@ import {
   MIN_EPHEMERAL_INACTIVITY_SECONDS,
   parseGoDurationSeconds,
 } from "./advanced-settings";
+import { isHttpUrl, parseDerpRegionId, parseDerpUpdateFrequencySeconds } from "./derp-settings";
 import type {
   HeadscaleSettingsErrorCode,
   HeadscaleSettingsFailure,
@@ -230,6 +231,138 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       return success();
     }
 
+    case "add_derp_url": {
+      const url = readField(formData, "url");
+      if (!isHttpUrl(url)) {
+        return failure("invalidDerpUrl");
+      }
+
+      const { urls } = headscaleConfig.getDERPSettings();
+      if (urls.includes(url)) {
+        return failure("duplicateDerpUrl");
+      }
+
+      await headscaleConfig.patch([{ path: "derp.urls", value: [...urls, url] }]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "remove_derp_url": {
+      const url = readField(formData, "url");
+      const { urls } = headscaleConfig.getDERPSettings();
+      if (!urls.includes(url)) {
+        return failure("derpUrlNotFound");
+      }
+
+      await headscaleConfig.patch([
+        { path: "derp.urls", value: urls.filter((entry) => entry !== url) },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "add_derp_path": {
+      const path = readField(formData, "path");
+      if (path.length === 0) {
+        return failure("invalidDerpPath");
+      }
+
+      const { paths } = headscaleConfig.getDERPSettings();
+      if (paths.includes(path)) {
+        return failure("duplicateDerpPath");
+      }
+
+      await headscaleConfig.patch([{ path: "derp.paths", value: [...paths, path] }]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "remove_derp_path": {
+      const path = readField(formData, "path");
+      const { paths } = headscaleConfig.getDERPSettings();
+      if (!paths.includes(path)) {
+        return failure("derpPathNotFound");
+      }
+
+      await headscaleConfig.patch([
+        { path: "derp.paths", value: paths.filter((entry) => entry !== path) },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_derp_settings": {
+      const autoUpdateEnabled = readBooleanField(formData, "derp_auto_update_enabled");
+      if (autoUpdateEnabled === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      // Headscale reads this with Go's time.ParseDuration; a zero interval
+      // would make its DERP updater busy-loop.
+      const updateFrequency = readField(formData, "derp_update_frequency");
+      if (parseDerpUpdateFrequencySeconds(updateFrequency) === undefined) {
+        return failure("invalidDerpUpdateFrequency");
+      }
+
+      await headscaleConfig.patch([
+        { path: "derp.auto_update_enabled", value: autoUpdateEnabled },
+        { path: "derp.update_frequency", value: updateFrequency },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_derp_server": {
+      const enabled = readBooleanField(formData, "derp_server_enabled");
+      const verifyClients = readBooleanField(formData, "derp_server_verify_clients");
+      const automaticallyAdd = readBooleanField(
+        formData,
+        "derp_server_automatically_add_embedded_derp_region",
+      );
+      if (enabled === undefined || verifyClients === undefined || automaticallyAdd === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      // Headscale reserves 900-999 for embedded DERP regions.
+      const regionId = parseDerpRegionId(readField(formData, "derp_server_region_id"));
+      if (regionId === undefined) {
+        return failure("invalidDerpRegionId");
+      }
+
+      const regionCode = readField(formData, "derp_server_region_code");
+      const regionName = readField(formData, "derp_server_region_name");
+      if (regionCode.length === 0 || regionName.length === 0) {
+        return failure("invalidDerpRegionCode");
+      }
+
+      // Headscale refuses to start an enabled embedded server without a STUN
+      // address, and without a DERP map entry it cannot fall back to either.
+      const stunListenAddr = readField(formData, "derp_server_stun_listen_addr");
+      if (enabled && stunListenAddr.length === 0) {
+        return failure("missingDerpStunAddr");
+      }
+
+      const { paths } = headscaleConfig.getDERPSettings();
+      if (enabled && !automaticallyAdd && paths.length === 0) {
+        return failure("derpPathsRequired");
+      }
+
+      await headscaleConfig.patch([
+        { path: "derp.server.enabled", value: enabled },
+        { path: "derp.server.region_id", value: regionId },
+        { path: "derp.server.region_code", value: regionCode },
+        { path: "derp.server.region_name", value: regionName },
+        { path: "derp.server.stun_listen_addr", value: stunListenAddr },
+        { path: "derp.server.verify_clients", value: verifyClients },
+        {
+          path: "derp.server.automatically_add_embedded_derp_region",
+          value: automaticallyAdd,
+        },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
     default: {
       return failure("invalidAction");
     }
@@ -259,15 +392,6 @@ function readBooleanField(formData: FormData, name: string): boolean | undefined
 
 function splitList(value: string): string[] {
   return [...new Set(value.split(/[\s,]+/).filter((entry) => entry.length > 0))];
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 function failure(errorCode: HeadscaleSettingsErrorCode) {
