@@ -15,14 +15,17 @@ const LABELS = {
  * Submits the new locale to `/api/locale`, which persists it in a cookie and
  * redirects back to the current page so the loader re-runs with the new
  * language. Mirrors the color scheme switcher in the header.
+ *
+ * The request is a GET on purpose: everything travels in the query string, so
+ * the switch still works behind reverse proxies that drop the body of a POST
+ * (which made the browser land on this API URL with a server error).
  */
 export function useLocaleSubmit() {
   const submit = useSubmit();
   const location = useLocation();
   const returnTo = location.pathname + location.search;
 
-  return (locale: Locale) =>
-    submit({ locale, returnTo }, { action: "/api/locale", method: "POST" });
+  return (locale: Locale) => submit({ locale, returnTo }, { action: "/api/locale", method: "GET" });
 }
 
 /** Language entries rendered inside an existing dropdown menu. */

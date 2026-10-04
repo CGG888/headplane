@@ -180,7 +180,9 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
                   onClick={() =>
                     submit(
                       { colorScheme: value, returnTo },
-                      { action: "/api/color-scheme", method: "POST" },
+                      // GET keeps the value in the query string so the switch
+                      // survives proxies that drop POST bodies.
+                      { action: "/api/color-scheme", method: "GET" },
                     )
                   }
                 >
