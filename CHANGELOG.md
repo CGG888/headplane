@@ -1,11 +1,15 @@
 # Next
 
+# 0.15.0 (October 5, 2026)
+
 ## Changes
 
 - **Settings are now groups that open in a drawer.** Every settings page — Headscale, system status, API keys, the agent, login restrictions, the audit log and snapshots — shows a short list with a one-line summary of the current state, and the form itself slides in from the right. Pages that used to be one very long scroll are readable at a glance.
 - **The DERP preset can make your own relay the only one.** A checkbox in the preset writes `derp.urls: []` alongside enabling the embedded server, with the single-point-of-failure warning Headscale itself gives. The DERP row now also states where relays actually come from: only the embedded server, embedded plus Tailscale's public map, or only the public map.
 - The embedded DERP server can be given its **public IPv4 and IPv6 addresses** (`derp.server.ipv4`/`ipv6`), which Headscale recommends for connection stability. Emptying a field removes the key again.
 - DERP help text now matches Headscale's own documentation: the private key is **generated when missing** (only its directory has to be writable), `server_url` has to be **https**, and clients need **tcp/443** and **udp/3478** (the embedded server cannot serve the tcp/80 captive-portal check).
+
+---
 
 # 0.14.1 (October 5, 2026)
 
