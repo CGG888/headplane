@@ -251,6 +251,67 @@ const zhHant = {
       undeclaredHint: "沒有看到預期的標籤？標籤需要先在存取控制原則中定義，才能指派給機器。",
       notInPolicy: "有一個或多個標籤未在你的 ACL 原則中定義。請先在原則中新增它們，再指派給機器。",
     },
+    bulk: {
+      selected: {
+        one: "已選擇 {count} 台機器",
+        other: "已選擇 {count} 台機器",
+      },
+      selectAll: "全選目前可見的機器",
+      selectRow: "選擇 {name}",
+      clearSelection: "清除選擇",
+      actionsLabel: "批次操作",
+      setTags: "設定標籤",
+      setExpiry: "設定到期時間",
+      changeOwner: "變更擁有者",
+      delete: "刪除",
+      result: {
+        all: {
+          one: "已更新 {count} 台機器",
+          other: "已更新 {count} 台機器",
+        },
+        partial: "已更新 {updated} 台機器，{failed} 台失敗",
+      },
+      errors: {
+        noMachinesSelected: "請先選擇至少一台機器，再執行批次操作。",
+        tooManyMachines: "單次批次操作選擇的機器過多。",
+        missingTags: "請至少輸入一個標籤。",
+        missingUserId: "請選擇使用者。",
+        ownerUnsupported: "目前的 Headscale 版本不支援變更機器擁有者。",
+        unknown: "操作失敗，請再試一次。",
+      },
+      tags: {
+        title: {
+          one: "為 {count} 台機器設定標籤",
+          other: "為 {count} 台機器設定標籤",
+        },
+        description: "下列標籤會取代所選機器上現有的標籤。詳情請參閱{link}。",
+        replaceNotice: "標籤是取代而非合併。套用空清單會移除所選機器上的所有標籤。",
+        empty: "未選擇任何標籤",
+      },
+      expire: {
+        title: {
+          one: "為 {count} 台機器設定到期時間",
+          other: "為 {count} 台機器設定到期時間",
+        },
+      },
+      move: {
+        title: {
+          one: "變更 {count} 台機器的擁有者",
+          other: "變更 {count} 台機器的擁有者",
+        },
+      },
+      remove: {
+        title: {
+          one: "移除 {count} 台機器",
+          other: "移除 {count} 台機器",
+        },
+        body: {
+          one: "{count} 台機器將從你的網路中永久移除。如需重新加入，需要在裝置上重新對 Tailnet 進行驗證。",
+          other:
+            "{count} 台機器將從你的網路中永久移除。如需重新加入，需要在每台裝置上重新對 Tailnet 進行驗證。",
+        },
+      },
+    },
     chip: {
       exitNode: "出口節點",
       exitNodeEnabled: "此機器正在作為出口節點運作。",
@@ -398,6 +459,20 @@ const zhHant = {
       body: "你的 Headscale 設定中 ACL 原則模式很可能設為 {file}。這表示無法透過網頁介面編輯 ACL 檔案。若要解決此問題，需要在 Headscale 設定中將 {policyMode} 設為 {database}。",
     },
     updated: "原則已更新",
+    check: {
+      button: "驗證",
+      success: {
+        title: "原則有效",
+        body: "Headscale 已透過檢查端點接受此原則，現在可以儲存。",
+      },
+      failure: {
+        title: "原則被拒絕",
+        body: "Headscale 回報此原則有以下問題：",
+      },
+      errors: {
+        policyRejected: "Headscale 拒絕了此原則，因此沒有儲存。它傳回的訊息如下：",
+      },
+    },
     parseError: {
       title: "無法以視覺化方式編輯原則",
       body: "原則解析失敗（{error}）。請在{editFile}分頁中修正，視覺化編輯器就會恢復。",
@@ -697,6 +772,103 @@ const zhHant = {
       headscaleBody:
         "編輯 Headscale 自身設定檔中 Headplane 可以安全修改的部分：OpenID Connect、可信代理，以及存取控制原則的存放位置。",
       manageHeadscale: "管理 Headscale 設定",
+      systemTitle: "系統狀態",
+      systemBody:
+        "查看 Headplane 所管理的 Headscale 伺服器是否健康、執行哪個版本，以及是否有新版本可用。",
+      systemStatus: "查看系統狀態",
+    },
+    system: {
+      breadcrumb: "系統狀態",
+      title: "系統狀態",
+      body: "Headplane 所管理的 Headscale 伺服器之健康狀態、版本與設定檢查。",
+      statusTitle: "健康狀態",
+      statusHealthy: "Headscale 可連線",
+      statusUnhealthy: "Headscale 無法連線",
+      statusUnhealthyBody:
+        "Headplane 無法連線至 Headscale API。請先啟動 Headscale，然後重新載入本頁。",
+      versionLabel: "執行版本",
+      updateBadge: "有新版本",
+      updateBody: "Headscale {latest} 已發布，本伺服器執行的是 {current}。",
+      checksTitle: "診斷",
+      checksBody: "每項檢查都會說明發現的問題以及修復位置。",
+      checkStatusPass: "通過",
+      checkStatusWarning: "警告",
+      checkStatusFail: "失敗",
+      reviewSettings: "查看 Headscale 設定",
+      processTitle: "程序控制",
+      processBody: "Headplane 可以透過已設定的整合來重新載入或重新啟動 Headscale。",
+      processReload: "重新載入設定",
+      processRestart: "重新啟動 Headscale",
+      processPending: "處理中…",
+      processSuccess: "整合已接受該要求。",
+      processRestrictedTitle: "唯讀存取",
+      processUnavailableTitle: "未啟用整合",
+      processUnavailableBody:
+        "只有在啟用 Docker、Kubernetes 或原生(/proc)整合後，Headplane 才能重新載入或重新啟動 Headscale。設定方式請參閱{link}。",
+      processUnavailableLink: "文件",
+      processSemanticsReload:
+        "{name}會向 Headscale 程序傳送 SIGHUP，在不中斷連線的情況下重新載入設定。",
+      processSemanticsRestart: "{name}會重新啟動 Headscale 容器或 Pod。",
+      errors: {
+        invalidAction: "要求無效，請重新載入本頁後再試。",
+        notAvailable: "未啟用整合，Headplane 無法重新載入或重新啟動 Headscale。",
+        failed: "整合無法連線至 Headscale，詳情請參閱 Headplane 記錄。",
+      },
+      checks: {
+        reachable: {
+          title: "Headscale 可連線",
+          pass: "/health 端點有回應，Headplane 可以與 Headscale API 通訊。",
+          fail: "/health 端點沒有回應。請確認 Headscale 正在執行，並檢查 Headplane 設定中的位址是否正確。",
+        },
+        apiKey: {
+          title: "API 金鑰有效",
+          pass: "Headscale API 已接受設定的 API 金鑰。",
+          invalid:
+            "Headscale 拒絕了設定的 API 金鑰，表示它無效或已過期。請產生新的金鑰並更新 Headplane 設定。",
+          unknown:
+            "由於要求因其他原因失敗，Headplane 無法檢查 API 金鑰。詳情請參閱 Headplane 記錄。",
+        },
+        version: {
+          title: "Headscale 版本",
+          pass: "Headscale {version} 支援 Headplane 提供的所有功能。",
+          recommended:
+            "Headscale {version} 可以正常使用，但建議升級至 {recommended} 或更新版本：0.29 測試版至 0.29.1 的瀏覽器 SSH 無法使用。",
+          tooOld:
+            "Headscale {version} 低於 {minimum}，Headplane Agent 與瀏覽器 SSH 等功能將無法使用。",
+        },
+        policyMode: {
+          title: "存取控制原則模式",
+          pass: "Headscale 將原則儲存在資料庫中，因此存取控制編輯器可以透過 API 儲存。",
+          file: "Headscale 從檔案讀取原則，因此存取控制編輯器無法透過 API 儲存。如需在 Headplane 中編輯原則，請切換至資料庫模式。",
+          unknown: "Headplane 無法讀取 Headscale 的設定檔，因此無法判斷原則模式。",
+        },
+        oidc: {
+          title: "已設定 OIDC",
+          pass: "Headscale 已設定 OIDC 提供者，瀏覽器 SSH 與單一登入都需要它。",
+          missing: "Headscale 尚未設定 OIDC 提供者，瀏覽器 SSH 與單一登入在設定之前無法使用。",
+          unknown: "Headplane 無法讀取 Headscale 的設定檔，因此無法判斷是否已設定 OIDC。",
+        },
+        trustedProxies: {
+          title: "受信任的代理",
+          pass: "Headplane 未偵測到反向代理，或 Headscale 已信任其前方的代理。",
+          missing:
+            "Headplane 似乎位於反向代理之後，但 Headscale 未設定 trusted_proxies。在加入代理位址範圍之前，用戶端位址與部分登入流程可能不正確。",
+        },
+        configAccess: {
+          title: "Headscale 設定檔",
+          pass: "Headplane 可以讀取與寫入 Headscale 的設定檔。",
+          readOnly:
+            "Headplane 可以讀取但無法寫入 Headscale 的設定檔。如需從 Headplane 修改這些設定，請以可寫入方式掛載該檔案。",
+          unreadable:
+            "Headplane 無法讀取 Headscale 的設定檔。請檢查 headscale.config_path 設定與檔案權限。",
+        },
+        integration: {
+          title: "已啟用整合",
+          pass: "已啟用{name}，Headplane 可以為你重新載入或重新啟動 Headscale。",
+          missing:
+            "未啟用整合，Headplane 無法為你重新載入或重新啟動 Headscale。請啟用 Docker、Kubernetes 或原生(/proc)整合。",
+        },
+      },
     },
     headscale: {
       breadcrumb: "Headscale 設定",

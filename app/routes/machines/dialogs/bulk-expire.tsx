@@ -6,81 +6,62 @@ import Input from "~/components/input";
 import RadioGroup from "~/components/radio-group";
 import Text from "~/components/text";
 import Title from "~/components/title";
-import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import type { Machine } from "~/types";
-import { isNoExpiry } from "~/utils/node-info";
+import { isNoExpiry, type PopulatedNode } from "~/utils/node-info";
+import toast from "~/utils/toast";
 
-import type { MachineExpiryErrorCode } from "../machine-actions";
+import {
+  bulkErrorMessage,
+  bulkSummary,
+  type BulkErrorResult,
+  type BulkResult,
+} from "../components/bulk-result";
+import { parseLocalValue } from "./expire";
 
 type ExpiryMode = "never" | "default" | "custom";
 
-interface ExpireProps {
-  machine: Machine;
+interface BulkExpireProps {
+  nodes: PopulatedNode[];
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  onComplete: () => void;
 }
 
-type ExpiryResult = { success: true } | { success: false; errorCode: MachineExpiryErrorCode };
-
-const ERROR_KEYS: Record<MachineExpiryErrorCode, TranslationKey> = {
-  invalidExpiry: "machines.expire.errors.invalidDate",
-  expiryInPast: "machines.expire.errors.pastDate",
-};
-
-/** Formats an expiry for a `<input type="datetime-local">`, in local time. */
-function toLocalInputValue(expiry: string | null | undefined): string {
-  if (isNoExpiry(expiry)) {
-    return "";
-  }
-
-  const date = new Date(expiry as string);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
-export function parseLocalValue(value: string): Date | null {
-  if (value.length === 0) {
-    return null;
-  }
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-export default function Expire({ machine, isOpen, setIsOpen }: ExpireProps) {
+export default function BulkExpire({ nodes, isOpen, setIsOpen, onComplete }: BulkExpireProps) {
   const { t } = useI18n();
-  const fetcher = useFetcher<ExpiryResult>();
+  const fetcher = useFetcher<BulkResult | BulkErrorResult>();
   const submittingRef = useRef(false);
-  const [mode, setMode] = useState<ExpiryMode>(isNoExpiry(machine.expiry) ? "never" : "default");
-  const [expiry, setExpiry] = useState(() => toLocalInputValue(machine.expiry));
+  // There is no single machine to read a default from, so use "never" only when
+  // every selected machine already has key expiry disabled.
+  const [mode, setMode] = useState<ExpiryMode>(() =>
+    nodes.every((node) => isNoExpiry(node.expiry)) ? "never" : "default",
+  );
+  const [expiry, setExpiry] = useState("");
 
-  const error =
-    fetcher.data && !fetcher.data.success ? t(ERROR_KEYS[fetcher.data.errorCode]) : null;
+  const error = fetcher.data && !fetcher.data.success ? bulkErrorMessage(t, fetcher.data) : null;
   const customDate = mode === "custom" ? parseLocalValue(expiry) : null;
   const isDisabled = fetcher.state !== "idle" || (mode === "custom" && customDate === null);
 
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      submittingRef.current = false;
-      if (fetcher.data.success) {
-        setIsOpen(false);
-      }
+    const result = fetcher.data;
+    if (fetcher.state !== "idle" || !result) {
+      return;
     }
-  }, [fetcher.data, fetcher.state, setIsOpen]);
+
+    submittingRef.current = false;
+    if (result.success) {
+      toast(bulkSummary(t, result));
+      onComplete();
+      setIsOpen(false);
+    }
+  }, [fetcher.data, fetcher.state, onComplete, setIsOpen, t]);
 
   useEffect(() => {
     if (isOpen) {
-      setMode(isNoExpiry(machine.expiry) ? "never" : "default");
-      setExpiry(toLocalInputValue(machine.expiry));
+      setMode(nodes.every((node) => isNoExpiry(node.expiry)) ? "never" : "default");
+      setExpiry("");
     }
-  }, [isOpen, machine.expiry]);
+  }, [isOpen, nodes]);
 
   return (
     <Dialog
@@ -102,19 +83,21 @@ export default function Expire({ machine, isOpen, setIsOpen }: ExpireProps) {
 
           submittingRef.current = true;
           const form = new FormData();
-          form.set("action_id", "set_expiry");
-          form.set("node_id", machine.id);
+          form.set("action_id", "bulk_set_expiry");
           form.set("expiry_mode", mode);
           if (customDate) {
             // Send an absolute timestamp so the server does not have to guess
             // the browser's timezone.
             form.set("expiry", customDate.toISOString());
           }
+          for (const node of nodes) {
+            form.append("node_ids", node.id);
+          }
 
           fetcher.submit(form, { method: "POST" });
         }}
       >
-        <Title>{t("machines.expire.title", { name: machine.givenName })}</Title>
+        <Title>{t("machines.bulk.expire.title", { count: nodes.length })}</Title>
         <Text>{t("machines.expire.body")}</Text>
         {error ? (
           <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">

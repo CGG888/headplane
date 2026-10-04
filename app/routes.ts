@@ -38,6 +38,7 @@ export default [
       route("/restrictions", "routes/settings/restrictions/overview.tsx"),
       route("/agent", "routes/settings/agent.tsx"),
       route("/headscale", "routes/settings/headscale/overview.tsx"),
+      route("/system", "routes/settings/system/overview.tsx"),
     ]),
   ]),
 

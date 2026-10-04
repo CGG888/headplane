@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  CheckCircle,
   Construction,
   Eye,
   FlaskConical,
@@ -37,6 +38,7 @@ import Fallback from "./components/fallback";
 import RulesEditor from "./components/rules-editor";
 import TagsGroupsEditor from "./components/tags-groups-editor";
 import TailnetPolicyEditor from "./components/tailnet-policy-editor";
+import { ACL_ERROR_KEYS } from "./error-keys";
 
 const LazyEditor = lazy(() =>
   import("./components/cm.client").then((m) => ({ default: m.Editor })),
@@ -53,9 +55,12 @@ export default function Page({
 }: Route.ComponentProps) {
   const { t, tr } = useI18n();
   const [codePolicy, setCodePolicy] = useState(policy);
+  const [checkedPolicy, setCheckedPolicy] = useState<string | null>(null);
   const fetcher = useFetcher<typeof action>();
+  const checkFetcher = useFetcher<typeof action>();
   const { revalidate } = useRevalidator();
   const disabled = !access || !writable; // Disable if no permission or not writable
+  const busy = fetcher.state !== "idle" || checkFetcher.state !== "idle";
 
   const parsed = useMemo(() => parsePolicy(codePolicy), [codePolicy]);
   const sources = useMemo(
@@ -85,6 +90,26 @@ export default function Page({
       revalidate();
     }
   }, [fetcher.data]);
+
+  useEffect(() => {
+    // A validation verdict only describes the exact text that was checked, so
+    // it stops applying as soon as the editor changes.
+    setCheckedPolicy(null);
+  }, [codePolicy]);
+
+  // Headscale's rejection of a policy, whether it came from the validate button
+  // or from a save that was stopped before it reached storage.
+  const rejection =
+    checkFetcher.data?.errorCode != null
+      ? checkFetcher.data
+      : fetcher.data?.errorCode != null
+        ? fetcher.data
+        : undefined;
+  const checkSucceeded =
+    rejection == null &&
+    checkFetcher.data?.success === true &&
+    checkedPolicy != null &&
+    checkedPolicy === codePolicy;
 
   // The structured editors round-trip through the policy text, so the file
   // editor, the diff view and Save all work off one source of truth.
@@ -154,6 +179,21 @@ export default function Page({
           variant="error"
         >
           {fetcher.data.error.split(":").slice(1).join(": ") || t("acls.updateError.fallbackBody")}
+        </Notice>
+      ) : undefined}
+      {rejection?.detail !== undefined ? (
+        <Notice title={t("acls.check.failure.title")} variant="error">
+          <p>{t("acls.check.failure.body")}</p>
+          <p className="mt-1">{t(ACL_ERROR_KEYS[rejection.errorCode ?? "policyRejected"])}</p>
+          <Code className="mt-2 block whitespace-pre-wrap">{rejection.detail}</Code>
+        </Notice>
+      ) : undefined}
+      {checkSucceeded ? (
+        <Notice
+          title={t("acls.check.success.title")}
+          icon={<CheckCircle className="text-green-500" />}
+        >
+          {t("acls.check.success.body")}
         </Notice>
       ) : undefined}
       <Tabs className="mb-4" label={t("acls.editor.label")} defaultValue="rules">
@@ -247,9 +287,22 @@ export default function Page({
       </Tabs>
       <Button
         className="mr-2"
-        disabled={
-          disabled || fetcher.state !== "idle" || codePolicy.length === 0 || codePolicy === policy
-        }
+        disabled={disabled || busy || codePolicy.length === 0}
+        onClick={() => {
+          // Ask Headscale to parse the policy without storing it, so a bad
+          // policy can be fixed before Save ever touches the stored one.
+          const formData = new FormData();
+          formData.append("action_id", "check_policy");
+          formData.append("policy", codePolicy);
+          setCheckedPolicy(codePolicy);
+          checkFetcher.submit(formData, { method: "PATCH" });
+        }}
+      >
+        {t("acls.check.button")}
+      </Button>
+      <Button
+        className="mr-2"
+        disabled={disabled || busy || codePolicy.length === 0 || codePolicy === policy}
         onClick={() => {
           const formData = new FormData();
           formData.append("policy", codePolicy);
@@ -260,7 +313,7 @@ export default function Page({
         {t("acls.editor.save")}
       </Button>
       <Button
-        disabled={disabled || fetcher.state !== "idle" || codePolicy === policy}
+        disabled={disabled || busy || codePolicy === policy}
         onClick={() => {
           // Reset the editor to the original policy
           setCodePolicy(policy);

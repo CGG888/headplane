@@ -266,6 +266,70 @@ const en = {
       notInPolicy:
         "One or more tags are not defined in your ACL policy. Please add them to your policy before assigning them to a machine.",
     },
+    bulk: {
+      selected: {
+        one: "{count} machine selected",
+        other: "{count} machines selected",
+      },
+      selectAll: "Select all visible machines",
+      selectRow: "Select {name}",
+      clearSelection: "Clear selection",
+      actionsLabel: "Bulk actions",
+      setTags: "Set tags",
+      setExpiry: "Set expiry",
+      changeOwner: "Change owner",
+      delete: "Delete",
+      result: {
+        all: {
+          one: "{count} machine updated",
+          other: "{count} machines updated",
+        },
+        partial: "{updated} machines updated, {failed} failed",
+      },
+      errors: {
+        noMachinesSelected: "Select at least one machine before running a bulk action.",
+        tooManyMachines: "Too many machines were selected for a single action.",
+        missingTags: "Enter at least one tag.",
+        missingUserId: "Select a user.",
+        ownerUnsupported:
+          "Changing the owner of a machine is not supported by this Headscale version.",
+        unknown: "The action failed. Please try again.",
+      },
+      tags: {
+        title: {
+          one: "Set tags on {count} machine",
+          other: "Set tags on {count} machines",
+        },
+        description:
+          "The tags below replace the existing tags on every selected machine. See the {link} for more information.",
+        replaceNotice:
+          "Tags are replaced, not merged. Applying an empty list removes all tags from the selected machines.",
+        empty: "No tags selected",
+      },
+      expire: {
+        title: {
+          one: "Set expiry for {count} machine",
+          other: "Set expiry for {count} machines",
+        },
+      },
+      move: {
+        title: {
+          one: "Change the owner of {count} machine",
+          other: "Change the owner of {count} machines",
+        },
+      },
+      remove: {
+        title: {
+          one: "Remove {count} machine",
+          other: "Remove {count} machines",
+        },
+        body: {
+          one: "{count} machine will be permanently removed from your network. To re-add it, you will need to reauthenticate to your tailnet from the device.",
+          other:
+            "{count} machines will be permanently removed from your network. To re-add them, you will need to reauthenticate to your tailnet from each device.",
+        },
+      },
+    },
     chip: {
       exitNode: "Exit Node",
       exitNodeEnabled: "This machine is acting as an exit node.",
@@ -425,6 +489,20 @@ const en = {
       body: "The ACL policy mode is most likely set to {file} in your Headscale configuration. This means that the ACL file cannot be edited through the web interface. In order to resolve this, you'll need to set {policyMode} to {database} in your Headscale configuration.",
     },
     updated: "Updated policy",
+    check: {
+      button: "Validate",
+      success: {
+        title: "Policy is valid",
+        body: "Headscale accepted this policy through its check endpoint. It is safe to save.",
+      },
+      failure: {
+        title: "Policy was rejected",
+        body: "Headscale reported the following problem with the policy:",
+      },
+      errors: {
+        policyRejected: "Headscale rejected this policy, so it was not saved. Its message was:",
+      },
+    },
     parseError: {
       title: "Policy cannot be edited visually",
       body: "The policy could not be parsed ({error}). Fix it in the {editFile} tab and the visual editor will come back.",
@@ -741,6 +819,107 @@ const en = {
       headscaleBody:
         "Edit the parts of Headscale's own configuration file that Headplane can safely change: OpenID Connect, trusted proxies, and where the Access Control policy is stored.",
       manageHeadscale: "Manage Headscale Settings",
+      systemTitle: "System Status",
+      systemBody:
+        "Check whether the Headscale server Headplane manages is healthy, which version it runs, and whether a newer release is available.",
+      systemStatus: "View System Status",
+    },
+    system: {
+      breadcrumb: "System Status",
+      title: "System Status",
+      body: "Health, version, and configuration checks for the Headscale server that Headplane manages.",
+      statusTitle: "Health",
+      statusHealthy: "Headscale is reachable",
+      statusUnhealthy: "Headscale is unreachable",
+      statusUnhealthyBody:
+        "Headplane could not reach the Headscale API. Start Headscale, then reload this page.",
+      versionLabel: "Running version",
+      updateBadge: "Update available",
+      updateBody: "Headscale {latest} is available. This server runs {current}.",
+      checksTitle: "Diagnostics",
+      checksBody: "Each check explains what was found and where it can be fixed.",
+      checkStatusPass: "Passed",
+      checkStatusWarning: "Warning",
+      checkStatusFail: "Failed",
+      reviewSettings: "Review Headscale settings",
+      processTitle: "Process Control",
+      processBody:
+        "Headplane can ask the configured integration to reload or restart Headscale for you.",
+      processReload: "Reload configuration",
+      processRestart: "Restart Headscale",
+      processPending: "Working…",
+      processSuccess: "The integration accepted the request.",
+      processRestrictedTitle: "Read-only Access",
+      processUnavailableTitle: "No Integration Enabled",
+      processUnavailableBody:
+        "Headplane can only reload or restart Headscale when the Docker, Kubernetes, or native (/proc) integration is enabled. See the {link} for setup instructions.",
+      processUnavailableLink: "documentation",
+      processSemanticsReload:
+        "{name} sends SIGHUP to the Headscale process, which reloads the configuration without dropping connections.",
+      processSemanticsRestart: "{name} restarts the Headscale container or pod.",
+      errors: {
+        invalidAction: "The request was invalid. Reload the page and try again.",
+        notAvailable: "No integration is enabled, so Headplane cannot reload or restart Headscale.",
+        failed: "The integration could not reach Headscale. Check the Headplane logs for details.",
+      },
+      checks: {
+        reachable: {
+          title: "Headscale reachable",
+          pass: "The /health endpoint answered, so Headplane can talk to the Headscale API.",
+          fail: "The /health endpoint did not answer. Check that Headscale is running and that its URL in the Headplane configuration is correct.",
+        },
+        apiKey: {
+          title: "API key valid",
+          pass: "The Headscale API accepted the configured API key.",
+          invalid:
+            "Headscale rejected the configured API key, so it is invalid or expired. Generate a new key and update the Headplane configuration.",
+          unknown:
+            "Headplane could not check the API key because the request failed for another reason. Check the Headplane logs for details.",
+        },
+        version: {
+          title: "Headscale version",
+          pass: "Headscale {version} supports every feature Headplane offers.",
+          recommended:
+            "Headscale {version} works, but {recommended} or newer is recommended: browser SSH is broken on the 0.29 beta releases through 0.29.1.",
+          tooOld:
+            "Headscale {version} is older than {minimum}, so features such as the Headplane Agent and browser SSH are unavailable.",
+        },
+        policyMode: {
+          title: "Access Control policy mode",
+          pass: "Headscale stores the policy in its database, so the Access Control editor can save through the API.",
+          file: "Headscale reads the policy from a file, so the Access Control editor cannot save through the API. Switch to the database mode to edit the policy in Headplane.",
+          unknown:
+            "Headplane cannot read Headscale's configuration file, so the policy mode is unknown.",
+        },
+        oidc: {
+          title: "OIDC configured",
+          pass: "Headscale has an OIDC provider configured, which browser SSH and single sign-on require.",
+          missing:
+            "Headscale has no OIDC provider configured. Browser SSH and single sign-on stay unavailable until one is set up.",
+          unknown:
+            "Headplane cannot read Headscale's configuration file, so it cannot tell whether OIDC is configured.",
+        },
+        trustedProxies: {
+          title: "Trusted proxies",
+          pass: "Headplane did not detect a reverse proxy, or Headscale already trusts the proxy in front of it.",
+          missing:
+            "Headplane looks like it is reached through a reverse proxy, but Headscale has no trusted_proxies configured. Client addresses and some sign-in flows can be wrong until the proxy address range is added.",
+        },
+        configAccess: {
+          title: "Headscale configuration file",
+          pass: "Headplane can read and write Headscale's configuration file.",
+          readOnly:
+            "Headplane can read Headscale's configuration file but not write to it. Mount the file read-write to change these settings from Headplane.",
+          unreadable:
+            "Headplane cannot read Headscale's configuration file. Check the headscale.config_path setting and the file permissions.",
+        },
+        integration: {
+          title: "Integration enabled",
+          pass: "{name} is enabled, so Headplane can reload or restart Headscale for you.",
+          missing:
+            "No integration is enabled, so Headplane cannot reload or restart Headscale. Enable the Docker, Kubernetes, or native (/proc) integration.",
+        },
+      },
     },
     headscale: {
       breadcrumb: "Headscale Settings",

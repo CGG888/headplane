@@ -251,6 +251,67 @@ const zhHans = {
       undeclaredHint: "没有看到预期的标签？标签需要先在访问控制策略中定义，才能分配给机器。",
       notInPolicy: "有一个或多个标签未在你的 ACL 策略中定义。请先在策略中添加它们，再分配给机器。",
     },
+    bulk: {
+      selected: {
+        one: "已选择 {count} 台机器",
+        other: "已选择 {count} 台机器",
+      },
+      selectAll: "全选当前可见的机器",
+      selectRow: "选择 {name}",
+      clearSelection: "清除选择",
+      actionsLabel: "批量操作",
+      setTags: "设置标签",
+      setExpiry: "设置过期时间",
+      changeOwner: "变更所有者",
+      delete: "删除",
+      result: {
+        all: {
+          one: "已更新 {count} 台机器",
+          other: "已更新 {count} 台机器",
+        },
+        partial: "已更新 {updated} 台机器，{failed} 台失败",
+      },
+      errors: {
+        noMachinesSelected: "请先选择至少一台机器，再执行批量操作。",
+        tooManyMachines: "单次批量操作选择的机器过多。",
+        missingTags: "请至少输入一个标签。",
+        missingUserId: "请选择用户。",
+        ownerUnsupported: "当前的 Headscale 版本不支持变更机器所有者。",
+        unknown: "操作失败，请重试。",
+      },
+      tags: {
+        title: {
+          one: "为 {count} 台机器设置标签",
+          other: "为 {count} 台机器设置标签",
+        },
+        description: "下面的标签会替换所选机器上的现有标签。详情请参阅{link}。",
+        replaceNotice: "标签是替换而非合并。应用空列表会移除所选机器上的所有标签。",
+        empty: "未选择任何标签",
+      },
+      expire: {
+        title: {
+          one: "为 {count} 台机器设置过期时间",
+          other: "为 {count} 台机器设置过期时间",
+        },
+      },
+      move: {
+        title: {
+          one: "变更 {count} 台机器的所有者",
+          other: "变更 {count} 台机器的所有者",
+        },
+      },
+      remove: {
+        title: {
+          one: "移除 {count} 台机器",
+          other: "移除 {count} 台机器",
+        },
+        body: {
+          one: "{count} 台机器将从你的网络中永久移除。如需重新添加，需要在设备上重新对 Tailnet 进行认证。",
+          other:
+            "{count} 台机器将从你的网络中永久移除。如需重新添加，需要在每台设备上重新对 Tailnet 进行认证。",
+        },
+      },
+    },
     chip: {
       exitNode: "出口节点",
       exitNodeEnabled: "此机器正在作为出口节点运行。",
@@ -398,6 +459,20 @@ const zhHans = {
       body: "你的 Headscale 配置中 ACL 策略模式很可能被设为 {file}。这意味着无法通过 Web 界面编辑 ACL 文件。要解决此问题，需要在 Headscale 配置中将 {policyMode} 设为 {database}。",
     },
     updated: "策略已更新",
+    check: {
+      button: "验证",
+      success: {
+        title: "策略有效",
+        body: "Headscale 已通过检查端点接受此策略，现在可以保存。",
+      },
+      failure: {
+        title: "策略被拒绝",
+        body: "Headscale 报告此策略存在以下问题：",
+      },
+      errors: {
+        policyRejected: "Headscale 拒绝了此策略，因此没有保存。它返回的信息如下：",
+      },
+    },
     parseError: {
       title: "无法可视化编辑策略",
       body: "策略解析失败（{error}）。请在{editFile}标签页中修复，可视化编辑器就会恢复。",
@@ -697,6 +772,103 @@ const zhHans = {
       headscaleBody:
         "编辑 Headscale 自身配置文件中 Headplane 可以安全修改的部分：OpenID Connect、可信代理，以及访问控制策略的存放位置。",
       manageHeadscale: "管理 Headscale 设置",
+      systemTitle: "系统状态",
+      systemBody:
+        "查看 Headplane 所管理的 Headscale 服务器是否健康、运行哪个版本，以及是否有新版本可用。",
+      systemStatus: "查看系统状态",
+    },
+    system: {
+      breadcrumb: "系统状态",
+      title: "系统状态",
+      body: "Headplane 所管理的 Headscale 服务器的健康状况、版本与配置检查。",
+      statusTitle: "健康状况",
+      statusHealthy: "Headscale 可访问",
+      statusUnhealthy: "Headscale 无法访问",
+      statusUnhealthyBody:
+        "Headplane 无法连接 Headscale API。请先启动 Headscale，然后重新加载本页。",
+      versionLabel: "运行版本",
+      updateBadge: "有新版本",
+      updateBody: "Headscale {latest} 已发布，本服务器运行的是 {current}。",
+      checksTitle: "诊断",
+      checksBody: "每项检查都会说明发现的问题以及修复位置。",
+      checkStatusPass: "通过",
+      checkStatusWarning: "警告",
+      checkStatusFail: "失败",
+      reviewSettings: "查看 Headscale 设置",
+      processTitle: "进程控制",
+      processBody: "Headplane 可以通过已配置的集成来重新加载或重启 Headscale。",
+      processReload: "重新加载配置",
+      processRestart: "重启 Headscale",
+      processPending: "处理中…",
+      processSuccess: "集成已接受该请求。",
+      processRestrictedTitle: "只读访问",
+      processUnavailableTitle: "未启用集成",
+      processUnavailableBody:
+        "只有在启用 Docker、Kubernetes 或原生(/proc)集成后，Headplane 才能重新加载或重启 Headscale。设置方法请参阅{link}。",
+      processUnavailableLink: "文档",
+      processSemanticsReload:
+        "{name}会向 Headscale 进程发送 SIGHUP，在不中断连接的情况下重新加载配置。",
+      processSemanticsRestart: "{name}会重启 Headscale 容器或 Pod。",
+      errors: {
+        invalidAction: "请求无效，请重新加载本页后重试。",
+        notAvailable: "未启用集成，Headplane 无法重新加载或重启 Headscale。",
+        failed: "集成无法连接 Headscale，详情请查看 Headplane 日志。",
+      },
+      checks: {
+        reachable: {
+          title: "Headscale 可访问",
+          pass: "/health 端点有响应，Headplane 可以与 Headscale API 通信。",
+          fail: "/health 端点无响应。请确认 Headscale 正在运行，并检查 Headplane 配置中的地址是否正确。",
+        },
+        apiKey: {
+          title: "API 密钥有效",
+          pass: "Headscale API 已接受配置的 API 密钥。",
+          invalid:
+            "Headscale 拒绝了配置的 API 密钥，说明它无效或已过期。请生成新密钥并更新 Headplane 配置。",
+          unknown:
+            "由于请求因其他原因失败，Headplane 无法检查 API 密钥。详情请查看 Headplane 日志。",
+        },
+        version: {
+          title: "Headscale 版本",
+          pass: "Headscale {version} 支持 Headplane 提供的全部功能。",
+          recommended:
+            "Headscale {version} 可以正常使用，但建议升级到 {recommended} 或更高版本：0.29 测试版至 0.29.1 的浏览器 SSH 无法使用。",
+          tooOld:
+            "Headscale {version} 低于 {minimum}，Headplane Agent 与浏览器 SSH 等功能将无法使用。",
+        },
+        policyMode: {
+          title: "访问控制策略模式",
+          pass: "Headscale 将策略存储在数据库中，因此访问控制编辑器可以通过 API 保存。",
+          file: "Headscale 从文件读取策略，因此访问控制编辑器无法通过 API 保存。如需在 Headplane 中编辑策略，请切换到数据库模式。",
+          unknown: "Headplane 无法读取 Headscale 的配置文件，因此无法确定策略模式。",
+        },
+        oidc: {
+          title: "已配置 OIDC",
+          pass: "Headscale 已配置 OIDC 提供商，浏览器 SSH 与单点登录都需要它。",
+          missing: "Headscale 尚未配置 OIDC 提供商，浏览器 SSH 与单点登录在配置之前不可用。",
+          unknown: "Headplane 无法读取 Headscale 的配置文件，因此无法确定是否已配置 OIDC。",
+        },
+        trustedProxies: {
+          title: "可信代理",
+          pass: "Headplane 未检测到反向代理，或 Headscale 已信任其前方的代理。",
+          missing:
+            "Headplane 似乎位于反向代理之后，但 Headscale 未配置 trusted_proxies。在添加代理地址段之前，客户端地址与部分登录流程可能不正确。",
+        },
+        configAccess: {
+          title: "Headscale 配置文件",
+          pass: "Headplane 可以读写 Headscale 的配置文件。",
+          readOnly:
+            "Headplane 可以读取但无法写入 Headscale 的配置文件。如需从 Headplane 修改这些设置，请以可写方式挂载该文件。",
+          unreadable:
+            "Headplane 无法读取 Headscale 的配置文件。请检查 headscale.config_path 设置与文件权限。",
+        },
+        integration: {
+          title: "已启用集成",
+          pass: "已启用{name}，Headplane 可以为你重新加载或重启 Headscale。",
+          missing:
+            "未启用集成，Headplane 无法为你重新加载或重启 Headscale。请启用 Docker、Kubernetes 或原生(/proc)集成。",
+        },
+      },
     },
     headscale: {
       breadcrumb: "Headscale 设置",

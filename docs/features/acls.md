@@ -88,6 +88,17 @@ Anything Headplane does not model inside these sections — a grant's `app` or
 `via`, a future key inside `autoApprovers`, and any unknown top-level section
 such as `postures` — is preserved verbatim when a policy is saved.
 
+## Validating before saving
+
+Headscale can validate a policy without storing it, and the editor uses that:
+saving runs the policy through Headscale's own parser first, so a rule with a
+typo is reported — in Headscale's own words — instead of being written and
+silently ignored. A **validate** button does the same check on demand, which is
+worth doing before a large rewrite.
+
+If Headscale cannot run the check at all (an older release, an unreachable
+server), Headplane saves exactly as it always did rather than blocking you.
+
 ## Editing the file directly
 
 The **Edit file** tab is the original CodeMirror editor over the raw policy, and

@@ -1,5 +1,5 @@
-﻿import { ChevronDown, ChevronUp, Info, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Info, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, useSearchParams } from "react-router";
 
 import Code from "~/components/code";
@@ -29,8 +29,10 @@ import {
 } from "~/utils/node-info";
 
 import type { Route } from "./+types/overview";
+import BulkActions from "./components/bulk-actions";
 import { MachineFilters } from "./components/machine-filters";
 import MachineRow from "./components/machine-row";
+import SelectCheckbox from "./components/select-checkbox";
 import NewMachine from "./dialogs/new";
 import { useMachineFilterParams } from "./hooks/use-machine-filter-params";
 import { machineAction } from "./machine-actions";
@@ -121,6 +123,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const searchQuery = searchParams.get("q") ?? "";
   const { filterUser, filterTag, filterStatus, filterRoute, hasActiveFilters } =
@@ -229,6 +232,49 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     sortDirection,
   ]);
 
+  // Selection only ever refers to rows the user can currently see, so
+  // filtering or searching drops the rows that are no longer visible.
+  const visibleIds = useMemo(
+    () => new Set(filteredAndSortedNodes.map((node) => node.id)),
+    [filteredAndSortedNodes],
+  );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleIds]);
+
+  const selectedNodes = useMemo(
+    () => filteredAndSortedNodes.filter((node) => selectedIds.has(node.id)),
+    [filteredAndSortedNodes, selectedIds],
+  );
+
+  const toggleSelection = useCallback((id: string, selected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleAllVisible = useCallback(
+    (selected: boolean) => setSelectedIds(selected ? new Set(visibleIds) : new Set()),
+    [visibleIds],
+  );
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -294,10 +340,34 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             : t("machines.list.total", { count: loaderData.populatedNodes.length })}
         </span>
       </div>
+      {loaderData.writable && selectedNodes.length > 0 ? (
+        <BulkActions
+          existingTags={loaderData.existingTags}
+          nodes={selectedNodes}
+          onClearSelection={clearSelection}
+          policyTags={loaderData.policyTags}
+          supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
+          users={loaderData.users}
+        />
+      ) : undefined}
       <div className="overflow-x-auto">
         <table className="w-full min-w-160 table-auto rounded-lg">
           <thead className="text-mist-600 dark:text-mist-300">
             <tr className="px-0.5 text-left">
+              <th className="w-8 pb-2">
+                <SelectCheckbox
+                  aria-label={t("machines.bulk.selectAll")}
+                  checked={
+                    selectedNodes.length > 0 &&
+                    selectedNodes.length === filteredAndSortedNodes.length
+                  }
+                  disabled={!loaderData.writable || filteredAndSortedNodes.length === 0}
+                  indeterminate={
+                    selectedNodes.length > 0 && selectedNodes.length < filteredAndSortedNodes.length
+                  }
+                  onChange={toggleAllVisible}
+                />
+              </th>
               <th
                 aria-sort={
                   sortField === "name"
@@ -448,7 +518,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               <tr>
                 <td
                   className="py-8 text-center text-mist-500"
-                  colSpan={loaderData.agent !== undefined ? 6 : 5}
+                  colSpan={loaderData.agent !== undefined ? 7 : 6}
                 >
                   {t("machines.list.empty")}
                 </td>
@@ -468,9 +538,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                       ? false // If the user has write permissions, they can edit all machines
                       : node.user?.id !== loaderData.headscaleUserId
                   }
+                  isSelected={selectedIds.has(node.id)}
+                  isSelectionDisabled={!loaderData.writable}
                   key={node.id}
                   magic={loaderData.magic}
                   node={node}
+                  onSelectChange={(selected) => toggleSelection(node.id, selected)}
                   users={loaderData.users}
                   supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
                   supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}

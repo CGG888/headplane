@@ -106,6 +106,16 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
           </Link>
         </>
       ) : undefined}
+      <div className="flex w-full flex-col sm:w-2/3">
+        <h1 className="mb-4 text-2xl font-medium">{t("settings.overview.systemTitle")}</h1>
+        <p>{t("settings.overview.systemBody")}</p>
+      </div>
+      <Link to="/settings/system">
+        <div className="flex items-center text-lg font-medium">
+          {t("settings.overview.systemStatus")}
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </div>
+      </Link>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-﻿import { ChevronDown, Copy } from "lucide-react";
+import { ChevronDown, Copy } from "lucide-react";
 import { useMemo } from "react";
 
 import Chip from "~/components/chip";
@@ -21,6 +21,7 @@ import toast from "~/utils/toast";
 import { getUserDisplayName } from "~/utils/user";
 
 import MenuOptions from "./menu";
+import SelectCheckbox from "./select-checkbox";
 
 interface Props {
   node: PopulatedNode;
@@ -32,6 +33,9 @@ interface Props {
   policyTags?: string[];
   supportsNodeOwnerChange: boolean;
   supportsDisablingKeyExpiry: boolean;
+  isSelected?: boolean;
+  isSelectionDisabled?: boolean;
+  onSelectChange?: (selected: boolean) => void;
 }
 
 export default function MachineRow({
@@ -44,6 +48,9 @@ export default function MachineRow({
   policyTags,
   supportsNodeOwnerChange,
   supportsDisablingKeyExpiry,
+  isSelected,
+  isSelectionDisabled,
+  onSelectChange,
 }: Props) {
   const { t, locale } = useI18n();
   const uiTags = useMemo(() => uiTagsForNode(node, isAgent), [node, isAgent]);
@@ -58,6 +65,16 @@ export default function MachineRow({
 
   return (
     <tr className="group hover:bg-mist-100 dark:hover:bg-mist-800" key={node.id}>
+      {onSelectChange !== undefined ? (
+        <td className="w-8 py-2 pl-2 align-top">
+          <SelectCheckbox
+            aria-label={t("machines.bulk.selectRow", { name: node.givenName })}
+            checked={isSelected ?? false}
+            disabled={isSelectionDisabled}
+            onChange={onSelectChange}
+          />
+        </td>
+      ) : undefined}
       <td className="py-2 pl-2 focus-within:ring-3">
         <Link className={cn("group/link h-full focus:outline-hidden")} to={`/machines/${node.id}`}>
           <p

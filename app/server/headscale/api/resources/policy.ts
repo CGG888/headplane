@@ -3,6 +3,11 @@ import type { Transport } from "../transport";
 
 export interface PolicyApi {
   get(): Promise<{ policy: string; updatedAt: Date | null }>;
+  /**
+   * Validate a policy without storing it. Headscale replies `{}` when the
+   * policy parses and throws the parser's own error when it does not.
+   */
+  check(policy: string): Promise<void>;
   set(policy: string): Promise<{ policy: string; updatedAt: Date }>;
 }
 
@@ -21,6 +26,14 @@ export function makePolicyApi(
         policy,
         updatedAt: updatedAt !== null ? new Date(updatedAt) : null,
       };
+    },
+    check: async (policy) => {
+      await transport.request<Record<string, never>>({
+        method: "POST",
+        path: "v1/policy/check",
+        apiKey,
+        body: { policy },
+      });
     },
     set: async (policy) => {
       const { policy: newPolicy, updatedAt } = await transport.request<{
