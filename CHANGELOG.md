@@ -1,8 +1,12 @@
 # Next
 
+# 0.8.3 (October 4, 2026)
+
 ## Fixes
 
 - Fixed every form submission failing (adding users, creating pre-auth keys, saving the ACL policy) when a reverse proxy forwards the request without a `Content-Type` header. Headplane now restores a form content type when one is missing, logs a warning naming the request, and no longer turns those saves into an "Unexpected Server Error".
+
+---
 
 # 0.8.2 (October 4, 2026)
 
