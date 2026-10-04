@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import { useI18n } from "~/i18n/provider";
 import type { SnapshotMeta } from "~/server/snapshots/types";
 
-import RestoreSnapshot from "./drawers/restore-snapshot";
+import RestoreSnapshot from "./dialogs/restore-snapshot";
 import { formatBytes, REASON_KEYS } from "./labels";
 
 interface SnapshotRowProps {

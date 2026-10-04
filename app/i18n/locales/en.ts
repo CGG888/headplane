@@ -1060,7 +1060,7 @@ const en = {
           missingDir:
             "The directory {path} does not exist, so Headscale cannot create its SQLite database there.",
           readOnlyDir:
-            "The directory {path} is not writable, so Headscale cannot create or update its SQLite database.",
+            "Headplane cannot write to {path}, which is usually a read-only mount, so it cannot tell whether Headscale can. That is normal for a read-only mount — only act on it if Headscale itself reports that it cannot write its database.",
         },
         policy: {
           title: "Access Control policy file",
@@ -1101,6 +1101,19 @@ const en = {
           firstStart:
             "The Noise private key at {path} does not exist yet, but neither does the database, so Headscale generates it on first start.",
         },
+      },
+      tabsLabel: "System status sections",
+      groups: {
+        connection: "Connection",
+        version: "Version",
+        configuration: "Headscale configuration",
+        integration: "Integration",
+        oidc: "OIDC settings",
+        proxies: "Trusted proxies",
+        tls: "TLS and ACME",
+        database: "Database and keys",
+        policy: "Access control policy",
+        dns: "DNS records",
       },
     },
     headscale: {
@@ -1323,6 +1336,18 @@ const en = {
         relaySourceEmbeddedAndMap: "the embedded server plus the public DERP map",
         relaySourceMapOnly: "the public DERP map only",
         relaySourceNone: "no DERP map sources are configured",
+        publicPortTitle: "Public relay port",
+        publicPortValue: "Clients reach this relay at {endpoint}.",
+        publicPortUnknown:
+          "server_url is missing or cannot be parsed, so the public relay port cannot be derived.",
+        publicPortNote:
+          "Tailscale's documentation recommends 443, because clients assume that port in some situations. Any other port works as long as server_url names it.",
+        proxyTitle: "Behind a reverse proxy",
+        proxyDerpPath: "Forward the /derp path, not only the API and control paths.",
+        proxyUpgrade: "Allow the HTTP Upgrade DERP uses, and do not buffer the connection.",
+        proxyTls: "Present valid HTTPS to clients.",
+        proxyStun:
+          "udp/3478 for STUN has to reach Headscale directly; it cannot pass through an HTTP proxy.",
         regionNamesSummary: "Named regions: {count}",
         presetClearMapLabel: "Also stop loading Tailscale's public DERP map",
         presetClearMapDescription:
@@ -1419,10 +1444,12 @@ const en = {
       createTitle: "Create an API key",
       createBody:
         "Choose how long this key stays valid. The key is shown once, right after it is created.",
+      createAnother: "Create another key",
       expirationLabel: "Key expiration (days)",
       expirationDescription: "The key stops working after this many days.",
       createdTitle: "API key created",
-      createdBody: "Copy this key now. It cannot be shown again after you close this dialog.",
+      createdBody:
+        "Copy this key now. It cannot be shown again after you create another key or leave the page.",
       empty: "No API keys have been created yet.",
       prefix: "Prefix",
       created: "Created",
@@ -1598,6 +1625,7 @@ const en = {
       },
       filtersTitle: "Filters",
       filtersDescription: "Choose which operations are listed.",
+      summaryAll: "No filters",
       summaryActor: "actor: {actor}",
       summaryAction: "action: {action}",
       entryTitle: "Operation details",

@@ -2,10 +2,10 @@ import { Camera } from "lucide-react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
-import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import { authContext, snapshotContext } from "~/server/context";
@@ -53,9 +53,9 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
         {t("settings.snapshots.destructiveBody")}
       </Notice>
 
-      <SettingsSectionList>
+      <SettingsCollapsibleGroup>
         <TakeSnapshotSection root={root} />
-      </SettingsSectionList>
+      </SettingsCollapsibleGroup>
 
       <TableList>
         {entries.length === 0 ? (
@@ -75,7 +75,7 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
   );
 }
 
-/** Taking a snapshot is rare, so its form lives in the row's drawer. */
+/** Taking a snapshot is rare, so its form stays folded away above the list. */
 function TakeSnapshotSection({ root }: { root: string }) {
   const { t } = useI18n();
   const fetcher = useFetcher<SnapshotActionResult>();
@@ -85,7 +85,7 @@ function TakeSnapshotSection({ root }: { root: string }) {
   const succeeded = !isBusy && result?.success === true && result.snapshotId !== undefined;
 
   return (
-    <SettingsSection
+    <SettingsCollapsible
       description={t("settings.snapshots.takeBody")}
       summary={t("settings.snapshots.storedAt", { path: root })}
       title={t("settings.snapshots.takeTitle")}
@@ -107,7 +107,7 @@ function TakeSnapshotSection({ root }: { root: string }) {
         ) : undefined}
         <p className="text-xs opacity-60">{t("settings.snapshots.storedAt", { path: root })}</p>
       </fetcher.Form>
-    </SettingsSection>
+    </SettingsCollapsible>
   );
 }
 

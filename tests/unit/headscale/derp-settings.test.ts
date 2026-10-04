@@ -4,6 +4,8 @@ import {
   DERP_REGION_ID_MAX,
   DERP_REGION_ID_MIN,
   classifyDerpRelaySource,
+  deriveDerpPublicEndpoint,
+  formatDerpPublicEndpoint,
   isDerpIpv4Address,
   isDerpIpv6Address,
   isDerpRegionId,
@@ -129,6 +131,70 @@ describe("DERP relay source", () => {
       "embedded-and-map",
     );
     expect(classifyDerpRelaySource({ serverEnabled: false, urls: [internalMap] })).toBe("map-only");
+  });
+});
+
+describe("public relay endpoint", () => {
+  test("uses the explicit port server_url names", () => {
+    expect(deriveDerpPublicEndpoint("https://et.mtoo.vip:8443")).toEqual({
+      host: "et.mtoo.vip",
+      port: 8443,
+      explicitPort: true,
+    });
+    expect(deriveDerpPublicEndpoint("http://headscale.internal:8080")).toEqual({
+      host: "headscale.internal",
+      port: 8080,
+      explicitPort: true,
+    });
+    // IPv6 literals keep their brackets so the endpoint stays addressable.
+    expect(deriveDerpPublicEndpoint("https://[2001:db8::1]:8443")).toEqual({
+      host: "[2001:db8::1]",
+      port: 8443,
+      explicitPort: true,
+    });
+  });
+
+  test("falls back to the URL's default port when none is written", () => {
+    expect(deriveDerpPublicEndpoint("https://headscale.example.com")).toEqual({
+      host: "headscale.example.com",
+      port: 443,
+      explicitPort: false,
+    });
+    expect(deriveDerpPublicEndpoint("http://headscale.example.com")).toEqual({
+      host: "headscale.example.com",
+      port: 80,
+      explicitPort: false,
+    });
+    // The URL parser drops a default port, so these read as implicit too.
+    expect(deriveDerpPublicEndpoint(" https://headscale.example.com:443 ")).toEqual({
+      host: "headscale.example.com",
+      port: 443,
+      explicitPort: false,
+    });
+  });
+
+  test("returns undefined instead of throwing on unusable values", () => {
+    for (const value of [
+      "",
+      "   ",
+      "headscale.example.com",
+      "/etc/headscale/config.yaml",
+      "https://",
+      "ftp://headscale.example.com",
+      "not a url",
+    ]) {
+      expect(deriveDerpPublicEndpoint(value), value).toBeUndefined();
+    }
+
+    expect(deriveDerpPublicEndpoint(undefined)).toBeUndefined();
+  });
+
+  test("formats the endpoint as host:port", () => {
+    const endpoint = deriveDerpPublicEndpoint("https://et.mtoo.vip:8443");
+    expect(endpoint && formatDerpPublicEndpoint(endpoint)).toBe("et.mtoo.vip:8443");
+
+    const implicit = deriveDerpPublicEndpoint("https://headscale.example.com");
+    expect(implicit && formatDerpPublicEndpoint(implicit)).toBe("headscale.example.com:443");
   });
 });
 

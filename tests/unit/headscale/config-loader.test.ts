@@ -405,6 +405,7 @@ describe("Headscale config loader", () => {
 
     const config = await loadHeadscaleConfig(path);
     expect(config.getDERPSettings()).toEqual({
+      serverUrl: "http://localhost:8080",
       urls: [],
       paths: [],
       autoUpdateEnabled: false,
@@ -454,6 +455,7 @@ describe("Headscale config loader", () => {
 
     const config = await loadHeadscaleConfig(path);
     expect(config.getDERPSettings()).toEqual({
+      serverUrl: "http://localhost:8080",
       urls: ["https://controlplane.tailscale.com/derpmap/default"],
       paths: ["/etc/headscale/derp.yaml"],
       autoUpdateEnabled: false,
@@ -492,6 +494,7 @@ describe("Headscale config loader", () => {
 
     const config = await loadHeadscaleConfig(path);
     expect(config.getDERPSettings()).toEqual({
+      serverUrl: "http://localhost:8080",
       urls: [],
       paths: [],
       autoUpdateEnabled: false,

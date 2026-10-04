@@ -1,13 +1,28 @@
-import { CheckCircle, CircleAlert, CircleX } from "lucide-react";
+import {
+  CheckCircle,
+  CircleAlert,
+  CircleX,
+  FileCheck,
+  HeartPulse,
+  Power,
+  Stethoscope,
+} from "lucide-react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Chip from "~/components/chip";
 import Code from "~/components/code";
-import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import {
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsPanel,
+  SettingsTab,
+  SettingsTabList,
+  SettingsTabs,
+} from "~/components/settings-nav";
 import StatusCircle from "~/components/status-circle";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
@@ -26,6 +41,7 @@ import cn from "~/utils/cn";
 
 import type { Route } from "./+types/overview";
 import { systemAction } from "./actions";
+import type { ConfigCheckId } from "./config-checks";
 import { loadConfigChecks } from "./config-probe";
 import {
   computeDiagnostics,
@@ -34,6 +50,7 @@ import {
   isNewerVersion,
   type ApiKeyStatus,
   type Diagnostic,
+  type DiagnosticId,
   type DiagnosticStatus,
   type OidcStatus,
 } from "./diagnostics";
@@ -45,6 +62,39 @@ const STATUS_KEYS: Record<DiagnosticStatus, TranslationKey> = {
   warning: "settings.system.checkStatusWarning",
   fail: "settings.system.checkStatusFail",
 };
+
+/** A named set of checks that opens and closes as one block. */
+interface CheckGroup<Id extends string> {
+  id: string;
+  titleKey: TranslationKey;
+  ids: readonly Id[];
+}
+
+/** The diagnostics, grouped the way an operator works through them. */
+const DIAGNOSTIC_GROUPS: readonly CheckGroup<DiagnosticId>[] = [
+  { id: "connection", titleKey: "settings.system.groups.connection", ids: ["reachable", "apiKey"] },
+  { id: "version", titleKey: "settings.system.groups.version", ids: ["version"] },
+  {
+    id: "configuration",
+    titleKey: "settings.system.groups.configuration",
+    ids: ["policyMode", "oidc", "trustedProxies", "configAccess"],
+  },
+  { id: "integration", titleKey: "settings.system.groups.integration", ids: ["integration"] },
+];
+
+/** The configuration file checks, grouped by the part of config.yaml they read. */
+const CONFIG_CHECK_GROUPS: readonly CheckGroup<ConfigCheckId>[] = [
+  { id: "oidc", titleKey: "settings.system.groups.oidc", ids: ["configOidcKeys", "configOidc"] },
+  { id: "proxies", titleKey: "settings.system.groups.proxies", ids: ["configTrustedProxies"] },
+  { id: "tls", titleKey: "settings.system.groups.tls", ids: ["configTls"] },
+  {
+    id: "database",
+    titleKey: "settings.system.groups.database",
+    ids: ["configDatabase", "configNoiseKey"],
+  },
+  { id: "policy", titleKey: "settings.system.groups.policy", ids: ["configPolicy"] },
+  { id: "dns", titleKey: "settings.system.groups.dns", ids: ["configDnsRecords"] },
+];
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -149,21 +199,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { reachable, integration } = loaderData;
   const isReload = integration?.action === "reload";
 
-  /** The one-line "what is set right now" text of a check list row. */
-  const summarize = (checks: readonly CheckRow[]) => {
-    const counts = { pass: 0, warning: 0, fail: 0 };
-    for (const check of checks) {
-      counts[check.status] += 1;
-    }
-
-    return t("settings.system.summaryChecks", {
-      total: checks.length,
-      pass: counts.pass,
-      warning: counts.warning,
-      fail: counts.fail,
-    });
-  };
-
   // A failure is the one thing an operator has to see without opening anything.
   // The reachable check is left out because the notice above already says it.
   const failed = [...loaderData.diagnostics, ...loaderData.configChecks].filter(
@@ -214,136 +249,139 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </Notice>
       ) : undefined}
 
-      <div className="w-full sm:w-2/3">
-        <SettingsSectionList>
-          <SettingsSection
-            badge={
-              loaderData.updateAvailable ? (
-                <Chip
-                  className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
-                  text={t("settings.system.updateBadge")}
-                />
-              ) : undefined
-            }
-            summary={
-              reachable
-                ? t("settings.system.summaryHealthy", { version: loaderData.version })
-                : t("settings.system.statusUnhealthy")
-            }
-            title={t("settings.system.statusTitle")}
-          >
-            <div className="flex items-center gap-3">
-              <StatusCircle className="h-5 w-5" isOnline={reachable} />
-              <span className="text-lg font-medium">
-                {reachable
-                  ? t("settings.system.statusHealthy")
-                  : t("settings.system.statusUnhealthy")}
-              </span>
-            </div>
-            {!reachable ? (
-              <p className="mt-2 text-sm">{t("settings.system.statusUnhealthyBody")}</p>
-            ) : undefined}
+      <SettingsTabs defaultValue="status" label={t("settings.system.tabsLabel")}>
+        <SettingsTabList>
+          <SettingsTab icon={HeartPulse} value="status">
+            {t("settings.system.statusTitle")}
+          </SettingsTab>
+          <SettingsTab icon={Power} value="process">
+            {t("settings.system.processTitle")}
+          </SettingsTab>
+          <SettingsTab icon={Stethoscope} value="diagnostics">
+            {t("settings.system.checksTitle")}
+          </SettingsTab>
+          <SettingsTab icon={FileCheck} value="configuration">
+            {t("settings.system.configChecks.title")}
+          </SettingsTab>
+        </SettingsTabList>
 
-            <p className="text-md mt-4 flex items-center gap-2">
-              <span className="font-medium">{t("settings.system.versionLabel")}:</span>
-              <Code>{loaderData.version}</Code>
+        <SettingsPanel value="status">
+          <div className="flex items-center gap-3">
+            <StatusCircle className="h-5 w-5" isOnline={reachable} />
+            <span className="text-lg font-medium">
+              {reachable
+                ? t("settings.system.statusHealthy")
+                : t("settings.system.statusUnhealthy")}
+            </span>
+            {loaderData.updateAvailable ? (
+              <Chip
+                className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
+                text={t("settings.system.updateBadge")}
+              />
+            ) : undefined}
+          </div>
+          {!reachable ? (
+            <p className="text-sm">{t("settings.system.statusUnhealthyBody")}</p>
+          ) : undefined}
+
+          <p className="text-md flex items-center gap-2">
+            <span className="font-medium">{t("settings.system.versionLabel")}:</span>
+            <Code>{loaderData.version}</Code>
+          </p>
+          {loaderData.updateAvailable && loaderData.latestVersion ? (
+            <p className="text-sm opacity-70">
+              {t("settings.system.updateBody", {
+                latest: loaderData.latestVersion,
+                current: loaderData.version,
+              })}
             </p>
-            {loaderData.updateAvailable && loaderData.latestVersion ? (
-              <p className="mt-1 text-sm opacity-70">
-                {t("settings.system.updateBody", {
-                  latest: loaderData.latestVersion,
-                  current: loaderData.version,
-                })}
-              </p>
+          ) : undefined}
+        </SettingsPanel>
+
+        <SettingsPanel value="process">
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">{processSummary}</p>
+            <p className="text-sm opacity-70">{t("settings.system.processBody")}</p>
+          </div>
+
+          {integration ? (
+            <p className="text-sm opacity-70">
+              {isReload
+                ? t("settings.system.processSemanticsReload", { name: integration.name })
+                : t("settings.system.processSemanticsRestart", { name: integration.name })}
+            </p>
+          ) : (
+            <Notice
+              icon={<CircleX className="text-mist-400" />}
+              title={t("settings.system.processUnavailableTitle")}
+            >
+              {tr("settings.system.processUnavailableBody", {
+                link: (
+                  <Link external styled to="https://headplane.net/features/system-status">
+                    {t("settings.system.processUnavailableLink")}
+                  </Link>
+                ),
+              })}
+            </Notice>
+          )}
+
+          <fetcher.Form className="flex items-center gap-3" method="post">
+            <input name="action_id" type="hidden" value="process_config_change" />
+            <Button
+              disabled={isBusy || !integration || !loaderData.canProcess}
+              type="submit"
+              variant={isReload ? "heavy" : "danger"}
+            >
+              {isBusy
+                ? t("settings.system.processPending")
+                : isReload
+                  ? t("settings.system.processReload")
+                  : t("settings.system.processRestart")}
+            </Button>
+            {succeeded ? (
+              <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                {t("settings.system.processSuccess")}
+              </span>
             ) : undefined}
-          </SettingsSection>
+          </fetcher.Form>
 
-          <SettingsSection
-            description={t("settings.system.processBody")}
-            summary={processSummary}
-            title={t("settings.system.processTitle")}
-          >
-            {integration ? (
-              <p className="text-sm opacity-70">
-                {isReload
-                  ? t("settings.system.processSemanticsReload", { name: integration.name })
-                  : t("settings.system.processSemanticsRestart", { name: integration.name })}
-              </p>
-            ) : (
-              <Notice
-                icon={<CircleX className="text-mist-400" />}
-                title={t("settings.system.processUnavailableTitle")}
-              >
-                {tr("settings.system.processUnavailableBody", {
-                  link: (
-                    <Link external styled to="https://headplane.net/features/system-status">
-                      {t("settings.system.processUnavailableLink")}
-                    </Link>
-                  ),
-                })}
-              </Notice>
-            )}
+          {!loaderData.canProcess ? (
+            <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
+              {t("errors.permission.modifyIam")}
+            </Notice>
+          ) : undefined}
 
-            <fetcher.Form className="mt-4 flex items-center gap-3" method="post">
-              <input name="action_id" type="hidden" value="process_config_change" />
-              <Button
-                disabled={isBusy || !integration || !loaderData.canProcess}
-                type="submit"
-                variant={isReload ? "heavy" : "danger"}
-              >
-                {isBusy
-                  ? t("settings.system.processPending")
-                  : isReload
-                    ? t("settings.system.processReload")
-                    : t("settings.system.processRestart")}
-              </Button>
-              {succeeded ? (
-                <span className="text-sm text-emerald-600 dark:text-emerald-400">
-                  {t("settings.system.processSuccess")}
-                </span>
-              ) : undefined}
-            </fetcher.Form>
+          {error ? (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {error}
+            </p>
+          ) : undefined}
+        </SettingsPanel>
 
-            {!loaderData.canProcess ? (
-              <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
-                {t("errors.permission.modifyIam")}
-              </Notice>
-            ) : undefined}
+        <SettingsPanel value="diagnostics">
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">{summarize(t, loaderData.diagnostics)}</p>
+            <p className="text-sm opacity-70">{t("settings.system.checksBody")}</p>
+          </div>
+          <CheckGroups checks={loaderData.diagnostics} groups={DIAGNOSTIC_GROUPS} />
+        </SettingsPanel>
 
-            {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-                {error}
-              </p>
-            ) : undefined}
-          </SettingsSection>
-
-          <SettingsSection
-            description={t("settings.system.checksBody")}
-            size="wide"
-            summary={summarize(loaderData.diagnostics)}
-            title={t("settings.system.checksTitle")}
-          >
-            <CheckList checks={loaderData.diagnostics} />
-          </SettingsSection>
-
-          <SettingsSection
-            description={t("settings.system.configChecks.body")}
-            size="wide"
-            summary={
-              loaderData.configChecks.length > 0
-                ? summarize(loaderData.configChecks)
-                : t("settings.system.summaryChecksUnavailable")
-            }
-            title={t("settings.system.configChecks.title")}
-          >
-            {loaderData.configChecks.length > 0 ? (
-              <CheckList checks={loaderData.configChecks} />
-            ) : (
-              <p className="text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
-            )}
-          </SettingsSection>
-        </SettingsSectionList>
-      </div>
+        <SettingsPanel value="configuration">
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">
+              {loaderData.configChecks.length > 0
+                ? summarize(t, loaderData.configChecks)
+                : t("settings.system.summaryChecksUnavailable")}
+            </p>
+            <p className="text-sm opacity-70">{t("settings.system.configChecks.body")}</p>
+          </div>
+          {loaderData.configChecks.length > 0 ? (
+            <CheckGroups checks={loaderData.configChecks} groups={CONFIG_CHECK_GROUPS} />
+          ) : (
+            <p className="text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
+          )}
+        </SettingsPanel>
+      </SettingsTabs>
     </div>
   );
 }
@@ -351,6 +389,60 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 type CheckRow = Pick<Diagnostic, "status" | "titleKey" | "bodyKey" | "vars" | "link"> & {
   id: string;
 };
+
+type Translate = (key: TranslationKey, vars?: Record<string, string | number>) => string;
+
+/** The one-line "what is set right now" text of a check list row. */
+function summarize(t: Translate, checks: readonly CheckRow[]) {
+  const counts = { pass: 0, warning: 0, fail: 0 };
+  for (const check of checks) {
+    counts[check.status] += 1;
+  }
+
+  return t("settings.system.summaryChecks", {
+    total: checks.length,
+    pass: counts.pass,
+    warning: counts.warning,
+    fail: counts.fail,
+  });
+}
+
+/**
+ * Renders the checks of a page as collapsible blocks, one per group. A group
+ * only contains checks the loader produced, so a group with nothing to show is
+ * skipped instead of rendering an empty block.
+ */
+function CheckGroups<Id extends string>({
+  checks,
+  groups,
+}: {
+  checks: readonly (CheckRow & { id: Id })[];
+  groups: readonly CheckGroup<Id>[];
+}) {
+  const { t } = useI18n();
+
+  return (
+    <SettingsCollapsibleGroup>
+      {groups.map((group) => {
+        const rows = checks.filter((check) => group.ids.includes(check.id));
+        if (rows.length === 0) {
+          return undefined;
+        }
+
+        return (
+          <SettingsCollapsible
+            defaultOpen={rows.some((row) => row.status === "fail")}
+            key={group.id}
+            summary={summarize(t, rows)}
+            title={t(group.titleKey)}
+          >
+            <CheckList checks={rows} />
+          </SettingsCollapsible>
+        );
+      })}
+    </SettingsCollapsibleGroup>
+  );
+}
 
 function CheckList({ checks }: { checks: readonly CheckRow[] }) {
   const { t } = useI18n();

@@ -3,8 +3,6 @@ import { Form } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
-import Text from "~/components/text";
-import Title from "~/components/title";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
 
@@ -35,8 +33,6 @@ export default function AddGroup({ groups, isDisabled }: AddGroupProps) {
 
   return (
     <Form className="flex flex-col gap-4" method="POST">
-      <Title className="text-lg font-medium">{t("settings.addGroup.title")}</Title>
-      <Text>{t("settings.addGroup.body")}</Text>
       <input name="action_id" type="hidden" value="add_group" />
       <Input
         {...form.field("group")}

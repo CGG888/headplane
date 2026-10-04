@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
+import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
 import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
@@ -19,6 +20,7 @@ import {
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
 import DerpConnectivityHints from "./derp-connectivity-hints";
 import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedded-preset";
+import DerpPublicEndpoint from "./derp-public-endpoint";
 
 interface DerpSettingsProps {
   isDisabled: boolean;
@@ -271,172 +273,181 @@ export default function DerpSettings({
   }
 
   return (
-    <div className="flex w-full flex-col gap-8">
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.derp.urlsTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.urlsBody")}</p>
-
-        <TableList>
-          {settings.urls.length === 0 ? (
-            <TableList.Item className="justify-center py-4 opacity-70">
-              <p className="font-semibold">{t("settings.headscale.derp.urlsEmpty")}</p>
-            </TableList.Item>
-          ) : (
-            settings.urls.map((url) => (
-              <TableList.Item key={url}>
-                <p className="font-mono text-sm">{url}</p>
-                <removeUrlFetcher.Form method="post">
-                  <input name="action_id" type="hidden" value="remove_derp_url" />
-                  <input name="url" type="hidden" value={url} />
-                  <RemoveButton
-                    disabled={isDisabled || urlBusy}
-                    label={t("settings.headscale.derp.removeUrl")}
-                  />
-                </removeUrlFetcher.Form>
+    <SettingsCollapsibleGroup>
+      <SettingsCollapsible
+        description={t("settings.headscale.derp.urlsBody")}
+        title={t("settings.headscale.derp.urlsTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <TableList>
+            {settings.urls.length === 0 ? (
+              <TableList.Item className="justify-center py-4 opacity-70">
+                <p className="font-semibold">{t("settings.headscale.derp.urlsEmpty")}</p>
               </TableList.Item>
-            ))
-          )}
-        </TableList>
+            ) : (
+              settings.urls.map((url) => (
+                <TableList.Item key={url}>
+                  <p className="font-mono text-sm">{url}</p>
+                  <removeUrlFetcher.Form method="post">
+                    <input name="action_id" type="hidden" value="remove_derp_url" />
+                    <input name="url" type="hidden" value={url} />
+                    <RemoveButton
+                      disabled={isDisabled || urlBusy}
+                      label={t("settings.headscale.derp.removeUrl")}
+                    />
+                  </removeUrlFetcher.Form>
+                </TableList.Item>
+              ))
+            )}
+          </TableList>
 
-        {removeUrlError ? (
-          <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-            {removeUrlError}
-          </p>
-        ) : undefined}
+          {removeUrlError ? (
+            <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {removeUrlError}
+            </p>
+          ) : undefined}
 
-        <addUrlFetcher.Form className="mt-4 flex items-end gap-3" method="post" onSubmit={onAddUrl}>
-          <input name="action_id" type="hidden" value="add_derp_url" />
-          <Input
-            disabled={isDisabled || urlBusy}
-            errorMessage={urlLocalError}
-            invalid={Boolean(urlLocalError)}
-            label={t("settings.headscale.derp.urlLabel")}
-            name="url"
-            onChange={(next) => {
-              setUrlValue(next);
-              setUrlLocalError(undefined);
-            }}
-            placeholder={t("settings.headscale.derp.urlPlaceholder")}
-            required
-            value={urlValue}
-          />
-          <Button disabled={isDisabled || urlBusy} type="submit" variant="heavy">
-            {t("settings.headscale.derp.addUrl")}
-          </Button>
-        </addUrlFetcher.Form>
+          <addUrlFetcher.Form
+            className="mt-4 flex items-end gap-3"
+            method="post"
+            onSubmit={onAddUrl}
+          >
+            <input name="action_id" type="hidden" value="add_derp_url" />
+            <Input
+              disabled={isDisabled || urlBusy}
+              errorMessage={urlLocalError}
+              invalid={Boolean(urlLocalError)}
+              label={t("settings.headscale.derp.urlLabel")}
+              name="url"
+              onChange={(next) => {
+                setUrlValue(next);
+                setUrlLocalError(undefined);
+              }}
+              placeholder={t("settings.headscale.derp.urlPlaceholder")}
+              required
+              value={urlValue}
+            />
+            <Button disabled={isDisabled || urlBusy} type="submit" variant="heavy">
+              {t("settings.headscale.derp.addUrl")}
+            </Button>
+          </addUrlFetcher.Form>
 
-        <GroupError message={addUrlError} />
-      </section>
+          <GroupError message={addUrlError} />
+        </section>
 
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.derp.pathsTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.pathsBody")}</p>
+        <section className="flex w-full flex-col">
+          <h4 className="text-sm font-medium">{t("settings.headscale.derp.pathsTitle")}</h4>
+          <p className="mt-1 mb-3 text-sm opacity-70">{t("settings.headscale.derp.pathsBody")}</p>
 
-        <TableList>
-          {settings.paths.length === 0 ? (
-            <TableList.Item className="justify-center py-4 opacity-70">
-              <p className="font-semibold">{t("settings.headscale.derp.pathsEmpty")}</p>
-            </TableList.Item>
-          ) : (
-            settings.paths.map((path) => (
-              <TableList.Item key={path}>
-                <p className="font-mono text-sm">{path}</p>
-                <removePathFetcher.Form method="post">
-                  <input name="action_id" type="hidden" value="remove_derp_path" />
-                  <input name="path" type="hidden" value={path} />
-                  <RemoveButton
-                    disabled={isDisabled || pathBusy}
-                    label={t("settings.headscale.derp.removePath")}
-                  />
-                </removePathFetcher.Form>
+          <TableList>
+            {settings.paths.length === 0 ? (
+              <TableList.Item className="justify-center py-4 opacity-70">
+                <p className="font-semibold">{t("settings.headscale.derp.pathsEmpty")}</p>
               </TableList.Item>
-            ))
-          )}
-        </TableList>
+            ) : (
+              settings.paths.map((path) => (
+                <TableList.Item key={path}>
+                  <p className="font-mono text-sm">{path}</p>
+                  <removePathFetcher.Form method="post">
+                    <input name="action_id" type="hidden" value="remove_derp_path" />
+                    <input name="path" type="hidden" value={path} />
+                    <RemoveButton
+                      disabled={isDisabled || pathBusy}
+                      label={t("settings.headscale.derp.removePath")}
+                    />
+                  </removePathFetcher.Form>
+                </TableList.Item>
+              ))
+            )}
+          </TableList>
 
-        {removePathError ? (
-          <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-            {removePathError}
-          </p>
-        ) : undefined}
+          {removePathError ? (
+            <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {removePathError}
+            </p>
+          ) : undefined}
 
-        <addPathFetcher.Form
-          className="mt-4 flex items-end gap-3"
-          method="post"
-          onSubmit={onAddPath}
-        >
-          <input name="action_id" type="hidden" value="add_derp_path" />
-          <Input
-            disabled={isDisabled || pathBusy}
-            errorMessage={pathLocalError}
-            invalid={Boolean(pathLocalError)}
-            label={t("settings.headscale.derp.pathLabel")}
-            name="path"
-            onChange={(next) => {
-              setPathValue(next);
-              setPathLocalError(undefined);
-            }}
-            placeholder={t("settings.headscale.derp.pathPlaceholder")}
-            required
-            value={pathValue}
-          />
-          <Button disabled={isDisabled || pathBusy} type="submit" variant="heavy">
-            {t("settings.headscale.derp.addPath")}
-          </Button>
-        </addPathFetcher.Form>
+          <addPathFetcher.Form
+            className="mt-4 flex items-end gap-3"
+            method="post"
+            onSubmit={onAddPath}
+          >
+            <input name="action_id" type="hidden" value="add_derp_path" />
+            <Input
+              disabled={isDisabled || pathBusy}
+              errorMessage={pathLocalError}
+              invalid={Boolean(pathLocalError)}
+              label={t("settings.headscale.derp.pathLabel")}
+              name="path"
+              onChange={(next) => {
+                setPathValue(next);
+                setPathLocalError(undefined);
+              }}
+              placeholder={t("settings.headscale.derp.pathPlaceholder")}
+              required
+              value={pathValue}
+            />
+            <Button disabled={isDisabled || pathBusy} type="submit" variant="heavy">
+              {t("settings.headscale.derp.addPath")}
+            </Button>
+          </addPathFetcher.Form>
 
-        <GroupError message={addPathError} />
-      </section>
+          <GroupError message={addPathError} />
+        </section>
+      </SettingsCollapsible>
 
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.derp.refreshTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.refreshBody")}</p>
+      <SettingsCollapsible
+        description={t("settings.headscale.derp.refreshBody")}
+        title={t("settings.headscale.derp.refreshTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <refreshFetcher.Form className="flex flex-col gap-5" method="post">
+            <input name="action_id" type="hidden" value="save_derp_settings" />
 
-        <refreshFetcher.Form className="flex flex-col gap-5" method="post">
-          <input name="action_id" type="hidden" value="save_derp_settings" />
+            <BooleanField
+              checked={autoUpdate}
+              description={t("settings.headscale.derp.autoUpdateDescription")}
+              disabled={refreshDisabled}
+              label={t("settings.headscale.derp.autoUpdateLabel")}
+              name="derp_auto_update_enabled"
+              onCheckedChange={setAutoUpdate}
+            />
+            <Input
+              description={t("settings.headscale.derp.updateFrequencyDescription")}
+              disabled={refreshDisabled}
+              label={t("settings.headscale.derp.updateFrequencyLabel")}
+              name="derp_update_frequency"
+              onChange={setUpdateFrequency}
+              placeholder="3h"
+              required
+              value={updateFrequency}
+            />
 
-          <BooleanField
-            checked={autoUpdate}
-            description={t("settings.headscale.derp.autoUpdateDescription")}
-            disabled={refreshDisabled}
-            label={t("settings.headscale.derp.autoUpdateLabel")}
-            name="derp_auto_update_enabled"
-            onCheckedChange={setAutoUpdate}
-          />
-          <Input
-            description={t("settings.headscale.derp.updateFrequencyDescription")}
-            disabled={refreshDisabled}
-            label={t("settings.headscale.derp.updateFrequencyLabel")}
-            name="derp_update_frequency"
-            onChange={setUpdateFrequency}
-            placeholder="3h"
-            required
-            value={updateFrequency}
-          />
+            <GroupError message={refreshError} />
+            <SaveRow
+              disabled={refreshDisabled}
+              label={t("settings.headscale.derp.saveRefresh")}
+              savedLabel={
+                refreshFetcher.state === "idle" && refreshFetcher.data?.success
+                  ? t("settings.headscale.saved")
+                  : undefined
+              }
+            />
+          </refreshFetcher.Form>
+        </section>
+      </SettingsCollapsible>
 
-          <GroupError message={refreshError} />
-          <SaveRow
-            disabled={refreshDisabled}
-            label={t("settings.headscale.derp.saveRefresh")}
-            savedLabel={
-              refreshFetcher.state === "idle" && refreshFetcher.data?.success
-                ? t("settings.headscale.saved")
-                : undefined
-            }
-          />
-        </refreshFetcher.Form>
-      </section>
-
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.derp.serverTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.serverBody")}</p>
-
+      <SettingsCollapsible
+        description={t("settings.headscale.derp.serverBody")}
+        title={t("settings.headscale.derp.serverTitle")}
+      >
         <DerpEmbeddedPreset
           isDisabled={isDisabled}
           onApplied={onPresetApplied}
           privateKeyDefault={privateKeyDefault}
           server={settings.server}
         />
+        <DerpPublicEndpoint serverUrl={settings.serverUrl} />
         <DerpConnectivityHints />
         <serverFetcher.Form className="flex flex-col gap-5" method="post" onSubmit={onSaveServer}>
           <input name="action_id" type="hidden" value="save_derp_server" />
@@ -543,7 +554,7 @@ export default function DerpSettings({
             }
           />
         </serverFetcher.Form>
-      </section>
-    </div>
+      </SettingsCollapsible>
+    </SettingsCollapsibleGroup>
   );
 }

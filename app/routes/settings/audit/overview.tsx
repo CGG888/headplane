@@ -3,12 +3,15 @@ import { useState } from "react";
 import { data, Form } from "react-router";
 
 import Chip from "~/components/chip";
-import Drawer, { DrawerPanel, SettingsSection, SettingsSectionList } from "~/components/drawer";
+import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
+import Text from "~/components/text";
+import Title from "~/components/title";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
@@ -104,9 +107,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         {t("settings.audit.retentionBody", { count: maxEntries })}
       </Notice>
 
-      <SettingsSectionList>
+      <SettingsCollapsibleGroup>
         <AuditFiltersSection filters={filters} />
-      </SettingsSectionList>
+      </SettingsCollapsibleGroup>
 
       <p className="text-sm opacity-70">
         {t("settings.audit.showingCount", { shown: entries.length, total })}
@@ -138,7 +141,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 /** The filters live behind one row so the list of operations stays the page. */
 function AuditFiltersSection({ filters }: { filters: AuditFilters }) {
   const { t } = useI18n();
-  const [isOpen, setIsOpen] = useState(false);
 
   const action = filters.action
     ? ACTION_KEYS[filters.action]
@@ -146,38 +148,33 @@ function AuditFiltersSection({ filters }: { filters: AuditFilters }) {
       : filters.action
     : undefined;
 
-  const summary = [
-    t(RANGE_KEYS[filters.range]),
-    filters.actor ? t("settings.audit.summaryActor", { actor: filters.actor }) : undefined,
-    action ? t("settings.audit.summaryAction", { action }) : undefined,
-  ]
-    .filter((part): part is string => part !== undefined)
-    .join(" · ");
+  const isUnfiltered = filters.range === "all" && !filters.actor && !filters.action;
+  const summary = isUnfiltered
+    ? t("settings.audit.summaryAll")
+    : [
+        t(RANGE_KEYS[filters.range]),
+        filters.actor ? t("settings.audit.summaryActor", { actor: filters.actor }) : undefined,
+        action ? t("settings.audit.summaryAction", { action }) : undefined,
+      ]
+        .filter((part): part is string => part !== undefined)
+        .join(" · ");
 
   return (
-    <SettingsSection
+    <SettingsCollapsible
       description={t("settings.audit.filtersDescription")}
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
       summary={summary}
       title={t("settings.audit.filtersTitle")}
     >
-      <AuditFilterForm filters={filters} onSubmitted={() => setIsOpen(false)} />
-    </SettingsSection>
+      <AuditFilterForm filters={filters} />
+    </SettingsCollapsible>
   );
 }
 
-function AuditFilterForm({
-  filters,
-  onSubmitted,
-}: {
-  filters: AuditFilters;
-  onSubmitted: () => void;
-}) {
+function AuditFilterForm({ filters }: { filters: AuditFilters }) {
   const { t } = useI18n();
 
   return (
-    <Form className="flex w-full flex-col gap-3" method="get" onSubmit={() => onSubmitted()}>
+    <Form className="flex w-full flex-col gap-3" method="get">
       <div className="flex flex-col gap-3">
         <Input
           defaultValue={filters.actor}
@@ -226,7 +223,7 @@ function AuditFilterForm({
   );
 }
 
-/** One operation: the row stays terse, the drawer holds everything recorded. */
+/** One operation: the row stays terse, the dialog holds everything recorded. */
 function AuditEntryRow({ entry }: { entry: AuditEntry }) {
   const { t, locale } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -269,11 +266,10 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
         </span>
       </button>
 
-      <Drawer isOpen={isOpen} onOpenChange={setIsOpen}>
-        <DrawerPanel
-          description={t("settings.audit.entryDescription")}
-          title={t("settings.audit.entryTitle")}
-        >
+      <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
+        <DialogPanel onSubmit={(event) => event.preventDefault()} variant="unactionable">
+          <Title>{t("settings.audit.entryTitle")}</Title>
+          <Text>{t("settings.audit.entryDescription")}</Text>
           <dl className="flex flex-col gap-4">
             <DetailRow label={t("settings.audit.detailAction")} value={action} />
             <DetailRow label={t("settings.audit.detailResult")} value={result} />
@@ -292,8 +288,8 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
               value={entry.detail ?? t("settings.audit.detailMissing")}
             />
           </dl>
-        </DrawerPanel>
-      </Drawer>
+        </DialogPanel>
+      </Dialog>
     </TableList.Item>
   );
 }

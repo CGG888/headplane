@@ -9,9 +9,9 @@ outline: [2, 3]
 **Settings → Headscale** edits the parts of Headscale's own `config.yaml` that
 Headplane can safely change for you, instead of leaving you to SSH in.
 
-Every settings page lists its groups with a one-line summary of what is set right
-now; opening a group slides its form in from the right, so nothing is buried in
-one long scroll.
+Every settings page uses the same pill tabs as the top navigation — one tab per
+group — and a group with several sub-topics expands and collapses in place, so
+nothing is buried in one long scroll and nothing is hidden behind a panel.
 
 ::: warning Requirements
 
@@ -142,19 +142,35 @@ rather than instantly.
 
 A self-hosted region is only used if clients can actually reach it:
 
-| Port                                       | Why                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| **The Headscale HTTPS port** (usually 443) | The relay protocol itself; Headscale serves it on the same listener as the control server. |
-| **UDP 3478**                               | STUN, so clients can discover each other through the relay.                                |
+| Port                                          | Why                                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **The public port of `server_url`**           | The relay protocol itself; Headscale serves it on the same listener as the control server. |
+| **UDP 3478** (`derp.server.stun_listen_addr`) | STUN, so clients can discover each other through the relay.                                |
 
-Two more conditions from Headscale's own documentation: `server_url` must be
-**https** (the embedded relay needs TLS in place), and the embedded server cannot
-answer Tailscale's captive-portal check on **tcp/80** — that is a documented
-limitation, not a misconfiguration.
+**Which port is that?** The embedded relay is served on the same HTTPS endpoint
+as Headscale, so clients use whatever `server_url` names: `https://host` means
+**443**, `https://host:8443` means **8443**. Both work — Tailscale's own
+documentation just recommends 443, because clients assume that port in some
+situations. The DERP tab states the value Headplane derives from your
+configuration, and one more from Headscale's documentation: the embedded server
+cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
+documented limitation rather than a misconfiguration.
 
-Clients also have to reach the region's public address, so firewall and NAT
-rules are the usual reason a freshly enabled region never appears in use. The
-page repeats this next to the controls.
+### Behind a reverse proxy
+
+Headscale is often served through nginx, Caddy, Traefik or a NAS gateway. The
+embedded relay keeps working only if the proxy passes it through properly:
+
+| Requirement                                  | Why                                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Forward the **`/derp`** path                 | The relay endpoint lives there; forwarding only the API, `/ts2021` and `/health` leaves DERP unreachable — and it fails quietly. |
+| Allow the **HTTP Upgrade** and do not buffer | DERP runs as an upgraded connection; buffering or stripping `Upgrade` breaks it.                                                 |
+| Present valid **HTTPS** to clients           | Clients verify the certificate of `server_url`.                                                                                  |
+| Let **udp/3478** reach Headscale directly    | STUN cannot pass through an HTTP proxy.                                                                                          |
+
+Clients also have to reach the region's public address, so firewall and NAT rules
+are the usual reason a freshly enabled region never appears in use. The page
+repeats this next to the controls.
 
 ### Region names
 

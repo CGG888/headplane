@@ -1,9 +1,9 @@
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
-import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
+import { SettingsCollapsible } from "~/components/settings-nav";
 import StatusCircle from "~/components/status-circle";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -72,22 +72,21 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             ),
           })}
         </Notice>
-        <SettingsSectionList>
-          <SettingsSection
-            description={t("settings.agent.setupRowBody")}
-            title={t("settings.agent.setupTitle")}
-          >
-            <Text>
-              {tr("settings.agent.setupBody", {
-                link: (
-                  <Link external styled to="https://headplane.net/features/agent">
-                    {t("settings.agent.documentation")}
-                  </Link>
-                ),
-              })}
-            </Text>
-          </SettingsSection>
-        </SettingsSectionList>
+        <SettingsCollapsible
+          defaultOpen
+          description={t("settings.agent.setupRowBody")}
+          title={t("settings.agent.setupTitle")}
+        >
+          <Text>
+            {tr("settings.agent.setupBody", {
+              link: (
+                <Link external styled to="https://headplane.net/features/agent">
+                  {t("settings.agent.documentation")}
+                </Link>
+              ),
+            })}
+          </Text>
+        </SettingsCollapsible>
       </div>
     );
   }
@@ -153,59 +152,50 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </>
       ) : undefined}
 
-      <SettingsSectionList>
-        <SettingsSection
-          description={t("settings.agent.actionsBody")}
-          summary={
-            <span suppressHydrationWarning>
-              {t("settings.agent.lastSynced")}
-              {loaderData.syncedAt
-                ? formatTimeDelta(new Date(loaderData.syncedAt))
-                : t("settings.agent.never")}
-            </span>
-          }
-          title={t("settings.agent.actionsTitle")}
-        >
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-              <Text>{t("settings.agent.syncBody")}</Text>
-              <fetcher.Form method="post">
-                <Button disabled={isSyncing} type="submit" variant="heavy">
-                  {isSyncing ? t("settings.agent.syncing") : t("settings.agent.syncNow")}
-                </Button>
-              </fetcher.Form>
-            </div>
+      <SettingsCollapsible
+        defaultOpen
+        description={t("settings.agent.actionsBody")}
+        title={t("settings.agent.actionsTitle")}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <Text>{t("settings.agent.syncBody")}</Text>
+            <fetcher.Form method="post">
+              <Button disabled={isSyncing} type="submit" variant="heavy">
+                {isSyncing ? t("settings.agent.syncing") : t("settings.agent.syncNow")}
+              </Button>
+            </fetcher.Form>
+          </div>
 
-            {isPending ? (
-              <div className="flex flex-col gap-2">
-                <h2 className="font-medium">{t("settings.agent.approveTitle")}</h2>
-                <Text>
-                  {tr("settings.agent.approveBody", {
-                    link: (
-                      <Link external styled to={loaderData.authUrl!}>
-                        {t("settings.agent.thisLink")}
-                      </Link>
-                    ),
-                  })}
-                </Text>
-              </div>
-            ) : undefined}
-
+          {isPending ? (
             <div className="flex flex-col gap-2">
-              <h2 className="font-medium">{t("settings.agent.setupTitle")}</h2>
+              <h2 className="font-medium">{t("settings.agent.approveTitle")}</h2>
               <Text>
-                {tr("settings.agent.setupBody", {
+                {tr("settings.agent.approveBody", {
                   link: (
-                    <Link external styled to="https://headplane.net/features/agent">
-                      {t("settings.agent.documentation")}
+                    <Link external styled to={loaderData.authUrl!}>
+                      {t("settings.agent.thisLink")}
                     </Link>
                   ),
                 })}
               </Text>
             </div>
+          ) : undefined}
+
+          <div className="flex flex-col gap-2">
+            <h2 className="font-medium">{t("settings.agent.setupTitle")}</h2>
+            <Text>
+              {tr("settings.agent.setupBody", {
+                link: (
+                  <Link external styled to="https://headplane.net/features/agent">
+                    {t("settings.agent.documentation")}
+                  </Link>
+                ),
+              })}
+            </Text>
           </div>
-        </SettingsSection>
-      </SettingsSectionList>
+        </div>
+      </SettingsCollapsible>
     </div>
   );
 }

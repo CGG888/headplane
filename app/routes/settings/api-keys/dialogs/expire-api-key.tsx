@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
-import Drawer, { DrawerPanel } from "~/components/drawer";
+import Dialog, { DialogPanel } from "~/components/dialog";
 import Text from "~/components/text";
+import Title from "~/components/title";
 import { useI18n } from "~/i18n/provider";
 import type { Key } from "~/types";
 
@@ -43,36 +44,31 @@ export default function ExpireApiKey({ apiKey }: ExpireApiKeyProps) {
   };
 
   return (
-    <Drawer isOpen={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog isOpen={isOpen} onOpenChange={handleOpenChange}>
       <Button onClick={() => setIsOpen(true)} variant="heavy">
         {t("settings.apiKeys.expire")}
       </Button>
-      <DrawerPanel title={t("settings.apiKeys.expireTitle", { prefix: apiKey.prefix })}>
-        <fetcher.Form
-          className="flex flex-col gap-4"
-          method="post"
-          onSubmit={() => {
-            submittingRef.current = true;
-          }}
-        >
-          <input name="action_id" type="hidden" value="expire_api_key" />
-          <input name="prefix" type="hidden" value={apiKey.prefix} />
-          {error ? (
-            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-              {error}
-            </p>
-          ) : null}
-          <Text>{t("settings.apiKeys.expireBody")}</Text>
-          <div className="flex justify-end gap-3">
-            <Button onClick={() => handleOpenChange(false)} type="button">
-              {t("common.cancel")}
-            </Button>
-            <Button disabled={fetcher.state !== "idle"} type="submit" variant="danger">
-              {t("common.confirm")}
-            </Button>
-          </div>
-        </fetcher.Form>
-      </DrawerPanel>
-    </Drawer>
+      <DialogPanel
+        isDisabled={fetcher.state !== "idle"}
+        onSubmit={(event) => {
+          event.preventDefault();
+          submittingRef.current = true;
+
+          const form = new FormData();
+          form.set("action_id", "expire_api_key");
+          form.set("prefix", apiKey.prefix);
+          fetcher.submit(form, { method: "POST" });
+        }}
+        variant="destructive"
+      >
+        <Title>{t("settings.apiKeys.expireTitle", { prefix: apiKey.prefix })}</Title>
+        <Text>{t("settings.apiKeys.expireBody")}</Text>
+        {error ? (
+          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </p>
+        ) : null}
+      </DialogPanel>
+    </Dialog>
   );
 }

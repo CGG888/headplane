@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 import Button from "~/components/button";
 import Input from "~/components/input";
 import Select from "~/components/select";
+import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
 import Switch from "~/components/switch";
 import Text from "~/components/text";
 import { useI18n } from "~/i18n/provider";
@@ -137,146 +138,150 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
   }
 
   return (
-    <div className="flex w-full flex-col gap-8">
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.advancedNodeTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.advancedNodeBody")}</p>
+    <SettingsCollapsibleGroup>
+      <SettingsCollapsible
+        description={t("settings.headscale.advancedNodeBody")}
+        title={t("settings.headscale.advancedNodeTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <nodeFetcher.Form className="flex flex-col gap-5" method="post">
+            <input name="action_id" type="hidden" value="save_node_settings" />
 
-        <nodeFetcher.Form className="flex flex-col gap-5" method="post">
-          <input name="action_id" type="hidden" value="save_node_settings" />
-
-          <Input
-            description={t("settings.headscale.nodeExpiryDescription")}
-            disabled={nodeDisabled}
-            label={t("settings.headscale.nodeExpiryLabel")}
-            name="node_expiry"
-            onChange={setNodeExpiry}
-            placeholder="720h"
-            required
-            value={nodeExpiry}
-          />
-          <Input
-            description={t("settings.headscale.ephemeralInactivityDescription")}
-            disabled={nodeDisabled}
-            label={t("settings.headscale.ephemeralInactivityLabel")}
-            name="ephemeral_inactivity_timeout"
-            onChange={setInactivityTimeout}
-            placeholder="30m"
-            required
-            value={inactivityTimeout}
-          />
-
-          <GroupError message={nodeError} />
-          <SaveRow
-            disabled={nodeDisabled}
-            label={t("settings.headscale.saveNodeSettings")}
-            savedLabel={
-              nodeFetcher.state === "idle" && nodeFetcher.data?.success
-                ? t("settings.headscale.saved")
-                : undefined
-            }
-          />
-        </nodeFetcher.Form>
-      </section>
-
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.advancedLogTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.advancedLogBody")}</p>
-
-        <logFetcher.Form className="flex flex-col gap-5" method="post">
-          <input name="action_id" type="hidden" value="save_log_settings" />
-
-          <div>
-            <Select
-              description={t("settings.headscale.logLevelDescription")}
-              disabled={logDisabled}
-              items={levelItems}
-              label={t("settings.headscale.logLevelLabel")}
-              onValueChange={(value) => setLogLevel(value ?? "info")}
-              value={logLevel}
+            <Input
+              description={t("settings.headscale.nodeExpiryDescription")}
+              disabled={nodeDisabled}
+              label={t("settings.headscale.nodeExpiryLabel")}
+              name="node_expiry"
+              onChange={setNodeExpiry}
+              placeholder="720h"
+              required
+              value={nodeExpiry}
             />
-            <input name="log_level" type="hidden" value={logLevel} />
-          </div>
-
-          <div>
-            <Select
-              description={t("settings.headscale.logFormatDescription")}
-              disabled={logDisabled}
-              items={LOG_FORMATS.map((format) => ({ value: format, label: format }))}
-              label={t("settings.headscale.logFormatLabel")}
-              onValueChange={(value) => setLogFormat(value === "json" ? "json" : "text")}
-              value={logFormat}
+            <Input
+              description={t("settings.headscale.ephemeralInactivityDescription")}
+              disabled={nodeDisabled}
+              label={t("settings.headscale.ephemeralInactivityLabel")}
+              name="ephemeral_inactivity_timeout"
+              onChange={setInactivityTimeout}
+              placeholder="30m"
+              required
+              value={inactivityTimeout}
             />
-            <input name="log_format" type="hidden" value={logFormat} />
-          </div>
 
-          <GroupError message={logError} />
-          <SaveRow
-            disabled={logDisabled}
-            label={t("settings.headscale.saveLogSettings")}
-            savedLabel={
-              logFetcher.state === "idle" && logFetcher.data?.success
-                ? t("settings.headscale.saved")
-                : undefined
-            }
-          />
-        </logFetcher.Form>
-      </section>
+            <GroupError message={nodeError} />
+            <SaveRow
+              disabled={nodeDisabled}
+              label={t("settings.headscale.saveNodeSettings")}
+              savedLabel={
+                nodeFetcher.state === "idle" && nodeFetcher.data?.success
+                  ? t("settings.headscale.saved")
+                  : undefined
+              }
+            />
+          </nodeFetcher.Form>
+        </section>
+      </SettingsCollapsible>
 
-      <section className="flex w-full flex-col">
-        <h3 className="text-lg font-medium">{t("settings.headscale.advancedFeaturesTitle")}</h3>
-        <p className="mt-1 mb-4 text-sm opacity-70">
-          {t("settings.headscale.advancedFeaturesBody")}
-        </p>
+      <SettingsCollapsible
+        description={t("settings.headscale.advancedLogBody")}
+        title={t("settings.headscale.advancedLogTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <logFetcher.Form className="flex flex-col gap-5" method="post">
+            <input name="action_id" type="hidden" value="save_log_settings" />
 
-        <featureFetcher.Form className="flex flex-col gap-5" method="post">
-          <input name="action_id" type="hidden" value="save_feature_settings" />
+            <div>
+              <Select
+                description={t("settings.headscale.logLevelDescription")}
+                disabled={logDisabled}
+                items={levelItems}
+                label={t("settings.headscale.logLevelLabel")}
+                onValueChange={(value) => setLogLevel(value ?? "info")}
+                value={logLevel}
+              />
+              <input name="log_level" type="hidden" value={logLevel} />
+            </div>
 
-          <BooleanField
-            checked={taildrop}
-            description={t("settings.headscale.taildropDescription")}
-            disabled={featureDisabled}
-            label={t("settings.headscale.taildropLabel")}
-            name="taildrop_enabled"
-            onCheckedChange={setTaildrop}
-          />
-          <BooleanField
-            checked={autoUpdate}
-            description={t("settings.headscale.autoUpdateDescription")}
-            disabled={featureDisabled}
-            label={t("settings.headscale.autoUpdateLabel")}
-            name="auto_update_enabled"
-            onCheckedChange={setAutoUpdate}
-          />
-          <BooleanField
-            checked={logtail}
-            description={t("settings.headscale.logtailDescription")}
-            disabled={featureDisabled}
-            label={t("settings.headscale.logtailLabel")}
-            name="logtail_enabled"
-            onCheckedChange={setLogtail}
-          />
-          <BooleanField
-            checked={checkUpdates}
-            description={t("settings.headscale.checkUpdatesDescription")}
-            disabled={featureDisabled}
-            label={t("settings.headscale.checkUpdatesLabel")}
-            name="check_updates"
-            onCheckedChange={setCheckUpdates}
-          />
+            <div>
+              <Select
+                description={t("settings.headscale.logFormatDescription")}
+                disabled={logDisabled}
+                items={LOG_FORMATS.map((format) => ({ value: format, label: format }))}
+                label={t("settings.headscale.logFormatLabel")}
+                onValueChange={(value) => setLogFormat(value === "json" ? "json" : "text")}
+                value={logFormat}
+              />
+              <input name="log_format" type="hidden" value={logFormat} />
+            </div>
 
-          <GroupError message={featureError} />
-          <SaveRow
-            disabled={featureDisabled}
-            label={t("settings.headscale.saveFeatureSettings")}
-            savedLabel={
-              featureFetcher.state === "idle" && featureFetcher.data?.success
-                ? t("settings.headscale.saved")
-                : undefined
-            }
-          />
-        </featureFetcher.Form>
-      </section>
-    </div>
+            <GroupError message={logError} />
+            <SaveRow
+              disabled={logDisabled}
+              label={t("settings.headscale.saveLogSettings")}
+              savedLabel={
+                logFetcher.state === "idle" && logFetcher.data?.success
+                  ? t("settings.headscale.saved")
+                  : undefined
+              }
+            />
+          </logFetcher.Form>
+        </section>
+      </SettingsCollapsible>
+
+      <SettingsCollapsible
+        description={t("settings.headscale.advancedFeaturesBody")}
+        title={t("settings.headscale.advancedFeaturesTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <featureFetcher.Form className="flex flex-col gap-5" method="post">
+            <input name="action_id" type="hidden" value="save_feature_settings" />
+
+            <BooleanField
+              checked={taildrop}
+              description={t("settings.headscale.taildropDescription")}
+              disabled={featureDisabled}
+              label={t("settings.headscale.taildropLabel")}
+              name="taildrop_enabled"
+              onCheckedChange={setTaildrop}
+            />
+            <BooleanField
+              checked={autoUpdate}
+              description={t("settings.headscale.autoUpdateDescription")}
+              disabled={featureDisabled}
+              label={t("settings.headscale.autoUpdateLabel")}
+              name="auto_update_enabled"
+              onCheckedChange={setAutoUpdate}
+            />
+            <BooleanField
+              checked={logtail}
+              description={t("settings.headscale.logtailDescription")}
+              disabled={featureDisabled}
+              label={t("settings.headscale.logtailLabel")}
+              name="logtail_enabled"
+              onCheckedChange={setLogtail}
+            />
+            <BooleanField
+              checked={checkUpdates}
+              description={t("settings.headscale.checkUpdatesDescription")}
+              disabled={featureDisabled}
+              label={t("settings.headscale.checkUpdatesLabel")}
+              name="check_updates"
+              onCheckedChange={setCheckUpdates}
+            />
+
+            <GroupError message={featureError} />
+            <SaveRow
+              disabled={featureDisabled}
+              label={t("settings.headscale.saveFeatureSettings")}
+              savedLabel={
+                featureFetcher.state === "idle" && featureFetcher.data?.success
+                  ? t("settings.headscale.saved")
+                  : undefined
+              }
+            />
+          </featureFetcher.Form>
+        </section>
+      </SettingsCollapsible>
+    </SettingsCollapsibleGroup>
   );
 }

@@ -198,6 +198,12 @@ export interface DERPEmbeddedServerView {
 }
 
 export interface DERPSettingsView {
+  /**
+   * Headscale's `server_url`. The embedded DERP server is served on the same
+   * HTTPS endpoint as Headscale itself, so this URL is what tells clients which
+   * public port to use; Headscale's own listen address is irrelevant for DERP.
+   */
+  serverUrl: string;
   urls: string[];
   paths: string[];
   autoUpdateEnabled: boolean;
@@ -444,6 +450,7 @@ function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
   const defaults = DERP_SETTINGS_DEFAULTS;
 
   return {
+    serverUrl: readString(root.server_url),
     urls: readStringList(derp.urls),
     paths: readStringList(derp.paths),
     autoUpdateEnabled: readBoolean(derp.auto_update_enabled, defaults.autoUpdateEnabled),

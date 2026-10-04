@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import CodeBlock from "~/components/code-block";
-import { SettingsSection } from "~/components/drawer";
 import Notice from "~/components/notice";
 import NumberInput from "~/components/number-input";
+import { SettingsCollapsible } from "~/components/settings-nav";
 import Text from "~/components/text";
 import Title from "~/components/title";
 import { useI18n } from "~/i18n/provider";
@@ -16,38 +16,27 @@ import { API_KEY_ERROR_KEYS } from "../error-keys";
 export default function CreateApiKey() {
   const { t } = useI18n();
   const fetcher = useFetcher<ApiKeyActionResult>();
-  const submittingRef = useRef(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isRevealDismissed, setIsRevealDismissed] = useState(false);
 
-  // The full key is only ever returned by this one response, so it is kept in
-  // the drawer until the user closes it.
+  // The full key is only ever returned by this one response, so it stays in the
+  // block above the list until the user asks for the form back.
   const createdKey =
-    fetcher.data && fetcher.data.success && "apiKey" in fetcher.data ? fetcher.data.apiKey : null;
+    !isRevealDismissed && fetcher.data && fetcher.data.success && "apiKey" in fetcher.data
+      ? fetcher.data.apiKey
+      : null;
   const error =
     fetcher.data && !fetcher.data.success ? t(API_KEY_ERROR_KEYS[fetcher.data.errorCode]) : null;
 
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      submittingRef.current = false;
+    if (fetcher.data) {
+      setIsRevealDismissed(false);
     }
-  }, [fetcher.data, fetcher.state]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      fetcher.data = undefined;
-    }
-  }, [isOpen]);
+  }, [fetcher.data]);
 
   return (
-    <SettingsSection
+    <SettingsCollapsible
+      defaultOpen
       description={t("settings.apiKeys.createSectionBody")}
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open && submittingRef.current) {
-          return;
-        }
-        setIsOpen(open);
-      }}
       title={t("settings.apiKeys.create")}
     >
       {createdKey ? (
@@ -55,15 +44,12 @@ export default function CreateApiKey() {
           <Title className="text-lg font-medium">{t("settings.apiKeys.createdTitle")}</Title>
           <Notice variant="warning">{t("settings.apiKeys.createdBody")}</Notice>
           <CodeBlock>{createdKey}</CodeBlock>
+          <Button onClick={() => setIsRevealDismissed(true)} variant="heavy">
+            {t("settings.apiKeys.createAnother")}
+          </Button>
         </div>
       ) : (
-        <fetcher.Form
-          className="flex flex-col gap-4"
-          method="post"
-          onSubmit={() => {
-            submittingRef.current = true;
-          }}
-        >
+        <fetcher.Form className="flex flex-col gap-4" method="post">
           <input name="action_id" type="hidden" value="create_api_key" />
           <Text>{t("settings.apiKeys.createBody")}</Text>
           {error ? (
@@ -90,6 +76,6 @@ export default function CreateApiKey() {
           </Button>
         </fetcher.Form>
       )}
-    </SettingsSection>
+    </SettingsCollapsible>
   );
 }

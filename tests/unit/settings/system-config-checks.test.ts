@@ -261,7 +261,9 @@ describe("config file checks", () => {
       ),
       "configDatabase",
     );
-    expect(readOnly.status).toBe("fail");
+    // A read-only bind mount makes this probe fail while Headscale keeps
+    // writing happily, so the verdict is "cannot verify", not "broken".
+    expect(readOnly.status).toBe("warning");
     expect(readOnly.bodyKey).toBe("settings.system.configChecks.database.readOnlyDir");
   });
 

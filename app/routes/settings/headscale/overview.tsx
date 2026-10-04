@@ -1,10 +1,17 @@
+import { KeyRound, Network, Scale, ShieldCheck, SlidersHorizontal, Tags } from "lucide-react";
 import { data } from "react-router";
 
 import Code from "~/components/code";
-import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import {
+  SettingsCollapsible,
+  SettingsPanel,
+  SettingsTab,
+  SettingsTabList,
+  SettingsTabs,
+} from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
@@ -120,8 +127,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   } = loaderData;
   const isDisabled = writable ? !access : true;
 
-  // Which relays clients are handed, shown on the row so it is readable
-  // without opening the drawer.
+  // Which relays clients are handed, shown above the DERP blocks so it is
+  // readable without opening any of them.
   const relaySource = classifyDerpRelaySource({
     serverEnabled: derp.server.enabled,
     urls: derp.urls,
@@ -160,84 +167,94 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <p>{t("settings.headscale.body")}</p>
       </div>
 
-      <SettingsSectionList>
-        {/* The section body keeps its own paragraph because it links to the
-            restrictions page, and a link cannot live in the row's button. */}
-        <SettingsSection
-          summary={
-            oidc && oidc.issuer.length > 0
+      <SettingsTabs defaultValue="oidc" label={t("settings.headscale.title")}>
+        <SettingsTabList>
+          <SettingsTab icon={KeyRound} value="oidc">
+            {t("settings.headscale.oidcTitle")}
+          </SettingsTab>
+          <SettingsTab icon={ShieldCheck} value="trusted-proxies">
+            {t("settings.headscale.trustedProxiesTitle")}
+          </SettingsTab>
+          <SettingsTab icon={Scale} value="policy">
+            {t("settings.headscale.policyTitle")}
+          </SettingsTab>
+          <SettingsTab icon={SlidersHorizontal} value="advanced">
+            {t("settings.headscale.advancedTitle")}
+          </SettingsTab>
+          <SettingsTab icon={Network} value="derp">
+            {t("settings.headscale.derp.title")}
+          </SettingsTab>
+          <SettingsTab icon={Tags} value="derp-regions">
+            {t("settings.headscale.derp.regionNamesTitle")}
+          </SettingsTab>
+        </SettingsTabList>
+
+        <SettingsPanel value="oidc">
+          <p className="text-sm opacity-70">
+            {oidc && oidc.issuer.length > 0
               ? t("settings.headscale.summaryIssuer", { issuer: oidc.issuer })
-              : t("settings.headscale.summaryNotConfigured")
-          }
-          title={t("settings.headscale.oidcTitle")}
-        >
+              : t("settings.headscale.summaryNotConfigured")}
+          </p>
           <OidcSettings isDisabled={isDisabled} oidc={oidc} />
-        </SettingsSection>
+        </SettingsPanel>
 
-        <SettingsSection
-          description={t("settings.headscale.trustedProxiesBody")}
-          summary={t("settings.headscale.trustedProxiesSummary", {
-            count: trustedProxies.length,
-          })}
-          title={t("settings.headscale.trustedProxiesTitle")}
-        >
+        <SettingsPanel value="trusted-proxies">
+          <p className="text-sm opacity-70">{t("settings.headscale.trustedProxiesBody")}</p>
+          <p className="text-sm opacity-70">
+            {t("settings.headscale.trustedProxiesSummary", { count: trustedProxies.length })}
+          </p>
           <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
-        </SettingsSection>
+        </SettingsPanel>
 
-        <SettingsSection
-          description={t("settings.headscale.policyBody")}
-          summary={t("settings.headscale.policySummary", { mode: policyMode })}
-          title={t("settings.headscale.policyTitle")}
-        >
+        <SettingsPanel value="policy">
+          <p className="text-sm opacity-70">{t("settings.headscale.policyBody")}</p>
+          <p className="text-sm opacity-70">
+            {t("settings.headscale.policySummary", { mode: policyMode })}
+          </p>
           <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
-        </SettingsSection>
+        </SettingsPanel>
 
-        <SettingsSection
-          description={t("settings.headscale.advancedBody")}
-          size="wide"
-          summary={t("settings.headscale.advancedSummary", {
-            expiry: advanced.nodeExpiry,
-            level: advanced.logLevel,
-          })}
-          title={t("settings.headscale.advancedTitle")}
-        >
+        <SettingsPanel value="advanced">
+          <p className="text-sm opacity-70">{t("settings.headscale.advancedBody")}</p>
+          <p className="text-sm opacity-70">
+            {t("settings.headscale.advancedSummary", {
+              expiry: advanced.nodeExpiry,
+              level: advanced.logLevel,
+            })}
+          </p>
           <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
-        </SettingsSection>
+        </SettingsPanel>
 
-        <SettingsSection
-          description={t("settings.headscale.derp.body")}
-          size="wide"
-          summary={relaySourceSummary}
-          title={t("settings.headscale.derp.title")}
-        >
-          <div className="flex w-full flex-col gap-8">
-            <p className="rounded-lg border border-mist-200 p-3 text-sm dark:border-mist-800">
-              <span className="font-semibold">{relaySourceSummary}</span>
-            </p>
-            <DerpSettings
-              isDisabled={isDisabled}
-              privateKeyDefault={derpPrivateKeyDefault}
-              settings={derp}
-            />
-            <DerpStatus
-              agentEnabled={agentEnabled}
-              embedded={derp.server}
-              regionNames={derpRegionNames}
-              rows={derpRelay}
-            />
-          </div>
-        </SettingsSection>
+        <SettingsPanel value="derp">
+          <p className="text-sm opacity-70">{t("settings.headscale.derp.body")}</p>
+          <p className="rounded-lg border border-mist-200 p-3 text-sm dark:border-mist-800">
+            <span className="font-semibold">{relaySourceSummary}</span>
+          </p>
+          <DerpSettings
+            isDisabled={isDisabled}
+            privateKeyDefault={derpPrivateKeyDefault}
+            settings={derp}
+          />
+          <DerpStatus
+            agentEnabled={agentEnabled}
+            embedded={derp.server}
+            regionNames={derpRegionNames}
+            rows={derpRelay}
+          />
+        </SettingsPanel>
 
-        <SettingsSection
-          description={t("settings.headscale.derp.regionNamesBody")}
-          summary={t("settings.headscale.derp.regionNamesSummary", {
-            count: Object.keys(derpRegionNames).length,
-          })}
-          title={t("settings.headscale.derp.regionNamesTitle")}
-        >
-          <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
-        </SettingsSection>
-      </SettingsSectionList>
+        <SettingsPanel value="derp-regions">
+          <SettingsCollapsible
+            description={t("settings.headscale.derp.regionNamesBody")}
+            summary={t("settings.headscale.derp.regionNamesSummary", {
+              count: Object.keys(derpRegionNames).length,
+            })}
+            title={t("settings.headscale.derp.regionNamesTitle")}
+          >
+            <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
+          </SettingsCollapsible>
+        </SettingsPanel>
+      </SettingsTabs>
     </div>
   );
 }

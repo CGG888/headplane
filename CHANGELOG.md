@@ -1,5 +1,11 @@
 # Next
 
+## Changes
+
+- **Settings navigation now matches the top navigation.** Every settings page uses the same pill tabs as the app header (one tab per group), and a group with several sub-topics expands and collapses in place instead of sliding in from the right. The right-side drawers introduced in 0.15.0 are gone; confirmations (expiring a key, restoring a snapshot) are ordinary centred dialogs again.
+- The DERP tab shows the **public port clients will actually use** for the embedded relay, derived from Headscale's `server_url` (so `https://host:8443` means relays on 8443, and no port means 443), with a note that Tailscale's documentation recommends 443 because clients assume it in some situations.
+- The DERP tab also carries a short **reverse-proxy checklist**: the proxy has to forward `/derp`, allow the HTTP Upgrade DERP needs without buffering, present valid HTTPS, and udp/3478 for STUN has to reach Headscale directly.
+
 # 0.15.0 (October 5, 2026)
 
 ## Changes

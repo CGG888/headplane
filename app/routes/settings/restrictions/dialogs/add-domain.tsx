@@ -3,8 +3,6 @@ import { Form } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
-import Text from "~/components/text";
-import Title from "~/components/title";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
 
@@ -45,8 +43,6 @@ export default function AddDomain({ domains, isDisabled }: AddDomainProps) {
 
   return (
     <Form className="flex flex-col gap-4" method="POST">
-      <Title className="text-lg font-medium">{t("settings.addDomain.title")}</Title>
-      <Text>{t("settings.addDomain.body")}</Text>
       <input name="action_id" type="hidden" value="add_domain" />
       <Input
         {...form.field("domain")}

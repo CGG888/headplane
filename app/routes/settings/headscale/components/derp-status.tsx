@@ -1,3 +1,4 @@
+import { SettingsCollapsible } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import {
@@ -51,10 +52,10 @@ export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }
   const fallback = t("settings.headscale.derp.unknown");
 
   return (
-    <section className="flex w-full flex-col">
-      <h3 className="text-lg font-medium">{t("settings.headscale.derp.statusTitle")}</h3>
-      <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.statusBody")}</p>
-
+    <SettingsCollapsible
+      description={t("settings.headscale.derp.statusBody")}
+      title={t("settings.headscale.derp.statusTitle")}
+    >
       {!agentEnabled ? (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
           {t("settings.headscale.derp.statusAgentRequired")}
@@ -97,6 +98,6 @@ export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }
           ))}
         </TableList>
       )}
-    </section>
+    </SettingsCollapsible>
   );
 }

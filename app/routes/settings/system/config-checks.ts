@@ -355,7 +355,11 @@ function databaseCheck(config: unknown, probes: ConfigProbeResults): ConfigCheck
   }
 
   if (dir && dir.exists && dir.writable === false) {
-    return check("configDatabase", "fail", "settings.system.configChecks.database.readOnlyDir", {
+    // Headplane's access is not Headscale's: a read-only bind mount (the
+    // recommended way to let Headplane inspect the data directory) makes this
+    // probe fail while Headscale itself writes there happily. Warn about what
+    // cannot be verified instead of claiming the server cannot write.
+    return check("configDatabase", "warning", "settings.system.configChecks.database.readOnlyDir", {
       vars: { path: dir.path },
     });
   }

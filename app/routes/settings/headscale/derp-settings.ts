@@ -144,6 +144,63 @@ export const DERP_PRIVATE_KEY_FILENAME = "derp_server_private.key";
 export const DERP_EXAMPLE_PRIVATE_KEY_PATH = `/var/lib/headscale/${DERP_PRIVATE_KEY_FILENAME}`;
 
 /**
+ * The public endpoint clients use for Headscale's embedded DERP server. DERP is
+ * served on the same HTTPS endpoint as Headscale itself, so the port comes from
+ * `server_url`; Headscale's own listen address never reaches clients.
+ */
+export interface DerpPublicEndpoint {
+  /** Hostname as written in `server_url`, with IPv6 literals still bracketed. */
+  host: string;
+  port: number;
+  /** Whether `server_url` named the port itself rather than leaving it implied. */
+  explicitPort: boolean;
+}
+
+/**
+ * Derives the port clients connect to from Headscale's `server_url`. An explicit
+ * port wins; without one the URL's own default applies, which is 443 for https
+ * and 80 for http. An empty, relative, or unparsable value yields `undefined`
+ * so the page can say the port is unknown instead of guessing wrong.
+ */
+export function deriveDerpPublicEndpoint(
+  serverUrl: string | undefined,
+): DerpPublicEndpoint | undefined {
+  const trimmed = (serverUrl ?? "").trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return undefined;
+    }
+
+    if (url.hostname.length === 0) {
+      return undefined;
+    }
+
+    // The URL parser normalizes a default port (443 for https, 80 for http) to
+    // an empty string, which is exactly the "no port in the URL" case.
+    const explicitPort = url.port.length > 0;
+    const port = explicitPort ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+      return undefined;
+    }
+
+    return { host: url.hostname, port, explicitPort };
+  } catch {
+    // A value Headscale would reject anyway must not break the page.
+    return undefined;
+  }
+}
+
+/** Renders a derived endpoint the way clients address it, e.g. `host:8443`. */
+export function formatDerpPublicEndpoint(endpoint: DerpPublicEndpoint): string {
+  return `${endpoint.host}:${endpoint.port}`;
+}
+
+/**
  * Headscale's documented install layout keeps the embedded DERP signing key
  * next to its config file. Only the directory is taken from `configPath`; the
  * original separator is preserved so a Windows path stays a Windows path.
