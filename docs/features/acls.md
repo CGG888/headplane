@@ -84,9 +84,34 @@ for its newer policy features:
   `randomize-client-port`. Targets accept users, groups, tags, hosts, prefixes
   and the `autogroup:*` values, exactly like an ACL source.
 
-Anything Headplane does not model inside these sections — a grant's `app` or
-`via`, a future key inside `autoApprovers`, and any unknown top-level section
-such as `postures` — is preserved verbatim when a policy is saved.
+### Application grants and connectors
+
+A grant can also carry an **`app`** — an application served by connector nodes
+instead of an open port range, which is the one case where a grant needs no `ip`
+— and a **`via`** list naming the sources allowed to reach it. Both are edited in
+the same grant dialog.
+
+Headscale stores `app` as a capability map, so a policy written elsewhere can
+hold keys the editor does not know; only the entry the editor writes (`name`
+plus its `connectors`) is touched, and everything else in the map is kept as it
+was. A grant whose `app` came from somewhere else therefore survives a save
+untouched.
+
+### Tailnet-wide options
+
+`randomizeClientPort` is a policy-level option that makes machines pick a random
+source port for outgoing connections. It is a switch on the same page; if your
+policy never had the key, Headplane leaves it that way rather than inventing one.
+
+Anything Headplane does not model inside these sections — a future key inside
+`autoApprovers`, an unknown field inside a grant — is preserved verbatim when a
+policy is saved.
+
+::: warning `postures` and `ipSets` are Tailscale features
+Headscale does not implement them. If a policy contains either section the
+editor shows a warning and keeps the section exactly as written, so nothing is
+lost, but do not expect the rules to have any effect.
+:::
 
 ## Validating before saving
 

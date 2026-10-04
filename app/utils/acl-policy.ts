@@ -25,11 +25,22 @@ export interface SshRule {
 // The SSH actions the editor offers; anything else is kept and shown as-is.
 export const KNOWN_SSH_ACTIONS = ["accept", "check"];
 
+// An app grant names an application served by connector nodes instead of
+// opening a port range. Headscale reads `app` as a capability map; the parts
+// Headplane does not model stay in `extra` so the entry still round-trips.
+export interface GrantApp {
+  name: string;
+  connectors: string[];
+  extra: Record<string, unknown>;
+}
+
 // Grants are the modern replacement for `acls`: `ip` selects the ports.
 export interface GrantRule {
   src: string[];
   dst: string[];
   ip: string[];
+  app?: GrantApp;
+  via: string[];
   extra: Record<string, unknown>;
 }
 
@@ -56,6 +67,9 @@ export interface Policy {
   grants: GrantRule[];
   autoApprovers: AutoApprovers;
   nodeAttrs: NodeAttr[];
+  // Only set when the policy actually carried the key: an absent key means
+  // "use Headscale's default" and must not turn into an explicit `false`.
+  randomizeClientPort?: boolean;
   // Top-level keys Headplane does not model (postures, ipSets, ...)
   extra: Record<string, unknown>;
   // The order the top-level keys appeared in, so serializing keeps it.
@@ -88,7 +102,17 @@ export const KNOWN_KEYS = [
   "grants",
   "autoApprovers",
   "nodeAttrs",
+  "randomizeClientPort",
 ];
+
+// Policy sections Tailscale accepts but Headscale does not. They are kept in
+// `extra` verbatim, and the UI warns about them instead of hiding them.
+export const UNSUPPORTED_POLICY_SECTIONS = ["postures", "ipSets"];
+
+// The unsupported sections this policy actually carries, in catalog order.
+export function unsupportedPolicySections(policy: Policy): string[] {
+  return UNSUPPORTED_POLICY_SECTIONS.filter((key) => key in policy.extra);
+}
 
 export function parsePolicy(raw: string): ParseResult {
   if (raw.trim().length === 0) {
@@ -113,27 +137,35 @@ export function parsePolicy(raw: string): ParseResult {
   const record = parsed as Record<string, unknown>;
   const extra: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(record)) {
-    if (!KNOWN_KEYS.includes(key)) {
+    // A `randomizeClientPort` that is not a boolean is not the key this model
+    // knows, so it rides along in `extra` instead of being dropped.
+    if (
+      !KNOWN_KEYS.includes(key) ||
+      (key === "randomizeClientPort" && typeof value !== "boolean")
+    ) {
       extra[key] = value;
     }
   }
 
-  return {
-    ok: true,
-    hasComments,
-    policy: {
-      groups: toStringListMap(record.groups),
-      tagOwners: toStringListMap(record.tagOwners),
-      hosts: toStringMap(record.hosts),
-      acls: toAclRules(record.acls),
-      ssh: toSshRules(record.ssh),
-      grants: toGrantRules(record.grants),
-      autoApprovers: toAutoApprovers(record.autoApprovers),
-      nodeAttrs: toNodeAttrs(record.nodeAttrs),
-      extra,
-      keyOrder: Object.keys(record),
-    },
+  const policy: Policy = {
+    groups: toStringListMap(record.groups),
+    tagOwners: toStringListMap(record.tagOwners),
+    hosts: toStringMap(record.hosts),
+    acls: toAclRules(record.acls),
+    ssh: toSshRules(record.ssh),
+    grants: toGrantRules(record.grants),
+    autoApprovers: toAutoApprovers(record.autoApprovers),
+    nodeAttrs: toNodeAttrs(record.nodeAttrs),
+    extra,
+    keyOrder: Object.keys(record),
   };
+
+  // Only a real boolean becomes the key; anything else stayed in `extra`.
+  if (typeof record.randomizeClientPort === "boolean") {
+    policy.randomizeClientPort = record.randomizeClientPort;
+  }
+
+  return { ok: true, hasComments, policy };
 }
 
 export function serializePolicy(policy: Policy): string {
@@ -150,6 +182,10 @@ export function serializePolicy(policy: Policy): string {
     sections.autoApprovers = compactAutoApprovers(policy.autoApprovers);
   }
   if (policy.nodeAttrs.length > 0) sections.nodeAttrs = policy.nodeAttrs.map(compactNodeAttr);
+  // A policy that never had the key must not gain one.
+  if (policy.randomizeClientPort !== undefined) {
+    sections.randomizeClientPort = policy.randomizeClientPort;
+  }
   for (const [key, value] of Object.entries(policy.extra)) {
     sections[key] = value;
   }
@@ -430,7 +466,8 @@ function extraKeys(entry: Record<string, unknown>, known: string[]): Record<stri
   return out;
 }
 
-const GRANT_KEYS = ["src", "dst", "ip"];
+const GRANT_KEYS = ["src", "dst", "ip", "app", "via"];
+const GRANT_APP_KEYS = ["name", "connectors"];
 const AUTO_APPROVER_KEYS = ["routes", "exitNode"];
 const NODE_ATTR_KEYS = ["target", "attr"];
 
@@ -441,12 +478,38 @@ function toGrantRules(value: unknown): GrantRule[] {
 
   return value
     .filter((entry): entry is Record<string, unknown> => entry != null && typeof entry === "object")
-    .map((entry) => ({
-      src: toStringList(entry.src),
-      dst: toStringList(entry.dst),
-      ip: toStringList(entry.ip),
-      extra: extraKeys(entry, GRANT_KEYS),
-    }));
+    .map((entry) => {
+      const rule: GrantRule = {
+        src: toStringList(entry.src),
+        dst: toStringList(entry.dst),
+        ip: toStringList(entry.ip),
+        via: toStringList(entry.via),
+        extra: extraKeys(entry, GRANT_KEYS),
+      };
+
+      const app = toGrantApp(entry.app);
+      if (app !== undefined) {
+        rule.app = app;
+      }
+
+      return rule;
+    });
+}
+
+// `app` is only a grant's application descriptor when it is an object; a
+// capability map (what Headscale itself reads) has no name and its entries
+// stay in `extra`, so the value survives a round trip unchanged.
+function toGrantApp(value: unknown): GrantApp | undefined {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    name: typeof record.name === "string" ? record.name : "",
+    connectors: toStringList(record.connectors),
+    extra: extraKeys(record, GRANT_APP_KEYS),
+  };
 }
 
 function toAutoApprovers(value: unknown): AutoApprovers {
@@ -493,7 +556,20 @@ export function hasAutoApprovers(autoApprovers: AutoApprovers): boolean {
 function compactGrantRule(rule: GrantRule): Record<string, unknown> {
   const out: Record<string, unknown> = { src: rule.src, dst: rule.dst };
   if (rule.ip.length > 0) out.ip = rule.ip;
+  if (rule.app !== undefined) out.app = compactGrantApp(rule.app);
+  if (rule.via.length > 0) out.via = rule.via;
   return { ...out, ...rule.extra };
+}
+
+function compactGrantApp(app: GrantApp): Record<string, unknown> {
+  // `app` is a capability map in Headscale, so an entry the editor never wrote
+  // (a real capability key with its values) has no `name`/`connectors` at all.
+  // Writing them unconditionally would inject `name` and `connectors` as bogus
+  // capabilities into a policy that was otherwise untouched.
+  const out: Record<string, unknown> = {};
+  if (app.name.length > 0) out.name = app.name;
+  if (app.connectors.length > 0) out.connectors = app.connectors;
+  return { ...out, ...app.extra };
 }
 
 function compactAutoApprovers(autoApprovers: AutoApprovers): Record<string, unknown> {

@@ -13,6 +13,7 @@ import {
   policySources,
   serializePolicy,
   setUserGroups,
+  unsupportedPolicySections,
   withDefaultPort,
 } from "~/utils/acl-policy";
 
@@ -105,7 +106,7 @@ describe("parsePolicy", () => {
       },
     ]);
     expect(policy.grants).toEqual([
-      { src: ["group:eng"], dst: ["tag:server"], ip: ["tcp:443"], extra: {} },
+      { src: ["group:eng"], dst: ["tag:server"], ip: ["tcp:443"], via: [], extra: {} },
     ]);
     expect(policy.autoApprovers).toEqual({
       routes: { "10.0.0.0/8": ["group:ops"] },
@@ -137,6 +138,53 @@ describe("parsePolicy", () => {
 
     expect(policy.grants[0].extra).toEqual({ srcPosture: ["posture:latest"] });
     expect(policy.nodeAttrs[0].extra).toEqual({ comment: "keep me" });
+  });
+
+  test("parses app, via and randomizeClientPort", () => {
+    const { policy } = parseOrThrow(`{
+      "randomizeClientPort": true,
+      "grants": [
+        {
+          "src": ["group:eng"],
+          "dst": ["tag:connector"],
+          "ip": [],
+          "via": ["tag:router"],
+          "app": { "name": "mydb", "connectors": ["tag:connector"], "domains": ["db.example.com"] }
+        }
+      ]
+    }`);
+
+    expect(policy.randomizeClientPort).toBe(true);
+    expect(policy.grants[0].via).toEqual(["tag:router"]);
+    expect(policy.grants[0].app).toEqual({
+      name: "mydb",
+      connectors: ["tag:connector"],
+      extra: { domains: ["db.example.com"] },
+    });
+    // The modelled fields must not also be duplicated into `extra`.
+    expect(policy.grants[0].extra).toEqual({});
+  });
+
+  test("tolerates app and via with the wrong shape", () => {
+    const { policy } = parseOrThrow(`{
+      "randomizeClientPort": "yes",
+      "grants": [{ "src": ["alice@"], "dst": ["tag:web"], "app": "nope", "via": "tag:web" }]
+    }`);
+
+    // `via` is a string list, so a bare string still parses as one entry.
+    expect(policy.grants[0].via).toEqual(["tag:web"]);
+    expect(policy.grants[0].app).toBeUndefined();
+    // A non-boolean value is not the key Headplane models, so it is kept.
+    expect(policy.randomizeClientPort).toBeUndefined();
+    expect(policy.extra.randomizeClientPort).toBe("yes");
+  });
+
+  test("defaults a missing app name to an empty string", () => {
+    const { policy } = parseOrThrow(`{
+      "grants": [{ "src": ["alice@"], "dst": ["tag:web"], "app": { "connectors": ["tag:web"] } }]
+    }`);
+
+    expect(policy.grants[0].app).toEqual({ name: "", connectors: ["tag:web"], extra: {} });
   });
 
   test("keeps rule actions and unknown rule keys as they were written", () => {
@@ -239,6 +287,82 @@ describe("serializePolicy", () => {
     });
 
     expect(output.indexOf(`"hosts"`)).toBeLessThan(output.indexOf(`"groups"`));
+  });
+
+  test("round-trips app, via and randomizeClientPort", () => {
+    const { policy } = parseOrThrow(`{
+      "randomizeClientPort": true,
+      "grants": [
+        {
+          "src": ["group:eng"],
+          "dst": ["tag:connector"],
+          "ip": [],
+          "via": ["tag:router"],
+          "app": { "name": "mydb", "connectors": ["tag:connector"], "domains": ["db.example.com"] }
+        }
+      ]
+    }`);
+
+    const serialized = serializePolicy(policy);
+    const reparsed = parseOrThrow(serialized);
+
+    expect(reparsed.policy.randomizeClientPort).toBe(true);
+    expect(reparsed.policy.grants).toEqual(policy.grants);
+    expect(serialized).toContain('"via": ["tag:router"]');
+    expect(serialized).toContain('"name": "mydb"');
+    // Unknown sub-keys inside app come back too.
+    expect(serialized).toContain('"domains": ["db.example.com"]');
+    expect(reparsed.policy.grants[0].app?.extra).toEqual({ domains: ["db.example.com"] });
+  });
+
+  test("omits via when empty and app when undefined", () => {
+    const { policy } = parseOrThrow(`{
+      "grants": [{ "src": ["alice@"], "dst": ["tag:web"], "ip": ["tcp:443"], "via": [] }]
+    }`);
+
+    const output = serializePolicy(policy);
+    expect(output).not.toContain('"via"');
+    expect(output).not.toContain('"app"');
+  });
+
+  test("only writes randomizeClientPort when it is set", () => {
+    const { policy } = parseOrThrow(`{
+      "grants": [{ "src": ["alice@"], "dst": ["tag:web"], "ip": ["tcp:443"] }]
+    }`);
+
+    const output = serializePolicy(policy);
+    expect(output).not.toContain("randomizeClientPort");
+
+    // A serialize -> parse cycle must not invent the key either.
+    expect(parseOrThrow(output).policy.randomizeClientPort).toBeUndefined();
+
+    // An explicit false is a real setting, so it is written back.
+    const disabled = serializePolicy({ ...policy, randomizeClientPort: false });
+    expect(disabled).toContain('"randomizeClientPort": false');
+    expect(parseOrThrow(disabled).policy.randomizeClientPort).toBe(false);
+  });
+});
+
+describe("unsupportedPolicySections", () => {
+  test("reports the sections Headscale does not support", () => {
+    const { policy } = parseOrThrow(POLICY);
+    expect(unsupportedPolicySections(policy)).toEqual(["postures"]);
+  });
+
+  test("reports several sections in catalog order", () => {
+    const { policy } = parseOrThrow(`{
+      "ipSets": { "set:one": ["100.64.0.0/24"] },
+      "postures": { "posture:latest": ["node:latest"] }
+    }`);
+
+    expect(unsupportedPolicySections(policy)).toEqual(["postures", "ipSets"]);
+  });
+
+  test("reports nothing for a policy Headplane models completely", () => {
+    expect(unsupportedPolicySections(EMPTY_POLICY)).toEqual([]);
+    expect(
+      unsupportedPolicySections(parseOrThrow(`{ "groups": { "group:eng": ["alice@"] } }`).policy),
+    ).toEqual([]);
   });
 });
 

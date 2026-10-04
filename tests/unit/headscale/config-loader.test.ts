@@ -286,4 +286,116 @@ describe("Headscale config loader", () => {
       trustedProxies: [],
     });
   });
+
+  test("exposes the advanced settings with Headscale's defaults", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getAdvancedSettings()).toEqual({
+      nodeExpiry: "0",
+      // Headscale's config-example.yaml ships 30m, but its viper default (what
+      // an absent key actually resolves to) is 120s.
+      ephemeralInactivityTimeout: "120s",
+      logLevel: "info",
+      logFormat: "text",
+      taildropEnabled: true,
+      autoUpdateEnabled: false,
+      logtailEnabled: false,
+      disableCheckUpdates: false,
+    });
+  });
+
+  test("reads hand-written advanced settings verbatim", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "disable_check_updates: true",
+        "node:",
+        "  expiry: 720h",
+        "  ephemeral:",
+        "    inactivity_timeout: 30m",
+        "log:",
+        "  level: warn",
+        "  format: json",
+        "taildrop:",
+        "  enabled: false",
+        "auto_update:",
+        "  enabled: true",
+        "logtail:",
+        "  enabled: true",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getAdvancedSettings()).toEqual({
+      nodeExpiry: "720h",
+      ephemeralInactivityTimeout: "30m",
+      logLevel: "warn",
+      logFormat: "json",
+      taildropEnabled: false,
+      autoUpdateEnabled: true,
+      logtailEnabled: true,
+      disableCheckUpdates: true,
+    });
+  });
+
+  test("falls back to defaults for advanced settings with the wrong type", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "disable_check_updates: 1",
+        "node:",
+        "  expiry: 720",
+        "  ephemeral: wrong",
+        "log: not-a-map",
+        "taildrop:",
+        "  enabled: true",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getAdvancedSettings()).toEqual({
+      nodeExpiry: "0",
+      ephemeralInactivityTimeout: "120s",
+      logLevel: "info",
+      logFormat: "text",
+      taildropEnabled: true,
+      autoUpdateEnabled: false,
+      logtailEnabled: false,
+      disableCheckUpdates: false,
+    });
+  });
+
+  test("patches the advanced settings onto their dotted paths", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["server_url: http://localhost:8080", "node:", "  expiry: 0"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    await config.patch([
+      { path: "node.expiry", value: "720h" },
+      { path: "node.ephemeral.inactivity_timeout", value: "30m" },
+      { path: "log.level", value: "warn" },
+      { path: "log.format", value: "json" },
+      { path: "taildrop.enabled", value: false },
+      { path: "auto_update.enabled", value: true },
+      { path: "logtail.enabled", value: true },
+      { path: "disable_check_updates", value: true },
+    ]);
+
+    const written = parse(await readFile(path, "utf8"));
+    expect(written.node).toEqual({
+      expiry: "720h",
+      ephemeral: { inactivity_timeout: "30m" },
+    });
+    expect(written.log).toEqual({ level: "warn", format: "json" });
+    expect(written.taildrop).toEqual({ enabled: false });
+    expect(written.auto_update).toEqual({ enabled: true });
+    expect(written.logtail).toEqual({ enabled: true });
+    expect(written.disable_check_updates).toBe(true);
+  });
 });

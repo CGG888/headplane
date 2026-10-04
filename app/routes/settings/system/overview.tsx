@@ -11,6 +11,7 @@ import StatusCircle from "~/components/status-circle";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
+  appConfigContext,
   authContext,
   headscaleConfigContext,
   headscaleContext,
@@ -24,12 +25,14 @@ import cn from "~/utils/cn";
 
 import type { Route } from "./+types/overview";
 import { systemAction } from "./actions";
+import { loadConfigChecks } from "./config-probe";
 import {
   computeDiagnostics,
   integrationAction,
   isBehindProxy,
   isNewerVersion,
   type ApiKeyStatus,
+  type Diagnostic,
   type DiagnosticStatus,
   type OidcStatus,
 } from "./diagnostics";
@@ -46,6 +49,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
+  const appConfig = context.get(appConfigContext);
   const integration = context.get(integrationContext);
   const getRequestApi = context.get(requestApiContext);
 
@@ -88,6 +92,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const trustedProxyCount = trustedProxies.length;
   const integrationName = integration?.name;
 
+  // A web version of `headscale configtest`, read straight from the file on
+  // disk. It degrades to an empty list when the file cannot be read, so it
+  // never blocks the status page.
+  const configChecks = await loadConfigChecks(appConfig?.headscale.config_path);
+
   return {
     reachable,
     version: formatServerVersion(serverVersion),
@@ -121,6 +130,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       behindProxy,
       integrationName,
     }),
+    configChecks,
   };
 }
 
@@ -245,33 +255,56 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <h2 className="mt-8 text-2xl font-medium">{t("settings.system.checksTitle")}</h2>
         <p className="my-2">{t("settings.system.checksBody")}</p>
 
-        <ul className="mt-4 flex flex-col gap-3">
-          {loaderData.diagnostics.map((diagnostic) => (
-            <li
-              className="rounded-lg border border-mist-200 p-4 dark:border-mist-700"
-              key={diagnostic.id}
-            >
-              <div className="flex items-center gap-2">
-                <StatusIcon status={diagnostic.status} />
-                <span className="font-medium">{t(diagnostic.titleKey)}</span>
-                <span className={cn("text-xs", STATUS_TEXT[diagnostic.status])}>
-                  {t(STATUS_KEYS[diagnostic.status])}
-                </span>
-              </div>
-              <p className="mt-2 text-sm opacity-80">{t(diagnostic.bodyKey, diagnostic.vars)}</p>
-              {diagnostic.link ? (
-                <Link
-                  className="mt-2 inline-block text-sm font-medium text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  to={diagnostic.link.to}
-                >
-                  {t(diagnostic.link.labelKey)}
-                </Link>
-              ) : undefined}
-            </li>
-          ))}
-        </ul>
+        <CheckList checks={loaderData.diagnostics} />
+      </section>
+
+      <section className="w-full sm:w-2/3">
+        <h2 className="mt-8 text-2xl font-medium">{t("settings.system.configChecks.title")}</h2>
+        <p className="my-2">{t("settings.system.configChecks.body")}</p>
+
+        {loaderData.configChecks.length > 0 ? (
+          <CheckList checks={loaderData.configChecks} />
+        ) : (
+          <p className="mt-4 text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
+        )}
       </section>
     </div>
+  );
+}
+
+type CheckRow = Pick<Diagnostic, "status" | "titleKey" | "bodyKey" | "vars" | "link"> & {
+  id: string;
+};
+
+function CheckList({ checks }: { checks: readonly CheckRow[] }) {
+  const { t } = useI18n();
+
+  return (
+    <ul className="mt-4 flex flex-col gap-3">
+      {checks.map((diagnostic) => (
+        <li
+          className="rounded-lg border border-mist-200 p-4 dark:border-mist-700"
+          key={diagnostic.id}
+        >
+          <div className="flex items-center gap-2">
+            <StatusIcon status={diagnostic.status} />
+            <span className="font-medium">{t(diagnostic.titleKey)}</span>
+            <span className={cn("text-xs", STATUS_TEXT[diagnostic.status])}>
+              {t(STATUS_KEYS[diagnostic.status])}
+            </span>
+          </div>
+          <p className="mt-2 text-sm opacity-80">{t(diagnostic.bodyKey, diagnostic.vars)}</p>
+          {diagnostic.link ? (
+            <Link
+              className="mt-2 inline-block text-sm font-medium text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              to={diagnostic.link.to}
+            >
+              {t(diagnostic.link.labelKey)}
+            </Link>
+          ) : undefined}
+        </li>
+      ))}
+    </ul>
   );
 }
 

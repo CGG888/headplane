@@ -150,6 +150,26 @@ export interface TailnetSettingsView {
   trustedProxies: string[];
 }
 
+/**
+ * Headscale settings that live outside `dns`, `oidc` and `policy`. Durations
+ * stay Headscale duration strings (`0`, `720h`, `30d`) because Headplane writes
+ * them back verbatim; only the format is narrowed to the two values Headscale
+ * understands.
+ */
+export interface AdvancedSettingsView {
+  nodeExpiry: string;
+  ephemeralInactivityTimeout: string;
+  // Headscale accepts the full zerolog level set, but Headplane only writes the
+  // four below `LOG_LEVELS`. The raw string is kept so a config with e.g.
+  // `trace` is shown as it is instead of being silently replaced.
+  logLevel: string;
+  logFormat: "text" | "json";
+  taildropEnabled: boolean;
+  autoUpdateEnabled: boolean;
+  logtailEnabled: boolean;
+  disableCheckUpdates: boolean;
+}
+
 interface HeadscaleConfigState {
   document?: Document;
   config: unknown;
@@ -168,6 +188,7 @@ interface HeadscaleConfig {
   hasOIDCConfig: () => boolean;
   getOIDCSettings: () => OIDCSettingsView | undefined;
   getTailnetSettings: () => TailnetSettingsView;
+  getAdvancedSettings: () => AdvancedSettingsView;
   dnsRecords: () => DNSRecord[];
   patch: (patches: PatchConfig[]) => Promise<void>;
   addDNS: (record: DNSRecord) => Promise<boolean | void>;
@@ -198,6 +219,7 @@ function createHeadscaleConfig(
     hasOIDCConfig: () => hasOIDCConfig(state),
     getOIDCSettings: () => getOIDCSettings(state),
     getTailnetSettings: () => getTailnetSettings(state),
+    getAdvancedSettings: () => getAdvancedSettings(state),
     dnsRecords: () => dnsRecords(state),
     patch: (patches) => patchHeadscaleConfig(state, patches),
     addDNS: (record) => addDNS(state, record),
@@ -288,6 +310,65 @@ function getTailnetSettings(config: HeadscaleConfigState): TailnetSettingsView {
     policyMode: readString(policy.mode, "file") === "database" ? "database" : "file",
     policyPath: readString(policy.path),
     trustedProxies: readStringList(root.trusted_proxies),
+  };
+}
+
+/**
+ * Headscale's documented defaults for the advanced settings, matching
+ * `hscontrol/types/config.go`'s `viper.SetDefault` calls in v0.29.2. They are
+ * shown (and written back) when the key is absent from the file.
+ */
+const ADVANCED_SETTINGS_DEFAULTS = {
+  nodeExpiry: "0",
+  // Headscale's `viper.SetDefault` is 120s; its config-example.yaml ships 30m.
+  // The default below is what Headscale actually uses when the key is unset.
+  ephemeralInactivityTimeout: "120s",
+  logLevel: "info",
+  logFormat: "text" as const,
+  taildropEnabled: true,
+  autoUpdateEnabled: false,
+  logtailEnabled: false,
+  disableCheckUpdates: false,
+};
+
+// Advanced Headscale settings that live outside `dns`, `oidc` and `policy`.
+// Every value is read defensively so a hand-written config with unexpected
+// types falls back to Headscale's default instead of breaking the page.
+function getAdvancedSettings(config: HeadscaleConfigState): AdvancedSettingsView {
+  const root = readObject(config.config) ?? {};
+  const node = readObject(root.node) ?? {};
+  const ephemeral = readObject(node.ephemeral) ?? {};
+  const log = readObject(root.log) ?? {};
+  const taildrop = readObject(root.taildrop) ?? {};
+  const autoUpdate = readObject(root.auto_update) ?? {};
+  const logtail = readObject(root.logtail) ?? {};
+
+  return {
+    nodeExpiry: readString(node.expiry, ADVANCED_SETTINGS_DEFAULTS.nodeExpiry),
+    ephemeralInactivityTimeout: readString(
+      ephemeral.inactivity_timeout,
+      ADVANCED_SETTINGS_DEFAULTS.ephemeralInactivityTimeout,
+    ),
+    // An empty level cannot be shown in the picker, so it falls back to the
+    // documented default just like an unset value.
+    logLevel:
+      readString(log.level, ADVANCED_SETTINGS_DEFAULTS.logLevel) ||
+      ADVANCED_SETTINGS_DEFAULTS.logLevel,
+    // Headscale only understands these two and falls back to `text` for
+    // anything else, so the view mirrors that instead of showing a value the
+    // page could never write.
+    logFormat:
+      readString(log.format, ADVANCED_SETTINGS_DEFAULTS.logFormat) === "json" ? "json" : "text",
+    taildropEnabled: readBoolean(taildrop.enabled, ADVANCED_SETTINGS_DEFAULTS.taildropEnabled),
+    autoUpdateEnabled: readBoolean(
+      autoUpdate.enabled,
+      ADVANCED_SETTINGS_DEFAULTS.autoUpdateEnabled,
+    ),
+    logtailEnabled: readBoolean(logtail.enabled, ADVANCED_SETTINGS_DEFAULTS.logtailEnabled),
+    disableCheckUpdates: readBoolean(
+      root.disable_check_updates,
+      ADVANCED_SETTINGS_DEFAULTS.disableCheckUpdates,
+    ),
   };
 }
 

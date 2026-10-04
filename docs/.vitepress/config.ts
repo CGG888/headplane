@@ -59,6 +59,7 @@ export default defineConfig({
               { text: "Access Control", link: "/features/acls" },
               { text: "API Keys", link: "/features/api-keys" },
               { text: "Bulk Operations", link: "/features/bulk-operations" },
+              { text: "DNS", link: "/features/dns" },
               { text: "Headscale Settings", link: "/features/headscale-settings" },
               { text: "System Status", link: "/features/system-status" },
               { text: "Headplane Agent", link: "/features/agent" },

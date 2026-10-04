@@ -1,7 +1,9 @@
 import { ArrowRight, Plane } from "lucide-react";
 import { useState } from "react";
 
+import Button from "~/components/button";
 import Chip from "~/components/chip";
+import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import type { GrantRule, NodeAttr, Policy } from "~/utils/acl-policy";
@@ -87,6 +89,26 @@ export default function TailnetPolicyEditor({
   }
 
   const routes = Object.entries(policy.autoApprovers.routes).sort(([a], [b]) => a.localeCompare(b));
+
+  // The tri-state is the point: an absent key means "use Headscale's default",
+  // which is not the same as an explicit false.
+  const randomizeClientPort = policy.randomizeClientPort;
+  const randomizeState =
+    randomizeClientPort === undefined
+      ? t("acls.tailnetOptions.randomizeClientPortUnset")
+      : randomizeClientPort
+        ? t("acls.tailnetOptions.randomizeClientPortEnabled")
+        : t("acls.tailnetOptions.randomizeClientPortDisabled");
+
+  function setRandomizeClientPort(next: boolean | undefined) {
+    const updated: Policy = { ...policy };
+    if (next === undefined) {
+      delete updated.randomizeClientPort;
+    } else {
+      updated.randomizeClientPort = next;
+    }
+    onChange(updated);
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -250,6 +272,45 @@ export default function TailnetPolicyEditor({
           ))
         )}
       </Section>
+
+      <section>
+        <div className="mb-3">
+          <h2 className="text-lg font-medium">{t("acls.tailnetOptions.title")}</h2>
+          <p className="max-w-prose text-sm text-mist-600 dark:text-mist-300">
+            {t("acls.tailnetOptions.description")}
+          </p>
+        </div>
+        <TableList>
+          <TableList.Item className="flex-col items-stretch gap-2 py-3 md:flex-row md:items-center">
+            <div className="flex min-w-0 items-center gap-3">
+              <Switch
+                checked={randomizeClientPort === true}
+                disabled={isDisabled}
+                label={t("acls.tailnetOptions.randomizeClientPortLabel")}
+                onCheckedChange={(checked) => setRandomizeClientPort(checked)}
+              />
+              <div>
+                <p className="text-sm font-medium">
+                  {t("acls.tailnetOptions.randomizeClientPortLabel")}
+                </p>
+                <p className="max-w-prose text-xs opacity-70">
+                  {t("acls.tailnetOptions.randomizeClientPortDescription")}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="text-xs opacity-60">{randomizeState}</span>
+              <Button
+                disabled={isDisabled || randomizeClientPort === undefined}
+                onClick={() => setRandomizeClientPort(undefined)}
+                type="button"
+              >
+                {t("acls.tailnetOptions.randomizeClientPortClear")}
+              </Button>
+            </div>
+          </TableList.Item>
+        </TableList>
+      </section>
     </div>
   );
 }

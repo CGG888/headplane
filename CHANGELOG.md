@@ -1,5 +1,12 @@
 # Next
 
+## Changes
+
+- The Headscale settings page now also edits the remaining day-to-day configuration: the default node expiry, the ephemeral-node inactivity timeout, the log level and format, and the Taildrop, node auto-update, logtail and update-check switches.
+- The system status page checks Headscale's own configuration file as well: keys that newer Headscale refuses to start with, rejected trusted-proxy ranges, TLS/ACME paths that do not exist, a missing or read-only database directory, an unusable policy file, the `extra_records` / `extra_records_path` conflict, incoherent OIDC settings and a missing noise key.
+- Access Control can now edit a grant's `app` (with its connectors) and `via`, and the tailnet-wide `randomizeClientPort` option; policy sections Headscale does not support (`postures`, `ipSets`) are now called out instead of being silently kept.
+- DNS extra records can be exported to JSON and imported again, with a preview, an append-or-replace choice and per-index validation.
+
 # 0.10.0 (October 5, 2026)
 
 ## Changes

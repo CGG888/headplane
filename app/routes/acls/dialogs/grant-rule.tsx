@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
+import Button from "~/components/button";
 import Dialog, { DialogPanel } from "~/components/dialog";
+import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
 import TokenList from "~/components/token-list";
@@ -16,7 +18,7 @@ interface GrantRuleDialogProps {
   onSave: (rule: GrantRule) => void;
 }
 
-const EMPTY: GrantRule = { src: [], dst: [], ip: [], extra: {} };
+const EMPTY: GrantRule = { src: [], dst: [], ip: [], via: [], extra: {} };
 
 // Headscale accepts `*`, a single port, a range or a comma separated list of
 // either, optionally prefixed with a protocol.
@@ -46,11 +48,11 @@ export default function GrantRuleDialog({
     }
   }, [isOpen, rule]);
 
-  // An application grant is identified by `app` in `extra`; it targets an
-  // application rather than a port, so its ip list may stay empty.
-  const hasApp = "app" in draft.extra;
+  // An application grant targets an app instead of a port, so its ip list may
+  // stay empty. Everything the editor cannot show rides in `extra`.
+  const app = draft.app;
   const isInvalid =
-    draft.src.length === 0 || draft.dst.length === 0 || (draft.ip.length === 0 && !hasApp);
+    draft.src.length === 0 || draft.dst.length === 0 || (draft.ip.length === 0 && !app);
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
@@ -58,7 +60,6 @@ export default function GrantRuleDialog({
         isDisabled={isInvalid}
         onSubmit={(event) => {
           event.preventDefault();
-          // `extra` rides along so unknown keys survive the edit.
           onSave({ ...draft });
           setIsOpen(false);
         }}
@@ -84,7 +85,7 @@ export default function GrantRuleDialog({
           values={draft.dst}
         />
         <TokenList
-          description={hasApp ? t("acls.grantRule.appNote") : t("acls.grantRule.ipDescription")}
+          description={t("acls.grantRule.ipDescription")}
           emptyText={t("acls.grantRule.ipEmpty")}
           label={t("acls.grantRule.ipLabel")}
           onChange={(ip) => setDraft({ ...draft, ip })}
@@ -93,9 +94,65 @@ export default function GrantRuleDialog({
           validate={isValidGrantIp}
           values={draft.ip}
         />
-        {!hasApp && draft.ip.length === 0 ? (
+        {!app && draft.ip.length === 0 ? (
           <p className="text-xs text-red-500 dark:text-red-400">{t("acls.grantRule.ipRequired")}</p>
         ) : null}
+        <TokenList
+          description={t("acls.grantRule.viaDescription")}
+          emptyText={t("acls.grantRule.viaEmpty")}
+          label={t("acls.grantRule.viaLabel")}
+          onChange={(via) => setDraft({ ...draft, via })}
+          placeholder={t("acls.grantRule.viaPlaceholder")}
+          suggestions={sources}
+          values={draft.via}
+        />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-mist-700 dark:text-mist-200">
+                {t("acls.grantRule.appLabel")}
+              </p>
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("acls.grantRule.appDescription")}
+              </p>
+            </div>
+            <Button
+              className="shrink-0"
+              onClick={() =>
+                setDraft(
+                  app
+                    ? { ...draft, app: undefined }
+                    : { ...draft, app: { name: "", connectors: [], extra: {} } },
+                )
+              }
+              type="button"
+            >
+              {app ? t("acls.grantRule.appClear") : t("acls.grantRule.appAdd")}
+            </Button>
+          </div>
+          {app ? (
+            <>
+              <Input
+                label={t("acls.grantRule.appNameLabel")}
+                onChange={(name) => setDraft({ ...draft, app: { ...app, name } })}
+                placeholder={t("acls.grantRule.appNamePlaceholder")}
+                value={app.name}
+              />
+              <TokenList
+                description={t("acls.grantRule.appConnectorsDescription")}
+                emptyText={t("acls.grantRule.appConnectorsEmpty")}
+                label={t("acls.grantRule.appConnectorsLabel")}
+                onChange={(connectors) => setDraft({ ...draft, app: { ...app, connectors } })}
+                placeholder={t("acls.grantRule.appConnectorsPlaceholder")}
+                suggestions={sources}
+                values={app.connectors}
+              />
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("acls.grantRule.appNote")}
+              </p>
+            </>
+          ) : null}
+        </div>
       </DialogPanel>
     </Dialog>
   );

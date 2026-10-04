@@ -15,7 +15,12 @@ export type HeadscaleSettingsErrorCode =
   | "unspecifiedCidr"
   | "duplicateProxy"
   | "proxyNotFound"
-  | "invalidPolicyMode";
+  | "invalidPolicyMode"
+  | "invalidNodeExpiry"
+  | "invalidEphemeralInactivity"
+  | "invalidLogLevel"
+  | "invalidLogFormat"
+  | "invalidBooleanValue";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -28,6 +33,11 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   duplicateProxy: "settings.headscale.errors.duplicateProxy",
   proxyNotFound: "settings.headscale.errors.proxyNotFound",
   invalidPolicyMode: "settings.headscale.errors.invalidPolicyMode",
+  invalidNodeExpiry: "settings.headscale.errors.invalidNodeExpiry",
+  invalidEphemeralInactivity: "settings.headscale.errors.invalidEphemeralInactivity",
+  invalidLogLevel: "settings.headscale.errors.invalidLogLevel",
+  invalidLogFormat: "settings.headscale.errors.invalidLogFormat",
+  invalidBooleanValue: "settings.headscale.errors.invalidBooleanValue",
 };
 
 export interface HeadscaleSettingsSuccess {

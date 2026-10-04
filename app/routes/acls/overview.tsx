@@ -27,6 +27,7 @@ import {
   policyDestinations,
   policySources,
   serializePolicy,
+  unsupportedPolicySections,
   type Policy,
 } from "~/utils/acl-policy";
 import toast from "~/utils/toast";
@@ -70,6 +71,12 @@ export default function Page({
   const destinations = useMemo(
     () => (parsed.ok ? policyDestinations(parsed.policy, users) : []),
     [parsed, users],
+  );
+  // Sections such as postures or ipSets that Headscale rejects but that the
+  // structured editors cannot touch.
+  const unsupportedSections = useMemo(
+    () => (parsed.ok ? unsupportedPolicySections(parsed.policy) : []),
+    [parsed],
   );
 
   useEffect(() => {
@@ -194,6 +201,13 @@ export default function Page({
           icon={<CheckCircle className="text-green-500" />}
         >
           {t("acls.check.success.body")}
+        </Notice>
+      ) : undefined}
+      {unsupportedSections.length > 0 ? (
+        <Notice title={t("acls.unsupported.title")} variant="warning">
+          {t("acls.unsupported.body", {
+            sections: unsupportedSections.map((section) => `"${section}"`).join(", "),
+          })}
         </Notice>
       ) : undefined}
       <Tabs className="mb-4" label={t("acls.editor.label")} defaultValue="rules">

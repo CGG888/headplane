@@ -56,6 +56,25 @@ client cannot spoof its own address in the logs and in node registration.
 Headplane rejects `0.0.0.0/0` and `::/0`: Headscale treats them as a
 configuration error, and trusting every peer would defeat the point.
 
+## Node lifetime, logs and switches
+
+The same page also edits the settings that usually mean editing the file by hand:
+
+| Setting                             | What it does                                                                                                                  |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `node.expiry`                       | How long a machine's key stays valid by default. `0` means machines never expire. Written as a Go duration (`720h`, `8760h`). |
+| `node.ephemeral.inactivity_timeout` | How long an ephemeral machine may be offline before Headscale removes it (`30m`).                                             |
+| `log.level`                         | `debug`, `info`, `warn` or `error` — `debug` is the first thing to try when behaviour is odd, and it applies after a reload.  |
+| `log.format`                        | `text` for humans, `json` for log shipping.                                                                                   |
+| `taildrop.enabled`                  | Whether machines may send files to each other with Taildrop.                                                                  |
+| `auto_update.enabled`               | Whether machines are told to update themselves by default.                                                                    |
+| `logtail.enabled`                   | Whether node logs are sent to Tailscale's log service. Off keeps everything on your own hardware.                             |
+| `disable_check_updates`             | Stops Headscale from checking for its own updates.                                                                            |
+
+Values shown are Headscale's own defaults when a key is absent, so the page
+describes what your server is actually doing rather than only what the file
+happens to say.
+
 ## Policy mode
 
 | Mode             | Meaning                                                                                                                                                           |

@@ -8,6 +8,8 @@ import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
 import AddRecord from "../dialogs/add-record";
+import ImportRecords from "../dialogs/import-records";
+import ExportRecords from "./export-records";
 
 interface Props {
   records: { name: string; type: "A" | string; value: string }[];
@@ -73,7 +75,11 @@ export default function ManageRecords({ records, isDisabled }: Props) {
           )}
         </TableList>
 
-        {isDisabled ? undefined : <AddRecord records={records} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {isDisabled ? undefined : <AddRecord records={records} />}
+          {isDisabled ? undefined : <ImportRecords records={records} />}
+          <ExportRecords records={records} />
+        </div>
       </div>
     </div>
   );

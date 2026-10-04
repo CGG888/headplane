@@ -9,6 +9,13 @@ import {
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
+import {
+  isHeadscaleDuration,
+  isLogFormat,
+  isLogLevel,
+  MIN_EPHEMERAL_INACTIVITY_SECONDS,
+  parseGoDurationSeconds,
+} from "./advanced-settings";
 import type {
   HeadscaleSettingsErrorCode,
   HeadscaleSettingsFailure,
@@ -18,6 +25,13 @@ import { validateTrustedProxyCidr } from "./trusted-proxies";
 
 const PKCE_METHODS = new Set(["plain", "S256"]);
 const POLICY_MODES = new Set(["file", "database"]);
+
+/** Form field to Headscale config path for the boolean feature switches. */
+const FEATURE_PATHS = [
+  ["taildrop_enabled", "taildrop.enabled"],
+  ["auto_update_enabled", "auto_update.enabled"],
+  ["logtail_enabled", "logtail.enabled"],
+] as const;
 
 export async function headscaleSettingsAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
@@ -146,6 +160,76 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       return success();
     }
 
+    case "save_node_settings": {
+      // Headscale parses `node.expiry` with prometheus' model.ParseDuration,
+      // where the literal "0" means "nodes never expire".
+      const nodeExpiry = readField(formData, "node_expiry");
+      if (!isHeadscaleDuration(nodeExpiry)) {
+        return failure("invalidNodeExpiry");
+      }
+
+      // Headscale refuses to start when the inactivity timeout is 65s or less.
+      const inactivityTimeout = readField(formData, "ephemeral_inactivity_timeout");
+      const inactivitySeconds = parseGoDurationSeconds(inactivityTimeout);
+      if (
+        inactivitySeconds === undefined ||
+        inactivitySeconds <= MIN_EPHEMERAL_INACTIVITY_SECONDS
+      ) {
+        return failure("invalidEphemeralInactivity");
+      }
+
+      await headscaleConfig.patch([
+        { path: "node.expiry", value: nodeExpiry },
+        { path: "node.ephemeral.inactivity_timeout", value: inactivityTimeout },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_log_settings": {
+      const level = readField(formData, "log_level");
+      if (!isLogLevel(level)) {
+        return failure("invalidLogLevel");
+      }
+
+      const format = readField(formData, "log_format");
+      if (!isLogFormat(format)) {
+        return failure("invalidLogFormat");
+      }
+
+      await headscaleConfig.patch([
+        { path: "log.level", value: level },
+        { path: "log.format", value: format },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_feature_settings": {
+      const patches: { path: string; value: unknown }[] = [];
+      for (const [field, path] of FEATURE_PATHS) {
+        const value = readBooleanField(formData, field);
+        if (value === undefined) {
+          return failure("invalidBooleanValue");
+        }
+
+        patches.push({ path, value });
+      }
+
+      // `disable_check_updates` is Headscale's opt-out, so the form sends the
+      // inverted "check for updates" switch and the value is flipped here.
+      const checkUpdates = readBooleanField(formData, "check_updates");
+      if (checkUpdates === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      patches.push({ path: "disable_check_updates", value: !checkUpdates });
+
+      await headscaleConfig.patch(patches);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
     default: {
       return failure("invalidAction");
     }
@@ -154,6 +238,23 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
 function readField(formData: FormData, name: string): string {
   return formData.get(name)?.toString().trim() ?? "";
+}
+
+/**
+ * Switches submit an explicit "true"/"false" hidden field, so anything else is
+ * a malformed request rather than a value to coerce.
+ */
+function readBooleanField(formData: FormData, name: string): boolean | undefined {
+  const value = readField(formData, name);
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return undefined;
 }
 
 function splitList(value: string): string[] {

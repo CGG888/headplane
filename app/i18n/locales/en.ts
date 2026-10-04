@@ -675,8 +675,40 @@ const en = {
         "Ports this grant allows, optionally prefixed with tcp: or udp:, for example tcp:443, 80,443 or 1000-2000.",
       ipPlaceholder: "tcp:443",
       ipEmpty: "No ports yet",
-      ipRequired: "A grant without an app must allow at least one port.",
+      ipRequired:
+        "Ports decide which traffic a grant opens, so a grant without an app must allow at least one port.",
       appNote: "This grant defines an app, so the port list may stay empty.",
+      viaLabel: "Via",
+      viaDescription:
+        "Optional. Tags of the nodes the traffic has to pass through for the grant to apply.",
+      viaEmpty: "No via tags yet",
+      viaPlaceholder: "tag:router",
+      appLabel: "App",
+      appDescription:
+        "An app grant targets an application served by connector nodes instead of opening ports.",
+      appAdd: "Define app",
+      appClear: "Clear app",
+      appNameLabel: "App name",
+      appNamePlaceholder: "mydb",
+      appConnectorsLabel: "Connectors",
+      appConnectorsDescription: "Tags of the nodes that serve this application.",
+      appConnectorsEmpty: "No connectors yet",
+      appConnectorsPlaceholder: "tag:connector",
+    },
+    tailnetOptions: {
+      title: "Tailnet options",
+      description: "Policy-wide settings that apply to every device in the tailnet.",
+      randomizeClientPortLabel: "Randomize client port",
+      randomizeClientPortDescription:
+        "Lets a device pick a random source port for outgoing connections instead of keeping one stable.",
+      randomizeClientPortUnset: "Not set",
+      randomizeClientPortClear: "Reset to not set",
+      randomizeClientPortEnabled: "Enabled",
+      randomizeClientPortDisabled: "Disabled",
+    },
+    unsupported: {
+      title: "Unsupported policy sections",
+      body: "This policy defines {sections}, which Headscale does not support. Headplane keeps those sections verbatim when the policy is saved.",
     },
     autoApprovers: {
       title: "Auto-approvers",
@@ -786,6 +818,43 @@ const en = {
       ipLabel: "IP Address",
       duplicateField: "This record already exists.",
       duplicateBody: "A record with the domain name {name} and IP address {ip} already exists.",
+    },
+    importExport: {
+      exportButton: "Export records",
+      importButton: "Import records",
+      title: "Import DNS records",
+      body: "Paste the JSON from an exported file, or choose a .json file. Every record is checked before anything is written.",
+      jsonLabel: "JSON",
+      jsonPlaceholder: '[{ "name": "test.example.com", "type": "A", "value": "1.2.3.4" }]',
+      fileLabel: "Choose a .json file",
+      modeLabel: "Import mode",
+      modeAppend: "Append",
+      modeAppendBody: "Keep the current records and add the imported ones.",
+      modeReplace: "Replace",
+      modeReplaceBody: "Delete every current record first, then write the imported ones.",
+      previewTitle: "Preview",
+      previewIdle: "Nothing to import yet.",
+      previewAdd: "Records that will be added: {count}",
+      previewRemove: "Records that will be removed: {count}",
+      previewSkip: "Duplicate entries skipped: {count}",
+      previewTotal: "Records after the import: {count}",
+      previewMore: "and {count} more",
+      success: "Imported {imported} records and skipped {skipped} duplicates.",
+      errors: {
+        empty: "Paste JSON or choose a file that contains at least one record.",
+        invalidJson: "This is not valid JSON. Check the text and try again.",
+        notArray: "The JSON must be an array of records.",
+        notObject: "Record {position} is not an object.",
+        invalidName: "Record {position} needs a non-empty string name.",
+        invalidType: "Record {position} needs a string type.",
+        unsupportedType:
+          "Record {position} has the unsupported type {type}. Supported types: {types}.",
+        invalidValue: "Record {position} needs a non-empty string value.",
+        tooManyRecords:
+          "Too many records: this file contains {count}, but at most {max} are allowed.",
+        conflictingRecord:
+          "Records {position} and another entry share a name and type but have different values. Headplane keeps one record per name and type, so add the extra value in Headscale's configuration file instead.",
+      },
     },
     domains: {
       title: "Search Domains",
@@ -920,6 +989,84 @@ const en = {
             "No integration is enabled, so Headplane cannot reload or restart Headscale. Enable the Docker, Kubernetes, or native (/proc) integration.",
         },
       },
+      configChecks: {
+        title: "Configuration",
+        body: "These checks read Headscale's own config.yaml and the files it points at, the same way headscale configtest does. Fix them in the file before Headscale is restarted.",
+        unavailable:
+          "Headplane could not read Headscale's configuration file, so the configuration checks are unavailable.",
+        oidcKeys: {
+          title: "Unsupported OIDC keys",
+          pass: "The configuration does not contain any of the OIDC keys that Headscale 0.29 refuses to start with.",
+          fail: "The configuration still contains {keys}. Headscale 0.29 refuses to start while these keys are present; remove them and set node lifetime with the top-level node.expiry instead.",
+        },
+        trustedProxies: {
+          title: "Trusted proxy entries",
+          pass: "Every trusted_proxies entry is a usable address range.",
+          fail: "Headscale rejects {proxies}: the unspecified ranges (0.0.0.0/0 and ::/0) are configuration errors, and trusting every address would defeat the setting.",
+        },
+        tls: {
+          title: "TLS and ACME",
+          none: "No certificate is configured, so Headscale serves plain HTTP. That is only safe behind a reverse proxy that terminates TLS.",
+          pass: "The configured certificate files exist and can be read.",
+          missingFile:
+            "Headscale cannot read {path}: the certificate or key is missing, unreadable, or not a regular file.",
+          conflict:
+            "Both tls_letsencrypt_hostname ({hostname}) and a static certificate ({path}) are configured. Headscale uses the static certificate, so the ACME hostname has no effect.",
+          insecure:
+            "server_url is set to {url} while a certificate is configured, so clients connect over plain HTTP unless a reverse proxy terminates TLS in front of Headscale.",
+        },
+        database: {
+          title: "Database",
+          pass: "The SQLite database directory is writable and {path} exists.",
+          external:
+            "Headscale uses an external {type} database, so there is no SQLite file to create.",
+          missingFile:
+            "{path} does not exist yet. Headscale creates the SQLite database on its first start.",
+          missingDir:
+            "The directory {path} does not exist, so Headscale cannot create its SQLite database there.",
+          readOnlyDir:
+            "The directory {path} is not writable, so Headscale cannot create or update its SQLite database.",
+        },
+        policy: {
+          title: "Access Control policy file",
+          database: "Headscale stores the policy in its database, so no policy file is needed.",
+          pass: "The policy file at {path} exists and is not empty.",
+          missingPath:
+            "policy.mode is file but policy.path is empty, so Headscale loads no policy and allows every node.",
+          empty: "The policy file at {path} is empty, which Headscale treats as allow-all.",
+          missingFile:
+            "The policy file at {path} does not exist, so Headscale has no policy to load.",
+          unreadable:
+            "The policy file at {path} cannot be read, so Headscale has no policy to load.",
+        },
+        dns: {
+          title: "DNS records",
+          pass: "Only one source of extra DNS records is configured.",
+          conflict:
+            "Both dns.extra_records and dns.extra_records_path are set. Headplane reads the JSON file at {path} and ignores the inline records, and Headscale has to pick one of the two sources.",
+          review: "Review DNS records",
+        },
+        oidc: {
+          title: "OIDC settings",
+          pass: "The OIDC block is coherent.",
+          missingClientId:
+            "An issuer ({issuer}) is configured without a client_id, so Headscale cannot start the login flow.",
+          missingIssuer:
+            "A client_id ({clientId}) is configured without an issuer, so Headscale cannot discover the provider.",
+          badPkce: "pkce.method is set to {method}, but Headscale only accepts plain or S256.",
+          secrets:
+            "Both client_secret and client_secret_path are set. Headscale reads the inline client_secret, so the file is ignored.",
+        },
+        noise: {
+          title: "Noise private key",
+          pass: "The Noise private key at {path} exists and can be read.",
+          database:
+            "No noise.private_key_path is configured, so Headscale keeps the Noise key in its database.",
+          fail: "The Noise private key at {path} is missing or unreadable while a database already exists, so Headscale cannot start.",
+          firstStart:
+            "The Noise private key at {path} does not exist yet, but neither does the database, so Headscale generates it on first start.",
+        },
+      },
     },
     headscale: {
       breadcrumb: "Headscale Settings",
@@ -986,6 +1133,41 @@ const en = {
       fatalTitle: "Unsupported OIDC keys",
       fatalBody:
         "This configuration still contains {keys}. Headscale 0.29 refuses to start when any of these keys are present; remove them and set node lifetime with the top-level {setting} instead.",
+      advancedNodeTitle: "Node Lifecycle",
+      advancedNodeBody:
+        "How Headscale treats nodes over time. Both values are Headscale duration strings.",
+      nodeExpiryLabel: "Default node expiry",
+      nodeExpiryDescription:
+        "Applied to new non-tagged nodes. Use a Headscale duration such as 720h or 30d, or 0 so nodes never expire. Headscale's default is 0.",
+      ephemeralInactivityLabel: "Ephemeral inactivity timeout",
+      ephemeralInactivityDescription:
+        "How long an offline ephemeral node is kept before Headscale deletes it, for example 30m. Headscale refuses to start below 65s. Headscale's default is 120s.",
+      saveNodeSettings: "Save node settings",
+      advancedLogTitle: "Logging",
+      advancedLogBody:
+        "Log output of the Headscale server. Changes take effect after Headscale is restarted.",
+      logLevelLabel: "Log level",
+      logLevelDescription:
+        "Headplane can only save debug, info, warn, and error. Headscale's default is info.",
+      logFormatLabel: "Log format",
+      logFormatDescription:
+        "text for human-readable lines, json for structured output. Headscale's default is text.",
+      saveLogSettings: "Save logging settings",
+      advancedFeaturesTitle: "Features",
+      advancedFeaturesBody:
+        "Tailnet-wide feature switches that Headscale advertises to every node.",
+      taildropLabel: "Taildrop",
+      taildropDescription: "Allow nodes to send files to each other. Headscale's default is true.",
+      autoUpdateLabel: "Default node auto-update",
+      autoUpdateDescription:
+        "Nodes that have not opted in or out locally update themselves automatically. Headscale's default is false.",
+      logtailLabel: "Logtail",
+      logtailDescription:
+        "Let nodes send their logs to Tailscale's logging service. Headscale's default is false.",
+      checkUpdatesLabel: "Check for updates on startup",
+      checkUpdatesDescription:
+        "Let Headscale look for a newer release when it starts. Stored as Headscale's inverse disable_check_updates, which defaults to false, so this switch is on by default.",
+      saveFeatureSettings: "Save feature settings",
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
         invalidIssuer: "Enter a valid http(s) issuer URL, or leave it empty to disable OIDC.",
@@ -998,6 +1180,12 @@ const en = {
         duplicateProxy: "This CIDR is already in the trusted list.",
         proxyNotFound: "This CIDR is not in the trusted proxy list.",
         invalidPolicyMode: "Choose either the file or the database policy mode.",
+        invalidNodeExpiry: "Enter a Headscale duration such as 720h, 30d, or 0 to never expire.",
+        invalidEphemeralInactivity:
+          "Enter a duration such as 30m or 120s. Headscale requires more than 65s.",
+        invalidLogLevel: "Choose debug, info, warn, or error as the log level.",
+        invalidLogFormat: "Choose text or json as the log format.",
+        invalidBooleanValue: "This setting only accepts true or false.",
       },
     },
     agent: {

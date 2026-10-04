@@ -9,6 +9,7 @@ import {
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
+import { importRecords, parseImportMode, type ImportActionData } from "./records-io";
 
 export async function dnsAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
@@ -212,6 +213,44 @@ export async function dnsAction({ request, context }: Route.ActionArgs) {
 
       await integration?.onConfigChange(headscale);
       return { message: "DNS record added successfully" };
+    }
+    case "import_dns_records": {
+      const raw = formData.get("records_json")?.toString() ?? "";
+      const mode = parseImportMode(formData.get("import_mode")?.toString());
+      const config = headscaleConfig.getDNSConfig();
+
+      const result = importRecords(raw, config.extraRecords, mode);
+      if (!result.ok) {
+        return data({ success: false, error: result.error } satisfies ImportActionData, {
+          status: 400,
+        });
+      }
+
+      const { plan } = result;
+
+      // `removeDNS` matches on name and type, so a replaced record whose value
+      // changed is cleared and rewritten instead of patched in place. Records
+      // that stay identical are left alone.
+      if (mode === "replace") {
+        for (const record of config.extraRecords) {
+          await headscaleConfig.removeDNS(record);
+        }
+
+        for (const record of plan.records) {
+          await headscaleConfig.addDNS(record);
+        }
+      } else {
+        for (const record of plan.added) {
+          await headscaleConfig.addDNS(record);
+        }
+      }
+
+      if (plan.imported === 0 && mode === "append") {
+        return { success: true, imported: 0, skipped: plan.skipped };
+      }
+
+      await integration?.onConfigChange(headscale);
+      return { success: true, imported: plan.imported, skipped: plan.skipped };
     }
     case "override_dns": {
       const override = formData.get("override_dns")?.toString();

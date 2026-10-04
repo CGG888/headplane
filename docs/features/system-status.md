@@ -34,6 +34,23 @@ where it helps a link to the page that fixes it:
 | Headscale config readable | The DNS and Headscale settings pages can only read (or write) when `headscale.config_path` is mounted.                       |
 | Integration enabled       | Without an integration Headplane cannot reload or restart Headscale for you.                                                 |
 
+## Configuration checks
+
+The page also reads Headscale's configuration file itself and reports the
+problems that otherwise only show up as a server that will not start or a
+setting that quietly does nothing:
+
+| Check                | Why it matters                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Removed keys         | `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are gone in 0.29 and Headscale **refuses to start** while they are present.                         |
+| Trusted proxy ranges | `0.0.0.0/0` and `::/0` are configuration errors.                                                                                                                         |
+| TLS and ACME         | A configured certificate or Let's Encrypt hostname whose files do not exist cannot be served; `server_url` over `http` alongside TLS configuration is usually a mistake. |
+| Database             | A missing or read-only SQLite directory stops Headscale from writing anything.                                                                                           |
+| Policy file          | With `policy.mode: file`, an empty `policy.path` means _allow everything_.                                                                                               |
+| DNS records          | Both `dns.extra_records` and `dns.extra_records_path` set means the inline records are silently ignored.                                                                 |
+| OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                   |
+| Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                         |
+
 ## Reloading or restarting Headscale
 
 The button follows whatever integration is configured:

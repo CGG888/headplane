@@ -10,6 +10,7 @@ import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
 import { headscaleSettingsAction } from "./actions";
+import AdvancedSettings from "./components/advanced-settings";
 import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
 import TrustedProxies from "./components/trusted-proxies";
@@ -36,6 +37,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
     oidc: headscaleConfig.getOIDCSettings() ?? null,
+    advanced: headscaleConfig.getAdvancedSettings(),
     policyMode,
     policyPath,
     trustedProxies,
@@ -47,8 +49,16 @@ export const action = headscaleSettingsAction;
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr } = useI18n();
-  const { access, writable, oidc, policyMode, policyPath, trustedProxies, fatalOidcKeys } =
-    loaderData;
+  const {
+    access,
+    writable,
+    oidc,
+    advanced,
+    policyMode,
+    policyPath,
+    trustedProxies,
+    fatalOidcKeys,
+  } = loaderData;
   const isDisabled = writable ? !access : true;
 
   return (
@@ -84,6 +94,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <OidcSettings isDisabled={isDisabled} oidc={oidc} />
       <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
       <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
+      <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
     </div>
   );
 }
