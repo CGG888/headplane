@@ -1,8 +1,12 @@
 # Next
 
+# 0.8.4 (October 4, 2026)
+
 ## Fixes
 
 - Fixed every form submission being rejected with "Unexpected Server Error" when Headplane runs behind a reverse proxy that rewrites the `Host` header. React Router treats the mismatch between `Origin` and `Host` as a cross-site request and refuses the action; Headplane now also accepts the hosts named in `server.base_url` and the new `server.allowed_action_origins` option. The server log now says so explicitly, which is described in the new "Saving gives Unexpected Server Error" section of the documentation.
+
+---
 
 # 0.8.3 (October 4, 2026)
 
