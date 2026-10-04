@@ -1,5 +1,17 @@
 # Headplane
 
+> [!TIP]
+> **🇨🇳 中文用户请看：本仓库已内置中英文界面切换**
+>
+> 本仓库在原版 Headplane 基础上**新增了完整的界面多语言支持**，可在 **English / 简体中文 / 繁體中文** 之间一键切换，**无需任何配置**。
+>
+> - **在哪里切换**：登录后点击右上角**头像菜单**里的语言项；未登录时点击**登录页右上角的地球按钮**。
+> - **切换后全站生效**：选择保存在 `locale` cookie 中并由服务端渲染，所以页头、表格、对话框、**登录页、404 与权限错误提示**都会变成中文；时间格式也会跟随所选语言。
+> - **首次访问自动匹配**：读取浏览器的 `Accept-Language`，`zh-TW / zh-HK` 等自动使用繁体，其余中文使用简体，匹配不到时使用英文。
+> - **想参与翻译**：词条位于 `app/i18n/locales`，术语表与新增语言的完整步骤见 [多语言文档](./docs/features/languages.md)。
+>
+> 详细说明见下方 [Languages](#languages) 章节（English）。
+
 > A feature-complete web UI for [Headscale](https://headscale.net)
 
 <picture>
