@@ -14,20 +14,11 @@
 
 > A feature-complete web UI for [Headscale](https://headscale.net)
 
-<picture>
-    <source
-        media="(prefers-color-scheme: dark)"
-        srcset="./docs/assets/preview-dark.png"
-    >
-    <source
-        media="(prefers-color-scheme: light)"
-        srcset="./docs/assets/preview-light.png"
-    >
-    <img
-        alt="Preview"
-        src="./docs/assets/preview-dark.png"
-    >
-</picture>
+<img
+alt="Machine management in Headplane, shown in Simplified Chinese"
+src="./docs/assets/1.png"
+
+>
 
 Headscale is the de-facto self-hosted version of Tailscale, a popular Wireguard
 based VPN service. By default, it does not ship with a web UI, which is where
@@ -90,34 +81,16 @@ refer to the [contributor guidelines](./docs/CONTRIBUTING.md) for more info.
 
 ---
 
-<picture>
-    <source
-        media="(prefers-color-scheme: dark)"
-        srcset="./docs/assets/acls-dark.png"
-    >
-    <source
-        media="(prefers-color-scheme: light)"
-        srcset="./docs/assets/acls-light.png"
-    >
-    <img
-        alt="ACLs"
-        src="./docs/assets/acls-dark.png"
-    >
-</picture>
+<img
+alt="Access control editor with the language and theme switcher open"
+src="./docs/assets/2.png"
 
-<picture>
-    <source
-        media="(prefers-color-scheme: dark)"
-        srcset="./docs/assets/machine-dark.png"
-    >
-    <source
-        media="(prefers-color-scheme: light)"
-        srcset="./docs/assets/machine-light.png"
-    >
-    <img
-        alt="Machine Management"
-        src="./docs/assets/machine-dark.png"
-    >
-</picture>
+>
+
+<img
+alt="Machine details, subnet routes and Tailscale addresses"
+src="./docs/assets/3.png"
+
+>
 
 > Copyright (c) 2025 Aarnav Tale
