@@ -902,6 +902,8 @@ const en = {
     },
   },
   errors: {
+    policyNotWritable:
+      "Headscale is reading its ACL policy from a file, so the policy cannot be saved through the API. Ask your administrator to run Headscale with the `database` policy mode, or edit the policy file directly.",
     generic: {
       requestFailed: "There was an error processing your request.",
       statusCode: "Status Code",

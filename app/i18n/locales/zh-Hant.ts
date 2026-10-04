@@ -848,6 +848,8 @@ const zhHant = {
     },
   },
   errors: {
+    policyNotWritable:
+      "Headscale 目前以檔案模式（policy.mode: file）讀取 ACL 策略，因此無法透過 API 儲存。請讓管理員把 Headscale 改為 database 策略模式，或直接編輯策略檔案。",
     generic: {
       requestFailed: "處理你的請求時發生錯誤。",
       statusCode: "狀態碼",

@@ -1,4 +1,4 @@
-﻿import { data } from "react-router";
+import { data } from "react-router";
 
 import { authContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
@@ -47,7 +47,7 @@ export async function aclAction({ request, context }: Route.ActionArgs) {
       const rawData = error.data.rawData;
       // https://github.com/juanfont/headscale/blob/c4600346f9c29b514dc9725ac103efb9d0381f23/hscontrol/types/policy.go#L11
       if (rawData.includes("update is disabled")) {
-        throw data("Policy is not writable", { status: 403 });
+        throw data({ localized: { key: "errors.policyNotWritable" } }, { status: 403 });
       }
 
       const message =

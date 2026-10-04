@@ -848,6 +848,8 @@ const zhHans = {
     },
   },
   errors: {
+    policyNotWritable:
+      "Headscale 当前以文件模式（policy.mode: file）读取 ACL 策略，因此无法通过 API 保存。请让管理员把 Headscale 改为 database 策略模式，或直接编辑策略文件。",
     generic: {
       requestFailed: "处理你的请求时发生错误。",
       statusCode: "状态码",
