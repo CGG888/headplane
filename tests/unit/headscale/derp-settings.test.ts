@@ -3,6 +3,9 @@ import { describe, expect, test } from "vitest";
 import {
   DERP_REGION_ID_MAX,
   DERP_REGION_ID_MIN,
+  classifyDerpRelaySource,
+  isDerpIpv4Address,
+  isDerpIpv6Address,
   isDerpRegionId,
   isHttpUrl,
   parseDerpRegionId,
@@ -80,6 +83,52 @@ describe("DERP map URLs", () => {
     expect(isHttpUrl("ftp://derp.internal/map.yaml")).toBe(false);
     expect(isHttpUrl("/etc/headscale/derp.yaml")).toBe(false);
     expect(isHttpUrl("")).toBe(false);
+  });
+});
+
+describe("embedded server public addresses", () => {
+  test("accepts bare IPv4 literals and treats empty as unset", () => {
+    expect(isDerpIpv4Address("198.51.100.1")).toBe(true);
+    expect(isDerpIpv4Address(" 0.0.0.0 ")).toBe(true);
+    expect(isDerpIpv4Address("")).toBe(true);
+    expect(isDerpIpv4Address("   ")).toBe(true);
+    expect(isDerpIpv4Address("1.2.3.4/24")).toBe(false);
+    expect(isDerpIpv4Address("1.2.3.4:80")).toBe(false);
+    expect(isDerpIpv4Address("1.2.3")).toBe(false);
+    expect(isDerpIpv4Address("999.1.1.1")).toBe(false);
+    expect(isDerpIpv4Address("2001:db8::1")).toBe(false);
+  });
+
+  test("accepts bare IPv6 literals and treats empty as unset", () => {
+    expect(isDerpIpv6Address("2001:db8::1")).toBe(true);
+    expect(isDerpIpv6Address("::")).toBe(true);
+    expect(isDerpIpv6Address("::ffff:198.51.100.1")).toBe(true);
+    expect(isDerpIpv6Address("")).toBe(true);
+    expect(isDerpIpv6Address("2001:db8::1/64")).toBe(false);
+    expect(isDerpIpv6Address("[2001:db8::1]:443")).toBe(false);
+    expect(isDerpIpv6Address("derp.example.com")).toBe(false);
+    expect(isDerpIpv6Address("198.51.100.1")).toBe(false);
+  });
+});
+
+describe("DERP relay source", () => {
+  const publicMap = "https://controlplane.tailscale.com/derpmap/default";
+
+  test("classifies every combination of embedded server and map URLs", () => {
+    expect(classifyDerpRelaySource({ serverEnabled: true, urls: [] })).toBe("embedded-only");
+    expect(classifyDerpRelaySource({ serverEnabled: true, urls: [publicMap] })).toBe(
+      "embedded-and-map",
+    );
+    expect(classifyDerpRelaySource({ serverEnabled: false, urls: [publicMap] })).toBe("map-only");
+    expect(classifyDerpRelaySource({ serverEnabled: false, urls: [] })).toBe("none");
+  });
+
+  test("counts any map URL, not just the public one", () => {
+    const internalMap = "http://derp.internal/map.yaml";
+    expect(classifyDerpRelaySource({ serverEnabled: true, urls: [publicMap, internalMap] })).toBe(
+      "embedded-and-map",
+    );
+    expect(classifyDerpRelaySource({ serverEnabled: false, urls: [internalMap] })).toBe("map-only");
   });
 });
 

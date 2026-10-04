@@ -4,6 +4,7 @@ import { data, useFetcher } from "react-router";
 import Button from "~/components/button";
 import Chip from "~/components/chip";
 import Code from "~/components/code";
+import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
@@ -148,6 +149,35 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { reachable, integration } = loaderData;
   const isReload = integration?.action === "reload";
 
+  /** The one-line "what is set right now" text of a check list row. */
+  const summarize = (checks: readonly CheckRow[]) => {
+    const counts = { pass: 0, warning: 0, fail: 0 };
+    for (const check of checks) {
+      counts[check.status] += 1;
+    }
+
+    return t("settings.system.summaryChecks", {
+      total: checks.length,
+      pass: counts.pass,
+      warning: counts.warning,
+      fail: counts.fail,
+    });
+  };
+
+  // A failure is the one thing an operator has to see without opening anything.
+  // The reachable check is left out because the notice above already says it.
+  const failed = [...loaderData.diagnostics, ...loaderData.configChecks].filter(
+    (check) => check.status === "fail" && check.id !== "reachable",
+  );
+
+  const processSummary = !integration
+    ? t("settings.system.summaryProcessNone")
+    : !loaderData.canProcess
+      ? t("settings.system.processRestrictedTitle")
+      : `${integration.name} · ${
+          isReload ? t("settings.system.processReload") : t("settings.system.processRestart")
+        }`;
+
   return (
     <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
       <div className="flex w-full flex-col sm:w-2/3">
@@ -161,113 +191,159 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <p>{t("settings.system.body")}</p>
       </div>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.system.statusTitle")}</h2>
-        <div className="mt-3 flex items-center gap-3">
-          <StatusCircle className="h-5 w-5" isOnline={reachable} />
-          <span className="text-lg font-medium">
-            {reachable ? t("settings.system.statusHealthy") : t("settings.system.statusUnhealthy")}
-          </span>
-        </div>
-        {!reachable ? (
-          <p className="mt-2 text-sm">{t("settings.system.statusUnhealthyBody")}</p>
-        ) : undefined}
+      {!reachable ? (
+        <Notice
+          icon={<CircleX className="text-red-500" />}
+          title={t("settings.system.statusUnhealthy")}
+          variant="error"
+        >
+          {t("settings.system.statusUnhealthyBody")}
+        </Notice>
+      ) : undefined}
 
-        <p className="text-md mt-4 flex items-center gap-2">
-          <span className="font-medium">{t("settings.system.versionLabel")}:</span>
-          <Code>{loaderData.version}</Code>
-          {loaderData.updateAvailable ? (
-            <Chip
-              className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
-              text={t("settings.system.updateBadge")}
-            />
-          ) : undefined}
-        </p>
-        {loaderData.updateAvailable && loaderData.latestVersion ? (
-          <p className="mt-1 text-sm opacity-70">
-            {t("settings.system.updateBody", {
-              latest: loaderData.latestVersion,
-              current: loaderData.version,
-            })}
-          </p>
-        ) : undefined}
-      </section>
+      {failed.length > 0 ? (
+        <Notice
+          title={t("settings.system.checksFailedTitle", { count: failed.length })}
+          variant="error"
+        >
+          <ul className="flex list-disc flex-col gap-1 pl-5">
+            {failed.map((check) => (
+              <li key={check.id}>{t(check.titleKey)}</li>
+            ))}
+          </ul>
+        </Notice>
+      ) : undefined}
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.system.processTitle")}</h2>
-        <p className="my-2">{t("settings.system.processBody")}</p>
-
-        {integration ? (
-          <p className="mt-2 text-sm opacity-70">
-            {isReload
-              ? t("settings.system.processSemanticsReload", { name: integration.name })
-              : t("settings.system.processSemanticsRestart", { name: integration.name })}
-          </p>
-        ) : (
-          <Notice
-            icon={<CircleX className="text-mist-400" />}
-            title={t("settings.system.processUnavailableTitle")}
+      <div className="w-full sm:w-2/3">
+        <SettingsSectionList>
+          <SettingsSection
+            badge={
+              loaderData.updateAvailable ? (
+                <Chip
+                  className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
+                  text={t("settings.system.updateBadge")}
+                />
+              ) : undefined
+            }
+            summary={
+              reachable
+                ? t("settings.system.summaryHealthy", { version: loaderData.version })
+                : t("settings.system.statusUnhealthy")
+            }
+            title={t("settings.system.statusTitle")}
           >
-            {tr("settings.system.processUnavailableBody", {
-              link: (
-                <Link external styled to="https://headplane.net/features/system-status">
-                  {t("settings.system.processUnavailableLink")}
-                </Link>
-              ),
-            })}
-          </Notice>
-        )}
+            <div className="flex items-center gap-3">
+              <StatusCircle className="h-5 w-5" isOnline={reachable} />
+              <span className="text-lg font-medium">
+                {reachable
+                  ? t("settings.system.statusHealthy")
+                  : t("settings.system.statusUnhealthy")}
+              </span>
+            </div>
+            {!reachable ? (
+              <p className="mt-2 text-sm">{t("settings.system.statusUnhealthyBody")}</p>
+            ) : undefined}
 
-        <fetcher.Form className="mt-4 flex items-center gap-3" method="post">
-          <input name="action_id" type="hidden" value="process_config_change" />
-          <Button
-            disabled={isBusy || !integration || !loaderData.canProcess}
-            type="submit"
-            variant={isReload ? "heavy" : "danger"}
+            <p className="text-md mt-4 flex items-center gap-2">
+              <span className="font-medium">{t("settings.system.versionLabel")}:</span>
+              <Code>{loaderData.version}</Code>
+            </p>
+            {loaderData.updateAvailable && loaderData.latestVersion ? (
+              <p className="mt-1 text-sm opacity-70">
+                {t("settings.system.updateBody", {
+                  latest: loaderData.latestVersion,
+                  current: loaderData.version,
+                })}
+              </p>
+            ) : undefined}
+          </SettingsSection>
+
+          <SettingsSection
+            description={t("settings.system.processBody")}
+            summary={processSummary}
+            title={t("settings.system.processTitle")}
           >
-            {isBusy
-              ? t("settings.system.processPending")
-              : isReload
-                ? t("settings.system.processReload")
-                : t("settings.system.processRestart")}
-          </Button>
-          {succeeded ? (
-            <span className="text-sm text-emerald-600 dark:text-emerald-400">
-              {t("settings.system.processSuccess")}
-            </span>
-          ) : undefined}
-        </fetcher.Form>
+            {integration ? (
+              <p className="text-sm opacity-70">
+                {isReload
+                  ? t("settings.system.processSemanticsReload", { name: integration.name })
+                  : t("settings.system.processSemanticsRestart", { name: integration.name })}
+              </p>
+            ) : (
+              <Notice
+                icon={<CircleX className="text-mist-400" />}
+                title={t("settings.system.processUnavailableTitle")}
+              >
+                {tr("settings.system.processUnavailableBody", {
+                  link: (
+                    <Link external styled to="https://headplane.net/features/system-status">
+                      {t("settings.system.processUnavailableLink")}
+                    </Link>
+                  ),
+                })}
+              </Notice>
+            )}
 
-        {!loaderData.canProcess ? (
-          <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
-            {t("errors.permission.modifyIam")}
-          </Notice>
-        ) : undefined}
+            <fetcher.Form className="mt-4 flex items-center gap-3" method="post">
+              <input name="action_id" type="hidden" value="process_config_change" />
+              <Button
+                disabled={isBusy || !integration || !loaderData.canProcess}
+                type="submit"
+                variant={isReload ? "heavy" : "danger"}
+              >
+                {isBusy
+                  ? t("settings.system.processPending")
+                  : isReload
+                    ? t("settings.system.processReload")
+                    : t("settings.system.processRestart")}
+              </Button>
+              {succeeded ? (
+                <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                  {t("settings.system.processSuccess")}
+                </span>
+              ) : undefined}
+            </fetcher.Form>
 
-        {error ? (
-          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-            {error}
-          </p>
-        ) : undefined}
-      </section>
+            {!loaderData.canProcess ? (
+              <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
+                {t("errors.permission.modifyIam")}
+              </Notice>
+            ) : undefined}
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.system.checksTitle")}</h2>
-        <p className="my-2">{t("settings.system.checksBody")}</p>
+            {error ? (
+              <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </p>
+            ) : undefined}
+          </SettingsSection>
 
-        <CheckList checks={loaderData.diagnostics} />
-      </section>
+          <SettingsSection
+            description={t("settings.system.checksBody")}
+            size="wide"
+            summary={summarize(loaderData.diagnostics)}
+            title={t("settings.system.checksTitle")}
+          >
+            <CheckList checks={loaderData.diagnostics} />
+          </SettingsSection>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.system.configChecks.title")}</h2>
-        <p className="my-2">{t("settings.system.configChecks.body")}</p>
-
-        {loaderData.configChecks.length > 0 ? (
-          <CheckList checks={loaderData.configChecks} />
-        ) : (
-          <p className="mt-4 text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
-        )}
-      </section>
+          <SettingsSection
+            description={t("settings.system.configChecks.body")}
+            size="wide"
+            summary={
+              loaderData.configChecks.length > 0
+                ? summarize(loaderData.configChecks)
+                : t("settings.system.summaryChecksUnavailable")
+            }
+            title={t("settings.system.configChecks.title")}
+          >
+            {loaderData.configChecks.length > 0 ? (
+              <CheckList checks={loaderData.configChecks} />
+            ) : (
+              <p className="text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
+            )}
+          </SettingsSection>
+        </SettingsSectionList>
+      </div>
     </div>
   );
 }
@@ -280,7 +356,7 @@ function CheckList({ checks }: { checks: readonly CheckRow[] }) {
   const { t } = useI18n();
 
   return (
-    <ul className="mt-4 flex flex-col gap-3">
+    <ul className="flex flex-col gap-3">
       {checks.map((diagnostic) => (
         <li
           className="rounded-lg border border-mist-200 p-4 dark:border-mist-700"

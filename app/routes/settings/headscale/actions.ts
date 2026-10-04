@@ -26,6 +26,8 @@ import {
 import {
   defaultDerpPrivateKeyPath,
   isAbsoluteFilePath,
+  isDerpIpv4Address,
+  isDerpIpv6Address,
   isDerpStunAddress,
   isHttpUrl,
   parseDerpRegionId,
@@ -357,6 +359,19 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("missingDerpStunAddr");
       }
 
+      // Both public addresses are optional. An empty field clears a previously
+      // configured value by deleting the key, so Headscale falls back to the
+      // address it derives itself instead of advertising an empty string.
+      const ipv4 = readField(formData, "derp_server_ipv4");
+      if (!isDerpIpv4Address(ipv4)) {
+        return failure("invalidDerpIpv4");
+      }
+
+      const ipv6 = readField(formData, "derp_server_ipv6");
+      if (!isDerpIpv6Address(ipv6)) {
+        return failure("invalidDerpIpv6");
+      }
+
       const { paths } = headscaleConfig.getDERPSettings();
       if (enabled && !automaticallyAdd && paths.length === 0) {
         return failure("derpPathsRequired");
@@ -368,6 +383,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         { path: "derp.server.region_code", value: regionCode },
         { path: "derp.server.region_name", value: regionName },
         { path: "derp.server.stun_listen_addr", value: stunListenAddr },
+        { path: "derp.server.ipv4", value: ipv4.length > 0 ? ipv4 : null },
+        { path: "derp.server.ipv6", value: ipv6.length > 0 ? ipv6 : null },
         { path: "derp.server.verify_clients", value: verifyClients },
         {
           path: "derp.server.automatically_add_embedded_derp_region",
@@ -410,6 +427,18 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("invalidDerpPrivateKeyPath");
       }
 
+      // The public addresses are optional here too; the dialog prefills them
+      // from the current configuration, and clearing one deletes the key.
+      const ipv4 = readField(formData, "derp_server_ipv4");
+      if (!isDerpIpv4Address(ipv4)) {
+        return failure("invalidDerpIpv4");
+      }
+
+      const ipv6 = readField(formData, "derp_server_ipv6");
+      if (!isDerpIpv6Address(ipv6)) {
+        return failure("invalidDerpIpv6");
+      }
+
       // Enabling the server with `automatically_add_embedded_derp_region` off
       // requires a DERP map path, exactly like the manual save does.
       const { paths, server } = headscaleConfig.getDERPSettings();
@@ -417,14 +446,25 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpPathsRequired");
       }
 
-      await headscaleConfig.patch([
+      const patches: { path: string; value: unknown }[] = [
         { path: "derp.server.enabled", value: true },
         { path: "derp.server.region_id", value: regionId },
         { path: "derp.server.region_code", value: regionCode },
         { path: "derp.server.region_name", value: regionName },
         { path: "derp.server.stun_listen_addr", value: stunListenAddr },
+        { path: "derp.server.ipv4", value: ipv4.length > 0 ? ipv4 : null },
+        { path: "derp.server.ipv6", value: ipv6.length > 0 ? ipv6 : null },
         { path: "derp.server.private_key_path", value: privateKeyPath },
-      ]);
+      ];
+
+      // Optional: the operator asked for the embedded server to be the only
+      // relay, so every map URL is dropped in this same save. Unticked (or a
+      // request without the field) leaves derp.urls exactly as it is.
+      if (readBooleanField(formData, "derp_clear_public_map") === true) {
+        patches.push({ path: "derp.urls", value: [] });
+      }
+
+      await headscaleConfig.patch(patches);
       await integration?.onConfigChange(headscale);
       return success();
     }

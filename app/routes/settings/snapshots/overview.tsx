@@ -2,6 +2,7 @@ import { Camera } from "lucide-react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
+import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
@@ -34,11 +35,6 @@ export const action = snapshotsAction;
 
 export default function Page({ loaderData: { entries, root } }: Route.ComponentProps) {
   const { t } = useI18n();
-  const fetcher = useFetcher<SnapshotActionResult>();
-  const isBusy = fetcher.state !== "idle";
-  const result = fetcher.data;
-  const error = result && !result.success ? t(SNAPSHOT_ERROR_KEYS[result.errorCode]) : undefined;
-  const succeeded = !isBusy && result?.success === true && result.snapshotId !== undefined;
 
   return (
     <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
@@ -57,27 +53,9 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
         {t("settings.snapshots.destructiveBody")}
       </Notice>
 
-      <section className="flex w-full flex-col gap-2 sm:w-2/3">
-        <h2 className="text-lg font-medium">{t("settings.snapshots.takeTitle")}</h2>
-        <p className="text-sm opacity-80">{t("settings.snapshots.takeBody")}</p>
-        <fetcher.Form method="post">
-          <input name="action_id" type="hidden" value="take_snapshot" />
-          <Button disabled={isBusy} type="submit" variant="heavy">
-            {isBusy ? t("settings.snapshots.takePending") : t("settings.snapshots.take")}
-          </Button>
-        </fetcher.Form>
-        {succeeded ? (
-          <span className="text-sm text-emerald-600 dark:text-emerald-400">
-            {t("settings.snapshots.takeSuccess")}
-          </span>
-        ) : undefined}
-        {error ? (
-          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-            {error}
-          </p>
-        ) : undefined}
-        <p className="text-xs opacity-60">{t("settings.snapshots.storedAt", { path: root })}</p>
-      </section>
+      <SettingsSectionList>
+        <TakeSnapshotSection root={root} />
+      </SettingsSectionList>
 
       <TableList>
         {entries.length === 0 ? (
@@ -94,6 +72,42 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
         )}
       </TableList>
     </div>
+  );
+}
+
+/** Taking a snapshot is rare, so its form lives in the row's drawer. */
+function TakeSnapshotSection({ root }: { root: string }) {
+  const { t } = useI18n();
+  const fetcher = useFetcher<SnapshotActionResult>();
+  const isBusy = fetcher.state !== "idle";
+  const result = fetcher.data;
+  const error = result && !result.success ? t(SNAPSHOT_ERROR_KEYS[result.errorCode]) : undefined;
+  const succeeded = !isBusy && result?.success === true && result.snapshotId !== undefined;
+
+  return (
+    <SettingsSection
+      description={t("settings.snapshots.takeBody")}
+      summary={t("settings.snapshots.storedAt", { path: root })}
+      title={t("settings.snapshots.takeTitle")}
+    >
+      <fetcher.Form className="flex flex-col gap-3" method="post">
+        <input name="action_id" type="hidden" value="take_snapshot" />
+        <Button disabled={isBusy} type="submit" variant="heavy">
+          {isBusy ? t("settings.snapshots.takePending") : t("settings.snapshots.take")}
+        </Button>
+        {succeeded ? (
+          <span className="text-sm text-emerald-600 dark:text-emerald-400">
+            {t("settings.snapshots.takeSuccess")}
+          </span>
+        ) : undefined}
+        {error ? (
+          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </p>
+        ) : undefined}
+        <p className="text-xs opacity-60">{t("settings.snapshots.storedAt", { path: root })}</p>
+      </fetcher.Form>
+    </SettingsSection>
   );
 }
 

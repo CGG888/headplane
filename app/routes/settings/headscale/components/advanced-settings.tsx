@@ -137,10 +137,10 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
   }
 
   return (
-    <>
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.advancedNodeTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.advancedNodeBody")}</p>
+    <div className="flex w-full flex-col gap-8">
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.advancedNodeTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.advancedNodeBody")}</p>
 
         <nodeFetcher.Form className="flex flex-col gap-5" method="post">
           <input name="action_id" type="hidden" value="save_node_settings" />
@@ -179,9 +179,9 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
         </nodeFetcher.Form>
       </section>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.advancedLogTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.advancedLogBody")}</p>
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.advancedLogTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.advancedLogBody")}</p>
 
         <logFetcher.Form className="flex flex-col gap-5" method="post">
           <input name="action_id" type="hidden" value="save_log_settings" />
@@ -223,11 +223,11 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
         </logFetcher.Form>
       </section>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">
-          {t("settings.headscale.advancedFeaturesTitle")}
-        </h2>
-        <p className="my-2">{t("settings.headscale.advancedFeaturesBody")}</p>
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.advancedFeaturesTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">
+          {t("settings.headscale.advancedFeaturesBody")}
+        </p>
 
         <featureFetcher.Form className="flex flex-col gap-5" method="post">
           <input name="action_id" type="hidden" value="save_feature_settings" />
@@ -277,6 +277,6 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
           />
         </featureFetcher.Form>
       </section>
-    </>
+    </div>
   );
 }

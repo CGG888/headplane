@@ -5,6 +5,7 @@
  */
 
 import { parseGoDurationSeconds } from "./advanced-settings";
+import { parseIpv4, parseIpv6 } from "./trusted-proxies";
 
 /**
  * Headscale reserves the 900-999 range for embedded DERP regions so an embedded
@@ -84,6 +85,58 @@ export function isDerpStunAddress(value: string): boolean {
 /** POSIX (`/x`), Windows drive (`C:\x`) and UNC (`\\host\share`) paths. */
 export function isAbsoluteFilePath(value: string): boolean {
   return /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(value.trim());
+}
+
+/**
+ * `derp.server.ipv4` is a bare IPv4 literal Headscale hands to clients as the
+ * region's public address; a CIDR or a `host:port` pair is not accepted. An
+ * empty value is allowed and means "unset", which is how the form clears a
+ * previously configured address.
+ */
+export function isDerpIpv4Address(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length === 0 || parseIpv4(trimmed) !== undefined;
+}
+
+/**
+ * `derp.server.ipv6` takes the same bare-literal form as the IPv4 field, only
+ * for the other family; an IPv4 address or anything carrying a prefix length
+ * or port is rejected. An empty value means "unset".
+ */
+export function isDerpIpv6Address(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length === 0 || parseIpv6(trimmed) !== undefined;
+}
+
+/**
+ * Where the DERP relays Headscale hands to its clients come from. Classified
+ * from `derp.server.enabled` and `derp.urls`, the two settings that decide
+ * whether the embedded server is turned on and whether a remote map is merged
+ * into it. Local map files (`derp.paths`) describe regions themselves and are
+ * listed separately in the DERP settings drawer.
+ */
+export type DerpRelaySource = "embedded-only" | "embedded-and-map" | "map-only" | "none";
+
+export interface DerpRelaySourceInput {
+  /** `derp.server.enabled`. */
+  serverEnabled: boolean;
+  /** `derp.urls`: the remote DERP map sources clients are handed. */
+  urls: readonly string[];
+}
+
+/**
+ * A missing `derp.urls` and an explicitly empty `[ ]` mean the same thing:
+ * nothing but the embedded server is handed to clients.
+ */
+export function classifyDerpRelaySource({
+  serverEnabled,
+  urls,
+}: DerpRelaySourceInput): DerpRelaySource {
+  if (serverEnabled) {
+    return urls.length > 0 ? "embedded-and-map" : "embedded-only";
+  }
+
+  return urls.length > 0 ? "map-only" : "none";
 }
 
 /** The file Headscale's `config-example.yaml` documents for the region key. */

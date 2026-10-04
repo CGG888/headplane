@@ -51,9 +51,9 @@ export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }
   const fallback = t("settings.headscale.derp.unknown");
 
   return (
-    <section className="w-full sm:w-2/3">
-      <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.statusTitle")}</h2>
-      <p className="my-2">{t("settings.headscale.derp.statusBody")}</p>
+    <section className="flex w-full flex-col">
+      <h3 className="text-lg font-medium">{t("settings.headscale.derp.statusTitle")}</h3>
+      <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.statusBody")}</p>
 
       {!agentEnabled ? (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">

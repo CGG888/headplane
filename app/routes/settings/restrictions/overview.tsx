@@ -1,5 +1,6 @@
-﻿import { data } from "react-router";
+import { data } from "react-router";
 
+import { SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import { useI18n } from "~/i18n/provider";
@@ -11,7 +12,7 @@ import { restrictionAction } from "./actions";
 import AddDomain from "./dialogs/add-domain";
 import AddGroup from "./dialogs/add-group";
 import AddUser from "./dialogs/add-user";
-import RestrictionTable from "./table";
+import RestrictionSection from "./table";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -81,15 +82,31 @@ export default function Page({ loaderData: { access, writable, settings } }: Rou
           })}
         </p>
       </div>
-      <RestrictionTable isDisabled={isDisabled} type="domain" values={settings.domains}>
-        <AddDomain domains={settings.domains} isDisabled={isDisabled} />
-      </RestrictionTable>
-      <RestrictionTable isDisabled={isDisabled} type="group" values={settings.groups}>
-        <AddGroup groups={settings.groups} isDisabled={isDisabled} />
-      </RestrictionTable>
-      <RestrictionTable isDisabled={isDisabled} type="user" values={settings.users}>
-        <AddUser isDisabled={isDisabled} users={settings.users} />
-      </RestrictionTable>
+      <div className="w-full sm:w-2/3">
+        <SettingsSectionList>
+          <RestrictionSection isDisabled={isDisabled} type="domain" values={settings.domains}>
+            <AddDomain
+              domains={settings.domains}
+              isDisabled={isDisabled}
+              key={settings.domains.join("\n")}
+            />
+          </RestrictionSection>
+          <RestrictionSection isDisabled={isDisabled} type="group" values={settings.groups}>
+            <AddGroup
+              groups={settings.groups}
+              isDisabled={isDisabled}
+              key={settings.groups.join("\n")}
+            />
+          </RestrictionSection>
+          <RestrictionSection isDisabled={isDisabled} type="user" values={settings.users}>
+            <AddUser
+              isDisabled={isDisabled}
+              key={settings.users.join("\n")}
+              users={settings.users}
+            />
+          </RestrictionSection>
+        </SettingsSectionList>
+      </div>
     </div>
   );
 }

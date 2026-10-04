@@ -882,6 +882,11 @@ const zhHant = {
       checkStatusWarning: "警告",
       checkStatusFail: "失敗",
       reviewSettings: "查看 Headscale 設定",
+      summaryHealthy: "運作正常，版本 {version}",
+      summaryChecks: "{total} 項檢查：{pass} 項通過、{warning} 項警告、{fail} 項失敗",
+      summaryChecksUnavailable: "設定檔無法讀取",
+      summaryProcessNone: "未設定整合",
+      checksFailedTitle: "失敗的檢查：{count}",
       processTitle: "程序控制",
       processBody: "Headplane 可以透過已設定的整合來重新載入或重新啟動 Headscale。",
       processReload: "重新載入設定",
@@ -1116,7 +1121,16 @@ const zhHant = {
       checkUpdatesDescription:
         "讓 Headscale 在啟動時尋找新版本。它對應 Headscale 的反向設定項 disable_check_updates，該項預設為 false，因此這個開關預設為開啟。",
       saveFeatureSettings: "儲存功能設定",
+      advancedTitle: "節點生命週期、日誌與開關",
+      advancedBody: "Headscale 如何處理節點的時間行為，以及日誌輸出與網路層功能開關。",
+      summaryNotConfigured: "尚未設定",
+      summaryIssuer: "Issuer：{issuer}",
+      trustedProxiesSummary: "已設定範圍：{count} 個",
+      policySummary: "模式：{mode}",
+      advancedSummary: "節點到期 {expiry} · 日誌層級 {level}",
       derp: {
+        title: "DERP",
+        body: "Headscale 從哪裡取得下發給用戶端的 DERP 中繼地圖、多久重新整理一次，以及是否自行執行內嵌 DERP 伺服器。下方列出各機器的中繼使用情況。",
         statusTitle: "DERP 中繼",
         statusBody:
           "每台機器透過 Headscale 的 DERP 中繼連線的位置。即時中繼資料來自 Headplane Agent。",
@@ -1169,6 +1183,12 @@ const zhHant = {
         stunListenAddrLabel: "STUN 監聽位址",
         stunListenAddrDescription:
           "用於 NAT 穿透、回應 STUN 要求的 UDP 位址，例如 0.0.0.0:3478。啟用內嵌伺服器時 Headscale 要求填寫。",
+        ipv4Label: "公網 IPv4 位址",
+        ipv4Description:
+          "Headscale 為此中繼公布的公網 IPv4 位址，例如 198.51.100.1。設定後可提升連線穩定性。只能填寫裸位址，不要包含 CIDR 或連接埠；留空表示取消 derp.server.ipv4。",
+        ipv6Label: "公網 IPv6 位址",
+        ipv6Description:
+          "Headscale 為此中繼公布的公網 IPv6 位址，例如 2001:db8::1。設定後可提升連線穩定性。只能填寫裸位址，不要包含 CIDR 或連接埠；留空表示取消 derp.server.ipv6。",
         verifyClientsLabel: "驗證用戶端",
         verifyClientsDescription:
           "只允許在此 Headscale 註冊的用戶端使用內嵌中繼。Headscale 的預設值為 true。",
@@ -1178,7 +1198,7 @@ const zhHant = {
         keyConfigured: "已為內嵌伺服器設定私密金鑰路徑。",
         keyMissing: "還沒有為內嵌伺服器設定 derp.server.private_key_path。",
         serverKeyWarning:
-          "內嵌 DERP 伺服器需要 derp.server.private_key_path 指向的私密金鑰檔案。Headscale 會在可以時自動產生該金鑰，因此目錄必須可寫入，已存在的檔案也必須可被 Headscale 讀取。",
+          "Headplane 只儲存 derp.server.private_key_path 中的路徑，私密金鑰檔案本身不需要事先存在。Headscale 啟動時會在該路徑產生金鑰，因此目錄必須對 Headscale 可寫入，已存在的檔案也必須可被其讀取。",
         saveServer: "儲存內嵌伺服器設定",
         presetButton: "一鍵設定內嵌伺服器",
         presetTitle: "啟用內嵌 DERP 伺服器",
@@ -1188,11 +1208,13 @@ const zhHant = {
           "啟用內嵌伺服器會向所有用戶端發布一個新的 DERP 區域，並要求下列連接埠可達。你已設定的區域代碼或名稱只會被你在此確認的內容取代。",
         privateKeyPathLabel: "私密金鑰路徑",
         privateKeyPathDescription:
-          "區域簽章金鑰的絕對路徑。目錄可寫入時 Headscale 會自動產生該檔案，之後從該位置讀取。",
+          "區域簽章金鑰的絕對路徑。檔案不存在時 Headscale 會在該位置產生，因此只需目錄對 Headscale 可寫入。",
         connectivityTitle: "用戶端必須能存取的連接埠",
-        connectivityStun: "UDP 3478 用於 STUN，讓用戶端發現自己的 NAT 對應。",
+        connectivityStun: "用戶端需要 UDP 3478 用於 STUN，以便發現自己的 NAT 對應。",
         connectivityHttps:
-          "Headscale 提供控制服務的 HTTPS 連接埠，通常是 TCP 443；DERP 協定使用同一個監聽連接埠。",
+          "server_url 必須使用 https，因為內嵌中繼透過 TLS 提供 DERP。用戶端存取的是同一個監聽連接埠，通常是 TCP 443（DERP over HTTPS）。",
+        connectivityCaptivePortal:
+          "內嵌伺服器無法回應 Tailscale 在 TCP 80 上的強制入口網站檢查，該檢查需要由其他服務提供。",
         connectivityNote:
           "用戶端連線的是該區域的公開位址，因此這些連接埠必須能穿過防火牆或 NAT。這也是自架區域始終無人使用的最常見原因。",
         regionNamesTitle: "區域名稱",
@@ -1209,6 +1231,17 @@ const zhHant = {
         removeRegionName: "移除",
         regionNamesDialogTitle: "新增區域名稱",
         regionNamesDialogBody: "該名稱會取代中繼表格與機器詳細頁面中的裸 ID。",
+        relaySourceLabel: "中繼來源：{source}",
+        relaySourceEmbeddedOnly: "僅內嵌伺服器",
+        relaySourceEmbeddedAndMap: "內嵌伺服器加上公開 DERP 地圖",
+        relaySourceMapOnly: "僅公開 DERP 地圖",
+        relaySourceNone: "尚未設定任何 DERP 地圖來源",
+        regionNamesSummary: "已命名的區域：{count} 個",
+        presetClearMapLabel: "同時停止載入 Tailscale 的公開 DERP 地圖",
+        presetClearMapDescription:
+          "在同一次儲存中清空 derp.urls，用戶端只會取得你在這裡執行的中繼。",
+        presetClearMapWarning:
+          "移除公開地圖後，內嵌伺服器會成為唯一的中繼：一旦它無法連線，用戶端之間就無法透過 DERP 互通。請確認用戶端能存取它的 TCP 443（DERP over HTTPS）與 UDP 3478（STUN）。",
       },
       errors: {
         invalidAction: "要求無效，請重新整理頁面後重試。",
@@ -1239,6 +1272,10 @@ const zhHant = {
         invalidDerpRegionCode: "內嵌伺服器需要同時填寫區域代碼與區域名稱。",
         missingDerpStunAddr: "啟用內嵌伺服器時，Headscale 要求填寫 STUN 監聽位址。",
         invalidDerpStunAddr: "請按 host:port 的格式填寫 STUN 位址，例如 0.0.0.0:3478。",
+        invalidDerpIpv4:
+          "請填寫 198.51.100.1 這樣的裸 IPv4 位址，不要包含前置長度或連接埠；留空表示取消該設定。",
+        invalidDerpIpv6:
+          "請填寫 2001:db8::1 這樣的裸 IPv6 位址，不要包含前置長度或連接埠；留空表示取消該設定。",
         invalidDerpPrivateKeyPath:
           "請填寫私密金鑰檔案的絕對路徑，例如 /var/lib/headscale/derp_server_private.key。",
         invalidDerpRegionMapId: "區域 ID 請填寫正整數。",
@@ -1262,8 +1299,7 @@ const zhHant = {
       never: "從未",
       nodesSynced: "已同步節點：",
       needsApprovalTitle: "Agent 需要核准",
-      needsApprovalBody:
-        "Agent 正在等待其 Tailnet 註冊被核准。Headplane 會嘗試自動核准；若失敗，你可以前往{link}完成核准。",
+      needsApprovalBody: "Agent 正在等待其 Tailnet 註冊被核准。開啟下方的操作即可核准。",
       thisLink: "此連結",
       syncErrorTitle: "同步錯誤",
       apiKeyRejectedTitle: "Headscale 拒絕了設定中的 API Key",
@@ -1272,12 +1308,22 @@ const zhHant = {
       apiKeysLink: "設定 → API 金鑰",
       syncing: "同步中…",
       syncNow: "立即同步",
+      actionsTitle: "Agent 操作",
+      actionsBody: "同步 Agent、核准待處理的註冊，或查看設定步驟。",
+      syncBody: "立即從 Headscale 取得最新的節點資訊。",
+      approveTitle: "註冊核准",
+      approveBody: "Headplane 會嘗試自動核准註冊。如果 Agent 仍在等待，請開啟{link}自行核准。",
+      setupTitle: "Agent 設定",
+      setupRowBody: "如何安裝 Agent 並將其連線到 Headplane。",
+      setupBody:
+        "Agent 執行在 Headscale 伺服器上，並使用 headscale.api_key 登入。設定與疑難排解請參閱{link}。",
     },
     apiKeys: {
       breadcrumb: "API 金鑰",
       title: "API 金鑰",
       body: "API 金鑰讓工具透過 Headscale API 進行驗證。完整金鑰只在建立時顯示一次。",
       create: "建立 API 金鑰",
+      createSectionBody: "為需要透過 Headscale API 存取的工具或指令碼建立金鑰。",
       createTitle: "建立 API 金鑰",
       createBody: "選擇此金鑰的有效期限。金鑰會在建立後立即顯示一次。",
       expirationLabel: "金鑰有效期限（天）",
@@ -1376,6 +1422,10 @@ const zhHant = {
       emptyGroups: "允許所有群組驗證。",
       emptyUsers: "允許所有使用者驗證。",
       remove: "移除",
+      domainsBody: "電子郵件網域在此清單中的使用者可以透過 OIDC 驗證。",
+      groupsBody: "這些群組中的成員可以透過 OIDC 驗證。",
+      usersBody: "只有這些使用者可以透過 OIDC 驗證。",
+      summaryCount: "已允許 {count} 項",
     },
     addDomain: {
       button: "新增網域",
@@ -1446,8 +1496,23 @@ const zhHant = {
         snapshotCreate: "建立快照",
         snapshotRestore: "還原快照",
       },
+      filtersTitle: "篩選條件",
+      filtersDescription: "選擇要列出的操作。",
+      summaryActor: "操作者：{actor}",
+      summaryAction: "操作：{action}",
+      entryTitle: "操作詳情",
+      entryDescription: "Headplane 為這項操作記錄的全部資訊。",
+      detailAction: "操作",
+      detailResult: "結果",
+      detailTime: "時間",
+      detailActor: "操作者",
+      detailActorType: "操作者類型",
+      detailTarget: "目標",
+      detailNote: "詳情",
+      detailMissing: "未記錄",
     },
     snapshots: {
+      summaryFiles: "檔案：{files}",
       breadcrumb: "設定快照",
       title: "設定快照",
       body: "Headplane 在修改 Headscale 設定檔（以及使用檔案模式時的原則檔）之前會先複製一份。快照可以下載，也可以隨時還原。",

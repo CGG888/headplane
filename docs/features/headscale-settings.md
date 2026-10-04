@@ -9,6 +9,10 @@ outline: [2, 3]
 **Settings → Headscale** edits the parts of Headscale's own `config.yaml` that
 Headplane can safely change for you, instead of leaving you to SSH in.
 
+Every settings page lists its groups with a one-line summary of what is set right
+now; opening a group slides its form in from the right, so nothing is buried in
+one long scroll.
+
 ::: warning Requirements
 
 - Headscale's configuration file must be mounted **read-write** into Headplane
@@ -97,14 +101,56 @@ overwrites a region code or name you already set: those are prefilled so you can
 edit them. Enabling the embedded server publishes a new region to every client,
 so the dialog says so before you commit.
 
+Two details worth knowing:
+
+- The **private key does not have to exist**: Headscale generates it when it is
+  missing, so only the directory it lives in has to be writable by Headscale.
+- `derp.server.ipv4` / `ipv6` are optional but recommended — Headscale's own
+  configuration suggests your server's public addresses for connection
+  stability, especially with exit nodes. Clearing a field removes the key again.
+
+### Making your own relay the default
+
+By default the embedded server is _added_ to Tailscale's public DERP map, so
+clients still have the public regions available and pick between them. To make
+your relay the only one, the preset also offers to clear the public map at the
+same time — it is the `derp.urls: []` setting:
+
+```yaml
+derp:
+  server:
+    enabled: true
+    region_id: 999
+    region_code: GDDG
+    region_name: "GDDG Embedded DERP"
+    stun_listen_addr: "0.0.0.0:3478"
+    private_key_path: /vol1/@appdata/headscale/derp_server_private.key
+  urls: [] # no fallback relays
+```
+
+The DERP row always states which relay source is in play: _only the embedded
+server_, _embedded plus the public map_, or _only the public map_.
+
+::: warning A single relay is a single point of failure
+With `derp.urls: []` there is nothing to fall back to, which is why Headscale's
+documentation warns about it. Verify the region works first (`tailscale debug
+derp headscale` on a client), and remember clients switch over on reconnect
+rather than instantly.
+:::
+
 ### What has to be reachable
 
 A self-hosted region is only used if clients can actually reach it:
 
 | Port                                       | Why                                                                                        |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| **UDP 3478**                               | STUN, so clients can discover each other through the relay.                                |
 | **The Headscale HTTPS port** (usually 443) | The relay protocol itself; Headscale serves it on the same listener as the control server. |
+| **UDP 3478**                               | STUN, so clients can discover each other through the relay.                                |
+
+Two more conditions from Headscale's own documentation: `server_url` must be
+**https** (the embedded relay needs TLS in place), and the embedded server cannot
+answer Tailscale's captive-portal check on **tcp/80** — that is a documented
+limitation, not a misconfiguration.
 
 Clients also have to reach the region's public address, so firewall and NAT
 rules are the usual reason a freshly enabled region never appears in use. The

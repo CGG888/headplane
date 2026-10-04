@@ -939,6 +939,11 @@ const en = {
       checkStatusWarning: "Warning",
       checkStatusFail: "Failed",
       reviewSettings: "Review Headscale settings",
+      summaryHealthy: "Healthy, running {version}",
+      summaryChecks: "{total} checks: {pass} pass, {warning} warning, {fail} fail",
+      summaryChecksUnavailable: "Configuration file not readable",
+      summaryProcessNone: "No integration configured",
+      checksFailedTitle: "Failed checks: {count}",
       processTitle: "Process Control",
       processBody:
         "Headplane can ask the configured integration to reload or restart Headscale for you.",
@@ -1198,7 +1203,17 @@ const en = {
       checkUpdatesDescription:
         "Let Headscale look for a newer release when it starts. Stored as Headscale's inverse disable_check_updates, which defaults to false, so this switch is on by default.",
       saveFeatureSettings: "Save feature settings",
+      advancedTitle: "Node lifetime, logs and switches",
+      advancedBody:
+        "How Headscale treats nodes over time, together with its log output and the tailnet-wide feature switches.",
+      summaryNotConfigured: "Not configured",
+      summaryIssuer: "Issuer: {issuer}",
+      trustedProxiesSummary: "Configured ranges: {count}",
+      policySummary: "Mode: {mode}",
+      advancedSummary: "Node expiry {expiry} · log level {level}",
       derp: {
+        title: "DERP",
+        body: "Where Headscale gets the relay map it hands to clients, how often that map is refreshed, and whether Headscale runs the embedded DERP server itself. Relay usage per machine is listed below.",
         statusTitle: "DERP Relays",
         statusBody:
           "Where each machine connects through Headscale's DERP relays. Live relay data comes from the Headplane Agent.",
@@ -1253,6 +1268,12 @@ const en = {
         stunListenAddrLabel: "STUN listen address",
         stunListenAddrDescription:
           "UDP address that answers STUN requests for NAT traversal, for example 0.0.0.0:3478. Headscale requires it when the embedded server is enabled.",
+        ipv4Label: "Public IPv4 address",
+        ipv4Description:
+          "Public IPv4 address Headscale advertises for this relay, for example 198.51.100.1. Setting it improves connection stability. Use a bare address without a CIDR or port, or leave it empty to unset derp.server.ipv4.",
+        ipv6Label: "Public IPv6 address",
+        ipv6Description:
+          "Public IPv6 address Headscale advertises for this relay, for example 2001:db8::1. Setting it improves connection stability. Use a bare address without a CIDR or port, or leave it empty to unset derp.server.ipv6.",
         verifyClientsLabel: "Verify clients",
         verifyClientsDescription:
           "Only let clients registered with this Headscale use the embedded relay. Headscale's default is true.",
@@ -1262,7 +1283,7 @@ const en = {
         keyConfigured: "A private key path is configured for the embedded server.",
         keyMissing: "No derp.server.private_key_path is configured for the embedded server.",
         serverKeyWarning:
-          "The embedded DERP server needs the private key file configured in derp.server.private_key_path. Headscale creates the key there when it can, so the directory must be writable, and an existing file must be readable by Headscale.",
+          "Headplane only stores the path in derp.server.private_key_path; the key file itself does not have to exist yet. Headscale generates it at that path when it starts, so the directory must be writable by Headscale, and an existing file must be readable by it.",
         saveServer: "Save embedded server",
         presetButton: "Set up the embedded server",
         presetTitle: "Enable the embedded DERP server",
@@ -1272,11 +1293,13 @@ const en = {
           "Enabling the embedded server publishes a new DERP region to every client and requires the ports below to be reachable. A region code or name you already set is only replaced by what you confirm here.",
         privateKeyPathLabel: "Private key path",
         privateKeyPathDescription:
-          "Absolute path of the region signing key. Headscale creates the file when the directory is writable, and reads it from there afterwards.",
+          "Absolute path of the region signing key. Headscale generates the file there when it is missing, so only the directory has to be writable by Headscale.",
         connectivityTitle: "What clients must reach",
-        connectivityStun: "UDP 3478 for STUN, so clients can discover their NAT mapping.",
+        connectivityStun: "Clients need UDP 3478 for STUN, so they can discover their NAT mapping.",
         connectivityHttps:
-          "The Headscale HTTPS port that serves the control server, usually TCP 443; the DERP protocol runs on that same listener.",
+          "server_url must use https, because the embedded relay serves DERP over TLS. Clients reach it on the same listener, usually TCP 443 (DERP over HTTPS).",
+        connectivityCaptivePortal:
+          "The embedded server cannot answer Tailscale's captive-portal check on TCP 80, so that check needs another service.",
         connectivityNote:
           "Clients connect to the region's public address, so its ports must be reachable through any firewall or NAT. That is the usual reason a self-hosted region never gets used.",
         regionNamesTitle: "Region names",
@@ -1295,6 +1318,17 @@ const en = {
         regionNamesDialogTitle: "Add a region name",
         regionNamesDialogBody:
           "The name is shown instead of the bare ID in the relay table and on the machine detail page.",
+        relaySourceLabel: "Relay source: {source}",
+        relaySourceEmbeddedOnly: "only the embedded server",
+        relaySourceEmbeddedAndMap: "the embedded server plus the public DERP map",
+        relaySourceMapOnly: "the public DERP map only",
+        relaySourceNone: "no DERP map sources are configured",
+        regionNamesSummary: "Named regions: {count}",
+        presetClearMapLabel: "Also stop loading Tailscale's public DERP map",
+        presetClearMapDescription:
+          "Clears derp.urls in the same save, so clients are handed only the relay you run here.",
+        presetClearMapWarning:
+          "Without the public map, your embedded server becomes the only relay: if it is down or unreachable, clients cannot reach each other over DERP. Make sure clients can reach it on TCP 443 (DERP over HTTPS) and UDP 3478 (STUN).",
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
@@ -1327,6 +1361,10 @@ const en = {
         missingDerpStunAddr:
           "Headscale requires a STUN listen address when the embedded server is enabled.",
         invalidDerpStunAddr: "Enter the STUN address as host:port, for example 0.0.0.0:3478.",
+        invalidDerpIpv4:
+          "Enter a bare IPv4 address such as 198.51.100.1 without a prefix length or port, or leave it empty to unset it.",
+        invalidDerpIpv6:
+          "Enter a bare IPv6 address such as 2001:db8::1 without a prefix length or port, or leave it empty to unset it.",
         invalidDerpPrivateKeyPath:
           "Enter an absolute path for the private key file, for example /var/lib/headscale/derp_server_private.key.",
         invalidDerpRegionMapId: "Enter the region ID as a positive number.",
@@ -1351,7 +1389,7 @@ const en = {
       nodesSynced: "Nodes synced: ",
       needsApprovalTitle: "Agent Needs Approval",
       needsApprovalBody:
-        "The agent is waiting for its Tailnet registration to be approved. Headplane will attempt to auto-approve it, but if that fails, you can complete approval by visiting {link}.",
+        "The agent is waiting for its Tailnet registration to be approved. Open the actions below to approve it.",
       thisLink: "this link",
       syncErrorTitle: "Sync Error",
       apiKeyRejectedTitle: "Headscale rejected the configured API key",
@@ -1360,12 +1398,24 @@ const en = {
       apiKeysLink: "Settings → API keys",
       syncing: "Syncing…",
       syncNow: "Sync Now",
+      actionsTitle: "Agent actions",
+      actionsBody: "Sync the agent, approve a pending registration, or review the setup steps.",
+      syncBody: "Fetch the latest node details from Headscale right away.",
+      approveTitle: "Registration approval",
+      approveBody:
+        "Headplane tries to approve the registration automatically. If the agent is still waiting, open {link} to approve it yourself.",
+      setupTitle: "Agent setup",
+      setupRowBody: "How to install the agent and connect it to Headplane.",
+      setupBody:
+        "The agent runs on the Headscale server and signs in with headscale.api_key. See {link} for setup and troubleshooting.",
     },
     apiKeys: {
       breadcrumb: "API Keys",
       title: "API Keys",
       body: "API keys authenticate tools against the Headscale API. A key is only shown in full once, when it is created.",
       create: "Create API key",
+      createSectionBody:
+        "Create a key for a tool or script that needs to talk to the Headscale API.",
       createTitle: "Create an API key",
       createBody:
         "Choose how long this key stays valid. The key is shown once, right after it is created.",
@@ -1470,6 +1520,11 @@ const en = {
       emptyGroups: "All groups are permitted to authenticate.",
       emptyUsers: "All users are permitted to authenticate.",
       remove: "Remove",
+      domainsBody:
+        "Users with an email on these domains are permitted to authenticate through OIDC.",
+      groupsBody: "Members of these groups are permitted to authenticate through OIDC.",
+      usersBody: "Only these users are permitted to authenticate through OIDC.",
+      summaryCount: "{count} allowed",
     },
     addDomain: {
       button: "Add domain",
@@ -1541,8 +1596,23 @@ const en = {
         snapshotCreate: "Take snapshot",
         snapshotRestore: "Restore snapshot",
       },
+      filtersTitle: "Filters",
+      filtersDescription: "Choose which operations are listed.",
+      summaryActor: "actor: {actor}",
+      summaryAction: "action: {action}",
+      entryTitle: "Operation details",
+      entryDescription: "Everything Headplane recorded for this operation.",
+      detailAction: "Action",
+      detailResult: "Result",
+      detailTime: "Time",
+      detailActor: "Actor",
+      detailActorType: "Actor type",
+      detailTarget: "Target",
+      detailNote: "Detail",
+      detailMissing: "Not recorded",
     },
     snapshots: {
+      summaryFiles: "Files: {files}",
       breadcrumb: "Configuration Snapshots",
       title: "Configuration Snapshots",
       body: "Headplane copies Headscale's configuration file, and its policy file when one is used, before it changes them. A snapshot can be downloaded or restored later.",

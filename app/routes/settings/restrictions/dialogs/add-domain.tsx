@@ -1,7 +1,7 @@
 import { type } from "arktype";
+import { Form } from "react-router";
 
 import Button from "~/components/button";
-import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -44,24 +44,25 @@ export default function AddDomain({ domains, isDisabled }: AddDomainProps) {
   const domain = (form.values.domain as string).trim();
 
   return (
-    <Dialog>
-      <Button disabled={isDisabled}>{t("settings.addDomain.button")}</Button>
-      <DialogPanel>
-        <Title>{t("settings.addDomain.title")}</Title>
-        <Text className="mb-4">{t("settings.addDomain.body")}</Text>
-        <input name="action_id" type="hidden" value="add_domain" />
-        <Input
-          {...form.field("domain")}
-          description={
-            domain.length > 0
-              ? t("settings.addDomain.descriptionWithDomain", { domain })
-              : t("settings.addDomain.description")
-          }
-          required
-          label={t("settings.addDomain.label")}
-          placeholder={t("settings.addDomain.placeholder")}
-        />
-      </DialogPanel>
-    </Dialog>
+    <Form className="flex flex-col gap-4" method="POST">
+      <Title className="text-lg font-medium">{t("settings.addDomain.title")}</Title>
+      <Text>{t("settings.addDomain.body")}</Text>
+      <input name="action_id" type="hidden" value="add_domain" />
+      <Input
+        {...form.field("domain")}
+        description={
+          domain.length > 0
+            ? t("settings.addDomain.descriptionWithDomain", { domain })
+            : t("settings.addDomain.description")
+        }
+        disabled={isDisabled}
+        required
+        label={t("settings.addDomain.label")}
+        placeholder={t("settings.addDomain.placeholder")}
+      />
+      <Button disabled={isDisabled} type="submit" variant="heavy">
+        {t("settings.addDomain.button")}
+      </Button>
+    </Form>
   );
 }

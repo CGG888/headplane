@@ -41,9 +41,7 @@ export default function PolicyModeSettings({ isDisabled, mode, path }: PolicyMod
   const saved = Boolean(fetcher.data?.success) && !isBusy;
 
   return (
-    <section className="w-full sm:w-2/3">
-      <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.policyTitle")}</h2>
-      <p className="my-2">{t("settings.headscale.policyBody")}</p>
+    <section className="flex w-full flex-col">
       <p className="text-sm">
         <span className="font-medium">{t("settings.headscale.policyPathLabel")}: </span>
         <Code>{path.length > 0 ? path : "—"}</Code>

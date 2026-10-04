@@ -32,6 +32,8 @@ export type HeadscaleSettingsErrorCode =
   | "invalidDerpRegionCode"
   | "missingDerpStunAddr"
   | "invalidDerpStunAddr"
+  | "invalidDerpIpv4"
+  | "invalidDerpIpv6"
   | "invalidDerpPrivateKeyPath"
   | "invalidDerpRegionMapId"
   | "invalidDerpRegionMapName"
@@ -66,6 +68,8 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidDerpRegionCode: "settings.headscale.errors.invalidDerpRegionCode",
   missingDerpStunAddr: "settings.headscale.errors.missingDerpStunAddr",
   invalidDerpStunAddr: "settings.headscale.errors.invalidDerpStunAddr",
+  invalidDerpIpv4: "settings.headscale.errors.invalidDerpIpv4",
+  invalidDerpIpv6: "settings.headscale.errors.invalidDerpIpv6",
   invalidDerpPrivateKeyPath: "settings.headscale.errors.invalidDerpPrivateKeyPath",
   invalidDerpRegionMapId: "settings.headscale.errors.invalidDerpRegionMapId",
   invalidDerpRegionMapName: "settings.headscale.errors.invalidDerpRegionMapName",

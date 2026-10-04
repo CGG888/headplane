@@ -73,10 +73,7 @@ export default function TrustedProxies({ isDisabled, proxies }: TrustedProxiesPr
   }
 
   return (
-    <section className="w-full sm:w-2/3">
-      <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.trustedProxiesTitle")}</h2>
-      <p className="my-2">{t("settings.headscale.trustedProxiesBody")}</p>
-
+    <section className="flex w-full flex-col">
       <TableList>
         {proxies.length === 0 ? (
           <TableList.Item className="justify-center py-4 opacity-70">

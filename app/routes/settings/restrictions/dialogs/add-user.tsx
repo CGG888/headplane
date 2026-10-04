@@ -1,7 +1,7 @@
 import { type } from "arktype";
+import { Form } from "react-router";
 
 import Button from "~/components/button";
-import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -34,20 +34,21 @@ export default function AddUser({ users, isDisabled }: AddUserProps) {
   });
 
   return (
-    <Dialog>
-      <Button disabled={isDisabled}>{t("settings.addUser.button")}</Button>
-      <DialogPanel>
-        <Title>{t("settings.addUser.title")}</Title>
-        <Text className="mb-4">{t("settings.addUser.body")}</Text>
-        <input name="action_id" type="hidden" value="add_user" />
-        <Input
-          {...form.field("user")}
-          description={t("settings.addUser.description")}
-          required
-          label={t("settings.addUser.label")}
-          placeholder={t("settings.addUser.placeholder")}
-        />
-      </DialogPanel>
-    </Dialog>
+    <Form className="flex flex-col gap-4" method="POST">
+      <Title className="text-lg font-medium">{t("settings.addUser.title")}</Title>
+      <Text>{t("settings.addUser.body")}</Text>
+      <input name="action_id" type="hidden" value="add_user" />
+      <Input
+        {...form.field("user")}
+        description={t("settings.addUser.description")}
+        disabled={isDisabled}
+        required
+        label={t("settings.addUser.label")}
+        placeholder={t("settings.addUser.placeholder")}
+      />
+      <Button disabled={isDisabled} type="submit" variant="heavy">
+        {t("settings.addUser.button")}
+      </Button>
+    </Form>
   );
 }

@@ -417,6 +417,8 @@ describe("Headscale config loader", () => {
         stunListenAddr: "0.0.0.0:3478",
         privateKeyPath: "",
         hasPrivateKey: false,
+        ipv4: "",
+        ipv6: "",
         verifyClients: true,
         automaticallyAddEmbeddedDerpRegion: true,
       },
@@ -442,6 +444,8 @@ describe("Headscale config loader", () => {
         "    region_code: home",
         "    region_name: Home DERP",
         "    stun_listen_addr: 0.0.0.0:3478",
+        "    ipv4: 198.51.100.1",
+        "    ipv6: 2001:db8::1",
         "    private_key_path: /var/lib/headscale/derp_server_private.key",
         "    verify_clients: false",
         "    automatically_add_embedded_derp_region: false",
@@ -462,6 +466,8 @@ describe("Headscale config loader", () => {
         stunListenAddr: "0.0.0.0:3478",
         privateKeyPath: "/var/lib/headscale/derp_server_private.key",
         hasPrivateKey: true,
+        ipv4: "198.51.100.1",
+        ipv6: "2001:db8::1",
         verifyClients: false,
         automaticallyAddEmbeddedDerpRegion: false,
       },
@@ -498,6 +504,8 @@ describe("Headscale config loader", () => {
         stunListenAddr: "0.0.0.0:3478",
         privateKeyPath: "",
         hasPrivateKey: false,
+        ipv4: "",
+        ipv6: "",
         verifyClients: true,
         automaticallyAddEmbeddedDerpRegion: true,
       },
@@ -535,6 +543,8 @@ describe("Headscale config loader", () => {
       { path: "derp.server.region_code", value: "home" },
       { path: "derp.server.region_name", value: "Home DERP" },
       { path: "derp.server.stun_listen_addr", value: "0.0.0.0:3478" },
+      { path: "derp.server.ipv4", value: "198.51.100.1" },
+      { path: "derp.server.ipv6", value: "2001:db8::1" },
       { path: "derp.server.verify_clients", value: false },
       { path: "derp.server.automatically_add_embedded_derp_region", value: false },
     ]);
@@ -552,10 +562,56 @@ describe("Headscale config loader", () => {
         region_code: "home",
         region_name: "Home DERP",
         stun_listen_addr: "0.0.0.0:3478",
+        ipv4: "198.51.100.1",
+        ipv6: "2001:db8::1",
         verify_clients: false,
         automatically_add_embedded_derp_region: false,
       },
     });
     expect(written.node).toEqual({ expiry: 0 });
+  });
+
+  test("falls back when the embedded server's public addresses are not strings", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "derp:",
+        "  server:",
+        "    ipv4: 198",
+        "    ipv6:",
+        "      - 2001:db8::1",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getDERPSettings().server.ipv4).toBe("");
+    expect(config.getDERPSettings().server.ipv6).toBe("");
+  });
+
+  test("deletes the public address keys when they are patched with null", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "derp:",
+        "  server:",
+        "    ipv4: 198.51.100.1",
+        "    ipv6: 2001:db8::1",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    await config.patch([
+      { path: "derp.server.ipv4", value: null },
+      { path: "derp.server.ipv6", value: null },
+    ]);
+
+    const written = parse(await readFile(path, "utf8"));
+    expect(written.derp.server).toEqual({});
+    expect(config.getDERPSettings().server.ipv4).toBe("");
+    expect(config.getDERPSettings().server.ipv6).toBe("");
   });
 });

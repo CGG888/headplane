@@ -172,9 +172,10 @@ export interface AdvancedSettingsView {
 
 /**
  * The optional DERP server embedded in Headscale. `region_id`, `region_code`,
- * `region_name`, `stun_listen_addr` and `private_key_path` have no viper
- * default in `hscontrol/types/config.go` (they read the Go zero value), so the
- * values below are the ones Headscale's own `config-example.yaml` documents.
+ * `region_name`, `stun_listen_addr`, `private_key_path`, `ipv4` and `ipv6` have
+ * no viper default in `hscontrol/types/config.go` (they read the Go zero
+ * value), so the values below are the ones Headscale's own
+ * `config-example.yaml` documents.
  */
 export interface DERPEmbeddedServerView {
   enabled: boolean;
@@ -188,6 +189,10 @@ export interface DERPEmbeddedServerView {
   privateKeyPath: string;
   // Whether a path is configured at all; the page shows it as a status line.
   hasPrivateKey: boolean;
+  // Public addresses Headscale advertises for the relay, so clients can reach
+  // it without resolving a hostname. Empty means the key is unset.
+  ipv4: string;
+  ipv6: string;
   verifyClients: boolean;
   automaticallyAddEmbeddedDerpRegion: boolean;
 }
@@ -422,6 +427,8 @@ const DERP_SETTINGS_DEFAULTS = {
     regionCode: "headscale",
     regionName: "Headscale Embedded DERP",
     stunListenAddr: "0.0.0.0:3478",
+    ipv4: "",
+    ipv6: "",
     verifyClients: true,
     automaticallyAddEmbeddedDerpRegion: true,
   },
@@ -451,6 +458,8 @@ function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
       // Headscale generates the key file when the path is missing, so the page
       // only needs to know whether a path is configured at all.
       hasPrivateKey: readString(server.private_key_path).length > 0,
+      ipv4: readString(server.ipv4, defaults.server.ipv4),
+      ipv6: readString(server.ipv6, defaults.server.ipv6),
       verifyClients: readBoolean(server.verify_clients, defaults.server.verifyClients),
       automaticallyAddEmbeddedDerpRegion: readBoolean(
         server.automatically_add_embedded_derp_region,

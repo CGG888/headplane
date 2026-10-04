@@ -1,9 +1,11 @@
 import { data } from "react-router";
 
 import Code from "~/components/code";
+import { SettingsSection, SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
   agentsContext,
@@ -20,14 +22,27 @@ import { Capabilities } from "~/server/web/roles";
 import type { Route } from "./+types/overview";
 import { headscaleSettingsAction } from "./actions";
 import AdvancedSettings from "./components/advanced-settings";
+import DerpRegionNames from "./components/derp-region-names";
 import DerpSettings from "./components/derp-settings";
 import DerpStatus from "./components/derp-status";
 import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
-import { defaultDerpPrivateKeyPath } from "./derp-settings";
+import {
+  classifyDerpRelaySource,
+  defaultDerpPrivateKeyPath,
+  type DerpRelaySource,
+} from "./derp-settings";
 import { buildDerpRelayRows, type DerpRelayRow } from "./derp-status";
+
+/** The wording for each place the DERP relays can come from. */
+const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
+  "embedded-only": "settings.headscale.derp.relaySourceEmbeddedOnly",
+  "embedded-and-map": "settings.headscale.derp.relaySourceEmbeddedAndMap",
+  "map-only": "settings.headscale.derp.relaySourceMapOnly",
+  none: "settings.headscale.derp.relaySourceNone",
+};
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
@@ -105,6 +120,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   } = loaderData;
   const isDisabled = writable ? !access : true;
 
+  // Which relays clients are handed, shown on the row so it is readable
+  // without opening the drawer.
+  const relaySource = classifyDerpRelaySource({
+    serverEnabled: derp.server.enabled,
+    urls: derp.urls,
+  });
+  const relaySourceSummary = t("settings.headscale.derp.relaySourceLabel", {
+    source: t(RELAY_SOURCE_KEYS[relaySource]),
+  });
+
   return (
     <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
       <div className="flex w-full flex-col sm:w-2/3">
@@ -135,22 +160,84 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <p>{t("settings.headscale.body")}</p>
       </div>
 
-      <OidcSettings isDisabled={isDisabled} oidc={oidc} />
-      <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
-      <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
-      <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
-      <DerpSettings
-        isDisabled={isDisabled}
-        privateKeyDefault={derpPrivateKeyDefault}
-        regionNames={derpRegionNames}
-        settings={derp}
-      />
-      <DerpStatus
-        agentEnabled={agentEnabled}
-        embedded={derp.server}
-        regionNames={derpRegionNames}
-        rows={derpRelay}
-      />
+      <SettingsSectionList>
+        {/* The section body keeps its own paragraph because it links to the
+            restrictions page, and a link cannot live in the row's button. */}
+        <SettingsSection
+          summary={
+            oidc && oidc.issuer.length > 0
+              ? t("settings.headscale.summaryIssuer", { issuer: oidc.issuer })
+              : t("settings.headscale.summaryNotConfigured")
+          }
+          title={t("settings.headscale.oidcTitle")}
+        >
+          <OidcSettings isDisabled={isDisabled} oidc={oidc} />
+        </SettingsSection>
+
+        <SettingsSection
+          description={t("settings.headscale.trustedProxiesBody")}
+          summary={t("settings.headscale.trustedProxiesSummary", {
+            count: trustedProxies.length,
+          })}
+          title={t("settings.headscale.trustedProxiesTitle")}
+        >
+          <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
+        </SettingsSection>
+
+        <SettingsSection
+          description={t("settings.headscale.policyBody")}
+          summary={t("settings.headscale.policySummary", { mode: policyMode })}
+          title={t("settings.headscale.policyTitle")}
+        >
+          <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
+        </SettingsSection>
+
+        <SettingsSection
+          description={t("settings.headscale.advancedBody")}
+          size="wide"
+          summary={t("settings.headscale.advancedSummary", {
+            expiry: advanced.nodeExpiry,
+            level: advanced.logLevel,
+          })}
+          title={t("settings.headscale.advancedTitle")}
+        >
+          <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
+        </SettingsSection>
+
+        <SettingsSection
+          description={t("settings.headscale.derp.body")}
+          size="wide"
+          summary={relaySourceSummary}
+          title={t("settings.headscale.derp.title")}
+        >
+          <div className="flex w-full flex-col gap-8">
+            <p className="rounded-lg border border-mist-200 p-3 text-sm dark:border-mist-800">
+              <span className="font-semibold">{relaySourceSummary}</span>
+            </p>
+            <DerpSettings
+              isDisabled={isDisabled}
+              privateKeyDefault={derpPrivateKeyDefault}
+              settings={derp}
+            />
+            <DerpStatus
+              agentEnabled={agentEnabled}
+              embedded={derp.server}
+              regionNames={derpRegionNames}
+              rows={derpRelay}
+            />
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          description={t("settings.headscale.derp.regionNamesBody")}
+          summary={t("settings.headscale.derp.regionNamesSummary", {
+            count: Object.keys(derpRegionNames).length,
+          })}
+          title={t("settings.headscale.derp.regionNamesTitle")}
+        >
+          <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
+        </SettingsSection>
+      </SettingsSectionList>
     </div>
   );
 }

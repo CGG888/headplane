@@ -10,18 +10,20 @@ import { useI18n } from "~/i18n/provider";
 import type { DERPSettingsView } from "~/server/headscale/config-loader";
 import cn from "~/utils/cn";
 
-import { isHttpUrl, parseDerpRegionId } from "../derp-settings";
+import {
+  isDerpIpv4Address,
+  isDerpIpv6Address,
+  isHttpUrl,
+  parseDerpRegionId,
+} from "../derp-settings";
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
 import DerpConnectivityHints from "./derp-connectivity-hints";
 import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedded-preset";
-import DerpRegionNames from "./derp-region-names";
 
 interface DerpSettingsProps {
   isDisabled: boolean;
   /** Documented location of the region signing key, prefilled by the preset. */
   privateKeyDefault: string;
-  /** Manual region id -> name mapping stored in Headplane's data directory. */
-  regionNames: Record<string, string>;
   settings: DERPSettingsView;
 }
 
@@ -113,7 +115,6 @@ function RemoveButton({ disabled, label }: { disabled: boolean; label: string })
 export default function DerpSettings({
   isDisabled,
   privateKeyDefault,
-  regionNames,
   settings,
 }: DerpSettingsProps) {
   const { t } = useI18n();
@@ -140,6 +141,8 @@ export default function DerpSettings({
   const [regionCode, setRegionCode] = useState(settings.server.regionCode);
   const [regionName, setRegionName] = useState(settings.server.regionName);
   const [stunListenAddr, setStunListenAddr] = useState(settings.server.stunListenAddr);
+  const [ipv4, setIpv4] = useState(settings.server.ipv4);
+  const [ipv6, setIpv6] = useState(settings.server.ipv6);
   const [verifyClients, setVerifyClients] = useState(settings.server.verifyClients);
   const [autoAdd, setAutoAdd] = useState(settings.server.automaticallyAddEmbeddedDerpRegion);
   const [keyConfigured, setKeyConfigured] = useState(settings.server.hasPrivateKey);
@@ -238,6 +241,19 @@ export default function DerpSettings({
       return;
     }
 
+    // Both public addresses are optional; an empty field clears the key.
+    if (!isDerpIpv4Address(ipv4)) {
+      event.preventDefault();
+      setServerLocalError(t("settings.headscale.errors.invalidDerpIpv4"));
+      return;
+    }
+
+    if (!isDerpIpv6Address(ipv6)) {
+      event.preventDefault();
+      setServerLocalError(t("settings.headscale.errors.invalidDerpIpv6"));
+      return;
+    }
+
     setServerLocalError(undefined);
   }
 
@@ -249,14 +265,16 @@ export default function DerpSettings({
     setRegionCode(values.regionCode);
     setRegionName(values.regionName);
     setStunListenAddr(values.stunListenAddr);
+    setIpv4(values.ipv4);
+    setIpv6(values.ipv6);
     setKeyConfigured(true);
   }
 
   return (
-    <>
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.urlsTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.derp.urlsBody")}</p>
+    <div className="flex w-full flex-col gap-8">
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.derp.urlsTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.urlsBody")}</p>
 
         <TableList>
           {settings.urls.length === 0 ? (
@@ -310,9 +328,9 @@ export default function DerpSettings({
         <GroupError message={addUrlError} />
       </section>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.pathsTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.derp.pathsBody")}</p>
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.derp.pathsTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.pathsBody")}</p>
 
         <TableList>
           {settings.paths.length === 0 ? (
@@ -370,9 +388,9 @@ export default function DerpSettings({
         <GroupError message={addPathError} />
       </section>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.refreshTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.derp.refreshBody")}</p>
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.derp.refreshTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.refreshBody")}</p>
 
         <refreshFetcher.Form className="flex flex-col gap-5" method="post">
           <input name="action_id" type="hidden" value="save_derp_settings" />
@@ -409,9 +427,9 @@ export default function DerpSettings({
         </refreshFetcher.Form>
       </section>
 
-      <section className="w-full sm:w-2/3">
-        <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.serverTitle")}</h2>
-        <p className="my-2">{t("settings.headscale.derp.serverBody")}</p>
+      <section className="flex w-full flex-col">
+        <h3 className="text-lg font-medium">{t("settings.headscale.derp.serverTitle")}</h3>
+        <p className="mt-1 mb-4 text-sm opacity-70">{t("settings.headscale.derp.serverBody")}</p>
 
         <DerpEmbeddedPreset
           isDisabled={isDisabled}
@@ -470,6 +488,24 @@ export default function DerpSettings({
             placeholder="0.0.0.0:3478"
             value={stunListenAddr}
           />
+          <Input
+            description={t("settings.headscale.derp.ipv4Description")}
+            disabled={serverDisabled}
+            label={t("settings.headscale.derp.ipv4Label")}
+            name="derp_server_ipv4"
+            onChange={setIpv4}
+            placeholder="198.51.100.1"
+            value={ipv4}
+          />
+          <Input
+            description={t("settings.headscale.derp.ipv6Description")}
+            disabled={serverDisabled}
+            label={t("settings.headscale.derp.ipv6Label")}
+            name="derp_server_ipv6"
+            onChange={setIpv6}
+            placeholder="2001:db8::1"
+            value={ipv6}
+          />
           <BooleanField
             checked={verifyClients}
             description={t("settings.headscale.derp.verifyClientsDescription")}
@@ -508,8 +544,6 @@ export default function DerpSettings({
           />
         </serverFetcher.Form>
       </section>
-
-      <DerpRegionNames isDisabled={isDisabled} names={regionNames} />
-    </>
+    </div>
   );
 }

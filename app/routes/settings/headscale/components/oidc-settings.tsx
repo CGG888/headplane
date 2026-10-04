@@ -54,9 +54,8 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
   const saved = Boolean(fetcher.data?.success) && !isBusy;
 
   return (
-    <section className="flex w-full flex-col sm:w-2/3">
-      <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.oidcTitle")}</h2>
-      <p className="my-2">
+    <section className="flex w-full flex-col gap-4">
+      <p>
         {tr("settings.headscale.oidcBody", {
           link: (
             <Link

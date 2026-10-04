@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import { useI18n } from "~/i18n/provider";
 import type { SnapshotMeta } from "~/server/snapshots/types";
 
-import RestoreSnapshot from "./dialogs/restore-snapshot";
+import RestoreSnapshot from "./drawers/restore-snapshot";
 import { formatBytes, REASON_KEYS } from "./labels";
 
 interface SnapshotRowProps {
@@ -20,6 +20,13 @@ export default function SnapshotRow({ snapshot }: SnapshotRowProps) {
       <div className="flex min-w-0 flex-col gap-1">
         <span className="font-medium">{takenAt}</span>
         <span className="text-sm opacity-80">{reason}</span>
+        {snapshot.files.length > 0 ? (
+          <span className="text-xs opacity-70">
+            {t("settings.snapshots.summaryFiles", {
+              files: snapshot.files.map((file) => file.name).join(", "),
+            })}
+          </span>
+        ) : undefined}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {snapshot.files.map((file) => (
             <a

@@ -3,7 +3,7 @@ import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import CodeBlock from "~/components/code-block";
-import Dialog, { DialogPanel } from "~/components/dialog";
+import { SettingsSection } from "~/components/drawer";
 import Notice from "~/components/notice";
 import NumberInput from "~/components/number-input";
 import Text from "~/components/text";
@@ -20,7 +20,7 @@ export default function CreateApiKey() {
   const [isOpen, setIsOpen] = useState(false);
 
   // The full key is only ever returned by this one response, so it is kept in
-  // the dialog until the user closes it.
+  // the drawer until the user closes it.
   const createdKey =
     fetcher.data && fetcher.data.success && "apiKey" in fetcher.data ? fetcher.data.apiKey : null;
   const error =
@@ -39,7 +39,8 @@ export default function CreateApiKey() {
   }, [isOpen]);
 
   return (
-    <Dialog
+    <SettingsSection
+      description={t("settings.apiKeys.createSectionBody")}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && submittingRef.current) {
@@ -47,28 +48,23 @@ export default function CreateApiKey() {
         }
         setIsOpen(open);
       }}
+      title={t("settings.apiKeys.create")}
     >
-      <Button className="my-4" onClick={() => setIsOpen(true)}>
-        {t("settings.apiKeys.create")}
-      </Button>
       {createdKey ? (
-        <DialogPanel variant="unactionable">
-          <Title>{t("settings.apiKeys.createdTitle")}</Title>
+        <div className="flex flex-col gap-4">
+          <Title className="text-lg font-medium">{t("settings.apiKeys.createdTitle")}</Title>
           <Notice variant="warning">{t("settings.apiKeys.createdBody")}</Notice>
           <CodeBlock>{createdKey}</CodeBlock>
-        </DialogPanel>
+        </div>
       ) : (
-        <DialogPanel
-          isDisabled={fetcher.state !== "idle"}
-          onSubmit={(event) => {
-            event.preventDefault();
+        <fetcher.Form
+          className="flex flex-col gap-4"
+          method="post"
+          onSubmit={() => {
             submittingRef.current = true;
-            const form = new FormData(event.currentTarget as HTMLFormElement);
-            form.set("action_id", "create_api_key");
-            fetcher.submit(form, { method: "POST" });
           }}
         >
-          <Title>{t("settings.apiKeys.createTitle")}</Title>
+          <input name="action_id" type="hidden" value="create_api_key" />
           <Text>{t("settings.apiKeys.createBody")}</Text>
           {error ? (
             <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -84,8 +80,16 @@ export default function CreateApiKey() {
             name="expiration"
             required
           />
-        </DialogPanel>
+          <Button
+            className="w-fit"
+            disabled={fetcher.state !== "idle"}
+            type="submit"
+            variant="heavy"
+          >
+            {t("settings.apiKeys.create")}
+          </Button>
+        </fetcher.Form>
       )}
-    </Dialog>
+    </SettingsSection>
   );
 }

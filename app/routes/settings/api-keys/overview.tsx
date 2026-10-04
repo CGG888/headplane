@@ -1,6 +1,7 @@
 import { KeyRound } from "lucide-react";
 import { data } from "react-router";
 
+import { SettingsSectionList } from "~/components/drawer";
 import Link from "~/components/link";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
@@ -48,7 +49,9 @@ export default function Page({ loaderData: { keys } }: Route.ComponentProps) {
       </p>
       <h1 className="mb-2 text-2xl font-medium">{t("settings.apiKeys.title")}</h1>
       <p className="mb-4">{t("settings.apiKeys.body")}</p>
-      <CreateApiKey />
+      <SettingsSectionList>
+        <CreateApiKey />
+      </SettingsSectionList>
       <TableList className="mt-4">
         {keys.length === 0 ? (
           <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">

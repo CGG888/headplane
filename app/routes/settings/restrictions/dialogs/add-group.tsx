@@ -1,7 +1,7 @@
 import { type } from "arktype";
+import { Form } from "react-router";
 
 import Button from "~/components/button";
-import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -34,20 +34,21 @@ export default function AddGroup({ groups, isDisabled }: AddGroupProps) {
   });
 
   return (
-    <Dialog>
-      <Button disabled={isDisabled}>{t("settings.addGroup.button")}</Button>
-      <DialogPanel>
-        <Title>{t("settings.addGroup.title")}</Title>
-        <Text className="mb-4">{t("settings.addGroup.body")}</Text>
-        <input name="action_id" type="hidden" value="add_group" />
-        <Input
-          {...form.field("group")}
-          description={t("settings.addGroup.description")}
-          required
-          label={t("settings.addGroup.label")}
-          placeholder={t("settings.addGroup.placeholder")}
-        />
-      </DialogPanel>
-    </Dialog>
+    <Form className="flex flex-col gap-4" method="POST">
+      <Title className="text-lg font-medium">{t("settings.addGroup.title")}</Title>
+      <Text>{t("settings.addGroup.body")}</Text>
+      <input name="action_id" type="hidden" value="add_group" />
+      <Input
+        {...form.field("group")}
+        description={t("settings.addGroup.description")}
+        disabled={isDisabled}
+        required
+        label={t("settings.addGroup.label")}
+        placeholder={t("settings.addGroup.placeholder")}
+      />
+      <Button disabled={isDisabled} type="submit" variant="heavy">
+        {t("settings.addGroup.button")}
+      </Button>
+    </Form>
   );
 }

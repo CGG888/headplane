@@ -11,7 +11,7 @@
 export type TrustedProxyProblem = "invalid" | "unspecified";
 
 /** Parses a dotted-quad IPv4 address into its four octets. */
-function parseIpv4(address: string): number[] | undefined {
+export function parseIpv4(address: string): number[] | undefined {
   const octets = address.split(".");
   if (octets.length !== 4) {
     return undefined;
@@ -69,7 +69,7 @@ function parseIpv6Groups(segment: string): number[] | undefined {
 }
 
 /** Parses an IPv6 address into exactly eight 16-bit groups. */
-function parseIpv6(address: string): number[] | undefined {
+export function parseIpv6(address: string): number[] | undefined {
   if (!address.includes(":")) {
     return undefined;
   }

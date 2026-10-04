@@ -38,6 +38,8 @@ interface SubmitOptions {
   configPath?: string;
   automaticallyAddEmbeddedDerpRegion?: boolean;
   paths?: string[];
+  ipv4?: string;
+  ipv6?: string;
 }
 
 const onConfigChange = vi.fn().mockResolvedValue(undefined);
@@ -67,6 +69,8 @@ function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.f
               stunListenAddr: "0.0.0.0:3478",
               privateKeyPath: "",
               hasPrivateKey: false,
+              ipv4: options.ipv4 ?? "",
+              ipv6: options.ipv6 ?? "",
               verifyClients: true,
               automaticallyAddEmbeddedDerpRegion:
                 options.automaticallyAddEmbeddedDerpRegion ?? true,
@@ -133,6 +137,8 @@ const PRESET_FIELDS = {
   derp_server_region_code: "home",
   derp_server_region_name: "Home DERP",
   derp_server_stun_listen_addr: "0.0.0.0:3478",
+  derp_server_ipv4: "",
+  derp_server_ipv6: "",
   derp_server_private_key_path: "/etc/headscale/derp_server_private.key",
 };
 
@@ -169,9 +175,43 @@ describe("embedded DERP preset action", () => {
       { path: "derp.server.region_code", value: "home" },
       { path: "derp.server.region_name", value: "Home DERP" },
       { path: "derp.server.stun_listen_addr", value: "0.0.0.0:3478" },
+      { path: "derp.server.ipv4", value: null },
+      { path: "derp.server.ipv6", value: null },
       { path: "derp.server.private_key_path", value: "/etc/headscale/derp_server_private.key" },
     ]);
     expect(onConfigChange).toHaveBeenCalledOnce();
+  });
+
+  test("writes the optional public addresses when they are filled in", async () => {
+    const { result, patch } = await submit({
+      ...PRESET_FIELDS,
+      derp_server_ipv4: "198.51.100.1",
+      derp_server_ipv6: "2001:db8::1",
+    });
+
+    expect(statusOf(result)).toBe(200);
+    expect(patch).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { path: "derp.server.ipv4", value: "198.51.100.1" },
+        { path: "derp.server.ipv6", value: "2001:db8::1" },
+      ]),
+    );
+  });
+
+  test("rejects public addresses that are not bare literals of the right family", async () => {
+    for (const value of ["198.51.100.1/24", "198.51.100.1:443", "2001:db8::1", "not-an-ip"]) {
+      const { result, patch } = await submit({ ...PRESET_FIELDS, derp_server_ipv4: value });
+      expect(statusOf(result), value).toBe(400);
+      expect(errorCodeOf(result), value).toBe("invalidDerpIpv4");
+      expect(patch).not.toHaveBeenCalled();
+    }
+
+    for (const value of ["2001:db8::1/64", "[2001:db8::1]:443", "198.51.100.1", "not-an-ip"]) {
+      const { result, patch } = await submit({ ...PRESET_FIELDS, derp_server_ipv6: value });
+      expect(statusOf(result), value).toBe(400);
+      expect(errorCodeOf(result), value).toBe("invalidDerpIpv6");
+      expect(patch).not.toHaveBeenCalled();
+    }
   });
 
   test("derives the private key path from Headscale's config path when it is empty", async () => {
@@ -238,6 +278,23 @@ describe("embedded DERP preset action", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
+  test("clears derp.urls in the same patch when the public map is dropped", async () => {
+    const { result, patch } = await submit({ ...PRESET_FIELDS, derp_clear_public_map: "true" });
+
+    expect(statusOf(result)).toBe(200);
+    expect(patch).toHaveBeenCalledWith(expect.arrayContaining([{ path: "derp.urls", value: [] }]));
+  });
+
+  test("leaves derp.urls alone unless the option is ticked", async () => {
+    const { result, patch } = await submit({ ...PRESET_FIELDS, derp_clear_public_map: "false" });
+
+    expect(statusOf(result)).toBe(200);
+    // The preset never touches derp.urls on its own; only the option above does.
+    expect(patch).toHaveBeenCalledWith(
+      expect.not.arrayContaining([{ path: "derp.urls", value: [] }]),
+    );
+  });
+
   test("still requires a DERP map path when the region is not added automatically", async () => {
     const { result, patch } = await submit(PRESET_FIELDS, {
       automaticallyAddEmbeddedDerpRegion: false,
@@ -253,6 +310,53 @@ describe("embedded DERP preset action", () => {
       paths: ["/etc/headscale/derp.yaml"],
     });
     expect(statusOf(withPath.result)).toBe(200);
+  });
+});
+
+describe("embedded DERP server action", () => {
+  const SERVER_FIELDS = {
+    action_id: "save_derp_server",
+    derp_server_enabled: "true",
+    derp_server_region_id: "999",
+    derp_server_region_code: "headscale",
+    derp_server_region_name: "Headscale Embedded DERP",
+    derp_server_stun_listen_addr: "0.0.0.0:3478",
+    derp_server_ipv4: "198.51.100.1",
+    derp_server_ipv6: "2001:db8::1",
+    derp_server_verify_clients: "true",
+    derp_server_automatically_add_embedded_derp_region: "true",
+  };
+
+  test("saves the public addresses and clears them with an empty field", async () => {
+    const set = await submit(SERVER_FIELDS);
+    expect(statusOf(set.result)).toBe(200);
+    expect(set.patch).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { path: "derp.server.ipv4", value: "198.51.100.1" },
+        { path: "derp.server.ipv6", value: "2001:db8::1" },
+      ]),
+    );
+
+    const cleared = await submit({ ...SERVER_FIELDS, derp_server_ipv4: "", derp_server_ipv6: "" });
+    expect(statusOf(cleared.result)).toBe(200);
+    expect(cleared.patch).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { path: "derp.server.ipv4", value: null },
+        { path: "derp.server.ipv6", value: null },
+      ]),
+    );
+  });
+
+  test("rejects a public address that carries a prefix length or port", async () => {
+    const badV4 = await submit({ ...SERVER_FIELDS, derp_server_ipv4: "198.51.100.1:443" });
+    expect(statusOf(badV4.result)).toBe(400);
+    expect(errorCodeOf(badV4.result)).toBe("invalidDerpIpv4");
+    expect(badV4.patch).not.toHaveBeenCalled();
+
+    const badV6 = await submit({ ...SERVER_FIELDS, derp_server_ipv6: "2001:db8::1/64" });
+    expect(statusOf(badV6.result)).toBe(400);
+    expect(errorCodeOf(badV6.result)).toBe("invalidDerpIpv6");
+    expect(badV6.patch).not.toHaveBeenCalled();
   });
 });
 
