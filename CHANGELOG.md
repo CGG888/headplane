@@ -1,8 +1,12 @@
 # Next
 
+# 0.8.2 (October 4, 2026)
+
 ## Fixes
 
 - Fixed logging out when Headplane runs behind a reverse proxy that mangles form submissions. Logout is now a plain navigation instead of a form POST, an unreachable OIDC end-session endpoint no longer blocks it, and cross-site logout requests are ignored.
+
+---
 
 # 0.8.1 (October 4, 2026)
 
