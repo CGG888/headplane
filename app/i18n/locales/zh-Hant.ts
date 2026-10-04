@@ -1229,6 +1229,10 @@ const zhHant = {
         "Agent 正在等待其 Tailnet 註冊被核准。Headplane 會嘗試自動核准；若失敗，你可以前往{link}完成核准。",
       thisLink: "此連結",
       syncErrorTitle: "同步錯誤",
+      apiKeyRejectedTitle: "Headscale 拒絕了設定中的 API Key",
+      apiKeyRejectedBody:
+        "Agent 使用的是 Headplane 設定檔裡的 headscale.api_key（不是你登入時用的那把），Headscale 回應 401 Unauthorized。請到 {link} 建立新的金鑰，寫入設定檔後重新啟動 Headplane。",
+      apiKeysLink: "設定 → API 金鑰",
       syncing: "同步中…",
       syncNow: "立即同步",
     },

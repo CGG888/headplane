@@ -1315,6 +1315,10 @@ const en = {
         "The agent is waiting for its Tailnet registration to be approved. Headplane will attempt to auto-approve it, but if that fails, you can complete approval by visiting {link}.",
       thisLink: "this link",
       syncErrorTitle: "Sync Error",
+      apiKeyRejectedTitle: "Headscale rejected the configured API key",
+      apiKeyRejectedBody:
+        "The agent signs in with headscale.api_key from Headplane's own configuration, not with the key you logged in with, and Headscale answered 401 Unauthorized. Create a new key under {link}, put it in the configuration and restart Headplane.",
+      apiKeysLink: "Settings → API keys",
       syncing: "Syncing…",
       syncNow: "Sync Now",
     },

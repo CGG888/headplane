@@ -1,6 +1,37 @@
 import { describe, expect, test } from "vitest";
 
-import { describeAgentError, MAX_AGENT_ERROR_LENGTH } from "~/server/hp-agent-error";
+import {
+  classifyAgentError,
+  describeAgentError,
+  MAX_AGENT_ERROR_LENGTH,
+} from "~/server/hp-agent-error";
+
+// The shape the agent reported when the configured API key was rejected.
+const UNAUTHORIZED = {
+  type: "DataWithResponseInit",
+  data: {
+    requestUrl: "POST v1/preauthkey",
+    statusCode: 401,
+    rawData: "Unauthorized",
+    data: null,
+  },
+  init: { status: 502, statusText: "Bad Gateway" },
+};
+
+describe("classifyAgentError", () => {
+  test("recognises a rejected API key", () => {
+    expect(classifyAgentError(UNAUTHORIZED)).toBe("apiKeyRejected");
+    expect(classifyAgentError({ statusCode: 401 })).toBe("apiKeyRejected");
+    expect(classifyAgentError({ response: { statusCode: 403 } })).toBe("apiKeyRejected");
+  });
+
+  test("leaves other failures alone", () => {
+    expect(classifyAgentError("plain failure")).toBeUndefined();
+    expect(classifyAgentError({ statusCode: 500 })).toBeUndefined();
+    expect(classifyAgentError(new Error("no status"))).toBeUndefined();
+    expect(classifyAgentError(undefined)).toBeUndefined();
+  });
+});
 
 describe("describeAgentError", () => {
   test("keeps a plain message", () => {

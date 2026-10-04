@@ -12,7 +12,7 @@ import log from "~/utils/log";
 import { HeadplaneConfig } from "./config/config-schema";
 import { hostInfo } from "./db/schema";
 import type { HeadscaleClient } from "./headscale/api";
-import { describeAgentError } from "./hp-agent-error";
+import { classifyAgentError, describeAgentError, type AgentErrorCode } from "./hp-agent-error";
 
 export interface AgentManager {
   lookup(nodeKeys: string[]): Promise<Record<string, HostInfo>>;
@@ -20,6 +20,7 @@ export interface AgentManager {
     syncedAt: Date | null;
     nodeCount: number;
     error?: string;
+    errorCode?: AgentErrorCode;
     authUrl?: string;
   };
   agentNodeKey(): string | undefined;
@@ -38,6 +39,7 @@ interface SyncState {
   nodeCount: number;
   selfKey?: string;
   error?: string;
+  errorCode?: AgentErrorCode;
   authUrl?: string;
 }
 
@@ -271,6 +273,7 @@ export async function createAgentManager(
         // into text once here, or the page and the log both say `[object Object]`.
         const message = describeAgentError(output.error);
         state.error = message;
+        state.errorCode = classifyAgentError(output.error);
         log.error("agent", "Sync error from agent (%d/5): %s", consecutiveErrors, message);
 
         if (consecutiveErrors >= 5 && proc) {
@@ -308,12 +311,14 @@ export async function createAgentManager(
       state.nodeCount = keys.length;
       state.selfKey = output.self || undefined;
       state.error = undefined;
+      state.errorCode = undefined;
 
       log.info("agent", "Sync complete: %d nodes updated", keys.length);
     } catch (error) {
       consecutiveErrors++;
       const message = describeAgentError(error);
       state.error = message;
+      state.errorCode = classifyAgentError(error);
       log.error("agent", "Sync failed (%d/5): %s", consecutiveErrors, message);
 
       if (consecutiveErrors >= 5) {
@@ -403,6 +408,7 @@ export async function createAgentManager(
         syncedAt: state.syncedAt,
         nodeCount: state.nodeCount,
         error: state.error,
+        errorCode: state.errorCode,
         authUrl: state.authUrl,
       };
     },

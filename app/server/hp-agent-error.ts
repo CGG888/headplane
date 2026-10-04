@@ -12,6 +12,46 @@ export const MAX_AGENT_ERROR_LENGTH = 1000;
 
 const MESSAGE_KEYS = ["message", "error", "reason", "detail", "msg"];
 
+/**
+ * Failures worth explaining differently from a raw message.
+ *
+ * `apiKeyRejected` is the one operators hit most: the API key in Headplane's own
+ * configuration is not the key they signed in with, so the UI keeps working
+ * while the agent (and anything else running without a session) gets a 401.
+ */
+export type AgentErrorCode = "apiKeyRejected";
+
+export function classifyAgentError(value: unknown): AgentErrorCode | undefined {
+  const status = extractStatusCode(value);
+  if (status === 401 || status === 403) {
+    return "apiKeyRejected";
+  }
+
+  return undefined;
+}
+
+/** Finds the HTTP status in the various shapes an error can arrive in. */
+function extractStatusCode(value: unknown, depth = 0): number | undefined {
+  if (value == null || typeof value !== "object" || depth > 4) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const direct = record.statusCode;
+  if (typeof direct === "number") {
+    return direct;
+  }
+
+  for (const key of ["data", "error", "response", "cause"]) {
+    const nested = extractStatusCode(record[key], depth + 1);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
 export function describeAgentError(value: unknown, depth = 0): string {
   if (value == null) {
     return "";

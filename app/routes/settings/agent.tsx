@@ -28,6 +28,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     syncedAt: sync.syncedAt?.toISOString() ?? null,
     nodeCount: sync.nodeCount,
     error: sync.error,
+    errorCode: sync.errorCode,
     authUrl: sync.authUrl,
   };
 }
@@ -123,9 +124,22 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : undefined}
 
       {loaderData.error ? (
-        <Notice variant="error" title={t("settings.agent.syncErrorTitle")}>
-          {loaderData.error}
-        </Notice>
+        <>
+          {loaderData.errorCode === "apiKeyRejected" ? (
+            <Notice variant="error" title={t("settings.agent.apiKeyRejectedTitle")}>
+              {tr("settings.agent.apiKeyRejectedBody", {
+                link: (
+                  <Link styled to="/settings/api-keys">
+                    {t("settings.agent.apiKeysLink")}
+                  </Link>
+                ),
+              })}
+            </Notice>
+          ) : undefined}
+          <Notice variant="error" title={t("settings.agent.syncErrorTitle")}>
+            {loaderData.error}
+          </Notice>
+        </>
       ) : undefined}
 
       <fetcher.Form method="post">
