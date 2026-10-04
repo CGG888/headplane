@@ -9,6 +9,7 @@
 //   - `runtime/vite-plugin.ts` — the dev-mode Vite middleware; loads
 //     this module through `ssrLoadModule` and dispatches each request.
 
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { exit, versions } from "node:process";
 
 import { createRequestListener } from "@react-router/node";
@@ -34,6 +35,7 @@ import {
   oidcContext,
   requestApiContext,
 } from "./context";
+import { shouldDefaultToFormBody } from "./form-content-type";
 
 log.info("server", "Running Node.js %s", versions.node);
 
@@ -96,8 +98,23 @@ interface ClientAddress {
   address?: string;
 }
 
-export default createRequestListener({
+const listener = createRequestListener({
   build,
   mode: import.meta.env.MODE,
   getLoadContext,
 });
+
+export default function handleRequest(req: IncomingMessage, res: ServerResponse) {
+  if (shouldDefaultToFormBody(req.method, req.headers["content-type"])) {
+    log.warn(
+      "server",
+      "Request %s %s arrived without a form Content-Type, defaulting to urlencoded",
+      req.method,
+      req.url,
+    );
+
+    req.headers["content-type"] = "application/x-www-form-urlencoded";
+  }
+
+  return listener(req, res);
+}
