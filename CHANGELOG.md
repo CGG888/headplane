@@ -1,10 +1,14 @@
 # Next
 
+# 0.10.0 (October 5, 2026)
+
 ## Changes
 
 - Machines can now be selected in bulk on the machines page and given tags, an expiry or a new owner — or deleted — in a single action, with a summary of how many of them were updated.
 - The Access Control editor validates a policy **before** saving it (and has its own validate button), so Headscale's own parser message is shown instead of a save that fails halfway.
 - Added a **system status** page under Settings: the Headscale version, an update hint, a diagnostics list for the most common misconfigurations, and a button that reloads or restarts Headscale through the configured integration.
+
+---
 
 # 0.9.0 (October 4, 2026)
 
