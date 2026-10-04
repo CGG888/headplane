@@ -24,6 +24,7 @@ import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~
 import { getUserDisplayName } from "~/utils/user";
 
 import type { Route } from "./+types/machine";
+import DerpInfo from "./components/derp-info";
 import { mapTagsToComponents, uiTagsForNode } from "./components/machine-row";
 import MenuOptions from "./components/menu";
 import Routes from "./dialogs/routes";
@@ -79,6 +80,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
           nodeKey: agents?.agentNodeKey(),
         }
       : undefined,
+    // Unlike `agent`, this stays true while the agent feature is on but no
+    // agent has synced yet, so the page can tell "no agent" from "no data".
+    agentEnabled: agents !== undefined,
+    derp: headscaleConfig.getDERPSettings(),
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
     policyTags: extractTagOwnerTags(policy),
@@ -101,6 +106,8 @@ export default function Page({
     users,
     magic,
     agent,
+    agentEnabled,
+    derp,
     stats,
     existingTags,
     policyTags,
@@ -423,6 +430,7 @@ export default function Page({
           ) : undefined}
         </div>
       </Card>
+      <DerpInfo agentEnabled={agentEnabled} server={derp.server} stats={stats} />
     </div>
   );
 }

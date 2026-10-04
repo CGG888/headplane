@@ -189,6 +189,26 @@ const en = {
       upnp: "UPnP",
       pcp: "PCP",
       natPmp: "NAT-PMP",
+      derp: {
+        title: "DERP Relays",
+        body: "Which DERP relay this machine uses. Live relay data comes from the Headplane Agent.",
+        agentRequired:
+          "Live relay data needs the Headplane Agent. Enable the agent so Headplane can read this machine's home region, preferred region, and DERP latency.",
+        empty: "This machine has not reported DERP relay information yet.",
+        homeRegion: "Home region",
+        preferredRegion: "Preferred region",
+        latency: "Latency by region",
+        latencyMore: "{count} more regions were measured; only the fastest are shown.",
+        idsOnly:
+          "Headplane cannot read the DERP map from Headscale, so regions without a local name are shown by ID.",
+        embeddedMarker: "embedded DERP",
+        embeddedEnabled: "Headscale's embedded DERP server is enabled and serves region {region}.",
+        embeddedDisabled:
+          "Headscale's embedded DERP server is disabled, so this machine relays through external DERP regions.",
+        embeddedSettingsLink: "Configure DERP relays",
+        unknown: "Unknown",
+        noLatency: "No data",
+      },
     },
     new: {
       registerTitle: "Register Machine Key",

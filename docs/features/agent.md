@@ -11,6 +11,20 @@ versions, the agent does not require you to manually create or manage pre-auth
 keys — Headplane generates a fresh key for each agent startup and reuses the
 agent's existing Tailnet state across restarts.
 
+## What the agent adds
+
+The Headscale API only knows what the control server itself sees. Everything the
+machines measure about themselves arrives through the agent:
+
+| Shown in | Data |
+| --- | --- |
+| Machine list and details | Client version, OS and host details |
+| Machine details | **DERP relay**: the home and preferred region, whether that region is your **embedded DERP server**, and the measured latency to each region |
+| Headscale settings → DERP | The per-machine relay table |
+
+Without the agent those pages say the agent is needed rather than showing an
+empty table — the control server does not carry this data.
+
 ## Prerequisites
 
 Before enabling the agent, ensure the following:

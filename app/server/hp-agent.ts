@@ -12,6 +12,7 @@ import log from "~/utils/log";
 import { HeadplaneConfig } from "./config/config-schema";
 import { hostInfo } from "./db/schema";
 import type { HeadscaleClient } from "./headscale/api";
+import { describeAgentError } from "./hp-agent-error";
 
 export interface AgentManager {
   lookup(nodeKeys: string[]): Promise<Record<string, HostInfo>>;
@@ -266,8 +267,11 @@ export async function createAgentManager(
 
       if (output.error) {
         consecutiveErrors++;
-        state.error = output.error;
-        log.error("agent", "Sync error from agent (%d/5): %s", consecutiveErrors, output.error);
+        // The agent reports errors as JSON, so this is often an object: turn it
+        // into text once here, or the page and the log both say `[object Object]`.
+        const message = describeAgentError(output.error);
+        state.error = message;
+        log.error("agent", "Sync error from agent (%d/5): %s", consecutiveErrors, message);
 
         if (consecutiveErrors >= 5 && proc) {
           log.warn("agent", "Too many consecutive errors, killing agent process for retry");
@@ -308,7 +312,7 @@ export async function createAgentManager(
       log.info("agent", "Sync complete: %d nodes updated", keys.length);
     } catch (error) {
       consecutiveErrors++;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeAgentError(error);
       state.error = message;
       log.error("agent", "Sync failed (%d/5): %s", consecutiveErrors, message);
 

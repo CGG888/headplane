@@ -1,5 +1,13 @@
 # Next
 
+## Changes
+
+- Machine details now show which **DERP relay** the machine is using: its home and preferred region, whether that region is Headscale's own embedded DERP server, and the measured latency to each region (fastest first, the rest summarised). This needs the Headplane Agent, since Headscale's API does not carry client relay measurements; without it the page says so instead of showing an empty table.
+
+## Fixes
+
+- A failing Headplane Agent sync no longer reports itself as `[object Object]`. The agent sends its errors as JSON, and that object is now turned into readable text for both the settings page and the log, so an agent that cannot start can actually be diagnosed.
+
 # 0.12.0 (October 5, 2026)
 
 ## Changes
