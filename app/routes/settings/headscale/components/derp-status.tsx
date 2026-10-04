@@ -1,3 +1,5 @@
+import { Activity } from "lucide-react";
+
 import { SettingsCollapsible } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
@@ -54,6 +56,13 @@ export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }
   return (
     <SettingsCollapsible
       description={t("settings.headscale.derp.statusBody")}
+      icon={Activity}
+      status={{
+        tone: !agentEnabled ? "warn" : rows.length > 0 ? "ok" : "neutral",
+        label: agentEnabled
+          ? t("settings.headscale.derp.relayMachineCount", { count: rows.length })
+          : t("settings.headscale.statusAgentRequired"),
+      }}
       title={t("settings.headscale.derp.statusTitle")}
     >
       {!agentEnabled ? (

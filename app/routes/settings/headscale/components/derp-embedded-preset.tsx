@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 import Button from "~/components/button";
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
+import { SettingsField } from "~/components/settings-nav";
 import Switch from "~/components/switch";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -226,22 +227,17 @@ export default function DerpEmbeddedPreset({
 
         <DerpConnectivityHints />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Text className="font-semibold">
-              {t("settings.headscale.derp.presetClearMapLabel")}
-            </Text>
-            <Text className="text-sm opacity-70">
-              {t("settings.headscale.derp.presetClearMapDescription")}
-            </Text>
-          </div>
+        <SettingsField
+          description={t("settings.headscale.derp.presetClearMapDescription")}
+          label={t("settings.headscale.derp.presetClearMapLabel")}
+        >
           <Switch
             checked={clearPublicMap}
             disabled={fetcher.state !== "idle"}
             label={t("settings.headscale.derp.presetClearMapLabel")}
             onCheckedChange={setClearPublicMap}
           />
-        </div>
+        </SettingsField>
         <input
           name="derp_clear_public_map"
           type="hidden"

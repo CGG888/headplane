@@ -1,5 +1,13 @@
 # Next
 
+# 0.17.0 (October 5, 2026)
+
+## Changes
+
+- The settings section got a visual pass so its pages look like one product: every page now shares the same header, one segmented tab bar (the shape of the top navigation, with scrolling on narrow screens), cards that expand and collapse, and a status chip wherever a state is worth seeing at a glance — OIDC configured, policy mode, trusted-proxy count, the embedded relay's state, keys created, last agent sync, snapshot size and check results. Primary actions sit in the same place on every page, and light/dark contrast is consistent across the section.
+
+---
+
 # 0.16.0 (October 5, 2026)
 
 ## Changes

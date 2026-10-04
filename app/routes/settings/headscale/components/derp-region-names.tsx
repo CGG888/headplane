@@ -125,7 +125,7 @@ export default function DerpRegionNames({ isDisabled, names }: DerpRegionNamesPr
 
       <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
         <Button
-          className="mt-4"
+          className="mt-4 self-end"
           disabled={isDisabled || removeFetcher.state !== "idle"}
           onClick={() => setIsOpen(true)}
         >

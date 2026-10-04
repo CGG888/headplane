@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
+import { SettingsActions } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
@@ -105,7 +106,7 @@ export default function TrustedProxies({ isDisabled, proxies }: TrustedProxiesPr
         </p>
       ) : undefined}
 
-      <addFetcher.Form className="mt-4 flex items-end gap-3" method="post" onSubmit={onSubmit}>
+      <addFetcher.Form className="mt-4 flex flex-col gap-3" method="post" onSubmit={onSubmit}>
         <input name="action_id" type="hidden" value="add_trusted_proxy" />
         <Input
           disabled={disabled}
@@ -121,9 +122,11 @@ export default function TrustedProxies({ isDisabled, proxies }: TrustedProxiesPr
           required
           value={value}
         />
-        <Button disabled={disabled} type="submit" variant="heavy">
-          {t("settings.headscale.addProxy")}
-        </Button>
+        <SettingsActions>
+          <Button disabled={disabled} type="submit" variant="heavy">
+            {t("settings.headscale.addProxy")}
+          </Button>
+        </SettingsActions>
       </addFetcher.Form>
 
       {addError ? (

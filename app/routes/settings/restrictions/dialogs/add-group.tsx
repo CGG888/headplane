@@ -3,6 +3,7 @@ import { Form } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
+import { SettingsActions } from "~/components/settings-nav";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
 
@@ -42,9 +43,11 @@ export default function AddGroup({ groups, isDisabled }: AddGroupProps) {
         label={t("settings.addGroup.label")}
         placeholder={t("settings.addGroup.placeholder")}
       />
-      <Button disabled={isDisabled} type="submit" variant="heavy">
-        {t("settings.addGroup.button")}
-      </Button>
+      <SettingsActions>
+        <Button disabled={isDisabled} type="submit" variant="heavy">
+          {t("settings.addGroup.button")}
+        </Button>
+      </SettingsActions>
     </Form>
   );
 }

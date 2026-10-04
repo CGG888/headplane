@@ -5,6 +5,7 @@ import Button from "~/components/button";
 import Code from "~/components/code";
 import Notice from "~/components/notice";
 import RadioGroup from "~/components/radio-group";
+import { SettingsActions } from "~/components/settings-nav";
 import { useI18n } from "~/i18n/provider";
 
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
@@ -91,16 +92,16 @@ export default function PolicyModeSettings({ isDisabled, mode, path }: PolicyMod
           </p>
         ) : undefined}
 
-        <div className="flex items-center gap-3">
-          <Button disabled={disabled || selected === mode} type="submit" variant="heavy">
-            {t("settings.headscale.savePolicy")}
-          </Button>
+        <SettingsActions>
           {saved ? (
             <span className="text-sm text-emerald-600 dark:text-emerald-400">
               {t("settings.headscale.saved")}
             </span>
           ) : undefined}
-        </div>
+          <Button disabled={disabled || selected === mode} type="submit" variant="heavy">
+            {t("settings.headscale.savePolicy")}
+          </Button>
+        </SettingsActions>
       </fetcher.Form>
     </section>
   );

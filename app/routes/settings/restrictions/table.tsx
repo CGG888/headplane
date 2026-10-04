@@ -6,7 +6,6 @@ import Button from "~/components/button";
 import TableList from "~/components/table-list";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import cn from "~/utils/cn";
 
 export type RestrictionType = "domain" | "group" | "user";
 
@@ -67,26 +66,30 @@ export default function RestrictionList({ type, values, isDisabled }: Restrictio
     // px-1 -mx-1 gives focus rings on buttons room to render without being
     // clipped by overflow-y-auto (which implicitly forces overflow-x).
     <div className="-mx-1 max-h-96 min-h-0 overflow-y-auto px-1">
-      <TableList>
+      <TableList className="border-0">
         {values.length > 0 ? (
           values.map((value) => (
-            <TableList.Item key={`${type}-${value}`}>
-              {type === "domain" ? (
-                <p>
-                  <span className="text-mist-600 dark:text-mist-300">{"<user>"}</span>
-                  <span className="font-bold">@</span>
-                  <span>{value}</span>
-                </p>
-              ) : (
-                <p>{value}</p>
-              )}
-              <Form method="POST">
+            <TableList.Item className="gap-3" key={`${type}-${value}`}>
+              {/* A single long entry truncates instead of pushing the row wider. */}
+              <p className="min-w-0 flex-1 truncate" title={value}>
+                {type === "domain" ? (
+                  <>
+                    <span className="text-mist-600 dark:text-mist-300">{"<user>"}</span>
+                    <span className="font-bold">@</span>
+                    <span>{value}</span>
+                  </>
+                ) : (
+                  value
+                )}
+              </p>
+              <Form className="shrink-0" method="POST">
                 <input name="action_id" type="hidden" value={`remove_${type}`} />
                 <input name={type} type="hidden" value={value} />
                 <Button
-                  className={cn("px-2 py-1 rounded-md", "text-red-500 dark:text-red-400")}
+                  className="rounded-md px-2 py-1 text-red-600 hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/10"
                   disabled={isDisabled}
                   type="submit"
+                  variant="ghost"
                 >
                   {t("settings.restrictions.remove")}
                 </Button>

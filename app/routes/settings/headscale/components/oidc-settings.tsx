@@ -6,8 +6,8 @@ import Input from "~/components/input";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import Select from "~/components/select";
+import { SettingsActions, SettingsField } from "~/components/settings-nav";
 import Switch from "~/components/switch";
-import Text from "~/components/text";
 import { useI18n } from "~/i18n/provider";
 import type { OIDCSettingsView } from "~/server/headscale/config-loader";
 
@@ -55,7 +55,7 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
 
   return (
     <section className="flex w-full flex-col gap-4">
-      <p>
+      <p className="text-sm text-mist-600 dark:text-mist-400">
         {tr("settings.headscale.oidcBody", {
           link: (
             <Link
@@ -111,78 +111,64 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
           required
         />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Text className="font-semibold">
-              {t("settings.headscale.emailVerifiedRequiredLabel")}
-            </Text>
-            <Text className="text-sm opacity-70">
-              {t("settings.headscale.emailVerifiedRequiredDescription")}
-            </Text>
-          </div>
+        <SettingsField
+          description={t("settings.headscale.emailVerifiedRequiredDescription")}
+          label={t("settings.headscale.emailVerifiedRequiredLabel")}
+        >
           <Switch
             checked={emailVerified}
             disabled={disabled}
             label={t("settings.headscale.emailVerifiedRequiredLabel")}
             onCheckedChange={setEmailVerified}
           />
-        </div>
+        </SettingsField>
         <input
           name="email_verified_required"
           type="hidden"
           value={emailVerified ? "true" : "false"}
         />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Text className="font-semibold">{t("settings.headscale.useExpiryFromTokenLabel")}</Text>
-            <Text className="text-sm opacity-70">
-              {t("settings.headscale.useExpiryFromTokenDescription")}
-            </Text>
-          </div>
+        <SettingsField
+          description={t("settings.headscale.useExpiryFromTokenDescription")}
+          label={t("settings.headscale.useExpiryFromTokenLabel")}
+        >
           <Switch
             checked={useExpiry}
             disabled={disabled}
             label={t("settings.headscale.useExpiryFromTokenLabel")}
             onCheckedChange={setUseExpiry}
           />
-        </div>
+        </SettingsField>
         <input name="use_expiry_from_token" type="hidden" value={useExpiry ? "true" : "false"} />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Text className="font-semibold">{t("settings.headscale.onlyStartIfOidcLabel")}</Text>
-            <Text className="text-sm opacity-70">
-              {t("settings.headscale.onlyStartIfOidcDescription")}
-            </Text>
-          </div>
+        <SettingsField
+          description={t("settings.headscale.onlyStartIfOidcDescription")}
+          label={t("settings.headscale.onlyStartIfOidcLabel")}
+        >
           <Switch
             checked={onlyStartIfOidc}
             disabled={disabled}
             label={t("settings.headscale.onlyStartIfOidcLabel")}
             onCheckedChange={setOnlyStartIfOidc}
           />
-        </div>
+        </SettingsField>
         <input
           name="only_start_if_oidc_is_available"
           type="hidden"
           value={onlyStartIfOidc ? "true" : "false"}
         />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Text className="font-semibold">{t("settings.headscale.pkceEnabledLabel")}</Text>
-            <Text className="text-sm opacity-70">
-              {t("settings.headscale.pkceEnabledDescription")}
-            </Text>
-          </div>
+        <SettingsField
+          description={t("settings.headscale.pkceEnabledDescription")}
+          label={t("settings.headscale.pkceEnabledLabel")}
+        >
           <Switch
             checked={pkceEnabled}
             disabled={disabled}
             label={t("settings.headscale.pkceEnabledLabel")}
             onCheckedChange={setPkceEnabled}
           />
-        </div>
+        </SettingsField>
         <input name="pkce_enabled" type="hidden" value={pkceEnabled ? "true" : "false"} />
 
         <div>
@@ -205,16 +191,16 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
           </p>
         ) : undefined}
 
-        <div className="flex items-center gap-3">
-          <Button disabled={disabled} type="submit" variant="heavy">
-            {t("settings.headscale.saveOidc")}
-          </Button>
+        <SettingsActions>
           {saved ? (
             <span className="text-sm text-emerald-600 dark:text-emerald-400">
               {t("settings.headscale.saved")}
             </span>
           ) : undefined}
-        </div>
+          <Button disabled={disabled} type="submit" variant="heavy">
+            {t("settings.headscale.saveOidc")}
+          </Button>
+        </SettingsActions>
       </fetcher.Form>
     </section>
   );

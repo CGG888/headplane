@@ -1,12 +1,17 @@
+import { Clock, ScrollText, ToggleRight } from "lucide-react";
 import { useState } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
 import Select from "~/components/select";
-import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
+import {
+  SettingsActions,
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsField,
+} from "~/components/settings-nav";
 import Switch from "~/components/switch";
-import Text from "~/components/text";
 import { useI18n } from "~/i18n/provider";
 import type { AdvancedSettingsView } from "~/server/headscale/config-loader";
 
@@ -39,14 +44,14 @@ interface SaveRowProps {
 
 function SaveRow({ disabled, label, savedLabel }: SaveRowProps) {
   return (
-    <div className="flex items-center gap-3">
-      <Button disabled={disabled} type="submit" variant="heavy">
-        {label}
-      </Button>
+    <SettingsActions>
       {savedLabel ? (
         <span className="text-sm text-emerald-600 dark:text-emerald-400">{savedLabel}</span>
       ) : undefined}
-    </div>
+      <Button disabled={disabled} type="submit" variant="heavy">
+        {label}
+      </Button>
+    </SettingsActions>
   );
 }
 
@@ -73,18 +78,14 @@ function BooleanField({
 }: BooleanFieldProps) {
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <Text className="font-semibold">{label}</Text>
-          <Text className="text-sm opacity-70">{description}</Text>
-        </div>
+      <SettingsField description={description} label={label}>
         <Switch
           checked={checked}
           disabled={disabled}
           label={label}
           onCheckedChange={onCheckedChange}
         />
-      </div>
+      </SettingsField>
       <input name={name} type="hidden" value={checked ? "true" : "false"} />
     </>
   );
@@ -141,6 +142,8 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
     <SettingsCollapsibleGroup>
       <SettingsCollapsible
         description={t("settings.headscale.advancedNodeBody")}
+        icon={Clock}
+        status={{ tone: "neutral", label: nodeExpiry }}
         title={t("settings.headscale.advancedNodeTitle")}
       >
         <section className="flex w-full flex-col">
@@ -184,6 +187,8 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
 
       <SettingsCollapsible
         description={t("settings.headscale.advancedLogBody")}
+        icon={ScrollText}
+        status={{ tone: "neutral", label: logLevel }}
         title={t("settings.headscale.advancedLogTitle")}
       >
         <section className="flex w-full flex-col">
@@ -230,6 +235,7 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
 
       <SettingsCollapsible
         description={t("settings.headscale.advancedFeaturesBody")}
+        icon={ToggleRight}
         title={t("settings.headscale.advancedFeaturesTitle")}
       >
         <section className="flex w-full flex-col">

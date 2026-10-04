@@ -21,7 +21,7 @@ export default function SnapshotRow({ snapshot }: SnapshotRowProps) {
         <span className="font-medium">{takenAt}</span>
         <span className="text-sm opacity-80">{reason}</span>
         {snapshot.files.length > 0 ? (
-          <span className="text-xs opacity-70">
+          <span className="truncate text-xs opacity-70">
             {t("settings.snapshots.summaryFiles", {
               files: snapshot.files.map((file) => file.name).join(", "),
             })}
@@ -30,17 +30,18 @@ export default function SnapshotRow({ snapshot }: SnapshotRowProps) {
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {snapshot.files.map((file) => (
             <a
-              className="inline-flex items-center gap-1 text-indigo-600 hover:underline dark:text-indigo-400"
+              className="inline-flex max-w-full min-w-0 items-center gap-1 text-indigo-600 hover:underline dark:text-indigo-400"
               download={file.name}
               href={`/settings/snapshots/download?${new URLSearchParams({
                 id: snapshot.id,
                 file: file.name,
               }).toString()}`}
               key={file.name}
+              title={file.name}
             >
-              <Download className="h-3.5 w-3.5" />
-              {file.name}
-              <span className="opacity-70">({formatBytes(file.size)})</span>
+              <Download className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{file.name}</span>
+              <span className="shrink-0 opacity-70">({formatBytes(file.size)})</span>
             </a>
           ))}
         </div>

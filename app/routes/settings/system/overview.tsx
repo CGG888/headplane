@@ -1,12 +1,23 @@
 import {
+  Boxes,
+  Cable,
   CheckCircle,
   CircleAlert,
   CircleX,
+  Database,
   FileCheck,
+  FileText,
+  Globe,
   HeartPulse,
+  KeyRound,
+  Lock,
+  Package,
   Power,
+  Settings2,
+  ShieldCheck,
   Stethoscope,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -16,12 +27,15 @@ import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
 import {
+  SettingsActions,
   SettingsCollapsible,
   SettingsCollapsibleGroup,
+  SettingsPage,
   SettingsPanel,
   SettingsTab,
   SettingsTabList,
   SettingsTabs,
+  type SettingsStatusTone,
 } from "~/components/settings-nav";
 import StatusCircle from "~/components/status-circle";
 import type { TranslationKey } from "~/i18n";
@@ -67,33 +81,61 @@ const STATUS_KEYS: Record<DiagnosticStatus, TranslationKey> = {
 interface CheckGroup<Id extends string> {
   id: string;
   titleKey: TranslationKey;
+  icon: LucideIcon;
   ids: readonly Id[];
 }
 
 /** The diagnostics, grouped the way an operator works through them. */
 const DIAGNOSTIC_GROUPS: readonly CheckGroup<DiagnosticId>[] = [
-  { id: "connection", titleKey: "settings.system.groups.connection", ids: ["reachable", "apiKey"] },
-  { id: "version", titleKey: "settings.system.groups.version", ids: ["version"] },
+  {
+    id: "connection",
+    titleKey: "settings.system.groups.connection",
+    icon: Cable,
+    ids: ["reachable", "apiKey"],
+  },
+  { id: "version", titleKey: "settings.system.groups.version", icon: Package, ids: ["version"] },
   {
     id: "configuration",
     titleKey: "settings.system.groups.configuration",
+    icon: Settings2,
     ids: ["policyMode", "oidc", "trustedProxies", "configAccess"],
   },
-  { id: "integration", titleKey: "settings.system.groups.integration", ids: ["integration"] },
+  {
+    id: "integration",
+    titleKey: "settings.system.groups.integration",
+    icon: Boxes,
+    ids: ["integration"],
+  },
 ];
 
 /** The configuration file checks, grouped by the part of config.yaml they read. */
 const CONFIG_CHECK_GROUPS: readonly CheckGroup<ConfigCheckId>[] = [
-  { id: "oidc", titleKey: "settings.system.groups.oidc", ids: ["configOidcKeys", "configOidc"] },
-  { id: "proxies", titleKey: "settings.system.groups.proxies", ids: ["configTrustedProxies"] },
-  { id: "tls", titleKey: "settings.system.groups.tls", ids: ["configTls"] },
+  {
+    id: "oidc",
+    titleKey: "settings.system.groups.oidc",
+    icon: KeyRound,
+    ids: ["configOidcKeys", "configOidc"],
+  },
+  {
+    id: "proxies",
+    titleKey: "settings.system.groups.proxies",
+    icon: ShieldCheck,
+    ids: ["configTrustedProxies"],
+  },
+  { id: "tls", titleKey: "settings.system.groups.tls", icon: Lock, ids: ["configTls"] },
   {
     id: "database",
     titleKey: "settings.system.groups.database",
+    icon: Database,
     ids: ["configDatabase", "configNoiseKey"],
   },
-  { id: "policy", titleKey: "settings.system.groups.policy", ids: ["configPolicy"] },
-  { id: "dns", titleKey: "settings.system.groups.dns", ids: ["configDnsRecords"] },
+  {
+    id: "policy",
+    titleKey: "settings.system.groups.policy",
+    icon: FileText,
+    ids: ["configPolicy"],
+  },
+  { id: "dns", titleKey: "settings.system.groups.dns", icon: Globe, ids: ["configDnsRecords"] },
 ];
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -214,175 +256,194 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         }`;
 
   return (
-    <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
-      <div className="flex w-full flex-col sm:w-2/3">
-        <p className="text-md mb-4">
+    <SettingsPage
+      breadcrumb={
+        <>
           <Link className="font-medium" to="/settings">
             {t("settings.overview.title")}
           </Link>
           <span className="mx-2">/</span> {t("settings.system.breadcrumb")}
-        </p>
-        <h1 className="mt-4 mb-2 text-2xl font-medium">{t("settings.system.title")}</h1>
-        <p>{t("settings.system.body")}</p>
-      </div>
+        </>
+      }
+      description={t("settings.system.body")}
+      notices={
+        <>
+          {!reachable ? (
+            <Notice
+              icon={<CircleX className="text-red-500" />}
+              title={t("settings.system.statusUnhealthy")}
+              variant="error"
+            >
+              {t("settings.system.statusUnhealthyBody")}
+            </Notice>
+          ) : undefined}
 
-      {!reachable ? (
-        <Notice
-          icon={<CircleX className="text-red-500" />}
-          title={t("settings.system.statusUnhealthy")}
-          variant="error"
-        >
-          {t("settings.system.statusUnhealthyBody")}
-        </Notice>
-      ) : undefined}
-
-      {failed.length > 0 ? (
-        <Notice
-          title={t("settings.system.checksFailedTitle", { count: failed.length })}
-          variant="error"
-        >
-          <ul className="flex list-disc flex-col gap-1 pl-5">
-            {failed.map((check) => (
-              <li key={check.id}>{t(check.titleKey)}</li>
-            ))}
-          </ul>
-        </Notice>
-      ) : undefined}
-
+          {failed.length > 0 ? (
+            <Notice
+              title={t("settings.system.checksFailedTitle", { count: failed.length })}
+              variant="error"
+            >
+              <ul className="flex list-disc flex-col gap-1 pl-5">
+                {failed.map((check) => (
+                  <li key={check.id}>{t(check.titleKey)}</li>
+                ))}
+              </ul>
+            </Notice>
+          ) : undefined}
+        </>
+      }
+      title={t("settings.system.title")}
+    >
       <SettingsTabs defaultValue="status" label={t("settings.system.tabsLabel")}>
         <SettingsTabList>
-          <SettingsTab icon={HeartPulse} value="status">
+          <SettingsTab className="shrink-0" icon={HeartPulse} value="status">
             {t("settings.system.statusTitle")}
           </SettingsTab>
-          <SettingsTab icon={Power} value="process">
+          <SettingsTab className="shrink-0" icon={Power} value="process">
             {t("settings.system.processTitle")}
           </SettingsTab>
-          <SettingsTab icon={Stethoscope} value="diagnostics">
+          <SettingsTab className="shrink-0" icon={Stethoscope} value="diagnostics">
             {t("settings.system.checksTitle")}
           </SettingsTab>
-          <SettingsTab icon={FileCheck} value="configuration">
+          <SettingsTab className="shrink-0" icon={FileCheck} value="configuration">
             {t("settings.system.configChecks.title")}
           </SettingsTab>
         </SettingsTabList>
 
         <SettingsPanel value="status">
-          <div className="flex items-center gap-3">
-            <StatusCircle className="h-5 w-5" isOnline={reachable} />
-            <span className="text-lg font-medium">
-              {reachable
+          <SettingsCollapsible
+            defaultOpen
+            description={!reachable ? t("settings.system.statusUnhealthyBody") : undefined}
+            icon={HeartPulse}
+            status={{
+              tone: reachable ? "ok" : "error",
+              label: reachable
                 ? t("settings.system.statusHealthy")
-                : t("settings.system.statusUnhealthy")}
-            </span>
-            {loaderData.updateAvailable ? (
-              <Chip
-                className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
-                text={t("settings.system.updateBadge")}
-              />
+                : t("settings.system.statusUnhealthy"),
+            }}
+            title={t("settings.system.statusTitle")}
+          >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <StatusCircle className="h-4 w-4" isOnline={reachable} />
+              <span className="font-medium">{t("settings.system.versionLabel")}:</span>
+              <Code>{loaderData.version}</Code>
+              {loaderData.updateAvailable ? (
+                <Chip
+                  className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
+                  text={t("settings.system.updateBadge")}
+                />
+              ) : undefined}
+            </div>
+            {loaderData.updateAvailable && loaderData.latestVersion ? (
+              <p className="text-sm text-mist-600 dark:text-mist-400">
+                {t("settings.system.updateBody", {
+                  latest: loaderData.latestVersion,
+                  current: loaderData.version,
+                })}
+              </p>
             ) : undefined}
-          </div>
-          {!reachable ? (
-            <p className="text-sm">{t("settings.system.statusUnhealthyBody")}</p>
-          ) : undefined}
-
-          <p className="text-md flex items-center gap-2">
-            <span className="font-medium">{t("settings.system.versionLabel")}:</span>
-            <Code>{loaderData.version}</Code>
-          </p>
-          {loaderData.updateAvailable && loaderData.latestVersion ? (
-            <p className="text-sm opacity-70">
-              {t("settings.system.updateBody", {
-                latest: loaderData.latestVersion,
-                current: loaderData.version,
-              })}
-            </p>
-          ) : undefined}
+          </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="process">
-          <div className="flex flex-col gap-1">
-            <p className="font-medium">{processSummary}</p>
-            <p className="text-sm opacity-70">{t("settings.system.processBody")}</p>
-          </div>
+          <SettingsCollapsible
+            defaultOpen
+            description={t("settings.system.processBody")}
+            icon={Power}
+            status={{
+              tone: !integration ? "neutral" : loaderData.canProcess ? "ok" : "warn",
+              label: processSummary,
+            }}
+            title={t("settings.system.processTitle")}
+          >
+            {integration ? (
+              <p className="text-sm text-mist-600 dark:text-mist-400">
+                {isReload
+                  ? t("settings.system.processSemanticsReload", { name: integration.name })
+                  : t("settings.system.processSemanticsRestart", { name: integration.name })}
+              </p>
+            ) : (
+              <Notice
+                icon={<CircleX className="text-mist-400" />}
+                title={t("settings.system.processUnavailableTitle")}
+              >
+                {tr("settings.system.processUnavailableBody", {
+                  link: (
+                    <Link external styled to="https://headplane.net/features/system-status">
+                      {t("settings.system.processUnavailableLink")}
+                    </Link>
+                  ),
+                })}
+              </Notice>
+            )}
 
-          {integration ? (
-            <p className="text-sm opacity-70">
-              {isReload
-                ? t("settings.system.processSemanticsReload", { name: integration.name })
-                : t("settings.system.processSemanticsRestart", { name: integration.name })}
-            </p>
-          ) : (
-            <Notice
-              icon={<CircleX className="text-mist-400" />}
-              title={t("settings.system.processUnavailableTitle")}
-            >
-              {tr("settings.system.processUnavailableBody", {
-                link: (
-                  <Link external styled to="https://headplane.net/features/system-status">
-                    {t("settings.system.processUnavailableLink")}
-                  </Link>
-                ),
-              })}
-            </Notice>
-          )}
+            <fetcher.Form method="post">
+              <input name="action_id" type="hidden" value="process_config_change" />
+              <SettingsActions>
+                {succeeded ? (
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                    {t("settings.system.processSuccess")}
+                  </span>
+                ) : undefined}
+                <Button
+                  disabled={isBusy || !integration || !loaderData.canProcess}
+                  type="submit"
+                  variant={isReload ? "heavy" : "danger"}
+                >
+                  {isBusy
+                    ? t("settings.system.processPending")
+                    : isReload
+                      ? t("settings.system.processReload")
+                      : t("settings.system.processRestart")}
+                </Button>
+              </SettingsActions>
+            </fetcher.Form>
 
-          <fetcher.Form className="flex items-center gap-3" method="post">
-            <input name="action_id" type="hidden" value="process_config_change" />
-            <Button
-              disabled={isBusy || !integration || !loaderData.canProcess}
-              type="submit"
-              variant={isReload ? "heavy" : "danger"}
-            >
-              {isBusy
-                ? t("settings.system.processPending")
-                : isReload
-                  ? t("settings.system.processReload")
-                  : t("settings.system.processRestart")}
-            </Button>
-            {succeeded ? (
-              <span className="text-sm text-emerald-600 dark:text-emerald-400">
-                {t("settings.system.processSuccess")}
-              </span>
+            {!loaderData.canProcess ? (
+              <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
+                {t("errors.permission.modifyIam")}
+              </Notice>
             ) : undefined}
-          </fetcher.Form>
 
-          {!loaderData.canProcess ? (
-            <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
-              {t("errors.permission.modifyIam")}
-            </Notice>
-          ) : undefined}
-
-          {error ? (
-            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-              {error}
-            </p>
-          ) : undefined}
+            {error ? (
+              <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </p>
+            ) : undefined}
+          </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="diagnostics">
           <div className="flex flex-col gap-1">
-            <p className="font-medium">{summarize(t, loaderData.diagnostics)}</p>
-            <p className="text-sm opacity-70">{t("settings.system.checksBody")}</p>
+            <p className="text-sm font-medium">{summarize(t, loaderData.diagnostics)}</p>
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.system.checksBody")}
+            </p>
           </div>
           <CheckGroups checks={loaderData.diagnostics} groups={DIAGNOSTIC_GROUPS} />
         </SettingsPanel>
 
         <SettingsPanel value="configuration">
           <div className="flex flex-col gap-1">
-            <p className="font-medium">
+            <p className="text-sm font-medium">
               {loaderData.configChecks.length > 0
                 ? summarize(t, loaderData.configChecks)
                 : t("settings.system.summaryChecksUnavailable")}
             </p>
-            <p className="text-sm opacity-70">{t("settings.system.configChecks.body")}</p>
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.system.configChecks.body")}
+            </p>
           </div>
           {loaderData.configChecks.length > 0 ? (
             <CheckGroups checks={loaderData.configChecks} groups={CONFIG_CHECK_GROUPS} />
           ) : (
-            <p className="text-sm opacity-70">{t("settings.system.configChecks.unavailable")}</p>
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.system.configChecks.unavailable")}
+            </p>
           )}
         </SettingsPanel>
       </SettingsTabs>
-    </div>
+    </SettingsPage>
   );
 }
 
@@ -392,12 +453,24 @@ type CheckRow = Pick<Diagnostic, "status" | "titleKey" | "bodyKey" | "vars" | "l
 
 type Translate = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
-/** The one-line "what is set right now" text of a check list row. */
-function summarize(t: Translate, checks: readonly CheckRow[]) {
-  const counts = { pass: 0, warning: 0, fail: 0 };
+interface CheckCounts {
+  pass: number;
+  warning: number;
+  fail: number;
+}
+
+function countChecks(checks: readonly CheckRow[]): CheckCounts {
+  const counts: CheckCounts = { pass: 0, warning: 0, fail: 0 };
   for (const check of checks) {
     counts[check.status] += 1;
   }
+
+  return counts;
+}
+
+/** The one-line "what is set right now" text of a check list row. */
+function summarize(t: Translate, checks: readonly CheckRow[]) {
+  const counts = countChecks(checks);
 
   return t("settings.system.summaryChecks", {
     total: checks.length,
@@ -405,6 +478,31 @@ function summarize(t: Translate, checks: readonly CheckRow[]) {
     warning: counts.warning,
     fail: counts.fail,
   });
+}
+
+/** The compact pill beside a group's title: only the counts that are non-zero. */
+function countStatus(t: Translate, counts: CheckCounts) {
+  const parts: string[] = [];
+  if (counts.pass > 0) {
+    parts.push(t("settings.system.statusPass", { count: counts.pass }));
+  }
+  if (counts.warning > 0) {
+    parts.push(t("settings.system.statusWarning", { count: counts.warning }));
+  }
+  if (counts.fail > 0) {
+    parts.push(t("settings.system.statusFail", { count: counts.fail }));
+  }
+
+  return parts.join(" · ");
+}
+
+/** A group reads green only when nothing in it needs attention. */
+function countsTone(counts: CheckCounts): SettingsStatusTone {
+  if (counts.fail > 0) {
+    return "error";
+  }
+
+  return counts.warning > 0 ? "warn" : "ok";
 }
 
 /**
@@ -429,10 +527,13 @@ function CheckGroups<Id extends string>({
           return undefined;
         }
 
+        const counts = countChecks(rows);
         return (
           <SettingsCollapsible
-            defaultOpen={rows.some((row) => row.status === "fail")}
+            defaultOpen={counts.fail > 0}
+            icon={group.icon}
             key={group.id}
+            status={{ tone: countsTone(counts), label: countStatus(t, counts) }}
             summary={summarize(t, rows)}
             title={t(group.titleKey)}
           >

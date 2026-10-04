@@ -1,3 +1,4 @@
+import { CirclePlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 
@@ -5,9 +6,8 @@ import Button from "~/components/button";
 import CodeBlock from "~/components/code-block";
 import Notice from "~/components/notice";
 import NumberInput from "~/components/number-input";
-import { SettingsCollapsible } from "~/components/settings-nav";
+import { SettingsActions, SettingsCollapsible } from "~/components/settings-nav";
 import Text from "~/components/text";
-import Title from "~/components/title";
 import { useI18n } from "~/i18n/provider";
 
 import type { ApiKeyActionResult } from "../actions";
@@ -37,23 +37,26 @@ export default function CreateApiKey() {
     <SettingsCollapsible
       defaultOpen
       description={t("settings.apiKeys.createSectionBody")}
-      title={t("settings.apiKeys.create")}
+      icon={CirclePlus}
+      status={createdKey ? { tone: "ok", label: t("settings.apiKeys.createdTitle") } : undefined}
+      title={t("settings.apiKeys.createTitle")}
     >
       {createdKey ? (
         <div className="flex flex-col gap-4">
-          <Title className="text-lg font-medium">{t("settings.apiKeys.createdTitle")}</Title>
           <Notice variant="warning">{t("settings.apiKeys.createdBody")}</Notice>
           <CodeBlock>{createdKey}</CodeBlock>
-          <Button onClick={() => setIsRevealDismissed(true)} variant="heavy">
-            {t("settings.apiKeys.createAnother")}
-          </Button>
+          <SettingsActions>
+            <Button onClick={() => setIsRevealDismissed(true)} variant="heavy">
+              {t("settings.apiKeys.createAnother")}
+            </Button>
+          </SettingsActions>
         </div>
       ) : (
         <fetcher.Form className="flex flex-col gap-4" method="post">
           <input name="action_id" type="hidden" value="create_api_key" />
           <Text>{t("settings.apiKeys.createBody")}</Text>
           {error ? (
-            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
               {error}
             </p>
           ) : null}
@@ -66,14 +69,11 @@ export default function CreateApiKey() {
             name="expiration"
             required
           />
-          <Button
-            className="w-fit"
-            disabled={fetcher.state !== "idle"}
-            type="submit"
-            variant="heavy"
-          >
-            {t("settings.apiKeys.create")}
-          </Button>
+          <SettingsActions>
+            <Button disabled={fetcher.state !== "idle"} type="submit" variant="heavy">
+              {t("settings.apiKeys.create")}
+            </Button>
+          </SettingsActions>
         </fetcher.Form>
       )}
     </SettingsCollapsible>

@@ -10,7 +10,7 @@ export default function DerpConnectivityHints() {
   const { t } = useI18n();
 
   return (
-    <div className="rounded-lg border border-mist-200 p-3 dark:border-mist-800">
+    <div className="rounded-lg bg-mist-50 p-3 dark:bg-mist-950/40">
       <Text className="font-semibold">{t("settings.headscale.derp.connectivityTitle")}</Text>
       <ul className="mt-1 list-disc pl-5 text-sm opacity-80">
         <li>{t("settings.headscale.derp.connectivityHttps")}</li>

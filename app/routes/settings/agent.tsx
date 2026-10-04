@@ -1,12 +1,18 @@
+import { BookOpen, RefreshCw } from "lucide-react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
-import { SettingsCollapsible } from "~/components/settings-nav";
+import {
+  SettingsActions,
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsField,
+  SettingsPage,
+} from "~/components/settings-nav";
 import StatusCircle from "~/components/status-circle";
 import Text from "~/components/text";
-import Title from "~/components/title";
 import { useI18n } from "~/i18n/provider";
 import { agentsContext, authContext } from "~/server/context";
 import { formatTimeDelta } from "~/utils/time";
@@ -58,144 +64,154 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher<typeof action>();
   const isSyncing = fetcher.state !== "idle";
 
+  const documentationLink = (
+    <Link external styled to="https://headplane.net/features/agent">
+      {t("settings.agent.documentation")}
+    </Link>
+  );
+
   if (!loaderData.enabled) {
     return (
-      <div className="flex max-w-(--breakpoint-lg) flex-col gap-8">
-        <Title>{t("settings.agent.title")}</Title>
-        <Notice title={t("settings.agent.notEnabledTitle")}>
-          {tr("settings.agent.notEnabledBody", {
-            reason: loaderData.reason,
-            link: (
-              <Link external styled to="https://headplane.net/features/agent">
-                {t("settings.agent.documentation")}
-              </Link>
-            ),
-          })}
-        </Notice>
-        <SettingsCollapsible
-          defaultOpen
-          description={t("settings.agent.setupRowBody")}
-          title={t("settings.agent.setupTitle")}
-        >
-          <Text>
-            {tr("settings.agent.setupBody", {
-              link: (
-                <Link external styled to="https://headplane.net/features/agent">
-                  {t("settings.agent.documentation")}
-                </Link>
-              ),
+      <SettingsPage
+        notices={
+          <Notice title={t("settings.agent.notEnabledTitle")}>
+            {tr("settings.agent.notEnabledBody", {
+              reason: loaderData.reason,
+              link: documentationLink,
             })}
-          </Text>
-        </SettingsCollapsible>
-      </div>
+          </Notice>
+        }
+        title={t("settings.agent.title")}
+      >
+        <SettingsCollapsibleGroup>
+          <SettingsCollapsible
+            defaultOpen
+            description={t("settings.agent.setupRowBody")}
+            icon={BookOpen}
+            status={{ tone: "error", label: t("settings.agent.notEnabledTitle") }}
+            title={t("settings.agent.setupTitle")}
+          >
+            <Text>
+              {tr("settings.agent.setupBody", {
+                link: documentationLink,
+              })}
+            </Text>
+          </SettingsCollapsible>
+        </SettingsCollapsibleGroup>
+      </SettingsPage>
     );
   }
 
   const isPending = !loaderData.syncedAt && loaderData.authUrl;
   const hasError = Boolean(loaderData.error);
+  const statusTone = hasError ? "error" : isPending ? "warn" : "ok";
+  const statusText = hasError
+    ? t("settings.agent.statusError")
+    : isPending
+      ? t("settings.agent.statusWaiting")
+      : t("settings.agent.statusHealthy");
+  const lastSynced = loaderData.syncedAt
+    ? formatTimeDelta(new Date(loaderData.syncedAt))
+    : t("settings.agent.never");
 
   return (
-    <div className="flex max-w-(--breakpoint-lg) flex-col gap-8">
-      <div className="flex w-full flex-col sm:w-2/3">
-        <Title>{t("settings.agent.title")}</Title>
-        <Text>{t("settings.overview.agentBody")}</Text>
-      </div>
+    <SettingsPage
+      description={t("settings.overview.agentBody")}
+      notices={
+        isPending || loaderData.error ? (
+          <>
+            {isPending ? (
+              <Notice title={t("settings.agent.needsApprovalTitle")} variant="warning">
+                {t("settings.agent.needsApprovalBody")}
+              </Notice>
+            ) : undefined}
 
-      <div className="flex items-center gap-3">
-        <StatusCircle isOnline={!hasError && !isPending} className="h-5 w-5" />
-        <span className="text-lg font-medium">
-          {hasError
-            ? t("settings.agent.statusError")
-            : isPending
-              ? t("settings.agent.statusWaiting")
-              : t("settings.agent.statusHealthy")}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Text>
-          <span className="font-medium">{t("settings.agent.lastSynced")}</span>
-          {loaderData.syncedAt ? (
-            <span suppressHydrationWarning>{formatTimeDelta(new Date(loaderData.syncedAt))}</span>
-          ) : (
-            t("settings.agent.never")
-          )}
-        </Text>
-        <Text>
-          <span className="font-medium">{t("settings.agent.nodesSynced")}</span>
-          {loaderData.nodeCount}
-        </Text>
-      </div>
-
-      {isPending ? (
-        <Notice variant="warning" title={t("settings.agent.needsApprovalTitle")}>
-          {t("settings.agent.needsApprovalBody")}
-        </Notice>
-      ) : undefined}
-
-      {loaderData.error ? (
-        <>
-          {loaderData.errorCode === "apiKeyRejected" ? (
-            <Notice variant="error" title={t("settings.agent.apiKeyRejectedTitle")}>
-              {tr("settings.agent.apiKeyRejectedBody", {
-                link: (
-                  <Link styled to="/settings/api-keys">
-                    {t("settings.agent.apiKeysLink")}
-                  </Link>
-                ),
-              })}
-            </Notice>
-          ) : undefined}
-          <Notice variant="error" title={t("settings.agent.syncErrorTitle")}>
-            {loaderData.error}
-          </Notice>
-        </>
-      ) : undefined}
-
-      <SettingsCollapsible
-        defaultOpen
-        description={t("settings.agent.actionsBody")}
-        title={t("settings.agent.actionsTitle")}
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <Text>{t("settings.agent.syncBody")}</Text>
-            <fetcher.Form method="post">
-              <Button disabled={isSyncing} type="submit" variant="heavy">
-                {isSyncing ? t("settings.agent.syncing") : t("settings.agent.syncNow")}
-              </Button>
-            </fetcher.Form>
-          </div>
-
-          {isPending ? (
-            <div className="flex flex-col gap-2">
-              <h2 className="font-medium">{t("settings.agent.approveTitle")}</h2>
+            {loaderData.error ? (
+              <>
+                {loaderData.errorCode === "apiKeyRejected" ? (
+                  <Notice variant="error" title={t("settings.agent.apiKeyRejectedTitle")}>
+                    {tr("settings.agent.apiKeyRejectedBody", {
+                      link: (
+                        <Link styled to="/settings/api-keys">
+                          {t("settings.agent.apiKeysLink")}
+                        </Link>
+                      ),
+                    })}
+                  </Notice>
+                ) : undefined}
+                <Notice variant="error" title={t("settings.agent.syncErrorTitle")}>
+                  {loaderData.error}
+                </Notice>
+              </>
+            ) : undefined}
+          </>
+        ) : undefined
+      }
+      title={t("settings.agent.title")}
+    >
+      <SettingsCollapsibleGroup>
+        <SettingsCollapsible
+          defaultOpen
+          description={t("settings.agent.actionsBody")}
+          icon={RefreshCw}
+          status={{ tone: statusTone, label: statusText }}
+          summary={t("settings.agent.summarySync", {
+            nodes: loaderData.nodeCount,
+            time: lastSynced,
+          })}
+          title={t("settings.agent.actionsTitle")}
+        >
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+              <span className="flex items-center gap-2.5 text-sm font-medium">
+                <StatusCircle isOnline={!hasError && !isPending} className="h-3.5 w-3.5" />
+                {statusText}
+              </span>
               <Text>
-                {tr("settings.agent.approveBody", {
-                  link: (
-                    <Link external styled to={loaderData.authUrl!}>
-                      {t("settings.agent.thisLink")}
-                    </Link>
-                  ),
-                })}
+                <span className="font-medium">{t("settings.agent.lastSynced")}</span>
+                <span suppressHydrationWarning>{lastSynced}</span>
+              </Text>
+              <Text>
+                <span className="font-medium">{t("settings.agent.nodesSynced")}</span>
+                {loaderData.nodeCount}
               </Text>
             </div>
-          ) : undefined}
 
-          <div className="flex flex-col gap-2">
-            <h2 className="font-medium">{t("settings.agent.setupTitle")}</h2>
-            <Text>
-              {tr("settings.agent.setupBody", {
-                link: (
-                  <Link external styled to="https://headplane.net/features/agent">
-                    {t("settings.agent.documentation")}
-                  </Link>
-                ),
-              })}
-            </Text>
+            <div className="flex flex-col gap-3">
+              <Text>{t("settings.agent.syncBody")}</Text>
+              <fetcher.Form method="post">
+                <SettingsActions>
+                  <Button disabled={isSyncing} type="submit" variant="heavy">
+                    {isSyncing ? t("settings.agent.syncing") : t("settings.agent.syncNow")}
+                  </Button>
+                </SettingsActions>
+              </fetcher.Form>
+            </div>
+
+            {isPending ? (
+              <SettingsField label={t("settings.agent.approveTitle")}>
+                <Text>
+                  {tr("settings.agent.approveBody", {
+                    link: (
+                      <Link external styled to={loaderData.authUrl!}>
+                        {t("settings.agent.thisLink")}
+                      </Link>
+                    ),
+                  })}
+                </Text>
+              </SettingsField>
+            ) : undefined}
+
+            <SettingsField label={t("settings.agent.setupTitle")}>
+              <Text>
+                {tr("settings.agent.setupBody", {
+                  link: documentationLink,
+                })}
+              </Text>
+            </SettingsField>
           </div>
-        </div>
-      </SettingsCollapsible>
-    </div>
+        </SettingsCollapsible>
+      </SettingsCollapsibleGroup>
+    </SettingsPage>
   );
 }

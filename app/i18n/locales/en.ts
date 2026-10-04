@@ -938,6 +938,9 @@ const en = {
       checkStatusPass: "Passed",
       checkStatusWarning: "Warning",
       checkStatusFail: "Failed",
+      statusPass: "{count} pass",
+      statusWarning: "{count} warning",
+      statusFail: "{count} fail",
       reviewSettings: "Review Headscale settings",
       summaryHealthy: "Healthy, running {version}",
       summaryChecks: "{total} checks: {pass} pass, {warning} warning, {fail} fail",
@@ -1178,6 +1181,10 @@ const en = {
         "Switching the mode does not copy the policy. When you switch from file to database, the policy starts out empty (which allows everything) until you import it with {command} after restarting Headscale. Every change here needs a Headscale restart.",
       savePolicy: "Save policy mode",
       saved: "Saved.",
+      statusConfigured: "Configured",
+      statusEnabled: "Enabled",
+      statusDisabled: "Disabled",
+      statusAgentRequired: "Agent required",
       fatalTitle: "Unsupported OIDC keys",
       fatalBody:
         "This configuration still contains {keys}. Headscale 0.29 refuses to start when any of these keys are present; remove them and set node lifetime with the top-level {setting} instead.",
@@ -1239,6 +1246,14 @@ const en = {
         latency: "Best latency",
         unknown: "Unknown",
         noLatency: "No data",
+        relayMachineCount: {
+          one: "{count} machine",
+          other: "{count} machines",
+        },
+        pathCount: {
+          one: "{count} path",
+          other: "{count} paths",
+        },
         urlsTitle: "DERP Map Sources",
         urlsBody:
           "URLs of DERP map files that Headscale merges and hands to every client. The public Tailscale map is a common entry.",
@@ -1412,6 +1427,7 @@ const en = {
       lastSynced: "Last synced: ",
       never: "Never",
       nodesSynced: "Nodes synced: ",
+      summarySync: "Last sync {time} · {nodes} nodes",
       needsApprovalTitle: "Agent Needs Approval",
       needsApprovalBody:
         "The agent is waiting for its Tailnet registration to be approved. Open the actions below to approve it.",
@@ -1438,6 +1454,9 @@ const en = {
       breadcrumb: "API Keys",
       title: "API Keys",
       body: "API keys authenticate tools against the Headscale API. A key is only shown in full once, when it is created.",
+      listTitle: "Existing keys",
+      listBody: "Keys that can authenticate against the Headscale API right now.",
+      summaryCount: "{count} keys",
       create: "Create API key",
       createSectionBody:
         "Create a key for a tool or script that needs to talk to the Headscale API.",
@@ -1586,6 +1605,8 @@ const en = {
       breadcrumb: "Operation Log",
       title: "Operation Log",
       body: "Every change made through Headplane is recorded here, newest first.",
+      listTitle: "Recorded operations",
+      listBody: "Newest first. Open an operation to see everything Headplane recorded for it.",
       retentionTitle: "Retention",
       retentionBody:
         "Only the newest {count} operations are kept; older entries are dropped automatically.",
@@ -1644,6 +1665,9 @@ const en = {
       breadcrumb: "Configuration Snapshots",
       title: "Configuration Snapshots",
       body: "Headplane copies Headscale's configuration file, and its policy file when one is used, before it changes them. A snapshot can be downloaded or restored later.",
+      listTitle: "Stored snapshots",
+      listBody: "Download a copy, or restore one to overwrite the live configuration.",
+      summaryStored: "{count} snapshots · {size}",
       destructiveTitle: "Restoring overwrites configuration",
       destructiveBody:
         "Restoring a snapshot writes the files back to their configured paths and asks Headscale to reload. The current configuration is lost, so download a copy first if you may need it.",

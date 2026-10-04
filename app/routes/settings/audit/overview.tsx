@@ -1,14 +1,19 @@
-import { ScrollText } from "lucide-react";
+import { ListFilter, ScrollText } from "lucide-react";
 import { useState } from "react";
 import { data, Form } from "react-router";
 
-import Chip from "~/components/chip";
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
-import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
+import {
+  SettingsActions,
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsPage,
+  SettingsStatus,
+} from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -91,50 +96,60 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { entries, total, filters, hasMore, maxEntries } = loaderData;
 
   return (
-    <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
-      <div className="flex w-full flex-col sm:w-2/3">
-        <p className="text-md mb-4">
+    <SettingsPage
+      breadcrumb={
+        <>
           <Link className="font-medium" to="/settings">
             {t("settings.overview.title")}
           </Link>
           <span className="mx-2">/</span> {t("settings.audit.breadcrumb")}
-        </p>
-        <h1 className="mt-4 mb-2 text-2xl font-medium">{t("settings.audit.title")}</h1>
-        <p>{t("settings.audit.body")}</p>
-      </div>
-
-      <Notice title={t("settings.audit.retentionTitle")}>
-        {t("settings.audit.retentionBody", { count: maxEntries })}
-      </Notice>
-
+        </>
+      }
+      description={t("settings.audit.body")}
+      notices={
+        <Notice title={t("settings.audit.retentionTitle")}>
+          {t("settings.audit.retentionBody", { count: maxEntries })}
+        </Notice>
+      }
+      title={t("settings.audit.title")}
+    >
       <SettingsCollapsibleGroup>
         <AuditFiltersSection filters={filters} />
-      </SettingsCollapsibleGroup>
 
-      <p className="text-sm opacity-70">
-        {t("settings.audit.showingCount", { shown: entries.length, total })}
-      </p>
-
-      <TableList>
-        {entries.length === 0 ? (
-          <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
-            <ScrollText />
-            <p className="font-semibold">{t("settings.audit.empty")}</p>
-          </TableList.Item>
-        ) : (
-          entries.map((entry) => <AuditEntryRow entry={entry} key={entry.id} />)
-        )}
-      </TableList>
-
-      {hasMore ? (
-        <Link
-          className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
-          to={`/settings/audit${auditQueryString({ ...filters, page: filters.page + 1 })}`}
+        <SettingsCollapsible
+          defaultOpen
+          description={t("settings.audit.listBody")}
+          icon={ScrollText}
+          status={{
+            tone: "neutral",
+            label: t("settings.audit.showingCount", { shown: entries.length, total }),
+          }}
+          title={t("settings.audit.listTitle")}
         >
-          {t("settings.audit.loadMore")}
-        </Link>
-      ) : undefined}
-    </div>
+          <TableList className="border-0">
+            {entries.length === 0 ? (
+              <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
+                <ScrollText />
+                <p className="font-semibold">{t("settings.audit.empty")}</p>
+              </TableList.Item>
+            ) : (
+              entries.map((entry) => <AuditEntryRow entry={entry} key={entry.id} />)
+            )}
+          </TableList>
+
+          {hasMore ? (
+            <SettingsActions>
+              <Link
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
+                to={`/settings/audit${auditQueryString({ ...filters, page: filters.page + 1 })}`}
+              >
+                {t("settings.audit.loadMore")}
+              </Link>
+            </SettingsActions>
+          ) : undefined}
+        </SettingsCollapsible>
+      </SettingsCollapsibleGroup>
+    </SettingsPage>
   );
 }
 
@@ -162,6 +177,8 @@ function AuditFiltersSection({ filters }: { filters: AuditFilters }) {
   return (
     <SettingsCollapsible
       description={t("settings.audit.filtersDescription")}
+      icon={ListFilter}
+      status={{ tone: "neutral", label: t(RANGE_KEYS[filters.range]) }}
       summary={summary}
       title={t("settings.audit.filtersTitle")}
     >
@@ -205,7 +222,7 @@ function AuditFilterForm({ filters }: { filters: AuditFilters }) {
           value={filters.range}
         />
       </div>
-      <div className="flex gap-3">
+      <SettingsActions>
         <button
           className="w-fit rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50"
           type="submit"
@@ -218,7 +235,7 @@ function AuditFilterForm({ filters }: { filters: AuditFilters }) {
         >
           {t("settings.audit.filterReset")}
         </Link>
-      </div>
+      </SettingsActions>
     </Form>
   );
 }
@@ -245,14 +262,9 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
         <span className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{action}</span>
-            <Chip
-              className={
-                entry.result === "success"
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
-              }
-              text={result}
-            />
+            <SettingsStatus tone={entry.result === "success" ? "ok" : "error"}>
+              {result}
+            </SettingsStatus>
           </span>
           {entry.target ? (
             <span className="truncate text-sm opacity-80">{entry.target}</span>

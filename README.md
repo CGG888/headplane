@@ -42,6 +42,7 @@ Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、D
 | **0.14.1** | **修复**：配置检查把"容器看不到的宿主目录"误判为"尚未创建/首次启动"（现统一为"无法检查"并提示挂载）                                                                                                                                                                              |
 | **0.15.0** | **设置页全部改为「分组列表 + 右侧抽屉」**；DERP 预设支持**只使用自建内嵌中继**（`derp.urls: []`）并显示**当前默认中继来源**；新增 `derp.server.ipv4`/`ipv6`；文案对齐官方（私钥缺失会自动生成、`server_url` 必须 https、需 tcp/443 + udp/3478）                                  |
 | **0.16.0** | 设置页导航**改为与顶部导航一致的横向 Tab**，内容多的分组用**展开/折叠**（不再右侧弹出，确认类操作回到居中对话框）；DERP 页显示**由 `server_url` 推导的对外中继端口**，并给出**反代检查清单**（转发 `/derp`、允许 Upgrade、HTTPS、udp/3478 直达）                                 |
+| **0.17.0** | **设置区视觉打磨**：统一页面外壳（标题/说明/通知）、**分段式 Tab 导航**（窄屏可横向滚动）、折叠卡片带**图标与状态徽标**（OIDC 是否配置、策略模式、可信代理数量、内嵌中继状态、密钥数量、Agent 同步、快照体积、检查结果）、保存按钮统一右对齐，浅色/深色对比一致 |
 
 ### 界面语言
 
@@ -73,6 +74,8 @@ Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、D
 官方安装文档：<https://headplane.net>　本仓库镜像：
 
 > **飞牛 fnOS（fpk 原生 headscale + Lucky 反代）的完整安装说明，见 [docs/install/fnos.md](./docs/install/fnos.md)** —— 含两份可直接使用的设置文件（`config.yaml` 与 `docker-compose.yml`）与全部常见问题排查。
+>
+> **注意**：fnOS 官方应用中心不提供 headscale，需先在应用中心添加第三方源 [github.com/conversun/fnos-store](https://github.com/conversun/fnos-store)，再安装 `headscale`（详见上面那份 fnOS 安装说明）。
 
 ```bash
 docker pull ghcr.io/cgg888/headplane:latest

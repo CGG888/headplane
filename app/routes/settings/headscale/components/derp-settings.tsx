@@ -1,12 +1,17 @@
+import { Map, MapPinned, RefreshCw, Server } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Input from "~/components/input";
-import { SettingsCollapsible, SettingsCollapsibleGroup } from "~/components/settings-nav";
+import {
+  SettingsActions,
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsField,
+} from "~/components/settings-nav";
 import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
-import Text from "~/components/text";
 import { useI18n } from "~/i18n/provider";
 import type { DERPSettingsView } from "~/server/headscale/config-loader";
 import cn from "~/utils/cn";
@@ -26,6 +31,10 @@ interface DerpSettingsProps {
   isDisabled: boolean;
   /** Documented location of the region signing key, prefilled by the preset. */
   privateKeyDefault: string;
+  /** Where the relays come from, resolved by the page into a status pill. */
+  relaySourceStatus?: { tone: "ok" | "warn"; label: string };
+  /** The existing "what is set right now" line for the relay source. */
+  relaySourceSummary?: string;
   settings: DERPSettingsView;
 }
 
@@ -42,23 +51,23 @@ function GroupError({ message }: { message: string | undefined }) {
   );
 }
 
-function SaveRow({ disabled, label, savedLabel }: SaveRowProps) {
-  return (
-    <div className="flex items-center gap-3">
-      <Button disabled={disabled} type="submit" variant="heavy">
-        {label}
-      </Button>
-      {savedLabel ? (
-        <span className="text-sm text-emerald-600 dark:text-emerald-400">{savedLabel}</span>
-      ) : undefined}
-    </div>
-  );
-}
-
 interface SaveRowProps {
   disabled: boolean;
   label: string;
   savedLabel: string | undefined;
+}
+
+function SaveRow({ disabled, label, savedLabel }: SaveRowProps) {
+  return (
+    <SettingsActions>
+      {savedLabel ? (
+        <span className="text-sm text-emerald-600 dark:text-emerald-400">{savedLabel}</span>
+      ) : undefined}
+      <Button disabled={disabled} type="submit" variant="heavy">
+        {label}
+      </Button>
+    </SettingsActions>
+  );
 }
 
 interface BooleanFieldProps {
@@ -84,18 +93,14 @@ function BooleanField({
 }: BooleanFieldProps) {
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <Text className="font-semibold">{label}</Text>
-          <Text className="text-sm opacity-70">{description}</Text>
-        </div>
+      <SettingsField description={description} label={label}>
         <Switch
           checked={checked}
           disabled={disabled}
           label={label}
           onCheckedChange={onCheckedChange}
         />
-      </div>
+      </SettingsField>
       <input name={name} type="hidden" value={checked ? "true" : "false"} />
     </>
   );
@@ -117,6 +122,8 @@ function RemoveButton({ disabled, label }: { disabled: boolean; label: string })
 export default function DerpSettings({
   isDisabled,
   privateKeyDefault,
+  relaySourceStatus,
+  relaySourceSummary,
   settings,
 }: DerpSettingsProps) {
   const { t } = useI18n();
@@ -275,7 +282,11 @@ export default function DerpSettings({
   return (
     <SettingsCollapsibleGroup>
       <SettingsCollapsible
+        defaultOpen
         description={t("settings.headscale.derp.urlsBody")}
+        icon={Map}
+        status={relaySourceStatus}
+        summary={relaySourceSummary}
         title={t("settings.headscale.derp.urlsTitle")}
       >
         <section className="flex w-full flex-col">
@@ -308,7 +319,7 @@ export default function DerpSettings({
           ) : undefined}
 
           <addUrlFetcher.Form
-            className="mt-4 flex items-end gap-3"
+            className="mt-4 flex flex-col gap-3"
             method="post"
             onSubmit={onAddUrl}
           >
@@ -327,18 +338,27 @@ export default function DerpSettings({
               required
               value={urlValue}
             />
-            <Button disabled={isDisabled || urlBusy} type="submit" variant="heavy">
-              {t("settings.headscale.derp.addUrl")}
-            </Button>
+            <SettingsActions>
+              <Button disabled={isDisabled || urlBusy} type="submit" variant="heavy">
+                {t("settings.headscale.derp.addUrl")}
+              </Button>
+            </SettingsActions>
           </addUrlFetcher.Form>
 
           <GroupError message={addUrlError} />
         </section>
+      </SettingsCollapsible>
 
+      <SettingsCollapsible
+        description={t("settings.headscale.derp.pathsBody")}
+        icon={MapPinned}
+        status={{
+          tone: settings.paths.length > 0 ? "ok" : "neutral",
+          label: t("settings.headscale.derp.pathCount", { count: settings.paths.length }),
+        }}
+        title={t("settings.headscale.derp.pathsTitle")}
+      >
         <section className="flex w-full flex-col">
-          <h4 className="text-sm font-medium">{t("settings.headscale.derp.pathsTitle")}</h4>
-          <p className="mt-1 mb-3 text-sm opacity-70">{t("settings.headscale.derp.pathsBody")}</p>
-
           <TableList>
             {settings.paths.length === 0 ? (
               <TableList.Item className="justify-center py-4 opacity-70">
@@ -368,7 +388,7 @@ export default function DerpSettings({
           ) : undefined}
 
           <addPathFetcher.Form
-            className="mt-4 flex items-end gap-3"
+            className="mt-4 flex flex-col gap-3"
             method="post"
             onSubmit={onAddPath}
           >
@@ -387,9 +407,11 @@ export default function DerpSettings({
               required
               value={pathValue}
             />
-            <Button disabled={isDisabled || pathBusy} type="submit" variant="heavy">
-              {t("settings.headscale.derp.addPath")}
-            </Button>
+            <SettingsActions>
+              <Button disabled={isDisabled || pathBusy} type="submit" variant="heavy">
+                {t("settings.headscale.derp.addPath")}
+              </Button>
+            </SettingsActions>
           </addPathFetcher.Form>
 
           <GroupError message={addPathError} />
@@ -398,6 +420,13 @@ export default function DerpSettings({
 
       <SettingsCollapsible
         description={t("settings.headscale.derp.refreshBody")}
+        icon={RefreshCw}
+        status={{
+          tone: autoUpdate ? "ok" : "neutral",
+          label: autoUpdate
+            ? t("settings.headscale.statusEnabled")
+            : t("settings.headscale.statusDisabled"),
+        }}
         title={t("settings.headscale.derp.refreshTitle")}
       >
         <section className="flex w-full flex-col">
@@ -439,6 +468,13 @@ export default function DerpSettings({
 
       <SettingsCollapsible
         description={t("settings.headscale.derp.serverBody")}
+        icon={Server}
+        status={{
+          tone: serverEnabled ? "ok" : "neutral",
+          label: serverEnabled
+            ? t("settings.headscale.statusEnabled")
+            : t("settings.headscale.statusDisabled"),
+        }}
         title={t("settings.headscale.derp.serverTitle")}
       >
         <DerpEmbeddedPreset
@@ -534,7 +570,7 @@ export default function DerpSettings({
             onCheckedChange={setAutoAdd}
           />
 
-          <p className="text-sm opacity-70">
+          <p className="text-sm text-mist-600 dark:text-mist-400">
             {keyConfigured
               ? t("settings.headscale.derp.keyConfigured")
               : t("settings.headscale.derp.keyMissing")}

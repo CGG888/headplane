@@ -7,6 +7,7 @@ import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
 import {
   SettingsCollapsible,
+  SettingsPage,
   SettingsPanel,
   SettingsTab,
   SettingsTabList,
@@ -136,103 +137,150 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const relaySourceSummary = t("settings.headscale.derp.relaySourceLabel", {
     source: t(RELAY_SOURCE_KEYS[relaySource]),
   });
+  const relaySourceStatus: { tone: "ok" | "warn"; label: string } = {
+    tone: relaySource === "none" ? "warn" : "ok",
+    label: t(RELAY_SOURCE_KEYS[relaySource]),
+  };
+
+  const oidcConfigured = oidc !== null && oidc.issuer.length > 0;
 
   return (
-    <div className="flex max-w-(--breakpoint-lg) flex-col gap-4">
-      <div className="flex w-full flex-col sm:w-2/3">
-        <p className="text-md mb-4">
+    <SettingsPage
+      breadcrumb={
+        <>
           <Link className="font-medium" to="/settings">
             {t("settings.overview.title")}
           </Link>
           <span className="mx-2">/</span> {t("settings.headscale.breadcrumb")}
-        </p>
-        {!writable ? (
-          <Notice title={t("settings.headscale.notWritableTitle")} variant="error">
-            {tr("settings.headscale.notWritableBody", { file: <Code>config.yaml</Code> })}
-          </Notice>
-        ) : !access ? (
-          <Notice title={t("settings.headscale.readOnlyTitle")} variant="warning">
-            {t("errors.permission.modifyIam")}
-          </Notice>
-        ) : undefined}
-        {fatalOidcKeys.length > 0 ? (
-          <Notice title={t("settings.headscale.fatalTitle")} variant="error">
-            {tr("settings.headscale.fatalBody", {
-              keys: <Code>{fatalOidcKeys.join(", ")}</Code>,
-              setting: <Code>node.expiry</Code>,
-            })}
-          </Notice>
-        ) : undefined}
-        <h1 className="mt-4 mb-2 text-2xl font-medium">{t("settings.headscale.title")}</h1>
-        <p>{t("settings.headscale.body")}</p>
-      </div>
-
+        </>
+      }
+      description={t("settings.headscale.body")}
+      notices={
+        <>
+          {!writable ? (
+            <Notice title={t("settings.headscale.notWritableTitle")} variant="error">
+              {tr("settings.headscale.notWritableBody", { file: <Code>config.yaml</Code> })}
+            </Notice>
+          ) : !access ? (
+            <Notice title={t("settings.headscale.readOnlyTitle")} variant="warning">
+              {t("errors.permission.modifyIam")}
+            </Notice>
+          ) : undefined}
+          {fatalOidcKeys.length > 0 ? (
+            <Notice title={t("settings.headscale.fatalTitle")} variant="error">
+              {tr("settings.headscale.fatalBody", {
+                keys: <Code>{fatalOidcKeys.join(", ")}</Code>,
+                setting: <Code>node.expiry</Code>,
+              })}
+            </Notice>
+          ) : undefined}
+        </>
+      }
+      title={t("settings.headscale.title")}
+    >
       <SettingsTabs defaultValue="oidc" label={t("settings.headscale.title")}>
         <SettingsTabList>
-          <SettingsTab icon={KeyRound} value="oidc">
+          <SettingsTab className="shrink-0" icon={KeyRound} value="oidc">
             {t("settings.headscale.oidcTitle")}
           </SettingsTab>
-          <SettingsTab icon={ShieldCheck} value="trusted-proxies">
+          <SettingsTab className="shrink-0" icon={ShieldCheck} value="trusted-proxies">
             {t("settings.headscale.trustedProxiesTitle")}
           </SettingsTab>
-          <SettingsTab icon={Scale} value="policy">
+          <SettingsTab className="shrink-0" icon={Scale} value="policy">
             {t("settings.headscale.policyTitle")}
           </SettingsTab>
-          <SettingsTab icon={SlidersHorizontal} value="advanced">
+          <SettingsTab className="shrink-0" icon={SlidersHorizontal} value="advanced">
             {t("settings.headscale.advancedTitle")}
           </SettingsTab>
-          <SettingsTab icon={Network} value="derp">
+          <SettingsTab className="shrink-0" icon={Network} value="derp">
             {t("settings.headscale.derp.title")}
           </SettingsTab>
-          <SettingsTab icon={Tags} value="derp-regions">
+          <SettingsTab className="shrink-0" icon={Tags} value="derp-regions">
             {t("settings.headscale.derp.regionNamesTitle")}
           </SettingsTab>
         </SettingsTabList>
 
         <SettingsPanel value="oidc">
-          <p className="text-sm opacity-70">
-            {oidc && oidc.issuer.length > 0
-              ? t("settings.headscale.summaryIssuer", { issuer: oidc.issuer })
-              : t("settings.headscale.summaryNotConfigured")}
-          </p>
-          <OidcSettings isDisabled={isDisabled} oidc={oidc} />
+          <SettingsCollapsible
+            defaultOpen
+            icon={KeyRound}
+            status={{
+              tone: oidcConfigured ? "ok" : "warn",
+              label: oidcConfigured
+                ? t("settings.headscale.statusConfigured")
+                : t("settings.headscale.summaryNotConfigured"),
+            }}
+            summary={
+              oidcConfigured
+                ? t("settings.headscale.summaryIssuer", { issuer: oidc?.issuer ?? "" })
+                : undefined
+            }
+            title={t("settings.headscale.oidcTitle")}
+          >
+            <OidcSettings isDisabled={isDisabled} oidc={oidc} />
+          </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="trusted-proxies">
-          <p className="text-sm opacity-70">{t("settings.headscale.trustedProxiesBody")}</p>
-          <p className="text-sm opacity-70">
-            {t("settings.headscale.trustedProxiesSummary", { count: trustedProxies.length })}
-          </p>
-          <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
+          <SettingsCollapsible
+            defaultOpen
+            description={t("settings.headscale.trustedProxiesBody")}
+            icon={ShieldCheck}
+            status={{
+              tone: trustedProxies.length > 0 ? "ok" : "neutral",
+              label: t("settings.headscale.trustedProxiesSummary", {
+                count: trustedProxies.length,
+              }),
+            }}
+            title={t("settings.headscale.trustedProxiesTitle")}
+          >
+            <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
+          </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="policy">
-          <p className="text-sm opacity-70">{t("settings.headscale.policyBody")}</p>
-          <p className="text-sm opacity-70">
-            {t("settings.headscale.policySummary", { mode: policyMode })}
-          </p>
-          <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
+          <SettingsCollapsible
+            defaultOpen
+            description={t("settings.headscale.policyBody")}
+            icon={Scale}
+            status={{
+              tone: policyMode === "database" ? "ok" : "neutral",
+              label:
+                policyMode === "database"
+                  ? t("settings.headscale.policyModeDatabase")
+                  : t("settings.headscale.policyModeFile"),
+            }}
+            summary={t("settings.headscale.policySummary", { mode: policyMode })}
+            title={t("settings.headscale.policyTitle")}
+          >
+            <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
+          </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="advanced">
-          <p className="text-sm opacity-70">{t("settings.headscale.advancedBody")}</p>
-          <p className="text-sm opacity-70">
-            {t("settings.headscale.advancedSummary", {
-              expiry: advanced.nodeExpiry,
-              level: advanced.logLevel,
-            })}
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">
+              {t("settings.headscale.advancedSummary", {
+                expiry: advanced.nodeExpiry,
+                level: advanced.logLevel,
+              })}
+            </p>
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.headscale.advancedBody")}
+            </p>
+          </div>
           <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
         </SettingsPanel>
 
         <SettingsPanel value="derp">
-          <p className="text-sm opacity-70">{t("settings.headscale.derp.body")}</p>
-          <p className="rounded-lg border border-mist-200 p-3 text-sm dark:border-mist-800">
-            <span className="font-semibold">{relaySourceSummary}</span>
+          <p className="text-sm text-mist-600 dark:text-mist-400">
+            {t("settings.headscale.derp.body")}
           </p>
           <DerpSettings
             isDisabled={isDisabled}
             privateKeyDefault={derpPrivateKeyDefault}
+            relaySourceStatus={relaySourceStatus}
+            relaySourceSummary={relaySourceSummary}
             settings={derp}
           />
           <DerpStatus
@@ -245,17 +293,22 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="derp-regions">
           <SettingsCollapsible
+            defaultOpen
             description={t("settings.headscale.derp.regionNamesBody")}
-            summary={t("settings.headscale.derp.regionNamesSummary", {
-              count: Object.keys(derpRegionNames).length,
-            })}
+            icon={Tags}
+            status={{
+              tone: Object.keys(derpRegionNames).length > 0 ? "ok" : "neutral",
+              label: t("settings.headscale.derp.regionNamesSummary", {
+                count: Object.keys(derpRegionNames).length,
+              }),
+            }}
             title={t("settings.headscale.derp.regionNamesTitle")}
           >
             <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
           </SettingsCollapsible>
         </SettingsPanel>
       </SettingsTabs>
-    </div>
+    </SettingsPage>
   );
 }
 

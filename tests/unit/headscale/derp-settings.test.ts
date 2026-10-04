@@ -136,8 +136,8 @@ describe("DERP relay source", () => {
 
 describe("public relay endpoint", () => {
   test("uses the explicit port server_url names", () => {
-    expect(deriveDerpPublicEndpoint("https://et.mtoo.vip:8443")).toEqual({
-      host: "et.mtoo.vip",
+    expect(deriveDerpPublicEndpoint("https://headscale.example.com:8443")).toEqual({
+      host: "headscale.example.com",
       port: 8443,
       explicitPort: true,
     });
@@ -190,8 +190,8 @@ describe("public relay endpoint", () => {
   });
 
   test("formats the endpoint as host:port", () => {
-    const endpoint = deriveDerpPublicEndpoint("https://et.mtoo.vip:8443");
-    expect(endpoint && formatDerpPublicEndpoint(endpoint)).toBe("et.mtoo.vip:8443");
+    const endpoint = deriveDerpPublicEndpoint("https://headscale.example.com:8443");
+    expect(endpoint && formatDerpPublicEndpoint(endpoint)).toBe("headscale.example.com:8443");
 
     const implicit = deriveDerpPublicEndpoint("https://headscale.example.com");
     expect(implicit && formatDerpPublicEndpoint(implicit)).toBe("headscale.example.com:443");

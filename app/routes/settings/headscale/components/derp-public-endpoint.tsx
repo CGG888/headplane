@@ -17,7 +17,7 @@ export default function DerpPublicEndpoint({ serverUrl }: { serverUrl: string })
   const address = endpoint ? formatDerpPublicEndpoint(endpoint) : undefined;
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-mist-200 p-3 sm:flex-row sm:gap-6 dark:border-mist-800">
+    <div className="flex flex-col gap-4 rounded-lg bg-mist-50 p-3 sm:flex-row sm:gap-6 dark:bg-mist-950/40">
       <div className="sm:w-1/2">
         <Text className="font-semibold">{t("settings.headscale.derp.publicPortTitle")}</Text>
         {address ? (
