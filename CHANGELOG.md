@@ -1,5 +1,7 @@
 # Next
 
+# 0.14.0 (October 5, 2026)
+
 ## Changes
 
 - The DERP section of the Headscale settings page can now **enable the embedded DERP server in one step**: a preset dialog fills the region id, code, name, STUN address and private-key path, and explains that it publishes a new region to every client.
@@ -9,6 +11,8 @@
 ## Fixes
 
 - Fixed the audit log, the snapshots pages and the API key actions answering **Unexpected Server Error**. The two contexts those pages read were never registered for requests, so asking for them failed at runtime (and only in those pages, which is why it slipped through). A unit test now fails whenever a context Headplane exports is not registered.
+
+---
 
 # 0.13.1 (October 5, 2026)
 
