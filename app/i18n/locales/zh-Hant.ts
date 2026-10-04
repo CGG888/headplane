@@ -1180,6 +1180,35 @@ const zhHant = {
         serverKeyWarning:
           "內嵌 DERP 伺服器需要 derp.server.private_key_path 指向的私密金鑰檔案。Headscale 會在可以時自動產生該金鑰，因此目錄必須可寫入，已存在的檔案也必須可被 Headscale 讀取。",
         saveServer: "儲存內嵌伺服器設定",
+        presetButton: "一鍵設定內嵌伺服器",
+        presetTitle: "啟用內嵌 DERP 伺服器",
+        presetBody:
+          "這裡會填入內嵌伺服器欄位並在一次儲存中啟用 derp.server。各欄位已依目前設定預填，確認前請先檢查。",
+        presetConsequence:
+          "啟用內嵌伺服器會向所有用戶端發布一個新的 DERP 區域，並要求下列連接埠可達。你已設定的區域代碼或名稱只會被你在此確認的內容取代。",
+        privateKeyPathLabel: "私密金鑰路徑",
+        privateKeyPathDescription:
+          "區域簽章金鑰的絕對路徑。目錄可寫入時 Headscale 會自動產生該檔案，之後從該位置讀取。",
+        connectivityTitle: "用戶端必須能存取的連接埠",
+        connectivityStun: "UDP 3478 用於 STUN，讓用戶端發現自己的 NAT 對應。",
+        connectivityHttps:
+          "Headscale 提供控制服務的 HTTPS 連接埠，通常是 TCP 443；DERP 協定使用同一個監聽連接埠。",
+        connectivityNote:
+          "用戶端連線的是該區域的公開位址，因此這些連接埠必須能穿過防火牆或 NAT。這也是自架區域始終無人使用的最常見原因。",
+        regionNamesTitle: "區域名稱",
+        regionNamesBody:
+          "Headscale 不提供 DERP 地圖介面，因此外部區域只有 ID。可以為 Headplane 無法解析的區域填寫名稱；這份對應儲存在 Headplane 的資料目錄中，而不是 Headscale 設定裡。",
+        regionNamesEmpty: "還沒有設定手動區域名稱。",
+        regionNameIdLabel: "區域 ID",
+        regionNameIdDescription: "Tailscale 回報的區域數字 ID，例如 901。",
+        regionNameIdPlaceholder: "901",
+        regionNameValueLabel: "區域名稱",
+        regionNameValueDescription: "在 Headplane 中顯示於該區域 ID 旁的名稱。",
+        regionNameValuePlaceholder: "阿姆斯特丹",
+        addRegionName: "新增區域名稱",
+        removeRegionName: "移除",
+        regionNamesDialogTitle: "新增區域名稱",
+        regionNamesDialogBody: "該名稱會取代中繼表格與機器詳細頁面中的裸 ID。",
       },
       errors: {
         invalidAction: "要求無效，請重新整理頁面後重試。",
@@ -1209,6 +1238,14 @@ const zhHant = {
         invalidDerpRegionId: "請輸入 900 到 999 之間的區域 ID。",
         invalidDerpRegionCode: "內嵌伺服器需要同時填寫區域代碼與區域名稱。",
         missingDerpStunAddr: "啟用內嵌伺服器時，Headscale 要求填寫 STUN 監聽位址。",
+        invalidDerpStunAddr: "請按 host:port 的格式填寫 STUN 位址，例如 0.0.0.0:3478。",
+        invalidDerpPrivateKeyPath:
+          "請填寫私密金鑰檔案的絕對路徑，例如 /var/lib/headscale/derp_server_private.key。",
+        invalidDerpRegionMapId: "區域 ID 請填寫正整數。",
+        invalidDerpRegionMapName: "請為該區域填寫名稱。",
+        derpRegionMapNotFound: "該區域 ID 沒有手動名稱。",
+        derpRegionMapWriteFailed:
+          "Headplane 無法寫入區域名稱對應。請檢查其資料目錄是否可寫入後重試。",
         derpPathsRequired:
           "啟用內嵌伺服器且不自動新增區域時，Headscale 要求至少設定一個 DERP 地圖路徑。",
       },

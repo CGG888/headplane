@@ -31,6 +31,12 @@ export type HeadscaleSettingsErrorCode =
   | "invalidDerpRegionId"
   | "invalidDerpRegionCode"
   | "missingDerpStunAddr"
+  | "invalidDerpStunAddr"
+  | "invalidDerpPrivateKeyPath"
+  | "invalidDerpRegionMapId"
+  | "invalidDerpRegionMapName"
+  | "derpRegionMapNotFound"
+  | "derpRegionMapWriteFailed"
   | "derpPathsRequired";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
@@ -59,6 +65,12 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidDerpRegionId: "settings.headscale.errors.invalidDerpRegionId",
   invalidDerpRegionCode: "settings.headscale.errors.invalidDerpRegionCode",
   missingDerpStunAddr: "settings.headscale.errors.missingDerpStunAddr",
+  invalidDerpStunAddr: "settings.headscale.errors.invalidDerpStunAddr",
+  invalidDerpPrivateKeyPath: "settings.headscale.errors.invalidDerpPrivateKeyPath",
+  invalidDerpRegionMapId: "settings.headscale.errors.invalidDerpRegionMapId",
+  invalidDerpRegionMapName: "settings.headscale.errors.invalidDerpRegionMapName",
+  derpRegionMapNotFound: "settings.headscale.errors.derpRegionMapNotFound",
+  derpRegionMapWriteFailed: "settings.headscale.errors.derpRegionMapWriteFailed",
   derpPathsRequired: "settings.headscale.errors.derpPathsRequired",
 };
 

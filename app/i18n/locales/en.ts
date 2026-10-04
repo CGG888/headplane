@@ -1264,6 +1264,37 @@ const en = {
         serverKeyWarning:
           "The embedded DERP server needs the private key file configured in derp.server.private_key_path. Headscale creates the key there when it can, so the directory must be writable, and an existing file must be readable by Headscale.",
         saveServer: "Save embedded server",
+        presetButton: "Set up the embedded server",
+        presetTitle: "Enable the embedded DERP server",
+        presetBody:
+          "This fills in the embedded server fields and enables derp.server in one save. The values are prefilled from the current configuration; review them before confirming.",
+        presetConsequence:
+          "Enabling the embedded server publishes a new DERP region to every client and requires the ports below to be reachable. A region code or name you already set is only replaced by what you confirm here.",
+        privateKeyPathLabel: "Private key path",
+        privateKeyPathDescription:
+          "Absolute path of the region signing key. Headscale creates the file when the directory is writable, and reads it from there afterwards.",
+        connectivityTitle: "What clients must reach",
+        connectivityStun: "UDP 3478 for STUN, so clients can discover their NAT mapping.",
+        connectivityHttps:
+          "The Headscale HTTPS port that serves the control server, usually TCP 443; the DERP protocol runs on that same listener.",
+        connectivityNote:
+          "Clients connect to the region's public address, so its ports must be reachable through any firewall or NAT. That is the usual reason a self-hosted region never gets used.",
+        regionNamesTitle: "Region names",
+        regionNamesBody:
+          "Headscale does not expose its DERP map, so external regions only have IDs. Name any region Headplane cannot resolve; the mapping is stored in Headplane's data directory, not in Headscale's config.",
+        regionNamesEmpty: "No manual region names are configured.",
+        regionNameIdLabel: "Region ID",
+        regionNameIdDescription:
+          "The numeric ID Tailscale reports for the region, for example 901.",
+        regionNameIdPlaceholder: "901",
+        regionNameValueLabel: "Region name",
+        regionNameValueDescription: "The name shown next to this region ID in Headplane.",
+        regionNameValuePlaceholder: "Amsterdam",
+        addRegionName: "Add region name",
+        removeRegionName: "Remove",
+        regionNamesDialogTitle: "Add a region name",
+        regionNamesDialogBody:
+          "The name is shown instead of the bare ID in the relay table and on the machine detail page.",
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
@@ -1295,6 +1326,14 @@ const en = {
         invalidDerpRegionCode: "The embedded server needs both a region code and a region name.",
         missingDerpStunAddr:
           "Headscale requires a STUN listen address when the embedded server is enabled.",
+        invalidDerpStunAddr: "Enter the STUN address as host:port, for example 0.0.0.0:3478.",
+        invalidDerpPrivateKeyPath:
+          "Enter an absolute path for the private key file, for example /var/lib/headscale/derp_server_private.key.",
+        invalidDerpRegionMapId: "Enter the region ID as a positive number.",
+        invalidDerpRegionMapName: "Enter a name for this region.",
+        derpRegionMapNotFound: "This region ID has no manual name.",
+        derpRegionMapWriteFailed:
+          "Headplane could not write the region name mapping. Check that its data directory is writable and try again.",
         derpPathsRequired:
           "Headscale requires at least one DERP map path when the embedded server is enabled and its region is not added automatically.",
       },

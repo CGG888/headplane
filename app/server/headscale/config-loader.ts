@@ -182,8 +182,11 @@ export interface DERPEmbeddedServerView {
   regionCode: string;
   regionName: string;
   stunListenAddr: string;
-  // The key path itself is never returned; the page only needs to know whether
-  // one is configured.
+  // The configured key path, or an empty string when none is set. It is not a
+  // secret (Headscale reads the key file itself), and the embedded-server
+  // preset dialog prefills the field with it.
+  privateKeyPath: string;
+  // Whether a path is configured at all; the page shows it as a status line.
   hasPrivateKey: boolean;
   verifyClients: boolean;
   automaticallyAddEmbeddedDerpRegion: boolean;
@@ -444,6 +447,7 @@ function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
       regionCode: readString(server.region_code, defaults.server.regionCode),
       regionName: readString(server.region_name, defaults.server.regionName),
       stunListenAddr: readString(server.stun_listen_addr, defaults.server.stunListenAddr),
+      privateKeyPath: readString(server.private_key_path),
       // Headscale generates the key file when the path is missing, so the page
       // only needs to know whether a path is configured at all.
       hasPrivateKey: readString(server.private_key_path).length > 0,

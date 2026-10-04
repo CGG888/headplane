@@ -13,6 +13,7 @@ import {
   headscaleLiveStoreContext,
   requestApiContext,
 } from "~/server/context";
+import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
 
@@ -25,6 +26,7 @@ import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
+import { defaultDerpPrivateKeyPath } from "./derp-settings";
 import { buildDerpRelayRows, type DerpRelayRow } from "./derp-status";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -69,6 +71,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
     derp: headscaleConfig.getDERPSettings(),
+    // Manual names for the regions Headscale cannot name itself, plus the
+    // documented key location the embedded-server preset prefills.
+    derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
+    derpPrivateKeyDefault: defaultDerpPrivateKeyPath(appConfig.headscale.config_path),
     derpRelay,
     agentEnabled: agents !== undefined,
     policyMode,
@@ -88,6 +94,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     oidc,
     advanced,
     derp,
+    derpRegionNames,
+    derpPrivateKeyDefault,
     derpRelay,
     agentEnabled,
     policyMode,
@@ -131,8 +139,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
       <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
       <AdvancedSettings isDisabled={isDisabled} settings={advanced} />
-      <DerpSettings isDisabled={isDisabled} settings={derp} />
-      <DerpStatus agentEnabled={agentEnabled} rows={derpRelay} />
+      <DerpSettings
+        isDisabled={isDisabled}
+        privateKeyDefault={derpPrivateKeyDefault}
+        regionNames={derpRegionNames}
+        settings={derp}
+      />
+      <DerpStatus
+        agentEnabled={agentEnabled}
+        embedded={derp.server}
+        regionNames={derpRegionNames}
+        rows={derpRelay}
+      />
     </div>
   );
 }

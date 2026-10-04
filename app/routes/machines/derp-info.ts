@@ -24,6 +24,12 @@ export interface DerpEmbeddedServer {
   regionName: string;
 }
 
+/**
+ * Region id (decimal string) to an operator-supplied name, as stored in
+ * Headplane's data directory. Resolved after the embedded server's own name.
+ */
+export type DerpRegionNames = Record<string, string>;
+
 export interface DerpRegionInfo {
   regionId: number;
   code?: string;
@@ -31,7 +37,7 @@ export interface DerpRegionInfo {
 }
 
 export interface DerpRegionLabel {
-  /** `#901`, or `#999 · headscale` when a local name is known. */
+  /** `#901`, `#999 · headscale · Headscale Embedded DERP`, or `#901 · Amsterdam`. */
   label: string;
   /** True when this region is Headscale's embedded DERP server. */
   isEmbedded: boolean;
@@ -79,19 +85,57 @@ export function embeddedDerpRegion(
   };
 }
 
-/** Labels a region id, falling back to the caller's localized "unknown" text. */
+/** The manual name for a region id, or undefined when there is none. */
+function mappedRegionName(names: DerpRegionNames | undefined, region: number): string | undefined {
+  const name = names?.[String(region)]?.trim();
+  return name ? name : undefined;
+}
+
+/** True when a region has no name from either the embedded config or the map. */
+function isUnresolvedRegion(
+  region: number | undefined,
+  embedded: DerpRegionInfo | undefined,
+  names: DerpRegionNames | undefined,
+): boolean {
+  return (
+    region !== undefined &&
+    region !== embedded?.regionId &&
+    mappedRegionName(names, region) === undefined
+  );
+}
+
+/**
+ * Labels a region id, falling back to the caller's localized "unknown" text.
+ * Precedence: the embedded server's configured code/name, then the operator's
+ * manual mapping, then the bare id. The embedded region shows its code and its
+ * full name only when the name adds something the code does not already say.
+ */
 export function regionLabel(
   region: number | undefined,
   embedded: DerpRegionInfo | undefined,
   unknown: string,
+  names?: DerpRegionNames,
 ): DerpRegionLabel {
   if (region === undefined || !Number.isFinite(region)) {
     return { label: unknown, isEmbedded: false };
   }
 
   if (embedded !== undefined && embedded.regionId === region) {
-    const name = embedded.code ?? embedded.name;
-    return { label: name ? `#${region} · ${name}` : `#${region}`, isEmbedded: true };
+    const parts = [`#${region}`];
+    if (embedded.code) {
+      parts.push(embedded.code);
+    }
+
+    if (embedded.name && embedded.name !== embedded.code) {
+      parts.push(embedded.name);
+    }
+
+    return { label: parts.join(" · "), isEmbedded: true };
+  }
+
+  const mapped = mappedRegionName(names, region);
+  if (mapped !== undefined) {
+    return { label: `#${region} · ${mapped}`, isEmbedded: false };
   }
 
   return { label: `#${region}`, isEmbedded: false };
@@ -148,6 +192,7 @@ export function buildDerpInfo(
   info: HostInfo | undefined,
   server: DerpEmbeddedServer | undefined,
   unknown: string,
+  names?: DerpRegionNames,
 ): DerpInfoView {
   const embedded = embeddedDerpRegion(server);
   const home = readRegionId(info?.HomeDERP);
@@ -156,18 +201,14 @@ export function buildDerpInfo(
 
   return {
     hasRelayData: home !== undefined || preferred !== undefined || latencies.length > 0,
-    home: regionLabel(home, embedded, unknown),
-    preferred: regionLabel(preferred, embedded, unknown),
+    home: regionLabel(home, embedded, unknown, names),
+    preferred: regionLabel(preferred, embedded, unknown, names),
     latencies: capDerpLatencies(latencies),
     hasIdOnlyRegions:
-      isExternalRegion(home, embedded) ||
-      isExternalRegion(preferred, embedded) ||
-      latencies.some((entry) => isExternalRegion(entry.regionId, embedded)),
+      isUnresolvedRegion(home, embedded, names) ||
+      isUnresolvedRegion(preferred, embedded, names) ||
+      latencies.some((entry) => isUnresolvedRegion(entry.regionId, embedded, names)),
   };
-}
-
-function isExternalRegion(region: number | undefined, embedded: DerpRegionInfo | undefined) {
-  return region !== undefined && region !== embedded?.regionId;
 }
 
 function readRegionId(value: unknown): number | undefined {

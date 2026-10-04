@@ -99,10 +99,18 @@ describe("region labels", () => {
 
   test("resolves the embedded region and leaves external regions as ids", () => {
     expect(regionLabel(999, embedded, "Unknown")).toEqual({
-      label: "#999 · headscale",
+      label: "#999 · headscale · Headscale Embedded DERP",
       isEmbedded: true,
     });
     expect(regionLabel(1, embedded, "Unknown")).toEqual({ label: "#1", isEmbedded: false });
+  });
+
+  test("keeps the code and name from duplicating when they match", () => {
+    const sameName = embeddedDerpRegion({ ...EMBEDDED, regionName: "headscale" });
+    expect(regionLabel(999, sameName, "Unknown")).toEqual({
+      label: "#999 · headscale",
+      isEmbedded: true,
+    });
   });
 
   test("marks an unknown id as the localized unknown value", () => {
@@ -133,6 +141,25 @@ describe("region labels", () => {
       isEmbedded: false,
     });
   });
+
+  test("uses the manual mapping for regions the embedded server cannot name", () => {
+    const names = { "901": "Amsterdam" };
+    expect(regionLabel(901, embedded, "Unknown", names)).toEqual({
+      label: "#901 · Amsterdam",
+      isEmbedded: false,
+    });
+    // The embedded region's own configuration wins over a manual entry.
+    expect(regionLabel(999, embedded, "Unknown", { "999": "Manual" })).toEqual({
+      label: "#999 · headscale · Headscale Embedded DERP",
+      isEmbedded: true,
+    });
+  });
+
+  test("a removed mapping restores the bare id", () => {
+    const names = { "901": "Amsterdam" };
+    expect(regionLabel(901, embedded, "Unknown", names).label).toBe("#901 · Amsterdam");
+    expect(regionLabel(901, embedded, "Unknown", {}).label).toBe("#901");
+  });
 });
 
 describe("machine relay view", () => {
@@ -147,11 +174,32 @@ describe("machine relay view", () => {
     );
 
     expect(view.hasRelayData).toBe(true);
-    expect(view.home).toEqual({ label: "#999 · headscale", isEmbedded: true });
+    expect(view.home).toEqual({
+      label: "#999 · headscale · Headscale Embedded DERP",
+      isEmbedded: true,
+    });
     expect(view.preferred).toEqual({ label: "#1", isEmbedded: false });
     expect(view.latencies.rows.map((row) => row.region)).toEqual(["999", "2", "1"]);
     expect(view.latencies.hidden).toBe(0);
     expect(view.hasIdOnlyRegions).toBe(true);
+  });
+
+  test("a mapped external region no longer counts as id-only", () => {
+    const view = buildDerpInfo(
+      { HomeDERP: 901, NetInfo: { PreferredDERP: 1 } },
+      EMBEDDED,
+      "Unknown",
+      { "901": "Amsterdam" },
+    );
+
+    expect(view.home).toEqual({ label: "#901 · Amsterdam", isEmbedded: false });
+    // Region 1 is still unmapped, so the page keeps the id-only note.
+    expect(view.hasIdOnlyRegions).toBe(true);
+
+    const fullyMapped = buildDerpInfo({ HomeDERP: 901 }, EMBEDDED, "Unknown", {
+      "901": "Amsterdam",
+    });
+    expect(fullyMapped.hasIdOnlyRegions).toBe(false);
   });
 
   test("reports no relay data before the agent has looked at the machine", () => {

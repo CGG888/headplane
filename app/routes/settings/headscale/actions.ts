@@ -1,11 +1,18 @@
 import { data } from "react-router";
 
 import {
+  appConfigContext,
   authContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
 } from "~/server/context";
+import {
+  readDerpRegionNames,
+  removeDerpRegionName,
+  setDerpRegionName,
+  writeDerpRegionNames,
+} from "~/server/headscale/derp-region-names";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
@@ -16,7 +23,15 @@ import {
   MIN_EPHEMERAL_INACTIVITY_SECONDS,
   parseGoDurationSeconds,
 } from "./advanced-settings";
-import { isHttpUrl, parseDerpRegionId, parseDerpUpdateFrequencySeconds } from "./derp-settings";
+import {
+  defaultDerpPrivateKeyPath,
+  isAbsoluteFilePath,
+  isDerpStunAddress,
+  isHttpUrl,
+  parseDerpRegionId,
+  parseDerpRegionMapId,
+  parseDerpUpdateFrequencySeconds,
+} from "./derp-settings";
 import type {
   HeadscaleSettingsErrorCode,
   HeadscaleSettingsFailure,
@@ -360,6 +375,109 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         },
       ]);
       await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "preset_embedded_derp": {
+      // One-click preset for the embedded DERP server. The dialog prefills
+      // every field from the current configuration, so the operator reviews
+      // and can edit the values before this writes them in a single patch.
+      const regionId = parseDerpRegionId(readField(formData, "derp_server_region_id"));
+      if (regionId === undefined) {
+        return failure("invalidDerpRegionId");
+      }
+
+      const regionCode = readField(formData, "derp_server_region_code");
+      const regionName = readField(formData, "derp_server_region_name");
+      if (regionCode.length === 0 || regionName.length === 0) {
+        return failure("invalidDerpRegionCode");
+      }
+
+      const stunListenAddr = readField(formData, "derp_server_stun_listen_addr");
+      if (!isDerpStunAddress(stunListenAddr)) {
+        return failure("invalidDerpStunAddr");
+      }
+
+      // An empty key path falls back to Headscale's documented install layout:
+      // the signing key sits next to Headscale's own config file.
+      const appConfig = context.get(appConfigContext);
+      const submittedKeyPath = readField(formData, "derp_server_private_key_path");
+      const privateKeyPath =
+        submittedKeyPath.length > 0
+          ? submittedKeyPath
+          : defaultDerpPrivateKeyPath(appConfig?.headscale.config_path);
+      if (!isAbsoluteFilePath(privateKeyPath)) {
+        return failure("invalidDerpPrivateKeyPath");
+      }
+
+      // Enabling the server with `automatically_add_embedded_derp_region` off
+      // requires a DERP map path, exactly like the manual save does.
+      const { paths, server } = headscaleConfig.getDERPSettings();
+      if (!server.automaticallyAddEmbeddedDerpRegion && paths.length === 0) {
+        return failure("derpPathsRequired");
+      }
+
+      await headscaleConfig.patch([
+        { path: "derp.server.enabled", value: true },
+        { path: "derp.server.region_id", value: regionId },
+        { path: "derp.server.region_code", value: regionCode },
+        { path: "derp.server.region_name", value: regionName },
+        { path: "derp.server.stun_listen_addr", value: stunListenAddr },
+        { path: "derp.server.private_key_path", value: privateKeyPath },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "add_derp_region_name": {
+      const regionId = parseDerpRegionMapId(readField(formData, "derp_region_id"));
+      if (regionId === undefined) {
+        return failure("invalidDerpRegionMapId");
+      }
+
+      const regionName = readField(formData, "derp_region_name");
+      if (regionName.length === 0) {
+        return failure("invalidDerpRegionMapName");
+      }
+
+      const dataPath = context.get(appConfigContext)?.server.data_path;
+      if (!dataPath) {
+        return failure("derpRegionMapWriteFailed");
+      }
+
+      const names = await readDerpRegionNames(dataPath);
+      const written = await writeDerpRegionNames(
+        dataPath,
+        setDerpRegionName(names, regionId, regionName),
+      );
+      if (!written) {
+        return failure("derpRegionMapWriteFailed");
+      }
+
+      return success();
+    }
+
+    case "remove_derp_region_name": {
+      const regionId = parseDerpRegionMapId(readField(formData, "derp_region_id"));
+      if (regionId === undefined) {
+        return failure("invalidDerpRegionMapId");
+      }
+
+      const dataPath = context.get(appConfigContext)?.server.data_path;
+      if (!dataPath) {
+        return failure("derpRegionMapWriteFailed");
+      }
+
+      const names = await readDerpRegionNames(dataPath);
+      if (!(String(regionId) in names)) {
+        return failure("derpRegionMapNotFound");
+      }
+
+      const written = await writeDerpRegionNames(dataPath, removeDerpRegionName(names, regionId));
+      if (!written) {
+        return failure("derpRegionMapWriteFailed");
+      }
+
       return success();
     }
 

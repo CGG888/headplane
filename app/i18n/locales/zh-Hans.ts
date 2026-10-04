@@ -1180,6 +1180,35 @@ const zhHans = {
         serverKeyWarning:
           "内嵌 DERP 服务器需要 derp.server.private_key_path 指向的私钥文件。Headscale 会在可以时自动生成该密钥，因此目录必须可写，已存在的文件也必须可被 Headscale 读取。",
         saveServer: "保存内嵌服务器设置",
+        presetButton: "一键配置内嵌服务器",
+        presetTitle: "启用内嵌 DERP 服务器",
+        presetBody:
+          "这里会填写内嵌服务器字段并在一次保存中启用 derp.server。各字段已按当前配置预填，确认前请先检查。",
+        presetConsequence:
+          "启用内嵌服务器会向所有客户端发布一个新的 DERP 区域，并要求下列端口可达。你已设置的区域代码或名称只会被你在此确认的内容替换。",
+        privateKeyPathLabel: "私钥路径",
+        privateKeyPathDescription:
+          "区域签名密钥的绝对路径。目录可写时 Headscale 会自动生成该文件，之后从该位置读取。",
+        connectivityTitle: "客户端必须能访问的端口",
+        connectivityStun: "UDP 3478 用于 STUN，让客户端发现自己的 NAT 映射。",
+        connectivityHttps:
+          "Headscale 提供控制服务的 HTTPS 端口，通常是 TCP 443；DERP 协议使用同一个监听端口。",
+        connectivityNote:
+          "客户端连接的是该区域的公网地址，因此这些端口必须能穿过防火墙或 NAT。这也是自建区域始终无人使用的最常见原因。",
+        regionNamesTitle: "区域名称",
+        regionNamesBody:
+          "Headscale 不提供 DERP 地图接口，因此外部区域只有 ID。可以为 Headplane 无法解析的区域填写名称；该映射保存在 Headplane 的数据目录中，而不是 Headscale 配置里。",
+        regionNamesEmpty: "还没有配置手动区域名称。",
+        regionNameIdLabel: "区域 ID",
+        regionNameIdDescription: "Tailscale 上报的区域数字 ID，例如 901。",
+        regionNameIdPlaceholder: "901",
+        regionNameValueLabel: "区域名称",
+        regionNameValueDescription: "在 Headplane 中显示在该区域 ID 旁边的名称。",
+        regionNameValuePlaceholder: "阿姆斯特丹",
+        addRegionName: "添加区域名称",
+        removeRegionName: "移除",
+        regionNamesDialogTitle: "添加区域名称",
+        regionNamesDialogBody: "该名称会替代中继表格和机器详情页中的裸 ID。",
       },
       errors: {
         invalidAction: "请求无效，请刷新页面后重试。",
@@ -1209,6 +1238,14 @@ const zhHans = {
         invalidDerpRegionId: "请输入 900 到 999 之间的区域 ID。",
         invalidDerpRegionCode: "内嵌服务器需要同时填写区域代码和区域名称。",
         missingDerpStunAddr: "启用内嵌服务器时，Headscale 要求填写 STUN 监听地址。",
+        invalidDerpStunAddr: "请按 host:port 的格式填写 STUN 地址，例如 0.0.0.0:3478。",
+        invalidDerpPrivateKeyPath:
+          "请填写私钥文件的绝对路径，例如 /var/lib/headscale/derp_server_private.key。",
+        invalidDerpRegionMapId: "区域 ID 请填写正整数。",
+        invalidDerpRegionMapName: "请为该区域填写名称。",
+        derpRegionMapNotFound: "该区域 ID 没有手动名称。",
+        derpRegionMapWriteFailed:
+          "Headplane 无法写入区域名称映射。请检查其数据目录是否可写后重试。",
         derpPathsRequired:
           "启用内嵌服务器且不自动添加区域时，Headscale 要求至少配置一个 DERP 地图路径。",
       },

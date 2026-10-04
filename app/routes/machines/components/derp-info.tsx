@@ -11,11 +11,14 @@ import {
   regionLabel,
   type DerpEmbeddedServer,
   type DerpRegionLabel,
+  type DerpRegionNames,
 } from "../derp-info";
 
 interface DerpInfoProps {
   /** Whether the Headplane Agent feature is enabled at all. */
   agentEnabled: boolean;
+  /** Manual region id -> name mapping from Headplane's data directory. */
+  regionNames: DerpRegionNames;
   /** Headscale's embedded DERP configuration, when it could be read. */
   server: DerpEmbeddedServer | undefined;
   /** The agent's host info for this machine, when it reported any. */
@@ -27,16 +30,16 @@ function markedLabel(label: DerpRegionLabel, marker: string) {
   return label.isEmbedded ? `${label.label} (${marker})` : label.label;
 }
 
-export default function DerpInfo({ agentEnabled, server, stats }: DerpInfoProps) {
+export default function DerpInfo({ agentEnabled, regionNames, server, stats }: DerpInfoProps) {
   const { t } = useI18n();
   const unknown = t("machines.detail.derp.unknown");
   const embedded = embeddedDerpRegion(server);
-  const view = buildDerpInfo(stats, server, unknown);
+  const view = buildDerpInfo(stats, server, unknown, regionNames);
 
   const latency = view.latencies.rows
     .map(
       (row) =>
-        `${regionLabel(row.regionId, embedded, unknown).label} · ${formatDerpLatency(row.seconds)}`,
+        `${regionLabel(row.regionId, embedded, unknown, regionNames).label} · ${formatDerpLatency(row.seconds)}`,
     )
     .join("\n");
 
@@ -86,7 +89,7 @@ export default function DerpInfo({ agentEnabled, server, stats }: DerpInfoProps)
       <p className="mt-2 text-sm text-mist-600 dark:text-mist-300">
         {server?.enabled ? (
           t("machines.detail.derp.embeddedEnabled", {
-            region: regionLabel(server.regionId, embedded, unknown).label,
+            region: regionLabel(server.regionId, embedded, unknown, regionNames).label,
           })
         ) : (
           <>

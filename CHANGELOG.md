@@ -1,5 +1,15 @@
 # Next
 
+## Changes
+
+- The DERP section of the Headscale settings page can now **enable the embedded DERP server in one step**: a preset dialog fills the region id, code, name, STUN address and private-key path, and explains that it publishes a new region to every client.
+- Relay regions are easier to read: the region name is shown next to its code, and a **manual region id → name mapping** lets you label the external regions Headplane cannot resolve (stored in Headplane's own data directory, never in Headscale's config).
+- The DERP section (and the preset dialog) now states what has to be reachable for a self-hosted region to work: UDP 3478 for STUN and the Headscale HTTPS port for the relay protocol.
+
+## Fixes
+
+- Fixed the audit log, the snapshots pages and the API key actions answering **Unexpected Server Error**. The two contexts those pages read were never registered for requests, so asking for them failed at runtime (and only in those pages, which is why it slipped through). A unit test now fails whenever a context Headplane exports is not registered.
+
 # 0.13.1 (October 5, 2026)
 
 ## Fixes

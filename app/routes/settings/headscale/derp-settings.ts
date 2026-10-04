@@ -51,3 +51,60 @@ export function parseDerpUpdateFrequencySeconds(value: string): number | undefin
 
   return seconds;
 }
+
+/**
+ * The manual region-name mapping is not limited to Headscale's embedded range:
+ * external DERP regions use their own ids, so any positive integer is valid.
+ */
+export function parseDerpRegionMapId(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const id = Number(trimmed);
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}
+
+/**
+ * `derp.server.stun_listen_addr` is a `host:port` pair Headscale binds for
+ * STUN. IPv6 hosts are accepted in brackets, matching the format Headscale
+ * itself documents.
+ */
+export function isDerpStunAddress(value: string): boolean {
+  const match = /^(?:\[[0-9a-fA-F:]+\]|[^\s:]+):(\d{1,5})$/.exec(value.trim());
+  if (!match) {
+    return false;
+  }
+
+  const port = Number(match[1]);
+  return port >= 1 && port <= 65_535;
+}
+
+/** POSIX (`/x`), Windows drive (`C:\x`) and UNC (`\\host\share`) paths. */
+export function isAbsoluteFilePath(value: string): boolean {
+  return /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(value.trim());
+}
+
+/** The file Headscale's `config-example.yaml` documents for the region key. */
+export const DERP_PRIVATE_KEY_FILENAME = "derp_server_private.key";
+export const DERP_EXAMPLE_PRIVATE_KEY_PATH = `/var/lib/headscale/${DERP_PRIVATE_KEY_FILENAME}`;
+
+/**
+ * Headscale's documented install layout keeps the embedded DERP signing key
+ * next to its config file. Only the directory is taken from `configPath`; the
+ * original separator is preserved so a Windows path stays a Windows path.
+ */
+export function defaultDerpPrivateKeyPath(configPath: string | undefined): string {
+  const trimmed = (configPath ?? "").trim();
+  if (trimmed.length === 0) {
+    return DERP_EXAMPLE_PRIVATE_KEY_PATH;
+  }
+
+  const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  if (separator < 0) {
+    return `/${DERP_PRIVATE_KEY_FILENAME}`;
+  }
+
+  return `${trimmed.slice(0, separator)}${trimmed[separator]}${DERP_PRIVATE_KEY_FILENAME}`;
+}

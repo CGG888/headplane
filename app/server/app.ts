@@ -25,6 +25,7 @@ import { loadConfig } from "./config/load";
 import {
   agentsContext,
   appConfigContext,
+  auditContext,
   authContext,
   createAppContext,
   dbContext,
@@ -35,6 +36,7 @@ import {
   integrationContext,
   oidcContext,
   requestApiContext,
+  snapshotContext,
 } from "./context";
 import { shouldDefaultToFormBody } from "./form-content-type";
 
@@ -83,6 +85,7 @@ function getLoadContext(request: Request, client: ClientAddress) {
   const routerContext = new RouterContextProvider();
   routerContext.set(agentsContext, ctx.agents);
   routerContext.set(appConfigContext, ctx.config);
+  routerContext.set(auditContext, ctx.audit);
   routerContext.set(authContext, ctx.auth);
   routerContext.set(dbContext, ctx.db);
   routerContext.set(headscaleContext, ctx.headscale);
@@ -92,6 +95,7 @@ function getLoadContext(request: Request, client: ClientAddress) {
   routerContext.set(integrationContext, ctx.integration);
   routerContext.set(oidcContext, ctx.oidc);
   routerContext.set(requestApiContext, ctx.apiForRequest);
+  routerContext.set(snapshotContext, ctx.snapshots);
   return routerContext;
 }
 

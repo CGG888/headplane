@@ -12,9 +12,16 @@ import cn from "~/utils/cn";
 
 import { isHttpUrl, parseDerpRegionId } from "../derp-settings";
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
+import DerpConnectivityHints from "./derp-connectivity-hints";
+import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedded-preset";
+import DerpRegionNames from "./derp-region-names";
 
 interface DerpSettingsProps {
   isDisabled: boolean;
+  /** Documented location of the region signing key, prefilled by the preset. */
+  privateKeyDefault: string;
+  /** Manual region id -> name mapping stored in Headplane's data directory. */
+  regionNames: Record<string, string>;
   settings: DERPSettingsView;
 }
 
@@ -103,7 +110,12 @@ function RemoveButton({ disabled, label }: { disabled: boolean; label: string })
   );
 }
 
-export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps) {
+export default function DerpSettings({
+  isDisabled,
+  privateKeyDefault,
+  regionNames,
+  settings,
+}: DerpSettingsProps) {
   const { t } = useI18n();
 
   // One fetcher per control keeps each save button, error and confirmation
@@ -130,6 +142,7 @@ export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps
   const [stunListenAddr, setStunListenAddr] = useState(settings.server.stunListenAddr);
   const [verifyClients, setVerifyClients] = useState(settings.server.verifyClients);
   const [autoAdd, setAutoAdd] = useState(settings.server.automaticallyAddEmbeddedDerpRegion);
+  const [keyConfigured, setKeyConfigured] = useState(settings.server.hasPrivateKey);
   const [serverLocalError, setServerLocalError] = useState<string | undefined>();
 
   // Clearing a field only once the server accepted the entry keeps a rejected
@@ -226,6 +239,17 @@ export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps
     }
 
     setServerLocalError(undefined);
+  }
+
+  // The preset writes the same fields the manual form edits, so the form is
+  // brought in line immediately instead of showing stale values until a reload.
+  function onPresetApplied(values: EmbeddedDerpPresetValues) {
+    setServerEnabled(true);
+    setRegionId(values.regionId);
+    setRegionCode(values.regionCode);
+    setRegionName(values.regionName);
+    setStunListenAddr(values.stunListenAddr);
+    setKeyConfigured(true);
   }
 
   return (
@@ -389,6 +413,13 @@ export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps
         <h2 className="mt-8 text-2xl font-medium">{t("settings.headscale.derp.serverTitle")}</h2>
         <p className="my-2">{t("settings.headscale.derp.serverBody")}</p>
 
+        <DerpEmbeddedPreset
+          isDisabled={isDisabled}
+          onApplied={onPresetApplied}
+          privateKeyDefault={privateKeyDefault}
+          server={settings.server}
+        />
+        <DerpConnectivityHints />
         <serverFetcher.Form className="flex flex-col gap-5" method="post" onSubmit={onSaveServer}>
           <input name="action_id" type="hidden" value="save_derp_server" />
 
@@ -457,7 +488,7 @@ export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps
           />
 
           <p className="text-sm opacity-70">
-            {settings.server.hasPrivateKey
+            {keyConfigured
               ? t("settings.headscale.derp.keyConfigured")
               : t("settings.headscale.derp.keyMissing")}
           </p>
@@ -477,6 +508,8 @@ export default function DerpSettings({ isDisabled, settings }: DerpSettingsProps
           />
         </serverFetcher.Form>
       </section>
+
+      <DerpRegionNames isDisabled={isDisabled} names={regionNames} />
     </>
   );
 }

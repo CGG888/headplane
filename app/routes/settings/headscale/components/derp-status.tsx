@@ -1,23 +1,54 @@
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
+import {
+  parseDerpRegionId,
+  regionLabel,
+  type DerpEmbeddedServer,
+} from "~/routes/machines/derp-info";
 
 import type { DerpRelayRow } from "../derp-status";
 
 interface DerpStatusProps {
   agentEnabled: boolean;
+  /** Headscale's embedded DERP configuration, when it could be read. */
+  embedded: DerpEmbeddedServer | undefined;
+  /** Manual region id -> name mapping from Headplane's data directory. */
+  regionNames: Record<string, string>;
   rows: DerpRelayRow[];
 }
 
-function Region({ region, fallback }: { region: number | undefined; fallback: string }) {
+function Region({
+  embedded,
+  fallback,
+  names,
+  region,
+}: {
+  embedded: DerpEmbeddedServer | undefined;
+  fallback: string;
+  names: Record<string, string>;
+  region: number | undefined;
+}) {
   if (region === undefined) {
     return <span className="opacity-60">{fallback}</span>;
   }
 
-  return <span className="font-mono">#{region}</span>;
+  return <span className="font-mono">{regionLabel(region, embedded, fallback, names).label}</span>;
 }
 
-export default function DerpStatus({ agentEnabled, rows }: DerpStatusProps) {
+/** The agent reports latency keys as strings, so numeric ones are labelled. */
+function latencyLabel(
+  region: string,
+  embedded: DerpEmbeddedServer | undefined,
+  names: Record<string, string>,
+  fallback: string,
+): string {
+  const id = parseDerpRegionId(region);
+  return id === undefined ? region : regionLabel(id, embedded, fallback, names).label;
+}
+
+export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }: DerpStatusProps) {
   const { t } = useI18n();
+  const fallback = t("settings.headscale.derp.unknown");
 
   return (
     <section className="w-full sm:w-2/3">
@@ -42,17 +73,24 @@ export default function DerpStatus({ agentEnabled, rows }: DerpStatusProps) {
             <TableList.Item key={row.nodeKey}>
               <span className="w-1/3 truncate text-sm">{row.name}</span>
               <span className="w-1/5 text-sm">
-                <Region fallback={t("settings.headscale.derp.unknown")} region={row.homeRegion} />
+                <Region
+                  embedded={embedded}
+                  fallback={fallback}
+                  names={regionNames}
+                  region={row.homeRegion}
+                />
               </span>
               <span className="w-1/5 text-sm">
                 <Region
-                  fallback={t("settings.headscale.derp.unknown")}
+                  embedded={embedded}
+                  fallback={fallback}
+                  names={regionNames}
                   region={row.preferredRegion}
                 />
               </span>
               <span className="w-1/4 text-right font-mono text-sm">
                 {row.latency
-                  ? `${row.latency.region} · ${Math.round(row.latency.seconds * 1000)}ms`
+                  ? `${latencyLabel(row.latency.region, embedded, regionNames, fallback)} · ${Math.round(row.latency.seconds * 1000)}ms`
                   : t("settings.headscale.derp.noLatency")}
               </span>
             </TableList.Item>

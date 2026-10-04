@@ -35,7 +35,10 @@ Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、D
 | **0.9.0**  | 新增 **Headscale API Key 管理页**、**节点到期时间可选具体日期**、**ACL 结构化编辑 `grants` / `autoApprovers` / `nodeAttrs`**、**Headscale 设置页**（完整 OIDC、`trusted_proxies`、`policy.mode` 切换）                                                                           |
 | **0.10.0** | 新增 **机器批量操作**（批量打标签/设到期/改属主/删除）、**保存前策略校验**（展示 Headscale 原文报错）、**系统状态页**（版本与更新提示、8 项诊断、一键重载/重启）                                                                                                                 |
 | **0.11.0** | 新增 **Headscale 高级配置**（默认节点有效期、临时节点回收、日志级别/格式、Taildrop/自动更新/logtail/更新检查开关）、**配置文件体检**（web 版 configtest，8 类检查）、**ACL 补全**（grant 的 `app`/`via`、`randomizeClientPort`、`postures`/`ipSets` 提示）、**DNS 记录导入导出** |
-| **0.12.0** | 新增 **DERP 面板**（自定义 DERP map、内嵌 DERP 服务器、各机器所用区域与延迟）、**操作审计**（谁改了什么，`/settings/audit`）、**配置快照与一键回滚**（`/settings/snapshots`）；**修复**：容器看不到宿主目录时配置检查误报"目录不存在"，现改为"无法验证"并提示挂载 |
+| **0.12.0** | 新增 **DERP 面板**（自定义 DERP map、内嵌 DERP 服务器、各机器所用区域与延迟）、**操作审计**（谁改了什么，`/settings/audit`）、**配置快照与一键回滚**（`/settings/snapshots`）；**修复**：容器看不到宿主目录时配置检查误报"目录不存在"，现改为"无法验证"并提示挂载                |
+| **0.13.0** | **机器详情页新增 DERP 中继信息**（所属区域、是否走自建内嵌 DERP、各区域延迟，需 Agent）；**修复**：Agent 同步错误不再显示为 `[object Object]`                                                                                                                                    |
+| **0.13.1** | **修复**：配置里的 API Key 被 Headscale 拒绝（401）时，Agent 页直接给出提示与跳转，而不是甩一段请求转储                                                                                                                                                                          |
+| **0.14.0** | DERP 增强：**一键启用内嵌 DERP 服务器**预设、**区域名称手动映射**（外部区域不再只有 `#id`）、**内嵌服务器连通性提示**（UDP 3478 + Headscale HTTPS 端口）                                                                                                                         |
 
 ### 界面语言
 

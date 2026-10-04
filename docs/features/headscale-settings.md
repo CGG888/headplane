@@ -88,6 +88,37 @@ edits how that map is used:
 | `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
 | `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
 
+### Enabling your own relay in one step
+
+The **preset** button fills the whole embedded-server block for you — region id
+`999`, code `headscale`, the example STUN address, and a private-key path next to
+Headscale's configuration file — and saves it once you confirm. It never
+overwrites a region code or name you already set: those are prefilled so you can
+edit them. Enabling the embedded server publishes a new region to every client,
+so the dialog says so before you commit.
+
+### What has to be reachable
+
+A self-hosted region is only used if clients can actually reach it:
+
+| Port                                       | Why                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| **UDP 3478**                               | STUN, so clients can discover each other through the relay.                                |
+| **The Headscale HTTPS port** (usually 443) | The relay protocol itself; Headscale serves it on the same listener as the control server. |
+
+Clients also have to reach the region's public address, so firewall and NAT
+rules are the usual reason a freshly enabled region never appears in use. The
+page repeats this next to the controls.
+
+### Region names
+
+Headscale only hands Headplane the region **ids** a machine reports — its own
+relay endpoint is not a public DERP map — so an external region shows as `#901`.
+The embedded region gets its name from your configuration automatically, and
+**Settings → Headscale → DERP** has a small editor for naming the others (a
+region id → name mapping kept in Headplane's own data directory, never written
+into Headscale's configuration). Names then appear on the machine details too.
+
 Below the form, the page lists which relay region each machine is currently
 using, with the latency it measured. That live view needs the Headplane Agent,
 because the Headscale API does not expose client measurements; without the agent

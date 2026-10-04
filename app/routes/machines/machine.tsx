@@ -1,4 +1,4 @@
-﻿import { CheckCircle, CircleSlash, Info, UserCircle } from "lucide-react";
+import { CheckCircle, CircleSlash, Info, UserCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { data } from "react-router";
 
@@ -12,11 +12,13 @@ import Tooltip from "~/components/tooltip";
 import { useI18n } from "~/i18n/provider";
 import {
   agentsContext,
+  appConfigContext,
   headscaleConfigContext,
   headscaleContext,
   headscaleLiveStoreContext,
   requestApiContext,
 } from "~/server/context";
+import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import cn from "~/utils/cn";
 import { getOSInfo, getTSVersion } from "~/utils/host-info";
@@ -32,6 +34,7 @@ import { machineAction } from "./machine-actions";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
+  const appConfig = context.get(appConfigContext);
   const getRequestApi = context.get(requestApiContext);
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
@@ -84,6 +87,9 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     // agent has synced yet, so the page can tell "no agent" from "no data".
     agentEnabled: agents !== undefined,
     derp: headscaleConfig.getDERPSettings(),
+    // Manual names for the regions Headscale cannot name itself; a missing or
+    // corrupt file simply resolves to no mapping.
+    derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
     policyTags: extractTagOwnerTags(policy),
@@ -108,6 +114,7 @@ export default function Page({
     agent,
     agentEnabled,
     derp,
+    derpRegionNames,
     stats,
     existingTags,
     policyTags,
@@ -430,7 +437,12 @@ export default function Page({
           ) : undefined}
         </div>
       </Card>
-      <DerpInfo agentEnabled={agentEnabled} server={derp.server} stats={stats} />
+      <DerpInfo
+        agentEnabled={agentEnabled}
+        regionNames={derpRegionNames}
+        server={derp.server}
+        stats={stats}
+      />
     </div>
   );
 }
