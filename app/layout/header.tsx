@@ -198,7 +198,10 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
               <MenuSeparator />
               <MenuItem
                 variant="danger"
-                onClick={() => submit({}, { action: "/logout", method: "POST" })}
+                // A plain navigation instead of a form POST: submitting to a
+                // resource route can degrade into a native POST, which reverse
+                // proxies are known to forward without its body.
+                onClick={() => window.location.assign(`${__PREFIX__}/logout`)}
               >
                 {t("header.logout")}
               </MenuItem>
