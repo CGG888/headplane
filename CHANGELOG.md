@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.5 (October 6, 2026)
+
 ## Changes
 
 - **The relay addresses are configured in one place now.** Everything — the schedule (6/12/24 hours), which families to sync, the auto-reload switch, the **external IPv6 echo** with its URL, and the detection panel listing every candidate with its origin and why it was or was not chosen — lives in **Settings → Headscale → DERP → address auto-sync**. **Check** runs both detections and the comparison and writes nothing; **Run now** writes only the key that changed, after snapshotting the configuration and recording an audit entry. The detected address is authoritative (state it plainly), **auto-reload defaults to on** so clients see a change immediately — with the warning that it briefly interrupts them, and a run that changes nothing never reloads. A failing run raises a notification through the existing alert system (a successful change does not), and the temporary/privacy-address hint lives only here.
@@ -12,6 +14,9 @@
 - The page no longer reloads in a loop when a route chunk is missing during hydration: the client checks the guard before hydrating and shows the localized "your page is out of date" notice with a manual reload instead of letting the router reload again.
 - The local DERP map file checks (exists, readable, writable, size, parses, schema, unique region ids and codes) now also appear in the system page's configuration check list.
 - The machine detail relay card shows the relay's IPv4 and IPv6 with the same copy affordance, taken from the same configuration values the settings page manages, so the three views always agree.
+
+---
+
 # 0.22.4 (October 6, 2026)
 
 ## Fixes
