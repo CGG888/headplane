@@ -43,6 +43,9 @@ export type HeadscaleSettingsErrorCode =
   | "derpRegionMapNotFound"
   | "derpRegionMapWriteFailed"
   | "derpPathsRequired"
+  | "invalidDerpSyncInterval"
+  | "invalidDerpSyncFamilies"
+  | "derpSyncSaveFailed"
   | "invalidOidcExtraParams"
   | "duplicateOidcExtraParam"
   | "invalidHaProbeInterval"
@@ -92,6 +95,9 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpRegionMapNotFound: "settings.headscale.errors.derpRegionMapNotFound",
   derpRegionMapWriteFailed: "settings.headscale.errors.derpRegionMapWriteFailed",
   derpPathsRequired: "settings.headscale.errors.derpPathsRequired",
+  invalidDerpSyncInterval: "settings.headscale.errors.invalidDerpSyncInterval",
+  invalidDerpSyncFamilies: "settings.headscale.errors.invalidDerpSyncFamilies",
+  derpSyncSaveFailed: "settings.headscale.errors.derpSyncSaveFailed",
   invalidOidcExtraParams: "settings.headscale.errors.invalidOidcExtraParams",
   duplicateOidcExtraParam: "settings.headscale.errors.duplicateOidcExtraParam",
   invalidHaProbeInterval: "settings.headscale.errors.invalidHaProbeInterval",

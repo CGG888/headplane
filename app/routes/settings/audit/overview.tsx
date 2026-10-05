@@ -46,6 +46,7 @@ const ACTION_KEYS: Record<string, TranslationKey> = {
   [AUDIT_ACTIONS.restrictionRemoveGroup]: "settings.audit.actions.restrictionRemoveGroup",
   [AUDIT_ACTIONS.restrictionAddUser]: "settings.audit.actions.restrictionAddUser",
   [AUDIT_ACTIONS.restrictionRemoveUser]: "settings.audit.actions.restrictionRemoveUser",
+  [AUDIT_ACTIONS.derpAddressSync]: "settings.audit.actions.derpAddressSync",
   [AUDIT_ACTIONS.snapshotCreate]: "settings.audit.actions.snapshotCreate",
   [AUDIT_ACTIONS.snapshotRestore]: "settings.audit.actions.snapshotRestore",
 };

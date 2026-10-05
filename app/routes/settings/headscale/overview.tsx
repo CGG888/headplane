@@ -30,6 +30,7 @@ import {
   agentsContext,
   appConfigContext,
   authContext,
+  derpSyncContext,
   headscaleConfigContext,
   headscaleLiveStoreContext,
   requestApiContext,
@@ -46,6 +47,7 @@ import AdvancedSettings from "./components/advanced-settings";
 import DerpRegionNames from "./components/derp-region-names";
 import DerpSettings from "./components/derp-settings";
 import DerpStatus from "./components/derp-status";
+import DerpSyncSettings from "./components/derp-sync";
 import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
 import ServerOverview from "./components/server-overview";
@@ -69,6 +71,7 @@ const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
   const auth = context.get(authContext);
+  const derpSync = context.get(derpSyncContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const appConfig = context.get(appConfigContext);
   const getRequestApi = context.get(requestApiContext);
@@ -112,9 +115,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     snapshots: context.get(snapshotContext),
   });
 
+  // The address sync's settings and newest run are read from Headplane's own
+  // data directory, so the page can render them even when Headscale's
+  // configuration file is read-only.
+  await derpSync.ready();
+
   return {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
+    derpSync: {
+      settings: derpSync.settings(),
+      last: derpSync.last(),
+    },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
     derp,
@@ -141,6 +153,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const {
     access,
     writable,
+    derpSync,
     oidc,
     advanced,
     derp,
@@ -315,6 +328,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             relaySourceStatus={relaySourceStatus}
             relaySourceSummary={relaySourceSummary}
             settings={derp}
+          />
+          <DerpSyncSettings
+            isDisabled={isDisabled}
+            last={derpSync.last}
+            settings={derpSync.settings}
           />
           <DerpStatus
             agentEnabled={agentEnabled}

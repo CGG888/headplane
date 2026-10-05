@@ -9,6 +9,7 @@ import { createAuditService } from "./audit";
 import type { HeadplaneConfig } from "./config/config-schema";
 import { loadIntegration } from "./config/integration";
 import { createDbClient } from "./db/client.server";
+import { createDerpSyncService } from "./derp-sync/service.server";
 import { disabled, enabled, type Feature } from "./feature";
 import { createHeadscale, type HeadscaleClient } from "./headscale/api";
 import { loadHeadscaleConfig } from "./headscale/config-loader";
@@ -30,6 +31,7 @@ export const appConfigContext = createContext<AppContext["config"]>();
 export const auditContext = createContext<AppContext["audit"]>();
 export const authContext = createContext<AppContext["auth"]>();
 export const dbContext = createContext<AppContext["db"]>();
+export const derpSyncContext = createContext<AppContext["derpSync"]>();
 export const headscaleContext = createContext<AppContext["headscale"]>();
 export const headscaleApiKeyContext = createContext<AppContext["headscaleApiKey"]>();
 export const headscaleConfigContext = createContext<AppContext["hs"]>();
@@ -147,11 +149,40 @@ export async function createAppContext(config: HeadplaneConfig) {
     },
   });
 
+  // The embedded DERP server advertises `derp.server.ipv4`/`ipv6`, and on a host
+  // with a dynamic public address those values have to be kept current. The
+  // sync reads IPv4 from the relay hostname's A record (a machine behind NAT
+  // cannot know its own public address) and IPv6 from the host's own global
+  // unicast address. It writes only on a real change, snapshots the
+  // configuration first, and is inert until the operator enables it. A write
+  // can optionally trigger the integration above, off by default because a
+  // reload briefly interrupts connected clients.
+  const derpSync = createDerpSyncService({
+    dataPath: config.server.data_path,
+    config: hs,
+    getSnapshotTargets: () => {
+      const configPath = config.headscale.config_path;
+      return configPath
+        ? [
+            {
+              path: resolveTargetPath(configPath, dirname(configPath)),
+              kind: "headscale_config" as const,
+            },
+          ]
+        : [];
+    },
+    snapshots,
+    audit,
+    headscale,
+    integration,
+  });
+
   // Disposers run in reverse-registration order on shutdown.
   const disposers: Array<() => Promise<void> | void> = [
     () => auth.stop(),
     () => alerts.dispose(),
     () => nodeHistory.dispose(),
+    () => derpSync.dispose(),
     () => hsLive.dispose(),
     () => headscale.dispose(),
   ];
@@ -171,6 +202,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     auth.start();
     alerts.start();
     nodeHistory.start();
+    derpSync.start();
   }
 
   async function dispose() {
@@ -188,6 +220,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     db,
     audit,
     alerts,
+    derpSync,
     headscale,
     headscaleApiKey,
     agents,

@@ -13,6 +13,7 @@ export const AUDIT_ACTIONS = {
   restrictionRemoveGroup: "restriction.remove_group",
   restrictionAddUser: "restriction.add_user",
   restrictionRemoveUser: "restriction.remove_user",
+  derpAddressSync: "derp.address_sync",
   snapshotCreate: "snapshot.create",
   snapshotRestore: "snapshot.restore",
 } as const;

@@ -28,13 +28,13 @@ import { ErrorBanner } from "~/components/error-banner";
 import Link from "~/components/link";
 import {
   SettingsCollapsible,
-  SettingsCollapsibleGroup,
   SettingsPage,
   SettingsStatus,
   type SettingsStatusTone,
 } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
+import CopyValue from "~/routes/machines/components/copy-value";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
 import RelayResolver from "~/routes/machines/components/relay-resolver";
 import { configuredDerpRegion, resolveDerpRegionLabel } from "~/routes/machines/derp-info";
@@ -48,6 +48,7 @@ import {
   appConfigContext,
   auditContext,
   authContext,
+  derpSyncContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
@@ -83,6 +84,7 @@ import type { Route } from "./+types/overview";
 import {
   type CheckStatus,
   type CheckTally,
+  capDerpNodeLines,
   capDerpRegionLines,
   countNodeStatus,
   declaredDerpAddresses,
@@ -241,6 +243,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const appConfig = context.get(appConfigContext);
   const audit = context.get(auditContext);
   const auth = context.get(authContext);
+  const derpSync = context.get(derpSyncContext);
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const integration = context.get(integrationContext);
@@ -410,10 +413,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   //
   // IPv6 is the exception: it has no NAT, so the address lives on the machine
   // itself and only the host's own interfaces can name it. That probe is only
-  // worth its file reads while `derp.server.ipv6` is unset, which is also the
-  // only case where the card derives one.
+  // worth its file reads while `derp.server.ipv6` is unset, because a declared
+  // address wins before the machine's own addresses are looked at.
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
-  const resolveHostIpv6 = (derp.server.ipv6 ?? "").trim().length === 0;
+  const readHostAddresses = (derp.server.ipv6 ?? "").trim().length === 0;
   const [relayResolution, regionNames, mapInventory, hostAddresses] = await Promise.all([
     loadSharedRelayResolution(relayEndpoint?.host),
     readDerpRegionNames(appConfig.server.data_path),
@@ -424,20 +427,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       updateFrequency: derp.updateFrequency,
       baseDir: configPath ? dirname(configPath) : undefined,
     }),
-    resolveHostIpv6 ? loadHostIpv6Addresses() : Promise.resolve(undefined),
+    readHostAddresses ? loadHostIpv6Addresses() : Promise.resolve(undefined),
   ]);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
   // A literal endpoint is its own address, and an unusable `server_url` has no
   // hostname to compare against: both keep the row exactly as it read before.
   const relayIpv6 =
-    resolveHostIpv6 && relayView.host !== undefined && relayResolution?.kind !== "literal"
-      ? selectRelayIpv6({
+    relayView.host === undefined || relayResolution?.kind === "literal"
+      ? undefined
+      : selectRelayIpv6({
+          declared: derp.server.ipv6,
           candidates: hostAddresses?.candidates,
           namespace: hostAddresses?.namespace,
           dns: relayResolution?.ipv6,
           reason: relayResolution?.reason,
-        })
-      : undefined;
+        });
 
   // Every hostname the configured maps list, resolved through the shared relay
   // cache the address block above already uses: one batch, at most
@@ -460,6 +464,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       ),
     ),
   );
+
+  // The embedded-DERP address sync's newest run. Only a run that actually
+  // changed an address reaches the relay card: a check that found nothing to do
+  // stays on the settings page, where the schedule is configured.
+  await derpSync.ready();
+  const syncRun = derpSync.last();
+  const addressSync =
+    syncRun?.outcome === "changed" && syncRun.changes.length > 0 ? { at: syncRun.at } : undefined;
 
   return {
     versions: {
@@ -502,6 +514,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       }),
       urlCount: derp.urls.length,
       pathCount: derp.paths.length,
+      // Set only when the last address sync wrote something, so the card can
+      // say so without opening the DERP settings page.
+      addressSync,
       relay: {
         endpoint: relayView.host?.endpoint,
         host: relayView.host?.hostname,
@@ -511,11 +526,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         // lines are flattened to plain values here, because the card must not
         // import a module that reaches Node-only code (see `./relay-verdicts`).
         lines: relayAddressLines(derp.server, relayResolution),
-        // The IPv6 row reads its own selection instead: the machine's own
-        // global unicast address, cross-checked against the domain's AAAA, or
-        // the DNS answer labelled unverified. `undefined` means `derp.server`
-        // declared an address (or the endpoint is a literal), which is the one
-        // case the line above already words.
+        // The IPv6 row reads its own selection instead: the address
+        // `derp.server` declares, the machine's own global unicast address
+        // cross-checked against the domain's AAAA, or the DNS answer labelled
+        // unverified. `undefined` means there was no hostname to derive from at
+        // all (a literal endpoint, or an unusable `server_url`), which is the
+        // one case the line above already words on its own.
         ipv6: relayIpv6,
         // Which resolver produced this answer, and whether this viewer may ask
         // for a fresh one; the card shows both under the addresses.
@@ -639,10 +655,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ? relayReason(line.reason ?? "unavailable")
       : t(RELAY_VERDICT_KEYS[line.verdict], { address: "" });
 
-  // The IPv6 half of the address block, derived by the loader from the machine's
-  // own interfaces. It is absent when `derp.server.ipv6` is declared or the
-  // endpoint is a literal address, which is exactly when the line above already
-  // words the row.
+  // The IPv6 half of the address block, prepared by the loader: the address
+  // `derp.server` declares, the machine's own address cross-checked against the
+  // domain's AAAA, or the DNS answer labelled unverified. It is absent only when
+  // there was no hostname to derive from, which is exactly when the line above
+  // words the row on its own.
   const relayIpv6 = derp.relay.ipv6;
   const ipv6LegacyLine = derp.relay.lines.find((line) => line.family === "ipv6");
 
@@ -979,6 +996,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
             ) : undefined}
+
+            {/* One short line, only after a sync that changed an address. */}
+            {derp.addressSync ? (
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("overview.derp.syncChangedAt", {
+                  at: new Date(derp.addressSync.at).toLocaleString(locale),
+                })}
+              </p>
+            ) : undefined}
           </Card>
 
           <Card
@@ -1010,10 +1036,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   // geometry of its siblings and must not grow without bound.
                   <span className="flex flex-col gap-0.5">
                     {mapRegionLines.lines.map((region) => (
-                      <span
-                        className="flex flex-wrap items-center gap-1.5"
-                        key={region.regionId}
-                      >
+                      <span className="flex flex-wrap items-center gap-1.5" key={region.regionId}>
                         <span className="truncate" title={region.label}>
                           {region.label}
                         </span>
@@ -1032,32 +1055,43 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 }
                 title={t("overview.derp.mapsDetailTitle")}
               >
-                <SettingsCollapsibleGroup>
-                  {mapRegions.map((region) => (
-                    <SettingsCollapsible
-                      description={t("overview.derp.mapsRegionSummary", {
-                        count: region.nodeCount,
-                        source: region.map.source,
-                      })}
-                      key={region.regionId}
-                      nested
-                      status={{ tone: "neutral", label: mapSourceLabel(region) }}
-                      title={region.label}
-                    >
-                      {region.nodes.length === 0 ? (
-                        <p className="text-sm text-mist-600 dark:text-mist-400">
-                          {t("overview.derp.mapsRegionNoNodes")}
-                        </p>
-                      ) : (
-                        <ul className="flex flex-col gap-3">
-                          {region.nodes.map((node) => (
-                            <DerpMapNode key={`${node.name}:${node.endpoint}`} node={node} />
-                          ))}
-                        </ul>
-                      )}
-                    </SettingsCollapsible>
-                  ))}
-                </SettingsCollapsibleGroup>
+                {/* Flat: each region and its nodes are inline, so one
+                    expansion shows the relays instead of two nested ones. */}
+                <ul className="flex flex-col gap-4">
+                  {mapRegions.map((region) => {
+                    const nodes = capDerpNodeLines(region.nodes);
+
+                    return (
+                      <li className="flex flex-col gap-1" key={region.regionId}>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-medium text-mist-900 dark:text-mist-50">
+                            {region.label}
+                          </span>
+                          <span className="text-xs text-mist-500 dark:text-mist-400">
+                            {t("overview.derp.mapsRegionNodes", { count: region.nodeCount })}
+                          </span>
+                          <SettingsStatus tone="neutral">{mapSourceLabel(region)}</SettingsStatus>
+                        </div>
+                        {region.nodes.length === 0 ? (
+                          <p className="text-sm text-mist-600 dark:text-mist-400">
+                            {t("overview.derp.mapsRegionNoNodes")}
+                          </p>
+                        ) : (
+                          <ul className="flex flex-col">
+                            {nodes.lines.map((node) => (
+                              <DerpMapNode key={`${node.name}:${node.endpoint}`} node={node} />
+                            ))}
+                          </ul>
+                        )}
+                        {nodes.hidden > 0 ? (
+                          <p className="text-xs text-mist-500 dark:text-mist-400">
+                            {t("overview.derp.mapsMoreNodes", { count: nodes.hidden })}
+                          </p>
+                        ) : undefined}
+                      </li>
+                    );
+                  })}
+                </ul>
               </SettingsCollapsible>
             )}
 
@@ -1514,33 +1548,39 @@ function declaredAddress(declared: DeclaredDerpAddress[], family: "ipv4" | "ipv6
 }
 
 /**
- * One node of a configured DERP map: the endpoint a client dials, the STUN port
- * the map puts on it, and the addresses it declares next to the ones DNS
- * returns for the same hostname.
+ * One node of a configured DERP map, as flat definition rows: the name and the
+ * endpoint a client dials, the STUN port the map puts on it, and the addresses
+ * it declares next to the ones DNS returns for the same hostname. Nothing here
+ * opens: the region it belongs to is already inline, so a node adds rows rather
+ * than another collapsible.
  */
 function DerpMapNode({ node }: { node: DerpNodeSummary }) {
   const { t } = useI18n();
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-mist-100 p-3 dark:border-mist-800">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-medium text-mist-900 dark:text-mist-50">{node.name}</span>
-          {node.stunOnly ? (
-            <SettingsStatus tone="neutral">{t("overview.derp.mapsStunOnly")}</SettingsStatus>
-          ) : undefined}
-        </span>
-        <span className="flex flex-wrap items-center gap-1.5">
-          <Code>{node.endpoint}</Code>
-          {node.portDefaulted ? (
-            <span className="text-xs text-mist-500 dark:text-mist-400">
-              {t("overview.derp.mapsDefault")}
-            </span>
-          ) : undefined}
-        </span>
-      </div>
-
+    <li className="flex flex-col border-t border-mist-100 py-2 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60">
       <Facts>
+        <Fact
+          label={node.name}
+          source={
+            node.stunOnly
+              ? { tone: "neutral" as const, label: t("overview.derp.mapsStunOnly") }
+              : undefined
+          }
+        >
+          <span className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+            <CopyValue
+              className="w-auto pointer-coarse:[&>svg]:opacity-100"
+              copiedMessage={t("common.copied")}
+              value={node.endpoint}
+            />
+            {node.portDefaulted ? (
+              <span className="text-xs text-mist-500 dark:text-mist-400">
+                {t("overview.derp.mapsDefault")}
+              </span>
+            ) : undefined}
+          </span>
+        </Fact>
         <Fact label={t("overview.derp.mapsStun")}>
           {node.stunEndpoint === undefined ? (
             <span className="text-xs text-mist-500 dark:text-mist-400">
@@ -1548,7 +1588,11 @@ function DerpMapNode({ node }: { node: DerpNodeSummary }) {
             </span>
           ) : (
             <span className="flex flex-wrap items-center justify-end gap-1.5">
-              <Code>{node.stunEndpoint}</Code>
+              <CopyValue
+                className="w-auto pointer-coarse:[&>svg]:opacity-100"
+                copiedMessage={t("common.copied")}
+                value={node.stunEndpoint}
+              />
               {node.stunPortDefaulted ? (
                 <span className="text-xs text-mist-500 dark:text-mist-400">
                   {t("overview.derp.mapsDefault")}
@@ -1606,12 +1650,21 @@ function DerpMapAddress({
     <span className="flex flex-col gap-0.5 sm:items-end">
       {declared === undefined ? undefined : (
         <span className="flex flex-wrap items-center gap-1.5">
-          <Code>{declared}</Code>
+          <CopyValue
+            className="w-auto pointer-coarse:[&>svg]:opacity-100"
+            copiedMessage={t("common.copied")}
+            value={declared}
+          />
           <SettingsStatus tone="neutral">{t("overview.derp.mapsDeclared")}</SettingsStatus>
         </span>
       )}
       {resolved.map((address) => (
-        <Code key={address}>{address}</Code>
+        <CopyValue
+          key={address}
+          className="w-auto pointer-coarse:[&>svg]:opacity-100"
+          copiedMessage={t("common.copied")}
+          value={address}
+        />
       ))}
       {resolved.length === 0 ? missing : undefined}
     </span>

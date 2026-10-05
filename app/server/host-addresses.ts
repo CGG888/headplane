@@ -168,10 +168,7 @@ interface RankedCandidate extends HostIpv6Candidate {
  * identifier, then the interface name and the value. The last two make the
  * choice independent of the order the OS enumerated the interfaces in.
  */
-export function compareHostIpv6Candidates(
-  a: HostIpv6Candidate,
-  b: HostIpv6Candidate,
-): number {
+export function compareHostIpv6Candidates(a: HostIpv6Candidate, b: HostIpv6Candidate): number {
   const stability = (candidate: HostIpv6Candidate) =>
     candidate.temporary === true ? 2 : candidate.temporary === false ? 0 : 1;
   if (stability(a) !== stability(b)) {
@@ -566,8 +563,7 @@ async function readTemporaryFlags(): Promise<Map<string, boolean>> {
       continue;
     }
 
-    const temporary =
-      (flags & IFA_F_SECONDARY) !== 0 || (flags & IFA_F_DEPRECATED) !== 0;
+    const temporary = (flags & IFA_F_SECONDARY) !== 0 || (flags & IFA_F_DEPRECATED) !== 0;
     flagsByAddress.set(canonicalGroups(groups), temporary);
   }
 

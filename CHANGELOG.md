@@ -1,5 +1,13 @@
 # Next
 
+## Changes
+
+- **The embedded relay's advertised addresses can now keep themselves current.** The addresses are dynamic — IPv4 through DNS because a machine behind NAT cannot know its own public address, IPv6 from the host itself — so a schedule (every 6, 12 or 24 hours, or on demand with "run now") checks them and writes `derp.server.ipv4`/`ipv6` **only when a value actually changed**, patching just the changed key, after taking a configuration snapshot and recording an audit entry. Values that are not public (private ranges, CGNAT, loopback, link-local, ULA) are refused, a detection failure keeps the previous value and says why, and a read-only configuration skips the write with a reason. Reaching clients immediately needs a reload, so there is a default-off switch to trigger the existing reload/restart automatically, with the warning that it briefly interrupts them. Last run, what changed and what was skipped are shown in the card; the setting lives in Headplane's own data directory, so no migration and no config-file key.
+
+## Fixes
+
+- The "Local DERP nodes" box no longer nests: its regions are listed in the collapsed state as `#id · code · name · N nodes · source`, and opening it shows each region's nodes directly — `hostname:derpport`, STUN, a `stunonly` marker, the declared map addresses and the addresses they resolve to — capped per region so the card stays compact. Fail-soft notes stay as single muted lines.
+- Every address in that box — the node endpoints, the declared map addresses and the resolved answers — can be copied with one click.
 # 0.22.2 (October 6, 2026)
 
 ## Fixes

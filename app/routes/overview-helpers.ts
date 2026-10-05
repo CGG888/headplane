@@ -537,18 +537,34 @@ export function derpRegionSummaries(input: DerpRegionSummaryInput): DerpRegionSu
   return summaries;
 }
 
+/** A capped slice of a list, and the count the cap left out. */
+export interface CappedLines<T> {
+  lines: T[];
+  hidden: number;
+}
+
+/**
+ * The first `limit` items, plus a count of the rest, so a card can end with one
+ * "+N more" line instead of growing without bound. The order is the caller's,
+ * and a limit that is not a usable number hides everything rather than throwing.
+ */
+function capLines<T>(items: readonly T[], limit: number): CappedLines<T> {
+  const capped = Math.max(0, Math.trunc(limit));
+  return {
+    lines: items.slice(0, capped),
+    hidden: Math.max(0, items.length - capped),
+  };
+}
+
 /**
  * Most regions the collapsed "Local DERP nodes" box lists before it summarises
- * the rest. The box now names its regions while it is closed, so the cap is what
+ * the rest. The box names its regions while it is closed, so the cap is what
  * keeps a map with dozens of regions from turning one card into a wall.
  */
 export const DERP_MAP_REGION_LINE_LIMIT = 6;
 
 /** The regions the collapsed box lists, and how many it left out. */
-export interface DerpRegionLines {
-  lines: DerpRegionSummary[];
-  hidden: number;
-}
+export type DerpRegionLines = CappedLines<DerpRegionSummary>;
 
 /**
  * The first `limit` regions for the collapsed box, plus a count of the rest so
@@ -560,11 +576,29 @@ export function capDerpRegionLines(
   regions: readonly DerpRegionSummary[],
   limit = DERP_MAP_REGION_LINE_LIMIT,
 ): DerpRegionLines {
-  const capped = Math.max(0, Math.trunc(limit));
-  return {
-    lines: regions.slice(0, capped),
-    hidden: Math.max(0, regions.length - capped),
-  };
+  return capLines(regions, limit);
+}
+
+/**
+ * Most nodes one region prints inline in the expanded box. A single region of a
+ * public map can describe dozens of relays, and every region is listed at once
+ * now that nothing nests, so the cap is what keeps the card bounded.
+ */
+export const DERP_MAP_NODE_LINE_LIMIT = 6;
+
+/** The nodes one region prints inline, and how many it left out. */
+export type DerpNodeLines = CappedLines<DerpNodeSummary>;
+
+/**
+ * The first `limit` nodes of one region, plus a count of the rest so the region
+ * ends with one "+N more" line. The map's own order is kept, because that is how
+ * the file lists its relays.
+ */
+export function capDerpNodeLines(
+  nodes: readonly DerpNodeSummary[],
+  limit = DERP_MAP_NODE_LINE_LIMIT,
+): DerpNodeLines {
+  return capLines(nodes, limit);
 }
 
 // MARK: Headscale configuration

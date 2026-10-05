@@ -5,11 +5,13 @@ import { data } from "react-router";
 import {
   appConfigContext,
   authContext,
+  derpSyncContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
   snapshotContext,
 } from "~/server/context";
+import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
   readDerpRegionNames,
@@ -506,6 +508,45 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         },
       ]);
       await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_derp_sync": {
+      // The sync settings live in Headplane's own data directory, not in
+      // Headscale's configuration: only the addresses a run writes end up in
+      // the config file, and the schedule itself never does.
+      const derpSync = context.get(derpSyncContext);
+      const enabled = readBooleanField(formData, "derp_sync_enabled");
+      const autoReload = readBooleanField(formData, "derp_sync_auto_reload");
+      if (enabled === undefined || autoReload === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      const intervalHours = parseDerpSyncIntervalHours(
+        readField(formData, "derp_sync_interval_hours"),
+      );
+      if (intervalHours === undefined) {
+        return failure("invalidDerpSyncInterval");
+      }
+
+      const families = readField(formData, "derp_sync_families");
+      if (!isDerpSyncFamilies(families)) {
+        return failure("invalidDerpSyncFamilies");
+      }
+
+      const result = await derpSync.update({ enabled, intervalHours, families, autoReload });
+      if (!result.success) {
+        return failure("derpSyncSaveFailed");
+      }
+
+      return success();
+    }
+
+    case "run_derp_sync": {
+      // The settings card's "run now": one explicit check that works even while
+      // the schedule is off, and writes only when an address actually differs.
+      const derpSync = context.get(derpSyncContext);
+      await derpSync.runNow();
       return success();
     }
 
