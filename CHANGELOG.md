@@ -1,9 +1,14 @@
 # Next
 
+# 0.21.11 (October 5, 2026)
+
 ## Changes
 
 - **The machines list is a device list now.** Each row leads with a tile for the reported operating system, the online state reads at a glance with a dot and a chip, tags render as uniform chips that collapse into a "+N" with the rest on hover, a key expiring within a month stands out in amber, and IPv4 sits above IPv6 in one aligned block with a copy affordance on hover. The name column stays visible while the table scrolls, row actions appear only on hover or keyboard focus without shifting anything, and on a narrow screen each machine becomes a compact card instead of a cramped table.
 - Wording clean-up: the relay statistics are no longer labelled "derived" anywhere — the label now says where the numbers come from (the configuration and what the agent reports).
+
+---
+
 # 0.21.10 (October 5, 2026)
 
 ## Changes
