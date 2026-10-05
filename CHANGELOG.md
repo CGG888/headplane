@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- The **settings overview** is no longer a wall of text. Its entries are cards in a responsive grid — icon, title, one line about what the page does, and the whole card is the link — grouped into Headscale and Headplane, and the "settings page is still under construction" placeholder is gone.
+
 # 0.17.0 (October 5, 2026)
 
 ## Changes

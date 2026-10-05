@@ -832,7 +832,9 @@ const zhHans = {
   settings: {
     overview: {
       title: "设置",
-      body: "设置页面仍在建设中。随着我能添加更多功能，我会把它们加在这里。如果需要某些功能，欢迎在 GitHub 仓库提 issue。",
+      intro: "在这里管理 Headscale 的密钥与认证配置，以及 Headplane 的 Agent、操作日志与快照。",
+      headscaleSection: "Headscale",
+      headplaneSection: "Headplane",
       preAuthTitle: "预授权密钥",
       preAuthBody:
         "Headscale 完整支持预认证密钥，方便快速向 Tailnet 添加设备。想了解如何使用预认证密钥，请参阅{link}",

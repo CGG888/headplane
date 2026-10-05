@@ -886,7 +886,10 @@ const en = {
   settings: {
     overview: {
       title: "Settings",
-      body: "The settings page is still under construction. As I'm able to add more features, I'll be adding them here. If you require any features, feel free to open an issue on the GitHub repository.",
+      intro:
+        "Keys, authentication and the Headscale configuration live here, alongside the Headplane agent, operation log and snapshots.",
+      headscaleSection: "Headscale",
+      headplaneSection: "Headplane",
       preAuthTitle: "Pre-Auth Keys",
       preAuthBody:
         "Headscale fully supports pre-authentication keys in order to easily add devices to your Tailnet. To learn more about using pre-authentication keys, visit the {link}",

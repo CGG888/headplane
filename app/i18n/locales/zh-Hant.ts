@@ -832,7 +832,9 @@ const zhHant = {
   settings: {
     overview: {
       title: "設定",
-      body: "設定頁面仍在建置中。隨著我能加入更多功能，我會把它們放在這裡。如果需要特定功能，歡迎在 GitHub 專案提出 issue。",
+      intro: "在這裡管理 Headscale 的金鑰與驗證設定，以及 Headplane 的 Agent、操作記錄與快照。",
+      headscaleSection: "Headscale",
+      headplaneSection: "Headplane",
       preAuthTitle: "預先授權金鑰",
       preAuthBody:
         "Headscale 完整支援預先驗證金鑰，方便快速將裝置加入 Tailnet。想了解如何使用預先驗證金鑰，請參閱{link}",
