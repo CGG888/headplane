@@ -134,7 +134,7 @@ const ROUTE_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
  * stuck cell. `z-0` keeps row menus (ported to the body) painted above it.
  */
 const HEADER_CELL =
-  "sticky top-0 z-0 border-b border-mist-200 bg-white pb-2 text-left text-xs font-bold uppercase dark:border-mist-800 dark:bg-mist-900";
+  "sticky top-0 z-0 border-b border-mist-200 bg-white pb-2 text-left text-xs font-bold uppercase text-mist-500 dark:border-mist-800 dark:bg-mist-900 dark:text-mist-400";
 
 interface SortHeaderProps {
   field: SortField;
@@ -171,7 +171,9 @@ function SortHeader({
           aria-label={sortLabel}
           className={cn(
             "flex cursor-pointer items-center gap-x-1",
-            "hover:text-mist-900 dark:hover:text-mist-100",
+            isActive
+              ? "text-mist-900 dark:text-mist-100"
+              : "hover:text-mist-900 dark:hover:text-mist-100",
           )}
           onClick={() => onSort(field)}
           type="button"
@@ -179,9 +181,9 @@ function SortHeader({
           {label}
           {isActive ? (
             sortDirection === "asc" ? (
-              <ChevronUp className="h-3 w-3" />
+              <ChevronUp className="h-3 w-3 stroke-[2.5]" />
             ) : (
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="h-3 w-3 stroke-[2.5]" />
             )
           ) : undefined}
         </button>
@@ -199,7 +201,7 @@ function MachineEmptyState({ isFiltered, onReset }: { isFiltered: boolean; onRes
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center",
+        "mx-auto flex max-w-lg flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center",
         "border-mist-200 bg-mist-50/50",
         "dark:border-mist-800 dark:bg-mist-950/30",
       )}
@@ -399,6 +401,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     }
   };
 
+  /**
+   * The empty state is the only placeholder this page renders, and it may only
+   * appear once there is genuinely nothing to show. A refresh keeps the rows it
+   * already has — React Router holds the previous `loaderData` until the next
+   * one lands — so a placeholder can never flash over them.
+   */
+  const hasRows = filteredAndSortedNodes.length > 0;
+
   return (
     <>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -420,33 +430,35 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </div>
 
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-        <div className="relative w-full sm:w-64">
-          <Input
-            label={t("machines.list.searchLabel")}
-            labelHidden
-            maxLength={100}
-            onChange={setSearchQuery}
-            placeholder={t("machines.list.searchPlaceholder")}
-            value={searchQuery}
-          />
-          {searchQuery && (
-            <button
-              aria-label={t("machines.list.clearSearch")}
-              className={cn(
-                "absolute right-2 top-1/2 -translate-y-1/2",
-                "p-1 rounded-full",
-                "text-mist-400 hover:text-mist-600",
-                "dark:text-mist-500 dark:hover:text-mist-300",
-                "hover:bg-mist-100 dark:hover:bg-mist-800",
-              )}
-              onClick={clearSearch}
-              type="button"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        {/* The search field and the filter controls share one baseline: both are
+            2.375rem tall, and this row centres them on the same axis. */}
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Input
+              label={t("machines.list.searchLabel")}
+              labelHidden
+              maxLength={100}
+              onChange={setSearchQuery}
+              placeholder={t("machines.list.searchPlaceholder")}
+              value={searchQuery}
+            />
+            {searchQuery && (
+              <button
+                aria-label={t("machines.list.clearSearch")}
+                className={cn(
+                  "absolute right-2 top-1/2 -translate-y-1/2",
+                  "p-1 rounded-full",
+                  "text-mist-400 hover:text-mist-600",
+                  "dark:text-mist-500 dark:hover:text-mist-300",
+                  "hover:bg-mist-100 dark:hover:bg-mist-800",
+                )}
+                onClick={clearSearch}
+                type="button"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <MachineFilters users={loaderData.users} populatedNodes={loaderData.populatedNodes} />
         </div>
         <span className="text-sm whitespace-nowrap text-mist-500 lg:ml-auto">
@@ -470,12 +482,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         />
       ) : undefined}
 
-      {filteredAndSortedNodes.length === 0 ? (
-        <MachineEmptyState
-          isFiltered={Boolean(searchQuery) || hasActiveFilters}
-          onReset={resetSearchAndFilters}
-        />
-      ) : (
+      {hasRows ? (
         // No scroll container: the sticky header has to stick to the page, so
         // every column truncates instead of forcing the table wider.
         <table className="w-full table-fixed border-separate border-spacing-0 text-left">
@@ -587,6 +594,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             ))}
           </tbody>
         </table>
+      ) : (
+        <MachineEmptyState
+          isFiltered={Boolean(searchQuery) || hasActiveFilters}
+          onReset={resetSearchAndFilters}
+        />
       )}
     </>
   );

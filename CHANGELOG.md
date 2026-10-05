@@ -1,5 +1,8 @@
 # Next
 
+## Changes
+
+- The machines list finished its visual pass: the table header has consistent typography, the sorted column and direction are legible at a glance, the search field and the filters sit on one baseline at the same height, the empty state is centred and roomy, and a refresh never flashes a placeholder over rows that are already there.
 # 0.21.9 (October 5, 2026)
 
 ## Changes
