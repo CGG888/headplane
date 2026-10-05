@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.4 (October 6, 2026)
+
 ## Fixes
 
 - **The relay's IPv6 detection is honest in every environment now.** Candidates are collected from all readable sources — the interface list, `/proc/net/if_inet6` (which tells a **temporary/privacy** address apart from a stable one) and `/sys/class/net/.../device` (which tells a real NIC from a bridge) — with link-local, ULA, loopback and IPv4-mapped addresses excluded. A stable address is preferred over a privacy address that rotates, the address your domain's AAAA names wins when it matches, and every candidate comes with its origin and the reason it was or was not chosen. When the container's network namespace cannot be confirmed, the candidates are **still shown** (labelled as possibly-the-host, with the reason) instead of disappearing, and a machine with no public IPv6 still says so plainly.
@@ -9,6 +11,9 @@
 ## Changes
 
 - The automatic address sync uses the same selection, so it writes the stable address rather than a rotating privacy address, and it shows which source it used.
+
+---
+
 # 0.22.3 (October 6, 2026)
 
 ## Changes
