@@ -1,5 +1,10 @@
 # Next
 
+## Changes
+
+- **Alerts.** A new notifications page and a background notifier: point it at a webhook and it reports Headscale becoming unreachable (and recovering), nodes going offline and coming back, API keys nearing expiry and configuration checks turning into failures, with a cooldown so the same condition is not repeated every tick, a delivery history with the HTTP result and a Test button. Settings live in a JSON file in Headplane's data directory, and the loop is inert while notifications are disabled.
+- The machine detail page leads with its details card, and the DERP relay panel now sits inside the same card grid as its neighbours, so the whole page reads as one family of cards.
+- The Overview dashboard's boxes were unified: one card geometry, icon tiles, status chips, definition lists that stack on narrow screens, count tiles with tabular numbers, per-tally pass/warning/fail chips and clearly separated Derived and Configured values for the relay addresses.
 # 0.19.0 (October 5, 2026)
 
 ## Changes

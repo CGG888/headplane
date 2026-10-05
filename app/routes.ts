@@ -49,6 +49,7 @@ export default [
       route("/system", "routes/settings/system/overview.tsx"),
       route("/audit", "routes/settings/audit/overview.tsx"),
       route("/snapshots", "routes/settings/snapshots/overview.tsx"),
+      route("/notifications", "routes/settings/notifications/overview.tsx"),
     ]),
   ]),
 

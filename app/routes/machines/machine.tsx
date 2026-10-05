@@ -192,6 +192,68 @@ export default function Page({
       </header>
 
       <div className="grid gap-3 lg:grid-cols-2">
+        <MachineCard icon={Info} title={t("machines.detail.detailsTitle")}>
+          <dl className="flex flex-col">
+            <MachineAttribute name={t("machines.detail.creator")} value={owner} />
+            <MachineAttribute name={t("machines.detail.machineName")} value={node.givenName} />
+            <MachineAttribute
+              name={t("machines.detail.osHostname")}
+              tooltip={t("machines.detail.osHostnameTooltip")}
+              value={node.name}
+            />
+            {stats ? (
+              <>
+                <MachineAttribute name={t("machines.detail.os")} value={getOSInfo(stats)} />
+                <MachineAttribute
+                  name={t("machines.detail.tailscaleVersion")}
+                  value={getTSVersion(stats)}
+                />
+              </>
+            ) : undefined}
+            <MachineAttribute
+              isCode
+              isCopyable
+              name={t("machines.detail.id")}
+              tooltip={t("machines.detail.idTooltip")}
+              value={node.id}
+            />
+            <MachineAttribute
+              isCode
+              isCopyable
+              name={t("machines.detail.nodeKey")}
+              tooltip={t("machines.detail.nodeKeyTooltip")}
+              value={node.nodeKey}
+            />
+            <MachineAttribute
+              name={t("machines.detail.created")}
+              value={new Date(node.createdAt).toLocaleString(locale)}
+            />
+            <MachineAttribute
+              name={t("machines.detail.lastSeen")}
+              value={
+                node.online
+                  ? t("machines.common.connected")
+                  : new Date(node.lastSeen).toLocaleString(locale)
+              }
+            />
+            <MachineAttribute
+              name={t("machines.detail.keyExpiry")}
+              value={
+                !isNoExpiry(node.expiry)
+                  ? new Date(node.expiry!).toLocaleString(locale)
+                  : t("machines.common.never")
+              }
+            />
+            {magic ? (
+              <MachineAttribute
+                isCopyable
+                name={t("machines.detail.domain")}
+                value={`${node.givenName}.${magic}`}
+              />
+            ) : undefined}
+          </dl>
+        </MachineCard>
+
         <MachineCard icon={Network} title={t("machines.detail.addresses")}>
           <dl className="flex flex-col">
             <MachineAttribute
@@ -304,68 +366,6 @@ export default function Page({
           )}
         </MachineCard>
 
-        <MachineCard icon={Info} title={t("machines.detail.detailsTitle")}>
-          <dl className="flex flex-col">
-            <MachineAttribute name={t("machines.detail.creator")} value={owner} />
-            <MachineAttribute name={t("machines.detail.machineName")} value={node.givenName} />
-            <MachineAttribute
-              name={t("machines.detail.osHostname")}
-              tooltip={t("machines.detail.osHostnameTooltip")}
-              value={node.name}
-            />
-            {stats ? (
-              <>
-                <MachineAttribute name={t("machines.detail.os")} value={getOSInfo(stats)} />
-                <MachineAttribute
-                  name={t("machines.detail.tailscaleVersion")}
-                  value={getTSVersion(stats)}
-                />
-              </>
-            ) : undefined}
-            <MachineAttribute
-              isCode
-              isCopyable
-              name={t("machines.detail.id")}
-              tooltip={t("machines.detail.idTooltip")}
-              value={node.id}
-            />
-            <MachineAttribute
-              isCode
-              isCopyable
-              name={t("machines.detail.nodeKey")}
-              tooltip={t("machines.detail.nodeKeyTooltip")}
-              value={node.nodeKey}
-            />
-            <MachineAttribute
-              name={t("machines.detail.created")}
-              value={new Date(node.createdAt).toLocaleString(locale)}
-            />
-            <MachineAttribute
-              name={t("machines.detail.lastSeen")}
-              value={
-                node.online
-                  ? t("machines.common.connected")
-                  : new Date(node.lastSeen).toLocaleString(locale)
-              }
-            />
-            <MachineAttribute
-              name={t("machines.detail.keyExpiry")}
-              value={
-                !isNoExpiry(node.expiry)
-                  ? new Date(node.expiry!).toLocaleString(locale)
-                  : t("machines.common.never")
-              }
-            />
-            {magic ? (
-              <MachineAttribute
-                isCopyable
-                name={t("machines.detail.domain")}
-                value={`${node.givenName}.${magic}`}
-              />
-            ) : undefined}
-          </dl>
-        </MachineCard>
-
         {stats ? (
           <MachineCard icon={Activity} title={t("machines.detail.clientConnectivity")}>
             <dl className="flex flex-col">
@@ -412,14 +412,14 @@ export default function Page({
             </dl>
           </MachineCard>
         ) : undefined}
-      </div>
 
-      <DerpInfo
-        agentEnabled={agentEnabled}
-        regionNames={derpRegionNames}
-        server={derp.server}
-        stats={stats}
-      />
+        <DerpInfo
+          agentEnabled={agentEnabled}
+          regionNames={derpRegionNames}
+          server={derp.server}
+          stats={stats}
+        />
+      </div>
 
       <MachineCard
         description={t("machines.remove.body")}

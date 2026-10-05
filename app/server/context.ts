@@ -4,6 +4,7 @@ import { createContext } from "react-router";
 
 import log from "~/utils/log";
 
+import { createAlertService } from "./alerts/service.server";
 import { createAuditService } from "./audit";
 import type { HeadplaneConfig } from "./config/config-schema";
 import { loadIntegration } from "./config/integration";
@@ -21,6 +22,7 @@ import { createAuthService, type Principal } from "./web/auth";
 
 export type AppContext = Awaited<ReturnType<typeof createAppContext>>;
 export const agentsContext = createContext<AppContext["agents"]>();
+export const alertsContext = createContext<AppContext["alerts"]>();
 export const appConfigContext = createContext<AppContext["config"]>();
 export const auditContext = createContext<AppContext["audit"]>();
 export const authContext = createContext<AppContext["auth"]>();
@@ -86,6 +88,17 @@ export async function createAppContext(config: HeadplaneConfig) {
   );
   const integration = await loadIntegration(config.integration);
 
+  // Notification settings live in Headplane's data directory, and the notifier
+  // reuses the live node store and the configuration-check helper. It starts
+  // with the other services and is a no-op while notifications are disabled.
+  const alerts = createAlertService({
+    dataPath: config.server.data_path,
+    configPath: config.headscale.config_path,
+    headscale,
+    apiKey: headscaleApiKey,
+    hsLive,
+  });
+
   // Snapshot targets are resolved on demand: the policy file can be configured
   // either in the Headscale config file or switched to database mode while
   // Headplane is running. Relative paths are resolved against the Headscale
@@ -112,6 +125,7 @@ export async function createAppContext(config: HeadplaneConfig) {
   // Disposers run in reverse-registration order on shutdown.
   const disposers: Array<() => Promise<void> | void> = [
     () => auth.stop(),
+    () => alerts.dispose(),
     () => hsLive.dispose(),
     () => headscale.dispose(),
   ];
@@ -129,6 +143,7 @@ export async function createAppContext(config: HeadplaneConfig) {
 
   function startServices() {
     auth.start();
+    alerts.start();
   }
 
   async function dispose() {
@@ -145,6 +160,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     config,
     db,
     audit,
+    alerts,
     headscale,
     headscaleApiKey,
     agents,

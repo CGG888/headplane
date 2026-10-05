@@ -43,6 +43,8 @@ import cn from "~/utils/cn";
 
 import type { Route } from "./+types/overview";
 import {
+  type CheckStatus,
+  type CheckTally,
   countNodeStatus,
   countNodesHomedInRegion,
   declaredDerpAddresses,
@@ -52,6 +54,7 @@ import {
   hasIpv6StunWarning,
   readExtraRecordsPath,
   tallyChecks,
+  tallyEntries,
   textOrReason,
 } from "./overview-helpers";
 import { classifyDerpRelaySource, type DerpRelaySource } from "./settings/headscale/derp-settings";
@@ -100,6 +103,19 @@ const METRICS_STATE_TONES: Record<MetricsReport["state"], SettingsStatusTone> = 
   disabled: "neutral",
   invalid: "warn",
   unknown: "neutral",
+};
+
+/** The chip label of one check status, and the tone it reads with when non-zero. */
+const TALLY_KEYS: Record<CheckStatus, TranslationKey> = {
+  pass: "overview.health.passCount",
+  warning: "overview.health.warningCount",
+  fail: "overview.health.failCount",
+};
+
+const TALLY_TONES: Record<CheckStatus, SettingsStatusTone> = {
+  pass: "ok",
+  warning: "warn",
+  fail: "error",
 };
 
 type Attempt<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -410,14 +426,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const updateNote = (latest: string | undefined, current: string, hasUpdate: boolean) =>
     hasUpdate && latest ? t("overview.versions.updateNote", { latest, current }) : undefined;
 
-  const nodesText = counts.nodes
-    ? t("overview.counts.nodesValue", {
-        total: counts.nodes.total,
-        online: counts.nodes.online,
-        offline: counts.nodes.offline,
-      })
-    : undefined;
-
   const apiReadable = counts.nodes !== undefined || counts.users !== undefined;
   const preAuthReason =
     apiReadable && !counts.preAuthKeysSupported ? reason.unsupported : reason.api;
@@ -433,6 +441,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const healthTone: SettingsStatusTone =
     healthTally.fail > 0 ? "error" : healthTally.warning > 0 ? "warn" : "ok";
 
+  const enabled = t("overview.status.enabled");
+  const disabled = t("overview.status.disabled");
+  const on = t("overview.status.on");
+  const off = t("overview.status.off");
+  const configured = { tone: "neutral" as const, label: t("overview.status.configured") };
+  const derived = { tone: "neutral" as const, label: t("overview.status.derived") };
+
   return (
     <SettingsPage
       className="md:max-w-5xl"
@@ -442,81 +457,82 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <div className="flex flex-col gap-6">
         <Section title={t("overview.sections.versions")}>
           <Card
+            description={t("overview.versions.headplaneBody")}
             icon={LayoutDashboard}
             status={releaseStatus(versions.headplane.latest, versions.headplane.updateAvailable)}
             title={t("overview.versions.headplaneTitle")}
           >
-            <Row label={t("overview.versions.running")}>
-              <Value code text={versions.headplane.version} />
-            </Row>
-            <Row
-              label={t("overview.versions.latest")}
-              note={updateNote(
-                versions.headplane.latest,
-                versions.headplane.version,
-                versions.headplane.updateAvailable,
-              )}
-            >
-              <Value {...textOrReason(versions.headplane.latest, reason.notReported)} code />
-            </Row>
+            <Facts>
+              <Fact code label={t("overview.versions.running")} text={versions.headplane.version} />
+              <Fact
+                code
+                label={t("overview.versions.latest")}
+                note={updateNote(
+                  versions.headplane.latest,
+                  versions.headplane.version,
+                  versions.headplane.updateAvailable,
+                )}
+                {...textOrReason(versions.headplane.latest, reason.notReported)}
+              />
+            </Facts>
           </Card>
 
           <Card
+            description={t("overview.versions.headscaleBody")}
             icon={Server}
             status={releaseStatus(versions.headscale.latest, versions.headscale.updateAvailable)}
             title={t("overview.versions.headscaleTitle")}
           >
-            <Row label={t("overview.versions.running")}>
-              <Value code text={versions.headscale.version} />
-            </Row>
-            <Row
-              label={t("overview.versions.latest")}
-              note={updateNote(
-                versions.headscale.latest,
-                versions.headscale.version,
-                versions.headscale.updateAvailable,
-              )}
-            >
-              <Value {...textOrReason(versions.headscale.latest, reason.notReported)} code />
-            </Row>
+            <Facts>
+              <Fact code label={t("overview.versions.running")} text={versions.headscale.version} />
+              <Fact
+                code
+                label={t("overview.versions.latest")}
+                note={updateNote(
+                  versions.headscale.latest,
+                  versions.headscale.version,
+                  versions.headscale.updateAvailable,
+                )}
+                {...textOrReason(versions.headscale.latest, reason.notReported)}
+              />
+            </Facts>
           </Card>
 
           <Card
+            description={t("overview.versions.agentBody")}
             icon={Bot}
             status={{
               tone: versions.agent.enabled ? "ok" : "neutral",
-              label: versions.agent.enabled
-                ? t("overview.status.enabled")
-                : t("overview.status.disabled"),
+              label: versions.agent.enabled ? enabled : disabled,
             }}
             title={t("overview.versions.agentTitle")}
           >
             {versions.agent.enabled ? (
-              <>
-                <Row label={t("overview.versions.agentVersion")}>
-                  <Value {...textOrReason(versions.agent.version, reason.notReported)} code />
-                </Row>
-                <Row label={t("overview.versions.agentLastSync")}>
-                  <Value code text={versions.agent.syncedAt ?? t("overview.status.never")} />
-                </Row>
-                <Row label={t("overview.versions.agentNodes")}>
-                  <Value text={versions.agent.nodeCount} />
-                </Row>
+              <Facts>
+                <Fact
+                  code
+                  label={t("overview.versions.agentVersion")}
+                  {...textOrReason(versions.agent.version, reason.notReported)}
+                />
+                <Fact
+                  code
+                  label={t("overview.versions.agentLastSync")}
+                  text={versions.agent.syncedAt ?? t("overview.status.never")}
+                />
+                <Fact label={t("overview.versions.agentNodes")} text={versions.agent.nodeCount} />
                 {versions.agent.error ? (
-                  <Row label={t("overview.versions.agentError")}>
-                    <Value text={versions.agent.error} />
-                  </Row>
+                  <Fact label={t("overview.versions.agentError")} text={versions.agent.error} />
                 ) : undefined}
-              </>
+              </Facts>
             ) : (
               <div className="flex flex-col gap-1">
-                <span className="text-sm text-mist-600 dark:text-mist-400">
+                <p className="text-sm text-mist-600 dark:text-mist-400">
                   {t("overview.versions.agentDisabledBody")}
-                </span>
+                </p>
                 {versions.agent.reason ? (
-                  <span className="text-xs text-mist-500 dark:text-mist-400">
+                  <p className="text-xs text-mist-500 dark:text-mist-400">
                     {versions.agent.reason}
-                  </span>
+                  </p>
                 ) : undefined}
               </div>
             )}
@@ -525,99 +541,101 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <Section title={t("overview.sections.derp")}>
           <Card
+            description={t("overview.derp.regionBody")}
             icon={Network}
             status={{
               tone: derp.enabled ? "ok" : "neutral",
-              label: derp.enabled ? t("overview.status.enabled") : t("overview.status.disabled"),
+              label: derp.enabled ? enabled : disabled,
             }}
             title={t("overview.derp.regionTitle")}
           >
-            <Row label={t("overview.derp.region")}>
-              <Value
+            <Facts>
+              <Fact
                 code
+                label={t("overview.derp.region")}
                 text={t("overview.derp.regionValue", {
                   id: derp.regionId,
                   code: derp.regionCode,
                   name: derp.regionName,
                 })}
               />
-            </Row>
-            <Row label={t("overview.derp.relaySource")} note={t("overview.derp.relaySourceNote")}>
-              <Value text={t(RELAY_SOURCE_KEYS[derp.relaySource])} />
-            </Row>
-            <Row label={t("overview.derp.urls")}>
-              <Value
+              <Fact
+                label={t("overview.derp.relaySource")}
+                note={t("overview.derp.relaySourceNote")}
+                source={derived}
+                text={t(RELAY_SOURCE_KEYS[derp.relaySource])}
+              />
+              <Fact
+                label={t("overview.derp.urls")}
+                source={configured}
                 text={
                   derp.urlCount > 0
                     ? t("overview.derp.countConfigured", { count: derp.urlCount })
                     : t("overview.derp.none")
                 }
               />
-            </Row>
-            <Row label={t("overview.derp.paths")}>
-              <Value
+              <Fact
+                label={t("overview.derp.paths")}
+                source={configured}
                 text={
                   derp.pathCount > 0
                     ? t("overview.derp.countFiles", { count: derp.pathCount })
                     : t("overview.derp.none")
                 }
               />
-            </Row>
-            <Row label={t("overview.derp.machines")} note={t("overview.derp.machinesNote")}>
-              <Value text={derp.machinesInRegion} reason={machinesReason} />
-            </Row>
+              <Fact
+                label={t("overview.derp.machines")}
+                note={t("overview.derp.machinesNote")}
+                reason={machinesReason}
+                source={derived}
+                text={derp.machinesInRegion}
+              />
+            </Facts>
           </Card>
 
           <Card
+            description={t("overview.derp.publicBody")}
             icon={Radar}
             status={
               derp.ipv6StunWarning
                 ? { tone: "warn", label: t("overview.status.attention") }
-                : { tone: "neutral", label: t("overview.status.derived") }
+                : derived
             }
             title={t("overview.derp.publicTitle")}
           >
-            <Row
-              label={t("overview.derp.publicEndpoint")}
-              note={t("overview.derp.publicEndpointNote")}
-              status={{ tone: "neutral", label: t("overview.status.derived") }}
-            >
-              <Value
+            <FactGroup title={t("overview.status.derived")}>
+              <Fact
+                code
+                label={t("overview.derp.publicEndpoint")}
+                note={t("overview.derp.publicEndpointNote")}
                 {...textOrReason(derp.publicEndpoint, t("overview.derp.publicUnavailable"))}
-                code
               />
-            </Row>
-            <Row
-              label={t("overview.derp.declaredIpv4")}
-              status={{ tone: "neutral", label: t("overview.status.configured") }}
-            >
-              <Value
+            </FactGroup>
+
+            <FactGroup title={t("overview.status.configured")}>
+              <Fact
+                code
+                label={t("overview.derp.declaredIpv4")}
                 {...textOrReason(declaredAddress(derp.declared, "ipv4"), reason.notConfigured)}
-                code
               />
-            </Row>
-            <Row
-              label={t("overview.derp.declaredIpv6")}
-              note={t("overview.derp.declaredNote")}
-              status={{ tone: "neutral", label: t("overview.status.configured") }}
-            >
-              <Value
+              <Fact
+                code
+                label={t("overview.derp.declaredIpv6")}
+                note={t("overview.derp.declaredNote")}
                 {...textOrReason(declaredAddress(derp.declared, "ipv6"), reason.notConfigured)}
-                code
               />
-            </Row>
-            <Row
-              label={t("overview.derp.stun")}
-              note={t("overview.derp.stunNote")}
-              status={{ tone: "neutral", label: t("overview.status.configured") }}
-            >
-              <Value {...textOrReason(derp.stunListenAddr, reason.notConfigured)} code />
-            </Row>
+              <Fact
+                code
+                label={t("overview.derp.stun")}
+                note={t("overview.derp.stunNote")}
+                {...textOrReason(derp.stunListenAddr, reason.notConfigured)}
+              />
+            </FactGroup>
 
             {derp.ipv6StunWarning ? (
-              <div className="flex gap-2 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="flex flex-col gap-1">
+                <div className="flex min-w-0 flex-col gap-1">
                   <span className="font-medium">{t("overview.derp.ipv6StunTitle")}</span>
                   <span>
                     {t("overview.derp.ipv6StunBody", {
@@ -633,6 +651,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <Section title={t("overview.sections.service")}>
           <Card
+            description={t("overview.service.serverBody")}
             icon={Cable}
             status={{
               tone: service.reachable ? "ok" : "error",
@@ -642,51 +661,55 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("overview.service.title")}
           >
-            <Row
-              label={t("overview.service.url")}
-              status={{ tone: "neutral", label: t("overview.status.configured") }}
-            >
-              <Value code text={service.url} />
-            </Row>
-            <Row label={t("overview.service.baseDomain")}>
-              <Value {...textOrReason(service.baseDomain, reason.notConfigured)} code />
-            </Row>
-            <Row label={t("overview.service.policyMode")}>
-              <Value
+            <Facts>
+              <Fact code label={t("overview.service.url")} source={configured} text={service.url} />
+              <Fact
+                code
+                label={t("overview.service.baseDomain")}
+                {...textOrReason(service.baseDomain, reason.notConfigured)}
+              />
+              <Fact
+                label={t("overview.service.policyMode")}
                 text={
                   service.policyMode === "database"
                     ? t("overview.service.policyModeDatabase")
                     : t("overview.service.policyModeFile")
                 }
               />
-            </Row>
+            </Facts>
           </Card>
 
           <Card
+            description={t("overview.service.dnsBody")}
             icon={Globe}
             status={{
               tone: service.magicDns ? "ok" : "neutral",
-              label: service.magicDns ? t("overview.status.on") : t("overview.status.off"),
+              label: service.magicDns ? on : off,
             }}
             title={t("overview.service.dnsTitle")}
           >
-            <Row label={t("overview.service.magicDns")}>
-              <Value text={service.magicDns ? t("overview.status.on") : t("overview.status.off")} />
-            </Row>
-            <Row label={t("overview.service.overrideDns")}>
-              <Value
-                text={service.overrideDns ? t("overview.status.on") : t("overview.status.off")}
+            <Facts>
+              <Fact label={t("overview.service.magicDns")}>
+                <SettingsStatus tone={service.magicDns ? "ok" : "neutral"}>
+                  {service.magicDns ? on : off}
+                </SettingsStatus>
+              </Fact>
+              <Fact label={t("overview.service.overrideDns")}>
+                <SettingsStatus tone={service.overrideDns ? "ok" : "neutral"}>
+                  {service.overrideDns ? on : off}
+                </SettingsStatus>
+              </Fact>
+              <Fact
+                code
+                label={t("overview.service.extraRecords")}
+                note={t("overview.service.extraRecordsNote")}
+                {...textOrReason(service.extraRecordsPath, reason.notConfigured)}
               />
-            </Row>
-            <Row
-              label={t("overview.service.extraRecords")}
-              note={t("overview.service.extraRecordsNote")}
-            >
-              <Value {...textOrReason(service.extraRecordsPath, reason.notConfigured)} code />
-            </Row>
+            </Facts>
           </Card>
 
           <Card
+            description={t("overview.service.metricsBody")}
             icon={Activity}
             status={{
               tone: METRICS_STATE_TONES[service.metrics.state],
@@ -694,60 +717,95 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("overview.service.metricsTitle")}
           >
-            <Row label={t("overview.service.metricsListener")}>
-              <Value {...textOrReason(service.metrics.address, reason.notConfigured)} code />
-            </Row>
-            <Row label={t("overview.service.metricsEndpoint")}>
-              <Value text={t(METRICS_STATE_KEYS[service.metrics.state])} />
-            </Row>
-            <Row label={t("overview.service.trustedProxies")}>
-              <Value
+            <Facts>
+              <Fact
+                code
+                label={t("overview.service.metricsListener")}
+                {...textOrReason(service.metrics.address, reason.notConfigured)}
+              />
+              <Fact label={t("overview.service.metricsEndpoint")}>
+                <SettingsStatus tone={METRICS_STATE_TONES[service.metrics.state]}>
+                  {t(METRICS_STATE_KEYS[service.metrics.state])}
+                </SettingsStatus>
+              </Fact>
+              <Fact
+                label={t("overview.service.trustedProxies")}
                 text={t("overview.service.trustedProxiesValue", {
                   count: service.trustedProxies,
                 })}
               />
-            </Row>
+            </Facts>
           </Card>
         </Section>
 
         <Section title={t("overview.sections.counts")}>
-          <Card icon={Users} title={t("overview.counts.tailnetTitle")}>
-            <Row label={t("overview.counts.nodes")}>
-              <Value text={nodesText} reason={reason.api} />
-            </Row>
-            <Row label={t("overview.counts.users")}>
-              <Value text={counts.users} reason={reason.api} />
-            </Row>
-            <Row label={t("overview.counts.preAuthKeys")}>
-              <Value text={counts.preAuthKeys} reason={preAuthReason} />
-            </Row>
-            <Row label={t("overview.counts.apiKeys")}>
-              <Value text={counts.apiKeys} reason={reason.api} />
-            </Row>
+          <Card
+            description={t("overview.counts.tailnetBody")}
+            icon={Users}
+            title={t("overview.counts.tailnetTitle")}
+          >
+            <dl className="grid grid-cols-2 gap-2">
+              <CountTile
+                detail={
+                  counts.nodes
+                    ? t("overview.counts.nodesSplit", {
+                        online: counts.nodes.online,
+                        offline: counts.nodes.offline,
+                      })
+                    : undefined
+                }
+                label={t("overview.counts.nodes")}
+                reason={reason.api}
+                text={counts.nodes?.total}
+              />
+              <CountTile
+                label={t("overview.counts.users")}
+                reason={reason.api}
+                text={counts.users}
+              />
+              <CountTile
+                label={t("overview.counts.preAuthKeys")}
+                reason={preAuthReason}
+                text={counts.preAuthKeys}
+              />
+              <CountTile
+                label={t("overview.counts.apiKeys")}
+                reason={reason.api}
+                text={counts.apiKeys}
+              />
+            </dl>
           </Card>
 
-          <Card icon={Camera} title={t("overview.counts.headplaneTitle")}>
-            <Row label={t("overview.counts.audit")}>
-              <Value text={counts.auditEntries} reason={reason.api} />
-            </Row>
-            <Row label={t("overview.counts.snapshots")}>
-              <Value
-                text={
+          <Card
+            description={t("overview.counts.headplaneBody")}
+            icon={Camera}
+            title={t("overview.counts.headplaneTitle")}
+          >
+            <dl className="grid grid-cols-2 gap-2">
+              <CountTile
+                label={t("overview.counts.audit")}
+                reason={reason.api}
+                text={counts.auditEntries}
+              />
+              <CountTile
+                detail={
                   counts.snapshots
-                    ? t("overview.counts.snapshotsValue", {
-                        count: counts.snapshots.count,
+                    ? t("overview.counts.snapshotsSize", {
                         size: counts.snapshots.size ?? t("overview.reason.notReported"),
                       })
                     : undefined
                 }
+                label={t("overview.counts.snapshots")}
                 reason={reason.api}
+                text={counts.snapshots?.count}
               />
-            </Row>
+            </dl>
           </Card>
         </Section>
 
         <Section title={t("overview.sections.health")}>
           <Card
+            description={t("overview.health.body")}
             icon={HeartPulse}
             status={{
               tone: healthTone,
@@ -756,17 +814,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("overview.health.title")}
           >
-            <Row label={t("overview.health.configChecks")}>
-              <Value
-                text={
-                  health.configChecks ? t("overview.health.tally", health.configChecks) : undefined
-                }
+            <dl className="flex flex-col gap-3">
+              <TallyFact
+                label={t("overview.health.configChecks")}
                 reason={reason.config}
+                tally={health.configChecks}
               />
-            </Row>
-            <Row label={t("overview.health.diagnostics")}>
-              <Value text={t("overview.health.tally", healthTally)} />
-            </Row>
+              <TallyFact label={t("overview.health.diagnostics")} tally={healthTally} />
+            </dl>
             <p className="text-sm text-mist-600 dark:text-mist-400">
               {tr("overview.health.detailsBody", {
                 link: (
@@ -799,25 +854,28 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 interface CardProps {
   icon: LucideIcon;
   title: string;
+  /** One line on what the card's facts describe. */
+  description: string;
   status?: { tone: SettingsStatusTone; label: string };
   children: ReactNode;
 }
 
 /**
- * A read-only card in the dashboard grid. It mirrors the settings cards, minus
- * the link: nothing on this page is a navigation target except the one line
- * that points at the system status page.
+ * A read-only card in the dashboard grid. It keeps the settings card geometry
+ * (radius, border, padding, icon tile) but never links anywhere, so it gets no
+ * hover state: only the one line that points at the system status page is a
+ * navigation target.
  */
-function Card({ icon: Icon, title, status, children }: CardProps) {
+function Card({ icon: Icon, title, description, status, children }: CardProps) {
   return (
     <section
       className={cn(
-        "flex h-full flex-col gap-3 rounded-xl border p-4",
+        "flex h-full flex-col gap-4 rounded-xl border p-4",
         "border-mist-200 bg-white shadow-surface",
         "dark:border-mist-800 dark:bg-mist-950/40",
       )}
     >
-      <span className="flex items-center gap-3">
+      <header className="flex items-start gap-3">
         <span
           className={cn(
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
@@ -826,70 +884,168 @@ function Card({ icon: Icon, title, status, children }: CardProps) {
         >
           <Icon className="h-5 w-5" />
         </span>
-        <span className="min-w-0 flex-1 font-medium text-mist-900 dark:text-mist-50">{title}</span>
-        {status ? <SettingsStatus tone={status.tone}>{status.label}</SettingsStatus> : undefined}
-      </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-mist-900 dark:text-mist-50">{title}</span>
+            {status ? (
+              <SettingsStatus tone={status.tone}>{status.label}</SettingsStatus>
+            ) : undefined}
+          </span>
+          <span className="text-sm text-mist-600 dark:text-mist-400">{description}</span>
+        </span>
+      </header>
 
-      <div className="flex flex-col gap-2">{children}</div>
+      {children}
     </section>
   );
 }
 
-interface RowProps {
-  label: string;
-  /** A "configured" / "derived" chip that says where the value comes from. */
-  status?: { tone: SettingsStatusTone; label: string };
-  note?: string;
-  children: ReactNode;
+/** The definition list every card of facts renders into. */
+function Facts({ children }: { children: ReactNode }) {
+  return (
+    <dl className="flex flex-col divide-y divide-mist-100 dark:divide-mist-800/60">{children}</dl>
+  );
 }
 
-/** One label/value line, with an optional source chip and explanation. */
-function Row({ label, status, note, children }: RowProps) {
+/** A labelled sub-section of facts, for a card that mixes two sources. */
+function FactGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-0.5 border-t border-mist-100 pt-2 first:border-t-0 first:pt-0",
-        "dark:border-mist-800/60",
-      )}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="flex items-center gap-1.5 text-sm text-mist-600 dark:text-mist-400">
+    <section className="flex flex-col gap-1">
+      <h3 className="text-xs font-medium tracking-wide text-mist-500 uppercase dark:text-mist-400">
+        {title}
+      </h3>
+      <Facts>{children}</Facts>
+    </section>
+  );
+}
+
+interface FactProps {
+  label: string;
+  /** A "configured" / "derived" chip that says where the value comes from. */
+  source?: { tone: SettingsStatusTone; label: string };
+  note?: string;
+  /** The value; a chip's worth of markup instead when the value is a status. */
+  children?: ReactNode;
+  code?: boolean;
+  text?: string | number;
+  reason?: string;
+}
+
+/**
+ * One fact of a card: a label (with its source chip and explanation) over a
+ * value. The pair is stacked on a phone and put on one line from `sm` up, so a
+ * long path or URL truncates inside the card instead of overflowing it.
+ */
+function Fact({ label, source, note, children, code = false, text, reason }: FactProps) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+      <dt className="flex min-w-0 flex-col gap-0.5 text-sm text-mist-600 sm:max-w-[55%] dark:text-mist-400">
+        <span className="flex flex-wrap items-center gap-1.5">
           {label}
-          {status ? <SettingsStatus tone={status.tone}>{status.label}</SettingsStatus> : undefined}
+          {source ? <SettingsStatus tone={source.tone}>{source.label}</SettingsStatus> : undefined}
         </span>
-        <span className="min-w-0 text-right text-sm font-medium break-words">{children}</span>
-      </div>
-      {note ? <span className="text-xs text-mist-500 dark:text-mist-400">{note}</span> : undefined}
+        {note ? (
+          <span className="text-xs text-mist-500 dark:text-mist-400">{note}</span>
+        ) : undefined}
+      </dt>
+      <dd className="min-w-0 sm:flex-1 sm:text-right">
+        {children ??
+          (text === undefined ? (
+            <span className="text-sm text-mist-400 dark:text-mist-500">
+              {reason ? t("overview.unavailableReason", { reason }) : t("overview.unavailable")}
+            </span>
+          ) : (
+            <span
+              className="block truncate text-sm font-medium text-mist-900 dark:text-mist-50"
+              title={String(text)}
+            >
+              {code ? <Code>{String(text)}</Code> : String(text)}
+            </span>
+          ))}
+      </dd>
     </div>
   );
 }
 
-/**
- * The value half of a row. A missing value renders as an em dash with the
- * caller's short reason, so an unreadable setting is never mistaken for an
- * empty one.
- */
-function Value({
-  text,
-  reason,
-  code = false,
-}: {
-  text?: string | number;
+interface CountTileProps {
+  label: string;
+  /** The count itself, shown large; an em dash when it could not be read. */
+  text?: number | string;
   reason?: string;
-  code?: boolean;
-}) {
+  /** A small line under the number, e.g. how the total splits. */
+  detail?: string;
+}
+
+/** One number of a counts card: a large value with a small label under it. */
+function CountTile({ label, text, reason, detail }: CountTileProps) {
+  const { t } = useI18n();
+  const missing = text === undefined;
+  // Reversed so the value is on top while the label still reads first to a
+  // screen reader, and so a missing count keeps its em dash and reason.
+  const sub = missing ? reason : detail;
+
+  return (
+    <div className="flex min-w-0 flex-col-reverse gap-1 rounded-lg border border-mist-100 bg-mist-50/60 p-3 dark:border-mist-800 dark:bg-mist-900/50">
+      <dt className="truncate text-xs text-mist-500 dark:text-mist-400">{label}</dt>
+      <dd className="min-w-0">
+        <span
+          className={cn(
+            "block truncate text-2xl leading-none font-semibold tabular-nums",
+            missing ? "text-mist-400 dark:text-mist-500" : "text-mist-900 dark:text-mist-50",
+          )}
+          title={missing ? undefined : String(text)}
+        >
+          {missing ? t("overview.unavailable") : String(text)}
+        </span>
+        {sub ? (
+          <span
+            className="mt-1 block truncate text-xs text-mist-500 dark:text-mist-400"
+            title={sub}
+          >
+            {sub}
+          </span>
+        ) : undefined}
+      </dd>
+    </div>
+  );
+}
+
+interface TallyFactProps {
+  label: string;
+  tally?: CheckTally;
+  reason?: string;
+}
+
+/**
+ * One check tally as a row of pass/warning/fail chips. A status nobody hit
+ * stays visible but reads neutral, so "0 fail" never looks like a failure.
+ */
+function TallyFact({ label, tally, reason }: TallyFactProps) {
   const { t } = useI18n();
 
-  if (text === undefined) {
-    return (
-      <span className="text-mist-400 dark:text-mist-500">
-        {reason ? t("overview.unavailableReason", { reason }) : t("overview.unavailable")}
-      </span>
-    );
-  }
-
-  const rendered = String(text);
-  return code ? <Code>{rendered}</Code> : <span>{rendered}</span>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <dt className="text-sm text-mist-600 dark:text-mist-400">{label}</dt>
+      <dd className="flex flex-wrap items-center gap-1.5">
+        {tally === undefined ? (
+          <span className="text-sm text-mist-400 dark:text-mist-500">
+            {reason ? t("overview.unavailableReason", { reason }) : t("overview.unavailable")}
+          </span>
+        ) : (
+          tallyEntries(tally).map((entry) => (
+            <SettingsStatus
+              key={entry.status}
+              tone={entry.count > 0 ? TALLY_TONES[entry.status] : "neutral"}
+            >
+              {t(TALLY_KEYS[entry.status], { count: entry.count })}
+            </SettingsStatus>
+          ))
+        )}
+      </dd>
+    </div>
+  );
 }
 
 function declaredAddress(declared: DeclaredDerpAddress[], family: "ipv4" | "ipv6") {

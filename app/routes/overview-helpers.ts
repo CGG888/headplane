@@ -57,6 +57,22 @@ export function tallyChecks(checks: readonly { status: CheckStatus }[]): CheckTa
   return tally;
 }
 
+/** Every status in the order the dashboard shows it: best result first. */
+const CHECK_STATUS_ORDER = ["pass", "warning", "fail"] as const;
+
+export interface CheckStatusCount {
+  status: CheckStatus;
+  count: number;
+}
+
+/**
+ * A tally as a list of per-status counts, so the page can render one chip per
+ * status without depending on the property order of the tally object.
+ */
+export function tallyEntries(tally: CheckTally): CheckStatusCount[] {
+  return CHECK_STATUS_ORDER.map((status) => ({ status, count: tally[status] }));
+}
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 /**

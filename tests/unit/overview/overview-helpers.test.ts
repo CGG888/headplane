@@ -11,6 +11,7 @@ import {
   readExtraRecordsPath,
   stunBindHost,
   tallyChecks,
+  tallyEntries,
   textOrReason,
 } from "~/routes/overview-helpers";
 
@@ -40,6 +41,24 @@ describe("tallyChecks", () => {
 
   test("an empty list is all zeroes", () => {
     expect(tallyChecks([])).toEqual({ total: 0, pass: 0, warning: 0, fail: 0 });
+  });
+});
+
+describe("tallyEntries", () => {
+  test("lists pass, warning and fail in reading order", () => {
+    expect(tallyEntries({ total: 4, pass: 2, warning: 1, fail: 1 })).toEqual([
+      { status: "pass", count: 2 },
+      { status: "warning", count: 1 },
+      { status: "fail", count: 1 },
+    ]);
+  });
+
+  test("keeps a zero count so every status stays visible", () => {
+    expect(tallyEntries({ total: 1, pass: 1, warning: 0, fail: 0 })).toEqual([
+      { status: "pass", count: 1 },
+      { status: "warning", count: 0 },
+      { status: "fail", count: 0 },
+    ]);
   });
 });
 

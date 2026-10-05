@@ -24,6 +24,7 @@ import { ConfigError } from "./config/error";
 import { loadConfig } from "./config/load";
 import {
   agentsContext,
+  alertsContext,
   appConfigContext,
   auditContext,
   authContext,
@@ -84,6 +85,7 @@ function getLoadContext(request: Request, client: ClientAddress) {
 
   const routerContext = new RouterContextProvider();
   routerContext.set(agentsContext, ctx.agents);
+  routerContext.set(alertsContext, ctx.alerts);
   routerContext.set(appConfigContext, ctx.config);
   routerContext.set(auditContext, ctx.audit);
   routerContext.set(authContext, ctx.auth);

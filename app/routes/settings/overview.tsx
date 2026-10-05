@@ -1,6 +1,7 @@
 import {
   Activity,
   ArrowRight,
+  BellRing,
   Bot,
   Camera,
   FileKey2,
@@ -175,6 +176,13 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
               />
             </>
           ) : undefined}
+          <SettingsCard
+            action={t("settings.overview.notificationsSettings")}
+            description={t("settings.overview.notificationsBody")}
+            icon={BellRing}
+            title={t("settings.overview.notificationsTitle")}
+            to="/settings/notifications"
+          />
         </SettingsSection>
       </div>
     </SettingsPage>
