@@ -34,8 +34,13 @@ export interface DerpSyncSettings {
   autoReload: boolean;
 }
 
-/** Where a detected address came from. */
-export type DerpSyncSource = "dns" | "host" | "literal";
+/**
+ * Where a detected address came from: the relay hostname's own record (`dns`),
+ * a literal address in `server_url` (`literal`), the host's own interface
+ * (`host`), or the external IPv6 echo (`echo`) when the host's addresses are not
+ * the ones clients reach.
+ */
+export type DerpSyncSource = "dns" | "host" | "literal" | "echo";
 
 export interface DerpSyncValue {
   address: string;

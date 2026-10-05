@@ -61,6 +61,9 @@ const SOURCE_KEYS: Record<DerpSyncSource, TranslationKey> = {
   dns: "settings.headscale.derp.sync.sourceDns",
   host: "settings.headscale.derp.sync.sourceHost",
   literal: "settings.headscale.derp.sync.sourceLiteral",
+  // The external IPv6 echo, which reports what the internet sees rather than
+  // what any local interface holds.
+  echo: "settings.headscale.derp.sync.sourceEcho",
 };
 
 /** What the write means for the running Headscale. */

@@ -1,5 +1,14 @@
 # Next
 
+## Fixes
+
+- **The relay's IPv6 detection is honest in every environment now.** Candidates are collected from all readable sources — the interface list, `/proc/net/if_inet6` (which tells a **temporary/privacy** address apart from a stable one) and `/sys/class/net/.../device` (which tells a real NIC from a bridge) — with link-local, ULA, loopback and IPv4-mapped addresses excluded. A stable address is preferred over a privacy address that rotates, the address your domain's AAAA names wins when it matches, and every candidate comes with its origin and the reason it was or was not chosen. When the container's network namespace cannot be confirmed, the candidates are **still shown** (labelled as possibly-the-host, with the reason) instead of disappearing, and a machine with no public IPv6 still says so plainly.
+- **Contradictions are surfaced instead of hidden.** A `derp.server.ipv6` that no local interface holds, or a domain AAAA that points at a different machine, now raises an amber note with both values and a copy button for the address that should be used — so a configured value can no longer quietly mask the real one. Picking a temporary address is called out as rotating.
+- **An optional external IPv6 echo** (off by default) answers the question that matters when a router forwards or translates IPv6: what address the internet actually sees. It queries well-known echo endpoints over IPv6 only, with short timeouts, caching and fallbacks, and the UI says whether the answer matches a local interface or is a forwarded address no interface holds.
+
+## Changes
+
+- The automatic address sync uses the same selection, so it writes the stable address rather than a rotating privacy address, and it shows which source it used.
 # 0.22.3 (October 6, 2026)
 
 ## Changes

@@ -8,7 +8,11 @@
 // IPv4 is read from the A record of `server_url` because a machine behind NAT
 // cannot know its own public address; a lookup that fails leaves the configured
 // value exactly as it is. IPv6 is read from the host's own global unicast
-// address through `loadHostIpv6Addresses`, the same probe the relay card uses.
+// address through `loadHostIpv6Addresses`, the same probe the relay card uses,
+// and ranked by the same selection, so a rotating privacy address is never
+// preferred over a stable one. When the operator enabled the external IPv6 echo
+// (off by default), its answer wins: it is what the internet actually sees, so
+// it is right even when every local address is the container's or the router's.
 //
 // Lifecycle mirrors the other services on the app context: `start()` returns
 // immediately and schedules nothing while the sync is disabled, and `dispose()`
@@ -21,6 +25,7 @@
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
 import type { Headscale } from "~/server/headscale/api";
 import { loadHostIpv6Addresses, selectHostIpv6Address } from "~/server/host-addresses";
+import { loadHostEcho, readHostEchoSettings, type HostEchoResult } from "~/server/host-echo";
 import { loadSharedRelayResolution, type RelayResolution } from "~/server/relay-dns";
 import type { SnapshotService } from "~/server/snapshots/service.server";
 import type { SnapshotTarget } from "~/server/snapshots/types";
@@ -92,6 +97,12 @@ export interface DerpSyncServiceOptions {
   resolveRelay?: (host: string) => Promise<RelayResolution | undefined>;
   /** Enumerates the host's own global unicast IPv6 addresses. */
   loadHostIpv6?: () => Promise<Awaited<ReturnType<typeof loadHostIpv6Addresses>>>;
+  /**
+   * The external IPv6 echo answer, read from the same setting the Overview card
+   * offers. Off by default, so this only reaches the network when an operator
+   * turned the probe on.
+   */
+  resolveHostEcho?: () => Promise<HostEchoResult>;
   /** Injectable clock, for tests. */
   now?: () => Date;
   /** Test hook: overrides the interval the settings would schedule. */
@@ -138,6 +149,12 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
   const now = () => options.now?.() ?? new Date();
   const resolveRelay = options.resolveRelay ?? ((host: string) => loadSharedRelayResolution(host));
   const loadHostIpv6 = options.loadHostIpv6 ?? (() => loadHostIpv6Addresses());
+  const resolveHostEcho =
+    options.resolveHostEcho ??
+    (async () => {
+      const settings = await readHostEchoSettings(options.dataPath);
+      return loadHostEcho(settings);
+    });
 
   function ensureLoaded(): Promise<void> {
     loadPromise ??= readDerpSyncDocument(options.dataPath)
@@ -228,13 +245,23 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
   }
 
   /**
-   * The host's own global unicast IPv6 address. A process that does not share
-   * the host's network namespace can only see its own interfaces, so it reports
-   * that instead of advertising an address the host does not have.
+   * The address clients must be able to reach, IPv6 side.
+   *
+   * A process that does not share the host's network namespace can only see its
+   * own interfaces, so a veth-backed container reports that instead of
+   * advertising an address the host does not have. An unknown namespace is
+   * treated as the host's, because the container may legitimately share the
+   * host's stack, and the external echo — when the operator enabled it — wins
+   * over both: it is the one source that knows what the internet sees, which is
+   * exactly the NAT66 case where no local address is right.
    */
   async function detectIpv6(): Promise<FamilyDetection> {
-    const host = await loadHostIpv6();
-    if (host.namespace !== "host") {
+    const [host, echo] = await Promise.all([loadHostIpv6(), resolveHostEcho()]);
+    if (echo.address !== undefined && isPublicSyncIpv6(echo.address)) {
+      return { value: { address: echo.address, source: "echo" } };
+    }
+
+    if (host.namespace === "isolated") {
       return { skip: { family: "ipv6", reason: "namespace-unavailable" } };
     }
 

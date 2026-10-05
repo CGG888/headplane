@@ -9,12 +9,15 @@ import { readDerpSyncDocument, writeDerpSyncDocument } from "~/server/derp-sync/
 import type { DerpSyncSettings } from "~/server/derp-sync/types";
 import type { Headscale } from "~/server/headscale/api";
 import type { HostIpv6Addresses } from "~/server/host-addresses";
+import type { HostEchoResult } from "~/server/host-echo";
 import type { RelayResolution } from "~/server/relay-dns";
 import type { SnapshotService } from "~/server/snapshots/service.server";
 
 const BASE = Date.UTC(2026, 0, 1, 0, 0, 0);
 const RELAY_HOST = "relay.example.com";
 const HOST_IPV6 = "2606:4700::1111";
+const PRIVACY_IPV6 = "2606:4700:0:0:152f:808e:9eb1:31c9";
+const ECHO_IPV6 = "240e:3b3:4030:1510::1";
 const PUBLIC_IPV4 = "8.8.8.8";
 
 function resolution(ipv4: string[], overrides: Partial<RelayResolution> = {}): RelayResolution {
@@ -44,6 +47,7 @@ interface HarnessOptions {
   writable?: boolean;
   resolve?: (host: string) => Promise<RelayResolution | undefined>;
   host?: () => Promise<HostIpv6Addresses>;
+  echo?: () => Promise<HostEchoResult>;
   withIntegration?: boolean;
   withSnapshots?: boolean;
   intervalMs?: number;
@@ -92,6 +96,9 @@ describe("DERP address sync service", () => {
       ...(options.withIntegration === false ? {} : { integration: { onConfigChange: reload } }),
       resolveRelay: options.resolve ?? (async () => resolution([PUBLIC_IPV4])),
       loadHostIpv6: options.host ?? (async () => hostAddresses()),
+      // The echo is off unless a test asks for it, so no test reaches the
+      // network through the shared probe.
+      resolveHostEcho: options.echo ?? (async () => ({ reason: "disabled", attempted: [] })),
       now: () => new Date(BASE),
       ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
     });
@@ -214,6 +221,55 @@ describe("DERP address sync service", () => {
 
     expect(run?.skipped).toContainEqual({ family: "ipv6", reason: "namespace-unavailable" });
     expect(test6.current().ipv6).toBe(HOST_IPV6);
+  });
+
+  test("a rotating privacy address is never preferred over a stable one", async () => {
+    const test6b = build({
+      host: async () =>
+        hostAddresses({
+          candidates: [
+            { address: PRIVACY_IPV6, interfaceName: "ens18", temporary: true, realNic: true },
+            { address: HOST_IPV6, interfaceName: "ens18", temporary: false, realNic: true },
+          ],
+        }),
+    });
+    await test6b.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test6b.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: HOST_IPV6, source: "host" });
+    expect(test6b.current().ipv6).toBe(HOST_IPV6);
+  });
+
+  test("the external echo answer wins, because it is what clients reach", async () => {
+    const test6c = build({
+      echo: async () => ({
+        address: ECHO_IPV6,
+        attempted: ["https://api64.ipify.org?format=json"],
+      }),
+    });
+    await test6c.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test6c.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: ECHO_IPV6, source: "echo" });
+    expect(test6c.current().ipv6).toBe(ECHO_IPV6);
+    expect(test6c.patches).toEqual([{ path: "derp.server.ipv6", value: ECHO_IPV6 }]);
+  });
+
+  test("an isolated container still writes the address the echo reported", async () => {
+    const test6d = build({
+      host: async () => hostAddresses({ namespace: "isolated", candidates: [] }),
+      echo: async () => ({ address: ECHO_IPV6, attempted: [] }),
+    });
+    await test6d.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test6d.service.runNow();
+
+    // Only the family the setting left out is skipped: the echo answer is
+    // written even though every local interface belongs to the container.
+    expect(run?.skipped).toEqual([{ family: "ipv4", reason: "family-disabled" }]);
+    expect(test6d.current().ipv6).toBe(ECHO_IPV6);
   });
 
   test("a server_url with no host records why IPv4 was skipped", async () => {

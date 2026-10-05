@@ -19,19 +19,23 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { data } from "react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Code from "~/components/code";
 import { ErrorBanner } from "~/components/error-banner";
+import Input from "~/components/input";
 import Link from "~/components/link";
 import {
+  SettingsActions,
   SettingsCollapsible,
+  SettingsField,
   SettingsPage,
   SettingsStatus,
   type SettingsStatusTone,
 } from "~/components/settings-nav";
+import Switch from "~/components/switch";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import CopyValue from "~/routes/machines/components/copy-value";
@@ -65,8 +69,20 @@ import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import {
   loadHostIpv6Addresses,
   selectRelayIpv6,
+  type HostIpv6Stability,
+  type HostProbeReason,
   type RelayIpv6Selection,
 } from "~/server/host-addresses";
+import {
+  clearHostEchoCache,
+  DEFAULT_HOST_ECHO_URL,
+  FALLBACK_HOST_ECHO_URLS,
+  loadHostEcho,
+  parseHostEchoUrl,
+  readHostEchoSettings,
+  writeHostEchoSettings,
+  type HostEchoResult,
+} from "~/server/host-echo";
 import {
   buildRelayView,
   loadSharedRelayResolution,
@@ -95,8 +111,11 @@ import {
   type DerpRegionSummary,
   formatByteSize,
   hasIpv6StunWarning,
+  type HostEchoActionResult,
+  type HostEchoErrorCode,
   readExtraRecordsPath,
   type RelayReason,
+  relayIpv6NoteKind,
   summarizeFleetTrend,
   tallyChecks,
   tallyEntries,
@@ -201,6 +220,40 @@ const TALLY_TONES: Record<CheckStatus, SettingsStatusTone> = {
   warning: "warn",
   fail: "error",
 };
+
+/** How the ranking classified one of the machine's own addresses. */
+const IPV6_STABILITY_KEYS: Record<HostIpv6Stability, TranslationKey> = {
+  stable: "overview.derp.candidateStable",
+  unknown: "overview.derp.candidateUnknown",
+  temporary: "overview.derp.candidateTemporary",
+};
+
+const IPV6_STABILITY_TONES: Record<HostIpv6Stability, SettingsStatusTone> = {
+  stable: "ok",
+  unknown: "neutral",
+  temporary: "warn",
+};
+
+/** Why a source had nothing to say; each is a note, never a failure. */
+const IPV6_REASON_KEYS: Record<HostProbeReason, TranslationKey> = {
+  "os-unreadable": "overview.derp.ipv6ReasonOsUnreadable",
+  "proc-unreadable": "overview.derp.ipv6ReasonProcUnreadable",
+  "sys-unreadable": "overview.derp.ipv6ReasonSysUnreadable",
+  disabled: "overview.derp.ipv6ReasonEchoDisabled",
+  timeout: "overview.derp.ipv6ReasonEchoTimeout",
+  unreachable: "overview.derp.ipv6ReasonEchoUnreachable",
+  invalid: "overview.derp.ipv6ReasonEchoInvalid",
+};
+
+/** Stable codes the echo form turns into a sentence in the page's language. */
+const HOST_ECHO_ERROR_KEYS: Record<HostEchoErrorCode, TranslationKey> = {
+  invalidUrl: "overview.derp.echoInvalidUrl",
+  writeFailed: "overview.derp.echoWriteFailed",
+  invalidAction: "overview.derp.echoInvalidAction",
+};
+
+/** What the loader hands the echo card, so the card imports no server module. */
+type HostEchoData = Route.ComponentProps["loaderData"]["hostEcho"];
 
 type Attempt<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
@@ -411,15 +464,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // the same chain the machine page uses, so the two cards cannot word a region
   // differently: the manual mapping first, then the configured DERP maps.
   //
-  // IPv6 is the exception: it has no NAT, so the address lives on the machine
-  // itself and only the host's own interfaces can name it. That probe is only
-  // worth its file reads while `derp.server.ipv6` is unset, because a declared
-  // address wins before the machine's own addresses are looked at.
+  // IPv6 has no NAT in the usual case, so the address lives on the machine
+  // itself; the host probe is therefore always read, even when `derp.server.ipv6`
+  // is declared, because the two disagreeing is exactly what the operator has to
+  // see. That probe is cached, and the optional external echo — off unless an
+  // operator turned it on — adds the address the internet actually sees, which
+  // is the only source that is right behind NAT66. Both run inside the same
+  // parallel batch as everything else on this page.
+  const dataPath = appConfig.server.data_path;
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
-  const readHostAddresses = (derp.server.ipv6 ?? "").trim().length === 0;
-  const [relayResolution, regionNames, mapInventory, hostAddresses] = await Promise.all([
+  const hostAddressLookup = loadHostIpv6Addresses();
+  const hostEchoLookup = (async () => {
+    const settings = await readHostEchoSettings(dataPath);
+    const result: HostEchoResult = settings.enabled
+      ? await loadHostEcho(settings)
+      : { reason: "disabled", attempted: [] };
+    return { settings, result };
+  })();
+
+  const [relayResolution, regionNames, mapInventory, hostAddresses, hostEcho] = await Promise.all([
     loadSharedRelayResolution(relayEndpoint?.host),
-    readDerpRegionNames(appConfig.server.data_path),
+    readDerpRegionNames(dataPath),
     loadDerpRegionInventory({
       paths: derp.paths,
       urls: derp.urls,
@@ -427,9 +492,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       updateFrequency: derp.updateFrequency,
       baseDir: configPath ? dirname(configPath) : undefined,
     }),
-    readHostAddresses ? loadHostIpv6Addresses() : Promise.resolve(undefined),
+    hostAddressLookup,
+    hostEchoLookup,
   ]);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
+  // The echo answer is only worth reporting when it is a real one: a disabled
+  // probe and a probe that failed both leave the row to the local sources, with
+  // the failure recorded as a reason rather than as a missing address.
+  const echoAddress = hostEcho.result.address;
+  const probeReasons: HostProbeReason[] = [
+    ...(hostAddresses?.reasons ?? []),
+    ...(hostEcho.result.reason === undefined || hostEcho.result.reason === "disabled"
+      ? []
+      : [hostEcho.result.reason]),
+  ];
+
   // A literal endpoint is its own address, and an unusable `server_url` has no
   // hostname to compare against: both keep the row exactly as it read before.
   const relayIpv6 =
@@ -441,6 +518,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
           namespace: hostAddresses?.namespace,
           dns: relayResolution?.ipv6,
           reason: relayResolution?.reason,
+          probeReasons,
+          excluded: hostAddresses?.excluded,
+          ...(echoAddress === undefined
+            ? {}
+            : {
+                echo: {
+                  address: echoAddress,
+                  ...(hostEcho.result.url === undefined ? {} : { url: hostEcho.result.url }),
+                },
+              }),
         });
 
   // Every hostname the configured maps list, resolved through the shared relay
@@ -547,6 +634,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         stunListenAddr: derp.server.stunListenAddr,
       }),
     },
+    // The optional external echo: what it is set to right now, what the default
+    // endpoint is, and whether this viewer may change it. Plain values only, so
+    // the card never imports a module that opens a socket.
+    hostEcho: {
+      enabled: hostEcho.settings.enabled,
+      url: hostEcho.settings.url,
+      defaultUrl: DEFAULT_HOST_ECHO_URL,
+      fallbacks: [...FALLBACK_HOST_ECHO_URLS],
+      canEdit: auth.can(principal, Capabilities.configure_iam),
+    },
     service: {
       url: appConfig.headscale.url,
       reachable,
@@ -579,9 +676,57 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
+/**
+ * The one write the dashboard has: the optional external IPv6 echo. It is
+ * Headplane state stored under `data_path` (like the relay DNS servers), not
+ * Headscale configuration, so it needs no config write and works with a
+ * read-only Headscale configuration file. The same capability the other
+ * settings writes require is required here, and the response carries a stable
+ * code instead of English so the form can word it in the page's language.
+ */
+export async function action({ request, context }: Route.ActionArgs) {
+  const auth = context.get(authContext);
+
+  const principal = await auth.require(request);
+  if (!auth.can(principal, Capabilities.configure_iam)) {
+    throw data({ localized: { key: "errors.permission.modifyIam" } }, { status: 403 });
+  }
+
+  const form = await request.formData();
+  if (form.get("action_id")?.toString() !== "save_host_echo") {
+    return data({ ok: false, errorCode: "invalidAction" } satisfies HostEchoActionResult, {
+      status: 400,
+    });
+  }
+
+  const url = parseHostEchoUrl(form.get("host_echo_url")?.toString() ?? "");
+  if (url === undefined) {
+    return data({ ok: false, errorCode: "invalidUrl" } satisfies HostEchoActionResult, {
+      status: 400,
+    });
+  }
+
+  const dataPath = context.get(appConfigContext).server.data_path;
+  const saved = await writeHostEchoSettings(dataPath, {
+    enabled: form.get("host_echo_enabled")?.toString() === "true",
+    url,
+  });
+
+  if (!saved) {
+    return data({ ok: false, errorCode: "writeFailed" } satisfies HostEchoActionResult, {
+      status: 400,
+    });
+  }
+
+  // The setting decides which endpoint is asked, so a cached answer from the
+  // previous one must not survive the save.
+  clearHostEchoCache();
+  return data({ ok: true } satisfies HostEchoActionResult);
+}
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr, locale } = useI18n();
-  const { versions, derp, service, counts, health, history } = loaderData;
+  const { versions, derp, service, counts, health, history, hostEcho } = loaderData;
   const trendSummary = history.trend ? summarizeFleetTrend(history.trend) : undefined;
 
   const reason = {
@@ -669,8 +814,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       return relayDeclaredMarker;
     }
 
+    if (selection.source === "echo") {
+      return { tone: "neutral" as const, label: t("overview.derp.relaySourceEcho") };
+    }
+
     if (selection.source === "host") {
-      return { tone: "neutral" as const, label: t("overview.derp.relaySourceHost") };
+      return selection.unconfirmed
+        ? { tone: "warn" as const, label: t("overview.derp.relaySourceHostUnconfirmed") }
+        : { tone: "neutral" as const, label: t("overview.derp.relaySourceHost") };
     }
 
     if (selection.source === "dns") {
@@ -681,35 +832,39 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   };
 
   /**
-   * The one line under the IPv6 row, strongest reason first. A declared address
-   * keeps the verdict note the row printed before; a derived one says why it is
-   * what it is: a namespace Headplane could not see beats a machine without an
-   * address, which beats the address's own stability, which beats the alternates.
+   * The one line under the IPv6 row. Which note wins is decided by
+   * {@link relayIpv6NoteKind}, so the precedence is testable; this only words
+   * it. A declared address keeps the verdict note the row printed before, and
+   * a contradiction gets its own amber block below the row.
    */
   const ipv6Note = (selection: RelayIpv6Selection) => {
-    if (selection.source === "declared") {
-      return ipv6LegacyLine === undefined
-        ? undefined
-        : relayVerdictNote(ipv6LegacyLine, derp.relay.host);
+    const note = relayIpv6NoteKind(selection);
+    switch (note?.kind) {
+      case undefined:
+        return undefined;
+      case "declared":
+        return ipv6LegacyLine === undefined
+          ? undefined
+          : relayVerdictNote(ipv6LegacyLine, derp.relay.host);
+      case "echo-match":
+        return t("overview.derp.ipv6EchoMatches", { address: note.address });
+      case "echo-forwarded":
+        return t("overview.derp.ipv6EchoForwarded", { address: note.address });
+      case "unconfirmed":
+        return note.namespace === "isolated"
+          ? t("overview.derp.ipv6UnconfirmedIsolated")
+          : t("overview.derp.ipv6UnconfirmedUnknown");
+      case "unverified":
+        return t("overview.derp.ipv6UnverifiedNote");
+      case "dns-fallback":
+        return t("overview.derp.ipv6NoneBody");
+      case "temporary":
+        return t("overview.derp.ipv6TemporaryNote");
+      case "probe":
+        return note.reasons.map((entry) => t(IPV6_REASON_KEYS[entry])).join(" ");
+      case "alternates":
+        return t("overview.derp.ipv6Alternates", { addresses: note.addresses.join(", ") });
     }
-
-    if (selection.namespace !== "host") {
-      return t("overview.derp.ipv6UnverifiedNote");
-    }
-
-    if (selection.state === "no-host-address" && selection.addresses.length > 0) {
-      return t("overview.derp.ipv6NoneBody");
-    }
-
-    if (selection.temporary) {
-      return t("overview.derp.ipv6TemporaryNote");
-    }
-
-    if (selection.alternates.length > 0) {
-      return t("overview.derp.ipv6Alternates", { addresses: selection.alternates.join(", ") });
-    }
-
-    return undefined;
   };
 
   /** The sentence a derived IPv6 row with nothing to print reads as. */
@@ -966,6 +1121,32 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               suggestsConfigured={derp.relay.suggestsConfigured}
             />
 
+            {/* A declared address that no source agrees with: the operator has to
+                see both values, and the one clients should use is one click away. */}
+            {relayIpv6?.contradiction !== undefined && relayIpv6.copy !== undefined ? (
+              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <span className="font-medium">{t("overview.derp.ipv6ContradictionTitle")}</span>
+                  <span>
+                    {t(
+                      relayIpv6.contradiction.source === "echo"
+                        ? "overview.derp.ipv6ContradictionEcho"
+                        : "overview.derp.ipv6ContradictionHost",
+                      {
+                        declared: relayIpv6.contradiction.declared,
+                        detected: relayIpv6.contradiction.detected,
+                      },
+                    )}
+                  </span>
+                  <CopyAddress
+                    address={relayIpv6.copy}
+                    label={t("overview.derp.ipv6ContradictionCopy")}
+                  />
+                </div>
+              </div>
+            ) : undefined}
+
             {relayIpv6?.mismatch && relayIpv6.copy !== undefined ? (
               <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
@@ -981,6 +1162,75 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
             ) : undefined}
+
+            {/* Every address that was found, and why each one was or was not the
+                one chosen: the alternates list alone cannot explain a ranking. */}
+            {relayIpv6 !== undefined && relayIpv6.candidates.length > 0 ? (
+              <SettingsCollapsible
+                description={t("overview.derp.candidatesBody")}
+                summary={t("overview.derp.candidatesSummary", {
+                  count: relayIpv6.candidates.length,
+                })}
+                title={t("overview.derp.candidatesTitle")}
+              >
+                <ul className="flex flex-col gap-2">
+                  {relayIpv6.candidates.map((candidate) => (
+                    <li
+                      className="flex flex-col gap-0.5"
+                      key={`${candidate.interfaceName}:${candidate.address}`}
+                    >
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <Code>{candidate.address}</Code>
+                        {candidate.chosen ? (
+                          <SettingsStatus tone="ok">
+                            {t("overview.derp.candidateChosen")}
+                          </SettingsStatus>
+                        ) : undefined}
+                        <SettingsStatus tone={IPV6_STABILITY_TONES[candidate.stability]}>
+                          {t(IPV6_STABILITY_KEYS[candidate.stability])}
+                        </SettingsStatus>
+                        {candidate.fromDns ? (
+                          <SettingsStatus tone="neutral">
+                            {t("overview.derp.candidateDns")}
+                          </SettingsStatus>
+                        ) : undefined}
+                        {candidate.fromEcho ? (
+                          <SettingsStatus tone="ok">
+                            {t("overview.derp.candidateEcho")}
+                          </SettingsStatus>
+                        ) : undefined}
+                      </span>
+                      <span className="text-xs text-mist-500 dark:text-mist-400">
+                        {t(
+                          candidate.realNic
+                            ? "overview.derp.candidateRealNic"
+                            : "overview.derp.candidateVirtualNic",
+                          { interface: candidate.interfaceName },
+                        )}
+                        {" · "}
+                        {t("overview.derp.candidateSources", {
+                          sources: candidate.origins.join(", "),
+                        })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {relayIpv6.excluded.length > 0 ? (
+                  <p className="text-xs text-mist-500 dark:text-mist-400">
+                    {t("overview.derp.candidatesExcluded", { count: relayIpv6.excluded.length })}
+                  </p>
+                ) : undefined}
+
+                {relayIpv6.probeReasons.length > 0 ? (
+                  <p className="text-xs text-mist-500 dark:text-mist-400">
+                    {relayIpv6.probeReasons.map((entry) => t(IPV6_REASON_KEYS[entry])).join(" ")}
+                  </p>
+                ) : undefined}
+              </SettingsCollapsible>
+            ) : undefined}
+
+            <HostEchoSettings echo={hostEcho} />
 
             {derp.ipv6StunWarning ? (
               <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
@@ -1672,11 +1922,11 @@ function DerpMapAddress({
 }
 
 /**
- * The copy affordance under the IPv6 warning. One click puts the machine's own
- * address on the clipboard, ready to paste into `derp.server.ipv6`; a copy the
- * browser refuses is reported as a toast, never as an error page.
+ * The copy affordance under an IPv6 warning. One click puts the address that
+ * should be used on the clipboard; a copy the browser refuses is reported as a
+ * toast, never as an error page.
  */
-function CopyAddress({ address }: { address: string }) {
+function CopyAddress({ address, label }: { address: string; label?: string }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
@@ -1694,8 +1944,109 @@ function CopyAddress({ address }: { address: string }) {
   return (
     <Button className="self-start" onClick={onCopy} type="button">
       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-      {t("overview.derp.ipv6HostCopy")}
+      {label ?? t("overview.derp.ipv6HostCopy")}
     </Button>
+  );
+}
+
+/**
+ * The optional external echo: what it is for, the switch, and the endpoint.
+ *
+ * Off by default and stored in Headplane's data directory, never in Headscale's
+ * configuration, so it works with a read-only Headscale config file. The whole
+ * block is a form of its own, so saving the URL can never enable the probe and
+ * enabling the probe can never silently change the endpoint.
+ */
+function HostEchoSettings({ echo }: { echo: HostEchoData }) {
+  const { t } = useI18n();
+  const fetcher = useFetcher<HostEchoActionResult>();
+  const [enabled, setEnabled] = useState(echo.enabled);
+  const [url, setUrl] = useState(echo.url);
+
+  const busy = fetcher.state !== "idle";
+  const saved = fetcher.state === "idle" && fetcher.data?.ok === true;
+  const error =
+    fetcher.data !== undefined && !fetcher.data.ok
+      ? t(HOST_ECHO_ERROR_KEYS[fetcher.data.errorCode])
+      : undefined;
+
+  // Once a save lands, the loader revalidates with the stored (normalized)
+  // values, so the form follows the file rather than the text that was typed.
+  useEffect(() => {
+    if (fetcher.state !== "idle") {
+      return;
+    }
+
+    setEnabled(echo.enabled);
+    setUrl(echo.url);
+  }, [echo.enabled, echo.url, fetcher.state]);
+
+  const disabled = !echo.canEdit || busy;
+
+  return (
+    <SettingsCollapsible
+      description={t("overview.derp.echoBody")}
+      icon={Globe}
+      status={{
+        tone: echo.enabled ? "ok" : "neutral",
+        label: echo.enabled ? t("overview.status.on") : t("overview.status.off"),
+      }}
+      summary={echo.enabled ? t("overview.derp.echoSummary", { url: echo.url }) : undefined}
+      title={t("overview.derp.echoTitle")}
+    >
+      <fetcher.Form className="flex flex-col gap-5" method="post">
+        <input name="action_id" type="hidden" value="save_host_echo" />
+
+        <SettingsField
+          description={t("overview.derp.echoEnabledDescription")}
+          label={t("overview.derp.echoEnabledLabel")}
+        >
+          <Switch
+            checked={enabled}
+            disabled={disabled}
+            label={t("overview.derp.echoEnabledLabel")}
+            onCheckedChange={setEnabled}
+          />
+        </SettingsField>
+        <input name="host_echo_enabled" type="hidden" value={enabled ? "true" : "false"} />
+
+        <SettingsField
+          description={t("overview.derp.echoUrlDescription")}
+          label={t("overview.derp.echoUrlLabel")}
+        >
+          <Input
+            disabled={disabled}
+            label={t("overview.derp.echoUrlLabel")}
+            labelHidden
+            name="host_echo_url"
+            onChange={setUrl}
+            placeholder={echo.defaultUrl}
+            value={url}
+          />
+        </SettingsField>
+
+        <p className="rounded-lg bg-mist-100 p-3 text-sm text-mist-600 dark:bg-mist-800/50 dark:text-mist-300">
+          {t("overview.derp.echoNote", { urls: echo.fallbacks.join(", ") })}
+        </p>
+
+        {error ? (
+          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </p>
+        ) : undefined}
+
+        <SettingsActions>
+          {saved ? (
+            <span className="text-sm text-emerald-600 dark:text-emerald-400">
+              {t("overview.derp.echoSaved")}
+            </span>
+          ) : undefined}
+          <Button disabled={disabled} type="submit" variant="heavy">
+            {t("overview.derp.echoSave")}
+          </Button>
+        </SettingsActions>
+      </fetcher.Form>
+    </SettingsCollapsible>
   );
 }
 

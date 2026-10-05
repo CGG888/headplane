@@ -172,6 +172,61 @@ const en = {
       relayReasonUnavailable: "not resolved",
       relaySourceHost: "Host",
       relaySourceDnsUnverified: "DNS-unverified",
+      relaySourceEcho: "Internet (echo)",
+      relaySourceHostUnconfirmed: "Host (unconfirmed)",
+      ipv6EchoMatches: "The internet sees {address}, and this machine holds it.",
+      ipv6EchoForwarded:
+        "The internet sees {address}, which no interface on this machine holds: clients reach it through NAT66 or a router that forwards another address.",
+      ipv6UnconfirmedUnknown:
+        "Headplane could not confirm that this container shares the host's network namespace, so these addresses may be the container's own. They are shown rather than hidden, because a container can legitimately share the host's stack.",
+      ipv6UnconfirmedIsolated:
+        "This container has its own network namespace (a veth or bridge was found), so these addresses belong to the container, not to the host.",
+      ipv6ContradictionTitle: "The declared address is not what clients reach",
+      ipv6ContradictionEcho:
+        "derp.server.ipv6 declares {declared}, but the internet sees {detected}.",
+      ipv6ContradictionHost:
+        "derp.server.ipv6 declares {declared}, but this machine's own address is {detected}.",
+      ipv6ContradictionCopy: "Copy the address to use",
+      ipv6ReasonOsUnreadable: "The interface list could not be read.",
+      ipv6ReasonProcUnreadable:
+        "/proc/net/if_inet6 could not be read, so a temporary address cannot be told from a stable one.",
+      ipv6ReasonSysUnreadable:
+        "/sys/class/net could not be read, so a real NIC cannot be told from a virtual interface.",
+      ipv6ReasonEchoDisabled: "The external IPv6 echo is off.",
+      ipv6ReasonEchoTimeout: "The external IPv6 echo did not answer in time.",
+      ipv6ReasonEchoUnreachable: "The external IPv6 echo could not be reached.",
+      ipv6ReasonEchoInvalid: "The external IPv6 echo returned no usable IPv6 address.",
+      candidatesTitle: "Detected IPv6 addresses",
+      candidatesBody:
+        "Every public IPv6 address Headplane found, whether each one is stable, and which one was chosen.",
+      candidatesSummary: "{count} found on this machine",
+      candidatesExcluded:
+        "{count} further addresses were excluded: link-local, unique-local, loopback, multicast, unspecified and IPv4-mapped addresses can never be reached by a client.",
+      candidateChosen: "chosen",
+      candidateStable: "stable",
+      candidateUnknown: "stability unknown",
+      candidateTemporary: "temporary, rotates",
+      candidateDns: "named by the domain's AAAA",
+      candidateEcho: "confirmed by the echo",
+      candidateRealNic: "real NIC {interface}",
+      candidateVirtualNic: "virtual interface {interface}",
+      candidateSources: "read from {sources}",
+      echoTitle: "External IPv6 echo",
+      echoBody:
+        "Ask a public endpoint which IPv6 address the internet sees. It is the only source that is right when the host is behind NAT66 or a router that forwards a different address.",
+      echoEnabledLabel: "Ask a public echo endpoint",
+      echoEnabledDescription:
+        "Off by default, because this makes Headplane contact a third party. Turn it on when the address clients reach may not be one this machine holds.",
+      echoUrlLabel: "Echo endpoint",
+      echoUrlDescription: "The URL asked first, over IPv6 only.",
+      echoNote:
+        "The request goes out over IPv6 only and is cached like the other lookups. When the endpoint does not answer, these are asked in turn: {urls}",
+      echoSummary: "Asking {url}.",
+      echoSave: "Save echo settings",
+      echoSaved: "Saved.",
+      echoInvalidUrl: "Enter an http(s) URL.",
+      echoWriteFailed: "Headplane could not write the setting to its data directory.",
+      echoInvalidAction: "That action is not supported.",
       ipv6NoneBody:
         "This machine has no public IPv6 address. Declare one in derp.server.ipv6, or fix the domain's DNS.",
       ipv6Alternates: "Other addresses on this machine: {addresses}",
@@ -1956,6 +2011,7 @@ const en = {
             "The Headscale configuration file is not writable, so nothing was written.",
           sourceDns: "DNS A record",
           sourceHost: "host interface",
+          sourceEcho: "external IPv6 echo",
           sourceLiteral: "server_url",
           reloadNotNeeded: "No reload was needed.",
           reloadManual: "Reload or restart Headscale for the change to take effect.",

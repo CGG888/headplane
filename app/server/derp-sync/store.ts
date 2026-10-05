@@ -43,7 +43,7 @@ function readText(value: unknown): string | undefined {
 }
 
 const FAMILIES: readonly DerpSyncFamily[] = ["ipv4", "ipv6"];
-const SOURCES: readonly DerpSyncSource[] = ["dns", "host", "literal"];
+const SOURCES: readonly DerpSyncSource[] = ["dns", "host", "literal", "echo"];
 const OUTCOMES: readonly DerpSyncOutcome[] = ["changed", "unchanged", "skipped", "failed"];
 const RELOADS: readonly DerpSyncReload[] = ["not-needed", "manual", "triggered", "failed"];
 const SKIP_REASONS: readonly DerpSyncSkipReason[] = [
