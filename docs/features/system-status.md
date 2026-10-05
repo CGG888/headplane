@@ -73,6 +73,9 @@ them into real checks.
 | OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                   |
 | Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                         |
 
+A check that turns into a failure can also be pushed to a webhook instead of
+waiting to be read here; see [Alert Notifications](/features/notifications).
+
 ## Metrics
 
 The **Metrics** tab reads Headscale's Prometheus endpoint for you. Everything on

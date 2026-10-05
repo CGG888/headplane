@@ -52,6 +52,7 @@ export default defineConfig({
             text: "Features",
             items: [
               { text: "Overview", link: "/features/overview" },
+              { text: "Alert Notifications", link: "/features/notifications" },
               {
                 text: "Single Sign-On (SSO)",
                 link: "/features/sso",
