@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   computeConfigChecks,
   configProbeTargets,
+  configRelayLookupTarget,
   DEFAULT_SQLITE_PATH,
   isUnspecifiedTrustedProxy,
   type ConfigCheck,
@@ -15,6 +16,7 @@ import {
   type ConfigProbeResults,
 } from "~/routes/settings/system/config-checks";
 import { loadConfigChecks } from "~/routes/settings/system/config-probe";
+import type { RelayResolution } from "~/server/relay-dns";
 
 function probe(path: string, overrides: Partial<ConfigProbe> = {}): ConfigProbe {
   return { path, exists: true, readable: true, isFile: true, size: 64, ...overrides };
@@ -22,6 +24,19 @@ function probe(path: string, overrides: Partial<ConfigProbe> = {}): ConfigProbe 
 
 function run(config: unknown, probes: ConfigProbeResults = {}): ConfigCheck[] {
   return computeConfigChecks({ config, probes });
+}
+
+/** An embedded relay that declares the addresses the checks compare. */
+function enabledConfig(addresses: { ipv4?: string; ipv6?: string }) {
+  return {
+    server_url: "https://derp.example.com",
+    derp: { server: { enabled: true, ...addresses } },
+  };
+}
+
+/** A relay hostname answer in the shape the resolver returns. */
+function resolution(overrides: Partial<RelayResolution> = {}): RelayResolution {
+  return { host: "derp.example.com", kind: "hostname", ipv4: [], ipv6: [], ...overrides };
 }
 
 function check(checks: ConfigCheck[], id: ConfigCheckId): ConfigCheck {
@@ -42,6 +57,8 @@ const CHECK_IDS: ConfigCheckId[] = [
   "configDnsRecords",
   "configOidc",
   "configNoiseKey",
+  "configDerpIpv4Resolvable",
+  "configDerpIpv6Resolvable",
 ];
 
 /** Every probe a fully healthy, first-start-free SQLite configuration needs. */
@@ -74,7 +91,7 @@ describe("config file checks", () => {
     );
 
     expect(checks.map((entry) => entry.id)).toEqual(CHECK_IDS);
-    expect(checks.map((entry) => entry.status)).toEqual(Array.from({ length: 8 }, () => "pass"));
+    expect(checks.map((entry) => entry.status)).toEqual(Array.from({ length: 10 }, () => "pass"));
   });
 
   test("fails on the OIDC keys Headscale 0.29 refuses to start with", () => {
@@ -492,6 +509,153 @@ describe("config file checks", () => {
     expect(entry.vars).toEqual({ path: "/var/lib/headscale/noise_private.key" });
   });
 
+  test("passes both relay families when the declared addresses resolve", () => {
+    const checks = computeConfigChecks({
+      config: enabledConfig({ ipv4: "198.51.100.7", ipv6: "2001:db8::7" }),
+      probes: {},
+      relayResolution: resolution({ ipv4: ["198.51.100.7"], ipv6: ["2001:db8::7"] }),
+    });
+
+    expect(check(checks, "configDerpIpv4Resolvable")).toMatchObject({
+      status: "pass",
+      bodyKey: "settings.system.configChecks.derpIpv4.match",
+      vars: { address: "198.51.100.7", host: "derp.example.com" },
+    });
+    expect(check(checks, "configDerpIpv6Resolvable")).toMatchObject({
+      status: "pass",
+      bodyKey: "settings.system.configChecks.derpIpv6.match",
+      vars: { address: "2001:db8::7", host: "derp.example.com" },
+    });
+    expect(check(checks, "configDerpIpv6Resolvable").link).toBeUndefined();
+  });
+
+  test("warns when a declared IPv6 address has no AAAA record at all", () => {
+    const checks = computeConfigChecks({
+      config: enabledConfig({ ipv4: "198.51.100.7", ipv6: "2001:db8::7" }),
+      probes: {},
+      relayResolution: resolution({ ipv4: ["198.51.100.7"] }),
+    });
+
+    const ipv6 = check(checks, "configDerpIpv6Resolvable");
+    expect(ipv6.status).toBe("warning");
+    expect(ipv6.bodyKey).toBe("settings.system.configChecks.derpIpv6.missingRecord");
+    expect(ipv6.vars).toEqual({ address: "2001:db8::7", host: "derp.example.com" });
+    expect(ipv6.link?.to).toBe("/settings/headscale");
+    // IPv4 is unaffected by the missing AAAA record.
+    expect(check(checks, "configDerpIpv4Resolvable").status).toBe("pass");
+  });
+
+  test("warns when the resolved AAAA record is a different address", () => {
+    const checks = computeConfigChecks({
+      config: enabledConfig({ ipv6: "2001:db8::7" }),
+      probes: {},
+      relayResolution: resolution({ ipv6: ["2001:db8::9"] }),
+    });
+
+    const ipv6 = check(checks, "configDerpIpv6Resolvable");
+    expect(ipv6.status).toBe("warning");
+    expect(ipv6.bodyKey).toBe("settings.system.configChecks.derpIpv6.mismatch");
+    expect(ipv6.vars).toEqual({ address: "2001:db8::7", host: "derp.example.com" });
+  });
+
+  test("warns about a stale IPv4 declaration after an address change", () => {
+    const checks = computeConfigChecks({
+      config: enabledConfig({ ipv4: "198.51.100.7" }),
+      probes: {},
+      relayResolution: resolution({ ipv4: ["198.51.100.9"] }),
+    });
+
+    const ipv4 = check(checks, "configDerpIpv4Resolvable");
+    expect(ipv4.status).toBe("warning");
+    expect(ipv4.bodyKey).toBe("settings.system.configChecks.derpIpv4.mismatch");
+  });
+
+  test("stays neutral when the relay is off or a family is undeclared", () => {
+    const disabled = computeConfigChecks({ config: {}, probes: {} });
+    expect(check(disabled, "configDerpIpv4Resolvable")).toMatchObject({
+      status: "pass",
+      bodyKey: "settings.system.configChecks.derpIpv4.disabled",
+    });
+    expect(check(disabled, "configDerpIpv6Resolvable").status).toBe("pass");
+
+    const undeclared = computeConfigChecks({
+      config: enabledConfig({ ipv4: "198.51.100.7" }),
+      probes: {},
+      relayResolution: resolution({ ipv4: ["198.51.100.7"] }),
+    });
+    expect(check(undeclared, "configDerpIpv6Resolvable")).toMatchObject({
+      status: "pass",
+      bodyKey: "settings.system.configChecks.derpIpv6.undeclared",
+    });
+  });
+
+  test("downgrades to cannot-check when the DNS lookup did not complete", () => {
+    const config = enabledConfig({ ipv6: "2001:db8::7" });
+
+    const timedOut = computeConfigChecks({
+      config,
+      probes: {},
+      relayResolution: resolution({ reason: "timeout", detail: { timedOut: true } }),
+    });
+    const timedOutCheck = check(timedOut, "configDerpIpv6Resolvable");
+    expect(timedOutCheck.status).toBe("warning");
+    expect(timedOutCheck.bodyKey).toBe("settings.system.configChecks.relayUnavailable");
+    expect(timedOutCheck.vars).toEqual({ address: "2001:db8::7", host: "derp.example.com" });
+
+    // No lookup ran at all, which is what a caller without DNS looks like.
+    const skipped = computeConfigChecks({ config, probes: {} });
+    expect(check(skipped, "configDerpIpv6Resolvable").bodyKey).toBe(
+      "settings.system.configChecks.relayUnavailable",
+    );
+  });
+
+  test("cannot check a relay address when server_url names no usable host", () => {
+    const checks = computeConfigChecks({
+      config: {
+        server_url: "../relative",
+        derp: { server: { enabled: true, ipv6: "2001:db8::7" } },
+      },
+      probes: {},
+      relayResolution: {
+        host: "",
+        kind: "literal",
+        ipv4: [],
+        ipv6: [],
+        reason: "host-missing",
+      },
+    });
+
+    expect(check(checks, "configDerpIpv6Resolvable")).toMatchObject({
+      status: "warning",
+      bodyKey: "settings.system.configChecks.relayHostUnusable",
+    });
+  });
+
+  test("only asks for a resolve when the relay declares an address", () => {
+    expect(configRelayLookupTarget({})).toBeUndefined();
+    expect(configRelayLookupTarget({ derp: { server: { enabled: true } } })).toBeUndefined();
+    expect(
+      configRelayLookupTarget({
+        server_url: "https://derp.example.com",
+        derp: { server: { enabled: true } },
+      }),
+    ).toBeUndefined();
+    expect(
+      configRelayLookupTarget({
+        server_url: "https://derp.example.com:8443",
+        derp: { server: { enabled: true, ipv6: "2001:db8::7" } },
+      }),
+    ).toBe("derp.example.com");
+    // An unusable server_url yields no host, which the resolver reports without
+    // touching DNS.
+    expect(
+      configRelayLookupTarget({
+        server_url: "not a url",
+        derp: { server: { enabled: true, ipv4: "198.51.100.7" } },
+      }),
+    ).toBe("");
+  });
+
   test("only asks the loader to probe the paths the config actually uses", () => {
     expect(configProbeTargets({})).toEqual({ databaseFile: DEFAULT_SQLITE_PATH });
     expect(configProbeTargets({ database: { type: "postgres" } })).toEqual({});
@@ -575,6 +739,8 @@ describe("config file probes", () => {
       "pass",
       "pass",
       "warning",
+      "pass",
+      "pass",
       "pass",
       "pass",
       "pass",

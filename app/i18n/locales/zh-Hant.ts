@@ -153,6 +153,16 @@ const zhHant = {
       relayResolvedNote: "依該主機名稱的 A 與 AAAA 記錄即時解析，結果會快取幾分鐘。",
       relayResolvedIpv4: "解析出的 IPv4",
       relayResolvedIpv6: "解析出的 IPv6",
+      relayVerdictMatch: "與 derp.server 宣告的位址一致",
+      relayVerdictMismatch: "derp.server 宣告了 {address}，但該主機名稱並未解析到它",
+      relayVerdictNoRecords: "derp.server 宣告了 {address}，但該主機名稱沒有對應類型的記錄",
+      relayVerdictUnavailable: "未檢查：DNS 查詢未完成",
+      relayVerdictHostMissing: "未檢查：server_url 沒有可用的主機名稱",
+      relayVerdictLiteral: "此端點本身就是 IP 位址，無需解析",
+      relayFixIpv4: "將 A 記錄指向該機器目前的位址，或清空 derp.server.ipv4",
+      relayFixIpv6: "為該主機名稱新增 AAAA 記錄，或接受僅 IPv4",
+      relayFixIpv6NoRecords:
+        "主機解析器可能在該名稱確有 AAAA 記錄時仍傳回空結果：用 `dig @1.1.1.1 +short AAAA {host}` 與 `dig +short AAAA {host}` 對照即可確認；若前者有結果，請把該主機的 DNS 指向能傳回 AAAA 的解析器。否定結果會快取五分鐘，重新啟動 Headplane 即可清除",
       relayReasonNoRecords: "DNS 查詢沒有回傳記錄",
       relayReasonTimeout: "DNS 查詢逾時",
       relayReasonResolverError: "DNS 查詢失敗",
@@ -359,14 +369,23 @@ const zhHant = {
       endpoints: "端點",
       clientConnectivity: "用戶端連線能力",
       varies: "目標相關 NAT",
-      variesTooltip: "該機器是否位於複雜的 NAT 之後，導致其 IP 位址隨目標位址而變化。",
+      variesTooltip:
+        "由機器自行上報：該機器是否位於複雜的 NAT 之後，導致其 IP 位址隨目標位址而變化。",
       hairpinning: "NAT 迴環",
-      hairpinningTooltip: "該機器是否需要穿越支援 hairpinning 的 NAT。",
+      hairpinningTooltip: "由機器自行上報：該機器是否需要穿越支援 hairpinning 的 NAT。",
       ipv6: "IPv6",
+      ipv6Tooltip:
+        "由機器自行上報，來自 Tailscale 自身的連線自我檢測：該機器所在網路是否可用 IPv6。這與 Headscale 無關，因此無法在 Headscale 端修正。若顯示「否」，請檢查該機器的網路：路由器或 ISP 是否派發全域 IPv6 位址、是否有 IPv6 預設路由、網路介面是否啟用 IPv6、防火牆是否放行，或該網路是否僅支援 IPv4。tailnet 內部的 Tailscale IPv6 位址不受影響。",
       udp: "UDP",
+      udpTooltip:
+        "由機器自行上報：該機器能否向 Tailscale 的探測端點傳送 UDP。直連依賴 UDP，失敗時會退回 DERP 中繼。",
       upnp: "UPnP",
+      upnpTooltip:
+        "由機器自行上報：該機器是否透過 UPnP 從路由器取得連接埠對應。有對應時更容易建立直連。",
       pcp: "PCP",
+      pcpTooltip: "由機器自行上報：該機器是否透過 PCP 從路由器取得連接埠對應。",
       natPmp: "NAT-PMP",
+      natPmpTooltip: "由機器自行上報：該機器是否透過 NAT-PMP 從路由器取得連接埠對應。",
       derp: {
         title: "DERP 中繼",
         body: "用戶端連線中繼的位置，以及此機器使用的 DERP 中繼。即時中繼資料來自 Headplane Agent。",
@@ -378,6 +397,16 @@ const zhHant = {
           "依該主機名稱的 A 與 AAAA 記錄即時解析，結果快取幾分鐘，也就是用戶端實際連線的位址。",
         relayResolvedIpv4: "解析出的 IPv4",
         relayResolvedIpv6: "解析出的 IPv6",
+        relayVerdictMatch: "與 derp.server 宣告的位址一致",
+        relayVerdictMismatch: "derp.server 宣告了 {address}，但該主機名稱並未解析到它",
+        relayVerdictNoRecords: "derp.server 宣告了 {address}，但該主機名稱沒有對應類型的記錄",
+        relayVerdictUnavailable: "未檢查：DNS 查詢未完成",
+        relayVerdictHostMissing: "未檢查：server_url 沒有可用的主機名稱",
+        relayVerdictLiteral: "此端點本身就是 IP 位址，無需解析",
+        relayFixIpv4: "將 A 記錄指向該機器目前的位址，或清空 derp.server.ipv4",
+        relayFixIpv6: "為該主機名稱新增 AAAA 記錄，或接受僅 IPv4",
+        relayFixIpv6NoRecords:
+          "主機解析器可能在該名稱確有 AAAA 記錄時仍傳回空結果：用 `dig @1.1.1.1 +short AAAA {host}` 與 `dig +short AAAA {host}` 對照即可確認；若前者有結果，請把該主機的 DNS 指向能傳回 AAAA 的解析器。否定結果會快取五分鐘，重新啟動 Headplane 即可清除",
         relayResolvedUnavailable: "未解析",
         relayReasonNoRecords: "DNS 查詢沒有回傳記錄",
         relayReasonTimeout: "DNS 查詢逾時",
@@ -1244,6 +1273,32 @@ const zhHant = {
           firstStart:
             "{path} 的 Noise 私鑰尚不存在，資料庫也尚未建立，因此 Headscale 會在首次啟動時產生它。",
         },
+        relayUnavailable:
+          "無法檢查 {host}：DNS 查詢未完成，因此 Headplane 無法判斷用戶端實際能連到哪些位址。查詢結果（包含否定的結果）會快取五分鐘，可稍後重新整理本頁再試。",
+        relayHostUnusable:
+          "無法檢查中繼位址：server_url 不是可用的 http(s) URL，因此 Headplane 不知道用戶端連線哪個主機。",
+        derpIpv4: {
+          title: "內嵌中繼 IPv4",
+          disabled: "Headscale 的內嵌 DERP 伺服器未啟用，無需檢查中繼位址。",
+          undeclared:
+            "未設定 derp.server.ipv4，沒有可比較的位址。保持為空時，用戶端只能透過 IPv4 存取中繼。",
+          match: "{host} 解析到 {address}，與 derp.server.ipv4 宣告的一致。",
+          mismatch:
+            "derp.server.ipv4 宣告了 {address}，但 {host} 並未解析到它。這通常是機器 IP 變更後遺留的舊位址；請更新 derp.server.ipv4 或該主機名稱的 A 記錄。",
+          missingRecord:
+            "derp.server.ipv4 宣告了 {address}，但 {host} 完全沒有 A 記錄，用戶端無法透過 IPv4 連到該位址。請為該主機名稱新增指向該機器的 A 記錄，或清空 derp.server.ipv4。",
+        },
+        derpIpv6: {
+          title: "內嵌中繼 IPv6",
+          disabled: "Headscale 的內嵌 DERP 伺服器未啟用，無需檢查中繼位址。",
+          undeclared:
+            "未設定 derp.server.ipv6，沒有可比較的位址。用戶端只能透過 IPv4 存取中繼；如需提供 IPv6 存取，請設定該值並發佈相符的 AAAA 記錄。",
+          match: "{host} 解析到 {address}，與 derp.server.ipv6 宣告的一致。",
+          mismatch:
+            "derp.server.ipv6 宣告了 {address}，但 {host} 並未解析到它，用戶端無法透過 IPv6 使用該位址上的中繼。請為該主機名稱新增指向執行中繼機器的 AAAA 記錄，或接受僅 IPv4。",
+          missingRecord:
+            "derp.server.ipv6 宣告了 {address}，但 {host} 完全沒有 AAAA 記錄，用戶端無法透過 IPv6 使用中繼。請為該主機名稱新增指向執行中繼機器的 AAAA 記錄，或接受僅 IPv4。主機解析器可能在該名稱確有 AAAA 記錄時仍傳回空結果：用 `dig @1.1.1.1 +short AAAA {host}` 與 `dig +short AAAA {host}` 對照即可確認；若前者有結果，請把該主機的 DNS 指向能傳回 AAAA 的解析器。否定結果會快取五分鐘，重新啟動 Headplane 即可清除。",
+        },
       },
       selfUpdate: {
         title: "Headplane 有新版本",
@@ -1289,6 +1344,7 @@ const zhHant = {
         database: "資料庫與金鑰",
         policy: "存取控制策略",
         dns: "DNS 記錄",
+        relay: "內嵌中繼",
       },
     },
     headscale: {

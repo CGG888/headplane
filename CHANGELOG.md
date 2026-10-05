@@ -1,5 +1,10 @@
 # Next
 
+## Changes
+
+- **The relay's IPv6 readiness is now a verdict, not a mystery.** Two configuration checks compare the addresses declared in `derp.server.ipv4`/`ipv6` with the addresses the relay hostname actually resolves to, and report a match, a declared address that does not resolve, no records at all, or that the check could not run (never a false failure). The relay cards on the machine detail page and the Overview show the same verdict with a one-line fix.
+- **The client connectivity card explains itself.** Every row says where its value comes from, and the IPv6 row states plainly that it is the node's own self-report — the machine's network, not Headscale — and what to look at when it says no.
+- A real-world cause is called out explicitly: a server whose DNS resolver filters AAAA records sees "no IPv6" even when the name has one. The hint gives the comparison to run (`dig @1.1.1.1 +short AAAA <host>` against the local `dig`), the fix (point the host's DNS at a resolver that answers AAAA) and the fact that the empty answer is cached for five minutes.
 # 0.21.1 (October 5, 2026)
 
 ## Changes

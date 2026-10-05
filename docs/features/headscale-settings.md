@@ -178,6 +178,44 @@ configuration, and one more from Headscale's documentation: the embedded server
 cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
 documented limitation rather than a misconfiguration.
 
+### Is the relay actually reachable over IPv6 (or IPv4)?
+
+`derp.server.ipv4` and `derp.server.ipv6` are what Headscale **advertises** to
+clients; they are not proof that the names clients use reach those addresses. The
+DERP tab therefore resolves the host in `server_url` (A and AAAA, cached for five
+minutes) and compares the two:
+
+| Declared vs resolved                                              | Verdict                                                                                                                                         |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| The declared address is among the records                         | **Matches** — clients reach the relay over that family.                                                                                         |
+| `derp.server.ipv6` is set, but the hostname has no AAAA record    | **Warning** — clients cannot use the relay over IPv6 at all. Add an AAAA record pointing at the machine running the relay, or accept IPv4-only. |
+| `derp.server.ipv4` is set, but no A record matches it             | **Warning** — usually a stale address left behind after the machine's IP changed. Update `derp.server.ipv4` or the hostname's A record.         |
+| `derp.server.ipv6` is empty                                       | **Nothing to compare** — a neutral pass with a note. Running the relay over IPv4 only is a valid choice.                                        |
+| The embedded server is disabled                                   | **Nothing to check** — the relay is not served from this configuration.                                                                         |
+| The lookup timed out, the resolver failed, or `server_url` is bad | **Cannot check** — reported as such rather than as a broken address, so a DNS hiccup never looks like a misconfiguration.                       |
+
+The same comparison appears on the **Overview** dashboard and on each machine's
+DERP card, right under the addresses the hostname resolves to now, and
+**Settings → System** lists it as the two checks _Embedded relay IPv4_ and
+_Embedded relay IPv6_.
+
+A host resolver can legitimately answer with no AAAA for a name that does have one,
+so "no record" is a property of the resolver in front of you, not proof about the
+zone. Compare `dig @1.1.1.1 +short AAAA <host>` with `dig +short AAAA <host>`: if
+the public resolver answers and the local one does not, the fix is to point that
+host's DNS at a resolver that returns AAAA rather than to change Headscale. Both
+positive and negative answers are cached for five minutes, so restart Headplane to
+clear the cache immediately after a DNS change.
+
+::: tip The other "IPv6: No" is not about the relay
+A machine's **Client Connectivity → IPv6** value is that machine's own
+connectivity self-test: it describes whether the machine's network has working
+IPv6, and it says nothing about Headscale or about your relay. It cannot be fixed
+on the Headscale side. The [fnOS deployment guide](/install/fnos) has a
+troubleshooting entry for both symptoms, or check that machine's network
+directly.
+:::
+
 ### Behind a reverse proxy
 
 Headscale is often served through nginx, Caddy, Traefik or a NAS gateway. The

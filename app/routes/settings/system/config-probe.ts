@@ -2,7 +2,9 @@
 //
 // The I/O half of the configuration checks: it reads Headscale's `config.yaml`
 // and probes the paths inside it, then hands the parsed document and the probe
-// results to the pure engine in `config-checks.ts`.
+// results to the pure engine in `config-checks.ts`. When the embedded DERP
+// server declares an address it also asks the shared relay resolver what the
+// relay hostname resolves to, which is the one lookup those checks need.
 //
 // `headscaleConfig` keeps its parsed document private and exposes no raw
 // accessor, so this reads the same file Headplane was configured with. Every
@@ -15,9 +17,12 @@ import { dirname } from "node:path";
 
 import { parseDocument } from "yaml";
 
+import { loadSharedRelayResolution } from "~/server/relay-dns";
+
 import {
   computeConfigChecks,
   configProbeTargets,
+  configRelayLookupTarget,
   type ConfigCheck,
   type ConfigProbe,
 } from "./config-checks";
@@ -41,6 +46,14 @@ export async function loadConfigChecks(path: string | undefined): Promise<Config
     probeOptional(targets.noiseKey),
   ]);
 
+  // The relay checks compare what `derp.server` declares with what the relay
+  // hostname resolves to. The lookup only runs when there is something to
+  // compare, it shares the resolver both DERP cards use, and it is fail-soft:
+  // no DNS answer leaves the checks saying they could not check, never failing.
+  const relayHost = configRelayLookupTarget(config);
+  const relayResolution =
+    relayHost === undefined ? undefined : await loadSharedRelayResolution(relayHost);
+
   return computeConfigChecks({
     config,
     probes: {
@@ -55,6 +68,7 @@ export async function loadConfigChecks(path: string | undefined): Promise<Config
         : undefined,
       noiseKey,
     },
+    relayResolution,
   });
 }
 

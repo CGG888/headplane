@@ -41,7 +41,14 @@ import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
 import { formatServerVersion } from "~/server/headscale/api/server-version";
 import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import type { AgentManager } from "~/server/hp-agent";
-import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
+import {
+  buildRelayView,
+  loadSharedRelayResolution,
+  relayVerdictIsNoteworthy,
+  type RelayAddressComparison,
+  type RelayAddressFamily,
+  type RelayAddressVerdict,
+} from "~/server/relay-dns";
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
 import cn from "~/utils/cn";
@@ -109,6 +116,31 @@ const RELAY_REASON_KEYS: Record<RelayReason, TranslationKey> = {
   "host-missing": "overview.derp.relayReasonHostMissing",
   "invalid-host": "overview.derp.relayReasonInvalidHost",
   unavailable: "overview.derp.relayReasonUnavailable",
+};
+
+/** What a declared relay address and the resolved records say to each other. */
+const RELAY_VERDICT_KEYS: Record<RelayAddressVerdict, TranslationKey> = {
+  matches: "overview.derp.relayVerdictMatch",
+  "declared-but-not-resolved": "overview.derp.relayVerdictMismatch",
+  "no-records": "overview.derp.relayVerdictNoRecords",
+  "resolver-unavailable": "overview.derp.relayVerdictUnavailable",
+  "host-missing": "overview.derp.relayVerdictHostMissing",
+  literal: "overview.derp.relayVerdictLiteral",
+};
+
+/** The one-line fix for a declared address clients cannot actually reach. */
+const RELAY_FIX_KEYS: Record<
+  RelayAddressFamily,
+  Partial<Record<RelayAddressVerdict, TranslationKey>>
+> = {
+  ipv4: {
+    "declared-but-not-resolved": "overview.derp.relayFixIpv4",
+    "no-records": "overview.derp.relayFixIpv4",
+  },
+  ipv6: {
+    "declared-but-not-resolved": "overview.derp.relayFixIpv6",
+    "no-records": "overview.derp.relayFixIpv6NoRecords",
+  },
 };
 
 const METRICS_STATE_KEYS: Record<MetricsReport["state"], TranslationKey> = {
@@ -354,7 +386,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // breaks the dashboard because a name did not resolve.
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
   const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
-  const relayView = buildRelayView(relayEndpoint, relayResolution);
+  const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
   const relayHost = relayHostSummary(derp.serverUrl);
   const relayAddress = relayAddressDisplay(relayView.address?.rows, relayView.address?.reason);
 
@@ -390,6 +422,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         port: relayHost.port,
         endpointReason: relayView.endpointReason,
         address: relayAddress,
+        // Declared versus resolved, so the card says whether what derp.server
+        // advertises is what clients would actually reach.
+        verdicts: relayView.address?.comparisons,
       },
       declared: declaredDerpAddresses(derp.server),
       stunListenAddr: derp.server.stunListenAddr,
@@ -500,6 +535,33 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const configured = { tone: "neutral" as const, label: t("overview.status.configured") };
   const derived = { tone: "neutral" as const, label: t("overview.status.derived") };
   const relayReason = (reason: RelayReason) => t(RELAY_REASON_KEYS[reason]);
+  const relayVerdictOf = (family: RelayAddressFamily) =>
+    derp.relay.verdicts?.find((entry) => entry.family === family);
+
+  /**
+   * What a declared relay address and the resolved records say to each other.
+   * A match or a missing record with nothing declared says nothing worth a
+   * line: the row already shows what resolved (or why nothing did).
+   *
+   * `host` is the resolved hostname, so a hint can quote the exact `dig`
+   * command an operator has to run instead of describing it.
+   */
+  const relayVerdictNote = (
+    comparison: RelayAddressComparison | undefined,
+    host: string | undefined,
+  ) => {
+    if (comparison === undefined || !relayVerdictIsNoteworthy(comparison)) {
+      return undefined;
+    }
+
+    const note = t(RELAY_VERDICT_KEYS[comparison.verdict], {
+      address: comparison.declared ?? "",
+    });
+    const fix = RELAY_FIX_KEYS[comparison.family][comparison.verdict];
+    return fix === undefined
+      ? note
+      : `${note} · ${t(fix, { host: host ?? "", address: comparison.declared ?? "" })}`;
+  };
 
   return (
     <SettingsPage
@@ -684,6 +746,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               <Fact
                 code
                 label={t("overview.derp.relayResolvedIpv4")}
+                note={relayVerdictNote(relayVerdictOf("ipv4"), derp.relay.host)}
                 {...textOrReason(
                   derp.relay.address.ipv4,
                   relayReason(derp.relay.address.ipv4Reason ?? "unavailable"),
@@ -692,6 +755,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               <Fact
                 code
                 label={t("overview.derp.relayResolvedIpv6")}
+                note={relayVerdictNote(relayVerdictOf("ipv6"), derp.relay.host)}
                 {...textOrReason(
                   derp.relay.address.ipv6,
                   relayReason(derp.relay.address.ipv6Reason ?? "unavailable"),

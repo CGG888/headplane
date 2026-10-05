@@ -643,6 +643,51 @@ Agent 用的是**配置文件里**的 `headscale.api_key`，不是你登录时�
 另外，Headscale 0.29 beta ~ 0.29.1 会以 `Method Not Allowed` 拒绝浏览器 SSH 的
 Tailscale WebSocket 请求，请升级到 0.29.2 或更高。
 
+### 15. 客户端连通性显示「IPv6: 否」，或中继解析不到 IPv6 地址
+
+这是两件不同的事，先分清再动手。
+
+**一、机器详情页的「客户端连通性 → IPv6: 否」**
+
+这个值来自**该机器自身**的 Tailscale 连通性自检（`WorkingIPv6`），说的是这台机器
+所在网络能不能用 IPv6，与 Headscale 无关 —— 在 Headscale 侧怎么改都不会变。要处理
+就在那台机器的网络上处理：
+
+- ISP / 路由器是否下发 IPv6 前缀（PD）、光猫是否桥接；
+- 系统网卡是否启用 IPv6（`ip -6 addr` 能看到全局地址）；
+- 防火墙 / 安全组是否放行 IPv6。
+
+如果该网络本来就只有 IPv4，保持「否」完全正常：tailnet 内部给设备分配的 Tailscale
+IPv6 地址（`fd7a:…`）照常可用，机器之间仍能用 IPv6 互访。
+
+**二、中继卡片里 IPv6 一栏解析不出地址**
+
+这说明 `server_url` 里的主机名**没有 AAAA 记录**，客户端完全无法通过 IPv6 连接自建
+中继 —— 不是「慢」，而是根本用不了。先确认：
+
+```bash
+dig +short AAAA headscale.example.com            # 本机解析器：无输出 = 它认为没有 AAAA
+dig @1.1.1.1 +short AAAA headscale.example.com   # 公共解析器：有输出 = 记录其实存在
+```
+
+**两边都要查**。本机解析器可能在名称确有 AAAA 记录时仍返回空结果（不响应 AAAA 查询、
+上游只转发 A、或有 DNS 过滤）。如果公共解析器查得到而本机查不到，问题在 DNS 而不在
+Headscale：把宿主机／路由器的 DNS 指向能返回 AAAA 的解析器即可。
+
+确认之后再二选一：
+
+- **要 IPv6**：给该主机名补一条 AAAA 记录（或用上面的办法让本机解析器能查到它），指向
+  运行 Headscale／中继的那台机器（也就是 Lucky 回源的地址）；同时确认 `listen_addr` 与
+  `derp.server.stun_listen_addr` 是双栈（例如 `listen_addr: "::"`、
+  `stun_listen_addr: "[::]:3478"`），否则即使解析到了地址，中继与 STUN 仍然只监听
+  IPv4。
+- **只跑 IPv4**：接受 IPv4-only，并清空 `derp.server.ipv6`，这个提示就不会再出现。
+
+Headplane 的解析结果（包括「没有记录」这类否定结果）**会缓存五分钟**：改完 DNS 后最多
+等五分钟再刷新页面，或直接重启 Headplane 立即清掉缓存；`设置 → 系统` 里的「内嵌中继
+IPv4 / IPv6」检查项给出同样的判定，中继卡片上的提示也会写出对应的 `dig` 命令。
+`derp.server.ipv4` 对应的告警通常意味着机器 IP 变过、声明的是旧地址。
+
 ## 十四、验收清单
 
 部署完成后逐项打勾：

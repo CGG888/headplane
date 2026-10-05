@@ -3,11 +3,14 @@ import { describe, expect, test } from "vitest";
 import {
   buildRelayView,
   classifyRelayHost,
+  compareRelayAddress,
+  compareRelayAddresses,
   createRelayResolver,
   loadRelayResolution,
   RELAY_DNS_CACHE_TTL_MS,
   RELAY_DNS_MAX_ADDRESSES,
   RELAY_DNS_TIMEOUT_MS,
+  relayVerdictIsNoteworthy,
   type RelayResolution,
   type RelayResolverOptions,
 } from "~/server/relay-dns";
@@ -252,6 +255,158 @@ describe("relay DNS resolution", () => {
   });
 });
 
+describe("compareRelayAddress", () => {
+  function hostname(answers: Partial<RelayResolution>): RelayResolution {
+    return { host: "derp.example.com", kind: "hostname", ipv4: [], ipv6: [], ...answers };
+  }
+
+  test("matches a declared address that resolves for either family", () => {
+    const resolution = hostname({ ipv4: ["198.51.100.7"], ipv6: ["2001:db8::7"] });
+
+    expect(compareRelayAddress("ipv4", "198.51.100.7", resolution).verdict).toBe("matches");
+    expect(compareRelayAddress("ipv6", "2001:db8::7", resolution).verdict).toBe("matches");
+  });
+
+  test("reports a stale declaration that is not among the resolved addresses", () => {
+    const resolution = hostname({ ipv4: ["198.51.100.7"], ipv6: ["2001:db8::7"] });
+
+    expect(compareRelayAddress("ipv4", "198.51.100.9", resolution)).toEqual({
+      family: "ipv4",
+      declared: "198.51.100.9",
+      resolved: ["198.51.100.7"],
+      verdict: "declared-but-not-resolved",
+    });
+
+    expect(compareRelayAddress("ipv6", "2001:db8::9", resolution).verdict).toBe(
+      "declared-but-not-resolved",
+    );
+  });
+
+  test("compares IPv6 spellings by expanding them", () => {
+    const resolution = hostname({ ipv6: ["2001:0db8:0000:0000:0000:0000:0000:0007"] });
+    expect(compareRelayAddress("ipv6", " 2001:DB8::7 ", resolution).verdict).toBe("matches");
+
+    const padded = hostname({ ipv4: ["198.51.100.007"] });
+    expect(compareRelayAddress("ipv4", "198.51.100.7", padded).verdict).toBe("matches");
+  });
+
+  test("separates a family with no records from one that resolved", () => {
+    const resolution = hostname({
+      ipv4: ["198.51.100.7"],
+      reason: undefined,
+    });
+
+    expect(compareRelayAddress("ipv6", "2001:db8::7", resolution)).toMatchObject({
+      declared: "2001:db8::7",
+      resolved: [],
+      verdict: "no-records",
+    });
+    // Nothing is declared for IPv4, so the answer it did give cannot contradict.
+    expect(compareRelayAddress("ipv4", undefined, resolution).verdict).toBe("matches");
+  });
+
+  test("a lookup that did not complete is unavailable, not missing", () => {
+    const timedOut = hostname({ reason: "timeout", detail: { timedOut: true } });
+    expect(compareRelayAddress("ipv6", "2001:db8::7", timedOut).verdict).toBe(
+      "resolver-unavailable",
+    );
+
+    const failed = hostname({ reason: "resolver-error", detail: { failed: true } });
+    expect(compareRelayAddress("ipv4", "198.51.100.7", failed).verdict).toBe(
+      "resolver-unavailable",
+    );
+
+    // The resolver itself never answered at all.
+    expect(compareRelayAddress("ipv6", "2001:db8::7", undefined).verdict).toBe(
+      "resolver-unavailable",
+    );
+  });
+
+  test("says the host is missing when server_url names no usable host", () => {
+    const missing = hostname({ reason: "host-missing" });
+    expect(compareRelayAddress("ipv4", "198.51.100.7", missing)).toMatchObject({
+      verdict: "host-missing",
+    });
+
+    const invalid = hostname({ reason: "invalid-host" });
+    expect(compareRelayAddress("ipv6", "2001:db8::7", invalid).verdict).toBe("host-missing");
+
+    // An unusable server_url comes back in the literal shape with a reason, and
+    // must not be mistaken for an endpoint that really is an address.
+    const unusable: RelayResolution = {
+      host: "",
+      kind: "literal",
+      ipv4: [],
+      ipv6: [],
+      reason: "host-missing",
+    };
+    expect(compareRelayAddress("ipv6", "2001:db8::7", unusable)).toMatchObject({
+      verdict: "host-missing",
+      resolved: [],
+    });
+  });
+
+  test("treats a literal endpoint as matching itself", () => {
+    const literal: RelayResolution = {
+      host: "[2001:db8::1]",
+      kind: "literal",
+      ipv4: [],
+      ipv6: [],
+    };
+
+    expect(compareRelayAddress("ipv6", "2001:0db8::1", literal)).toEqual({
+      family: "ipv6",
+      declared: "2001:0db8::1",
+      resolved: [],
+      verdict: "matches",
+    });
+    // A literal cannot answer the other family, and with nothing declared the
+    // verdict only says the endpoint is an address.
+    expect(compareRelayAddress("ipv4", "198.51.100.7", literal).verdict).toBe(
+      "declared-but-not-resolved",
+    );
+    expect(compareRelayAddress("ipv6", undefined, literal).verdict).toBe("literal");
+    expect(compareRelayAddress("ipv6", "2001:db8::9", literal).verdict).toBe(
+      "declared-but-not-resolved",
+    );
+  });
+
+  test("returns both families for a card", () => {
+    const resolution = hostname({ ipv4: ["198.51.100.7"], ipv6: ["2001:db8::7"] });
+    expect(
+      compareRelayAddresses({ ipv4: "198.51.100.7", ipv6: "2001:db8::9" }, resolution).map(
+        (entry) => [entry.family, entry.verdict],
+      ),
+    ).toEqual([
+      ["ipv4", "matches"],
+      ["ipv6", "declared-but-not-resolved"],
+    ]);
+
+    expect(compareRelayAddresses(undefined, resolution).map((entry) => entry.declared)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  test("only a verdict worth reading is printed next to a row", () => {
+    const resolution = hostname({ ipv4: ["198.51.100.7"] });
+
+    // A declaration makes every verdict meaningful.
+    expect(relayVerdictIsNoteworthy(compareRelayAddress("ipv4", "198.51.100.7", resolution))).toBe(
+      true,
+    );
+    expect(relayVerdictIsNoteworthy(compareRelayAddress("ipv6", undefined, resolution))).toBe(
+      false,
+    );
+
+    // Without one, only the verdicts the row cannot already show.
+    const noLookup = compareRelayAddress("ipv6", undefined, undefined);
+    expect(relayVerdictIsNoteworthy(noLookup)).toBe(true);
+    const literal: RelayResolution = { host: "[2001:db8::1]", kind: "literal", ipv4: [], ipv6: [] };
+    expect(relayVerdictIsNoteworthy(compareRelayAddress("ipv6", undefined, literal))).toBe(true);
+  });
+});
+
 describe("loadRelayResolution", () => {
   test("returns a resolution and never throws for a broken host", async () => {
     const stub = stubResolver();
@@ -316,6 +471,42 @@ describe("buildRelayView", () => {
     expect(view.address?.rows).toEqual([]);
     expect(view.address?.reason).toBe("timeout");
     expect(view.host?.endpoint).toBe("nx.example.com:8443");
+  });
+
+  test("adds the declared-versus-resolved comparison only when asked", () => {
+    const resolution: RelayResolution = {
+      host: "derp.example.com",
+      kind: "hostname",
+      ipv4: ["198.51.100.7"],
+      ipv6: [],
+    };
+
+    expect(buildRelayView(endpoint, resolution).address?.comparisons).toBeUndefined();
+
+    const compared = buildRelayView(endpoint, resolution, {
+      ipv4: "198.51.100.7",
+      ipv6: "2001:db8::7",
+    });
+    expect(compared.address?.comparisons).toEqual([
+      {
+        family: "ipv4",
+        declared: "198.51.100.7",
+        resolved: ["198.51.100.7"],
+        verdict: "matches",
+      },
+      { family: "ipv6", declared: "2001:db8::7", resolved: [], verdict: "no-records" },
+    ]);
+    // The rows the card renders are unchanged by the comparison.
+    expect(compared.address?.rows).toEqual([{ family: "ipv4", addresses: ["198.51.100.7"] }]);
+  });
+
+  test("keeps saying why when the lookup never ran", () => {
+    const view = buildRelayView(endpoint, undefined, { ipv6: "2001:db8::7" });
+    expect(view.address?.rows).toEqual([]);
+    expect(view.address?.reason).toBeUndefined();
+    expect(view.address?.comparisons?.[1]).toMatchObject({ verdict: "resolver-unavailable" });
+
+    expect(buildRelayView(endpoint, undefined).address).toBeUndefined();
   });
 
   test("says why there is no endpoint when server_url cannot be read", () => {

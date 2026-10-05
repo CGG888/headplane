@@ -9,6 +9,12 @@
 // translation *keys* that the page resolves in the caller's locale.
 
 import type { TranslationKey } from "~/i18n";
+import { deriveDerpPublicEndpoint } from "~/routes/settings/headscale/derp-settings";
+import {
+  compareRelayAddress,
+  type RelayAddressFamily,
+  type RelayResolution,
+} from "~/server/relay-dns";
 
 import type { DiagnosticLink, DiagnosticStatus } from "./diagnostics";
 
@@ -20,7 +26,9 @@ export type ConfigCheckId =
   | "configPolicy"
   | "configDnsRecords"
   | "configOidc"
-  | "configNoiseKey";
+  | "configNoiseKey"
+  | "configDerpIpv4Resolvable"
+  | "configDerpIpv6Resolvable";
 
 /** The same row shape as `Diagnostic`, rendered by the same list component. */
 export interface ConfigCheck {
@@ -73,6 +81,8 @@ const TITLES: Record<ConfigCheckId, TranslationKey> = {
   configDnsRecords: "settings.system.configChecks.dns.title",
   configOidc: "settings.system.configChecks.oidc.title",
   configNoiseKey: "settings.system.configChecks.noise.title",
+  configDerpIpv4Resolvable: "settings.system.configChecks.derpIpv4.title",
+  configDerpIpv6Resolvable: "settings.system.configChecks.derpIpv6.title",
 };
 
 /**
@@ -112,6 +122,12 @@ export interface ConfigChecksInput {
   /** Headscale's parsed `config.yaml`, or whatever the loader managed to read. */
   config: unknown;
   probes: ConfigProbeResults;
+  /**
+   * The relay hostname's DNS answer, when the embedded server declares an
+   * address and the loader looked it up. `undefined` means no lookup ran, which
+   * the relay checks report as "cannot check" instead of as a mismatch.
+   */
+  relayResolution?: RelayResolution;
 }
 
 /**
@@ -133,7 +149,11 @@ const PROBES_FOR_CHECK: Partial<
   configNoiseKey: (probes) => [probes.noiseKey, probes.databaseFile],
 };
 
-export function computeConfigChecks({ config, probes }: ConfigChecksInput): ConfigCheck[] {
+export function computeConfigChecks({
+  config,
+  probes,
+  relayResolution,
+}: ConfigChecksInput): ConfigCheck[] {
   // A missing or unparseable file leaves nothing to check. The page already
   // reports that through the `configAccess` diagnostic, so degrading to an
   // empty section is better than inventing failures from a file nobody read.
@@ -150,6 +170,8 @@ export function computeConfigChecks({ config, probes }: ConfigChecksInput): Conf
     dnsRecordsCheck(config),
     oidcCheck(config),
     noiseKeyCheck(config, probes),
+    derpResolvableCheck(config, "ipv4", relayResolution),
+    derpResolvableCheck(config, "ipv6", relayResolution),
   ];
 
   // A container that mounts Headscale's config file but not the directories the
@@ -232,6 +254,34 @@ export function isUnspecifiedTrustedProxy(entry: string): boolean {
   }
 
   return address.includes(":") && /^[0:]+$/.test(address);
+}
+
+/**
+ * The host the relay checks have to resolve, or `undefined` when they need no
+ * DNS at all: the embedded server is disabled or declares no address, so there
+ * is nothing a resolved record could contradict. An empty string is returned
+ * for a `server_url` that names no usable host, which the resolver turns into
+ * "host-missing" without touching DNS.
+ *
+ * Pure, so the loader can decide whether a lookup is worth running before it
+ * asks the resolver anything.
+ */
+export function configRelayLookupTarget(config: unknown): string | undefined {
+  const root = readObject(config);
+  if (!root) {
+    return undefined;
+  }
+
+  const server = readObject(readObject(root.derp)?.server);
+  if (server?.enabled !== true) {
+    return undefined;
+  }
+
+  if (readText(server.ipv4).length === 0 && readText(server.ipv6).length === 0) {
+    return undefined;
+  }
+
+  return deriveDerpPublicEndpoint(readText(root.server_url))?.host ?? "";
 }
 
 function check(
@@ -502,6 +552,62 @@ function noiseKeyCheck(config: unknown, probes: ConfigProbeResults): ConfigCheck
   return check("configNoiseKey", "pass", "settings.system.configChecks.noise.pass", {
     vars: { path },
   });
+}
+
+/**
+ * Whether the address `derp.server` advertises for the embedded relay is what
+ * the relay hostname actually resolves to. The declared value is what Headscale
+ * publishes to clients; only the DNS answer says whether they can reach it, so
+ * a declared address with no matching record is a warning rather than a pass.
+ *
+ * Two cases are deliberately neutral passes: an embedded server that is off
+ * (there is no relay address to check) and a family with nothing declared
+ * (there is nothing to compare, and IPv4-only is a valid way to run the relay).
+ * A lookup that did not complete is reported as "cannot check".
+ */
+function derpResolvableCheck(
+  config: unknown,
+  family: RelayAddressFamily,
+  relayResolution: RelayResolution | undefined,
+): ConfigCheck {
+  const id: ConfigCheckId =
+    family === "ipv4" ? "configDerpIpv4Resolvable" : "configDerpIpv6Resolvable";
+  const prefix =
+    family === "ipv4"
+      ? "settings.system.configChecks.derpIpv4"
+      : "settings.system.configChecks.derpIpv6";
+  const root = readObject(config) ?? {};
+  const server = readObject(readObject(root.derp)?.server) ?? {};
+  const declared = readText(server[family]);
+
+  if (server.enabled !== true) {
+    return check(id, "pass", `${prefix}.disabled`);
+  }
+
+  if (declared.length === 0) {
+    return check(id, "pass", `${prefix}.undeclared`);
+  }
+
+  // The relay endpoint's host, for the explanation. A DNS failure with no
+  // usable host is reported by the verdict itself, never with an empty label.
+  const host = deriveDerpPublicEndpoint(readText(root.server_url))?.host;
+  const vars = { address: declared, host: host && host.length > 0 ? host : "server_url" };
+
+  switch (compareRelayAddress(family, declared, relayResolution).verdict) {
+    case "matches":
+      return check(id, "pass", `${prefix}.match`, { vars });
+    case "declared-but-not-resolved":
+      return check(id, "warning", `${prefix}.mismatch`, { vars, link: SETTINGS_LINK });
+    case "no-records":
+      return check(id, "warning", `${prefix}.missingRecord`, { vars, link: SETTINGS_LINK });
+    case "host-missing":
+      return check(id, "warning", "settings.system.configChecks.relayHostUnusable");
+    default:
+      // The resolver did not answer, so nothing can be concluded about the
+      // declared address. The literal case cannot be reached with a
+      // declaration: a literal endpoint matches it or mismatches it.
+      return check(id, "warning", "settings.system.configChecks.relayUnavailable", { vars });
+  }
 }
 
 function readObject(value: unknown): Record<string, unknown> | undefined {

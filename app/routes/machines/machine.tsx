@@ -456,26 +456,31 @@ export default function Page({
               />
               <MachineAttribute
                 name={t("machines.detail.ipv6")}
+                tooltip={t("machines.detail.ipv6Tooltip")}
                 value={
                   stats.NetInfo?.WorkingIPv6 ? t("machines.common.yes") : t("machines.common.no")
                 }
               />
               <MachineAttribute
                 name={t("machines.detail.udp")}
+                tooltip={t("machines.detail.udpTooltip")}
                 value={
                   stats.NetInfo?.WorkingUDP ? t("machines.common.yes") : t("machines.common.no")
                 }
               />
               <MachineAttribute
                 name={t("machines.detail.upnp")}
+                tooltip={t("machines.detail.upnpTooltip")}
                 value={stats.NetInfo?.UPnP ? t("machines.common.yes") : t("machines.common.no")}
               />
               <MachineAttribute
                 name={t("machines.detail.pcp")}
+                tooltip={t("machines.detail.pcpTooltip")}
                 value={stats.NetInfo?.PCP ? t("machines.common.yes") : t("machines.common.no")}
               />
               <MachineAttribute
                 name={t("machines.detail.natPmp")}
+                tooltip={t("machines.detail.natPmpTooltip")}
                 value={stats.NetInfo?.PMP ? t("machines.common.yes") : t("machines.common.no")}
               />
             </dl>
@@ -484,6 +489,7 @@ export default function Page({
 
         <DerpInfo
           agentEnabled={agentEnabled}
+          declared={derp.server}
           regionNames={derpRegionNames}
           relay={relay}
           relayResolution={relayResolution}

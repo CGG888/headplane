@@ -14,6 +14,7 @@ import {
   Lock,
   Package,
   Power,
+  Radio,
   Settings2,
   ShieldCheck,
   Stethoscope,
@@ -138,6 +139,12 @@ const CONFIG_CHECK_GROUPS: readonly CheckGroup<ConfigCheckId>[] = [
     titleKey: "settings.system.groups.policy",
     icon: FileText,
     ids: ["configPolicy"],
+  },
+  {
+    id: "relay",
+    titleKey: "settings.system.groups.relay",
+    icon: Radio,
+    ids: ["configDerpIpv4Resolvable", "configDerpIpv6Resolvable"],
   },
   { id: "dns", titleKey: "settings.system.groups.dns", icon: Globe, ids: ["configDnsRecords"] },
 ];

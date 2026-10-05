@@ -156,6 +156,19 @@ const en = {
         "Resolved live from the hostname's A and AAAA records, cached for a few minutes.",
       relayResolvedIpv4: "Resolved IPv4",
       relayResolvedIpv6: "Resolved IPv6",
+      relayVerdictMatch: "matches the address derp.server declares",
+      relayVerdictMismatch:
+        "derp.server declares {address}, which this hostname does not resolve to",
+      relayVerdictNoRecords:
+        "derp.server declares {address}, but this hostname has no record of that type",
+      relayVerdictUnavailable: "not checked: the DNS lookup did not complete",
+      relayVerdictHostMissing: "not checked: server_url names no usable host",
+      relayVerdictLiteral: "this endpoint is already an IP address, so nothing is resolved",
+      relayFixIpv4:
+        "point the A record at this machine's current address, or clear derp.server.ipv4",
+      relayFixIpv6: "add an AAAA record for this hostname, or accept IPv4-only",
+      relayFixIpv6NoRecords:
+        "a host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it",
       relayReasonNoRecords: "the DNS lookup returned no records",
       relayReasonTimeout: "the DNS lookup timed out",
       relayReasonResolverError: "the DNS lookup failed",
@@ -370,14 +383,25 @@ const en = {
       clientConnectivity: "Client Connectivity",
       varies: "Varies",
       variesTooltip:
-        "Whether the machine is behind a difficult NAT that varies the machine’s IP address depending on the destination.",
+        "Reported by the machine itself: whether it is behind a difficult NAT that varies its IP address depending on the destination.",
       hairpinning: "Hairpinning",
-      hairpinningTooltip: "Whether the machine needs to traverse NATs with hairpinning.",
+      hairpinningTooltip:
+        "Reported by the machine itself: whether it needs to traverse NATs with hairpinning.",
       ipv6: "IPv6",
+      ipv6Tooltip:
+        "Reported by the machine itself in Tailscale's connectivity self-test: whether that machine has working IPv6 on its own network. It says nothing about Headscale, so it cannot be fixed here. If it says No, check that machine's network: whether the router or ISP gives it a global IPv6 address, whether it has a default IPv6 route, whether IPv6 is enabled on its interface, whether the firewall allows it, or whether the network is IPv4-only. Tailscale IPv6 addresses inside your tailnet work either way.",
       udp: "UDP",
+      udpTooltip:
+        "Reported by the machine itself: whether it could send UDP to Tailscale's endpoint probe. Direct connections use UDP, so a machine that fails this falls back to a DERP relay.",
       upnp: "UPnP",
+      upnpTooltip:
+        "Reported by the machine itself: whether it obtained a port mapping from the router with UPnP. A mapping makes direct connections easier.",
       pcp: "PCP",
+      pcpTooltip:
+        "Reported by the machine itself: whether it obtained a port mapping from the router with PCP.",
       natPmp: "NAT-PMP",
+      natPmpTooltip:
+        "Reported by the machine itself: whether it obtained a port mapping from the router with NAT-PMP.",
       derp: {
         title: "DERP Relays",
         body: "Where clients reach the relay, and which DERP relay this machine uses. Live relay data comes from the Headplane Agent.",
@@ -389,6 +413,19 @@ const en = {
           "Resolved live from the hostname's A and AAAA records, cached for a few minutes, so these are the addresses clients reach.",
         relayResolvedIpv4: "Resolved IPv4",
         relayResolvedIpv6: "Resolved IPv6",
+        relayVerdictMatch: "matches the address derp.server declares",
+        relayVerdictMismatch:
+          "derp.server declares {address}, which this hostname does not resolve to",
+        relayVerdictNoRecords:
+          "derp.server declares {address}, but this hostname has no record of that type",
+        relayVerdictUnavailable: "not checked: the DNS lookup did not complete",
+        relayVerdictHostMissing: "not checked: server_url names no usable host",
+        relayVerdictLiteral: "this endpoint is already an IP address, so nothing is resolved",
+        relayFixIpv4:
+          "point the A record at this machine's current address, or clear derp.server.ipv4",
+        relayFixIpv6: "add an AAAA record for this hostname, or accept IPv4-only",
+        relayFixIpv6NoRecords:
+          "a host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it",
         relayResolvedUnavailable: "not resolved",
         relayReasonNoRecords: "the DNS lookup returned no records",
         relayReasonTimeout: "the DNS lookup timed out",
@@ -1317,6 +1354,34 @@ const en = {
           firstStart:
             "The Noise private key at {path} does not exist yet, but neither does the database, so Headscale generates it on first start.",
         },
+        relayUnavailable:
+          "Cannot check {host}: the DNS lookup did not complete, so Headplane cannot tell which addresses clients reach. The answer, including a negative one, is cached for five minutes, so reload this page to try again.",
+        relayHostUnusable:
+          "Cannot check the relay address: server_url is not a usable http(s) URL, so Headplane does not know which host clients reach.",
+        derpIpv4: {
+          title: "Embedded relay IPv4",
+          disabled:
+            "Headscale's embedded DERP server is disabled, so there is no relay address to check.",
+          undeclared:
+            "derp.server.ipv4 is not set, so there is nothing to compare. Clients reach the relay over IPv4 only while this stays empty.",
+          match: "{host} resolves to {address}, the address derp.server.ipv4 declares.",
+          mismatch:
+            "derp.server.ipv4 declares {address}, but {host} does not resolve to it. This is usually a stale address left behind after the machine's IP changed; update derp.server.ipv4 or the hostname's A record.",
+          missingRecord:
+            "derp.server.ipv4 declares {address}, but {host} has no A record at all, so clients cannot reach the relay over IPv4 at that address. Publish an A record for this hostname pointing at the machine running the relay, or clear derp.server.ipv4.",
+        },
+        derpIpv6: {
+          title: "Embedded relay IPv6",
+          disabled:
+            "Headscale's embedded DERP server is disabled, so there is no relay address to check.",
+          undeclared:
+            "derp.server.ipv6 is not set, so there is nothing to compare. Clients reach the relay over IPv4 only; set it and publish a matching AAAA record to offer the relay over IPv6.",
+          match: "{host} resolves to {address}, the address derp.server.ipv6 declares.",
+          mismatch:
+            "derp.server.ipv6 declares {address}, but {host} does not resolve to it, so clients cannot use the relay over IPv6 at that address. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only.",
+          missingRecord:
+            "derp.server.ipv6 declares {address}, but {host} has no AAAA record at all, so clients cannot use the relay over IPv6. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only. A host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it.",
+        },
       },
       selfUpdate: {
         title: "Headplane update available",
@@ -1363,6 +1428,7 @@ const en = {
         database: "Database and keys",
         policy: "Access control policy",
         dns: "DNS records",
+        relay: "Embedded relay",
       },
     },
     headscale: {

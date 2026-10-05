@@ -324,6 +324,198 @@ export function createRelayResolver(options: RelayResolverOptions = {}): RelayRe
   };
 }
 
+// MARK: Declared vs resolved
+
+/**
+ * How a declared relay address relates to what the relay hostname actually
+ * resolves to.
+ *
+ * `derp.server.ipv4`/`ipv6` are what Headscale *advertises*; only a DNS answer
+ * says whether clients can reach those addresses. Keeping the comparison pure
+ * lets the machine card, the Overview card and the configuration checks all
+ * reach the same verdict from the same values.
+ */
+export type RelayAddressVerdict =
+  | "matches"
+  | "declared-but-not-resolved"
+  | "no-records"
+  | "resolver-unavailable"
+  | "host-missing"
+  | "literal";
+
+export interface RelayAddressComparison {
+  family: RelayAddressFamily;
+  /** The declared address, trimmed; `undefined` when nothing is declared. */
+  declared?: string;
+  /** The addresses this family resolved to; empty for a literal endpoint. */
+  resolved: string[];
+  verdict: RelayAddressVerdict;
+}
+
+/** The two addresses Headscale's embedded DERP server can declare. */
+export interface RelayDeclaredAddresses {
+  ipv4?: string;
+  ipv6?: string;
+}
+
+function normalizeIpv4(value: string): string | undefined {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(value.trim());
+  if (!match) {
+    return undefined;
+  }
+
+  const octets = match.slice(1).map((octet) => Number(octet));
+  return octets.some((octet) => octet > 255) ? undefined : octets.join(".");
+}
+
+/**
+ * Expands an IPv6 address to eight four-digit groups so `2001:db8::1` and
+ * `2001:0db8:0:0:0:0:0:1` compare equal. An embedded IPv4 tail and a zone id
+ * are left as written: rewriting them would be guesswork, and DNS answers spell
+ * them the way the resolver returned them.
+ */
+function normalizeIpv6(value: string): string | undefined {
+  const address = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .split("%")[0];
+  if (!address.includes(":") || address.includes(".")) {
+    return undefined;
+  }
+
+  const halves = address.split("::");
+  if (halves.length > 2) {
+    return undefined;
+  }
+
+  const groups = (part: string | undefined) =>
+    part !== undefined && part.length > 0 ? part.split(":") : [];
+  const left = groups(halves[0]);
+  const right = halves.length === 2 ? groups(halves[1]) : [];
+  const expanded =
+    halves.length === 2
+      ? [
+          ...left,
+          ...Array.from({ length: Math.max(0, 8 - left.length - right.length) }, () => "0"),
+          ...right,
+        ]
+      : left;
+
+  if (expanded.length !== 8 || expanded.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {
+    return undefined;
+  }
+
+  return expanded.map((group) => group.padStart(4, "0")).join(":");
+}
+
+/** A comparable spelling of one address; malformed values fall back to text. */
+function normalizeAddress(family: RelayAddressFamily, value: string): string {
+  const normalized = family === "ipv4" ? normalizeIpv4(value) : normalizeIpv6(value);
+  return normalized ?? value.trim().toLowerCase();
+}
+
+function addressesEqual(family: RelayAddressFamily, a: string, b: string): boolean {
+  return normalizeAddress(family, a) === normalizeAddress(family, b);
+}
+
+/**
+ * Compares one family's declared address against what the hostname resolved to.
+ *
+ * The verdict says what an operator has to know and nothing more: a literal
+ * endpoint is its own answer (so a declaration equal to it matches), an empty
+ * declaration cannot be contradicted by any answer, and a lookup that did not
+ * complete is reported as unavailable rather than as a missing record.
+ */
+export function compareRelayAddress(
+  family: RelayAddressFamily,
+  declared: string | undefined,
+  resolution: RelayResolution | undefined,
+): RelayAddressComparison {
+  const value = (declared ?? "").trim();
+  const base: Pick<RelayAddressComparison, "family" | "declared"> = {
+    family,
+    ...(value.length > 0 ? { declared: value } : {}),
+  };
+
+  if (resolution === undefined) {
+    return { ...base, resolved: [], verdict: "resolver-unavailable" };
+  }
+
+  const resolved = resolution[family];
+
+  // A resolver that never got as far as DNS reports the same way for a literal
+  // and a hostname: the endpoint itself is unusable, so no address can match.
+  if (resolution.reason === "host-missing" || resolution.reason === "invalid-host") {
+    return { ...base, resolved, verdict: "host-missing" };
+  }
+
+  if (resolution.reason === "timeout" || resolution.reason === "resolver-error") {
+    return { ...base, resolved, verdict: "resolver-unavailable" };
+  }
+
+  if (resolution.kind === "literal") {
+    if (value.length === 0) {
+      return { ...base, resolved, verdict: "literal" };
+    }
+
+    // A bracketed IPv6 literal is already the address clients dial, so it
+    // matches a declaration that names the same address; anything else cannot
+    // be reached over this family at all.
+    return {
+      ...base,
+      resolved,
+      verdict:
+        family === "ipv6" && addressesEqual("ipv6", value, resolution.host)
+          ? "matches"
+          : "declared-but-not-resolved",
+    };
+  }
+
+  if (resolved.length === 0) {
+    return { ...base, resolved, verdict: "no-records" };
+  }
+
+  if (value.length === 0) {
+    // Nothing is declared, so there is nothing these addresses can contradict.
+    return { ...base, resolved, verdict: "matches" };
+  }
+
+  return {
+    ...base,
+    resolved,
+    verdict: resolved.some((entry) => addressesEqual(family, entry, value))
+      ? "matches"
+      : "declared-but-not-resolved",
+  };
+}
+
+/** Both families in the order the cards list them: IPv4, then IPv6. */
+export function compareRelayAddresses(
+  declared: RelayDeclaredAddresses | undefined,
+  resolution: RelayResolution | undefined,
+): RelayAddressComparison[] {
+  return [
+    compareRelayAddress("ipv4", declared?.ipv4, resolution),
+    compareRelayAddress("ipv6", declared?.ipv6, resolution),
+  ];
+}
+
+/**
+ * Whether a comparison is worth printing next to a resolved address.
+ *
+ * A declaration makes every verdict meaningful. Without one, only a lookup that
+ * did not run and a literal endpoint say anything: a match or a missing record
+ * would just repeat the row it sits under.
+ */
+export function relayVerdictIsNoteworthy(comparison: RelayAddressComparison): boolean {
+  if (comparison.declared !== undefined) {
+    return true;
+  }
+
+  return comparison.verdict !== "matches" && comparison.verdict !== "no-records";
+}
+
 // MARK: View
 
 export interface RelayHostView {
@@ -345,6 +537,11 @@ export interface RelayAddressView {
   reason?: RelayResolutionReason;
   /** Per-family detail behind `reason`; useful for an operator-facing tooltip. */
   detail?: RelayResolutionDetail;
+  /**
+   * Declared versus resolved per family. Only present when the caller passed
+   * `derp.server`'s addresses, which is what both DERP cards do.
+   */
+  comparisons?: RelayAddressComparison[];
 }
 
 export interface RelayView {
@@ -363,10 +560,16 @@ export interface RelayEndpoint {
  * The rows the cards render: the endpoint, then one row per family that has an
  * address. An empty family carries the resolver's reason so the page never
  * prints a bare "not resolved" without saying why.
+ *
+ * Passing Headscale's declared addresses adds a per-family comparison on top of
+ * the rows, so a card can say whether what the configuration advertises is what
+ * clients would actually reach. A comparison is still produced when the lookup
+ * never ran, which is how a card says "not checked" instead of showing nothing.
  */
 export function buildRelayView(
   endpoint: RelayEndpoint | undefined,
   resolution: RelayResolution | undefined,
+  declared?: RelayDeclaredAddresses,
 ): RelayView {
   if (endpoint === undefined) {
     return { endpointReason: "invalid-host" };
@@ -382,8 +585,10 @@ export function buildRelayView(
     endpoint: `${endpoint.host}:${endpoint.port}`,
   };
 
+  const comparisons =
+    declared === undefined ? undefined : compareRelayAddresses(declared, resolution);
   if (resolution === undefined) {
-    return { host };
+    return comparisons === undefined ? { host } : { host, address: { rows: [], comparisons } };
   }
 
   const rows: RelayAddressRow[] = [];
@@ -400,6 +605,7 @@ export function buildRelayView(
       rows,
       reason: resolution.reason,
       detail: resolution.detail,
+      ...(comparisons === undefined ? {} : { comparisons }),
     },
   };
 }
