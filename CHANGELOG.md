@@ -1,3 +1,10 @@
+# Next
+
+# 0.21.5 (October 5, 2026)
+
+## Changes
+
+- **The relay cards say which resolver answered, and can re-resolve there.** Both the machine detail card and the Overview show a "Relay lookup" pill — the system resolver, or the configured servers with their addresses — and, when the system resolver returned nothing for an address family, the hint that a configured resolver is how to find out whether the name really has that record, with a link to the settings page. A **Re-resolve** button clears the cached answer and runs the lookup again from the card itself, so a fresh record shows up without waiting out the five-minute cache or visiting the settings page.
 # 0.21.4 (October 5, 2026)
 
 ## Fixes
