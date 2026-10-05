@@ -13,6 +13,7 @@ import type { OIDCSettingsView } from "~/server/headscale/config-loader";
 
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
 import OidcExtraParams from "./oidc-extra-params";
+import OidcSelfTest from "./oidc-self-test";
 
 /** Headscale's own defaults, used until an `oidc:` block exists in the file. */
 const OIDC_DEFAULTS: OIDCSettingsView = {
@@ -34,11 +35,16 @@ const OIDC_DEFAULTS: OIDCSettingsView = {
 };
 
 interface OidcSettingsProps {
+  /**
+   * Whether the read-only self-test may be run: it needs the IAM capability but
+   * not write access, so it stays available with a read-only config file.
+   */
+  canTest: boolean;
   isDisabled: boolean;
   oidc: OIDCSettingsView | null;
 }
 
-export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
+export default function OidcSettings({ canTest, isDisabled, oidc }: OidcSettingsProps) {
   const { t, tr } = useI18n();
   const fetcher = useFetcher<HeadscaleSettingsResult>();
   const isBusy = fetcher.state !== "idle";
@@ -222,6 +228,7 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
       </fetcher.Form>
 
       <OidcExtraParams extraParams={settings.extraParams} isDisabled={isDisabled} />
+      <OidcSelfTest canTest={canTest} />
     </section>
   );
 }

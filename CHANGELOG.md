@@ -1,5 +1,12 @@
 # Next
 
+## Changes
+
+- **Node availability history.** A sampler records when each node goes offline and comes back (7 days, sparse, in a JSON file beside the other state), the machine detail page shows a 24-hour availability bar with an uptime percentage, and the Overview shows the fleet-wide 7-day trend. Time before the sampler existed, or while it was down, is drawn as unknown rather than counted as uptime or downtime.
+- **OIDC self-test.** The OIDC tab can test the configuration for real: the issuer and its discovery document, that the document's issuer matches, the required endpoints and JWKS, the requested scopes, PKCE support, credentials (including a secret set both inline and as a path), that at least one allow-list is configured, and the callback URL to register with your provider, each with a pass/warning/fail/skip result and a summary.
+- **A backup of Headplane's own data.** The snapshots page can download a consistent copy of Headplane's SQLite database: local users and their sessions, the audit log and the host info the agent collects. The page states plainly what is not in it: secrets stay in config.yaml, the JSON state files are separate, and there is no one-click restore.
+- The relay cards show the **real addresses**: the relay hostname from server_url is resolved to its A and AAAA records (cached, and a literal address is used as-is) and shown next to the addresses declared in the configuration.
+- The header wordmark now reads **Headplane Console**.
 # 0.20.0 (October 5, 2026)
 
 ## Changes

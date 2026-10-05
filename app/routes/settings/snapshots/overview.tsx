@@ -1,4 +1,4 @@
-import { Archive, Camera } from "lucide-react";
+import { Archive, Camera, DatabaseBackup, Download } from "lucide-react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -92,6 +92,8 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
             )}
           </TableList>
         </SettingsCollapsible>
+
+        <DataBackupSection />
       </SettingsCollapsibleGroup>
     </SettingsPage>
   );
@@ -133,6 +135,47 @@ function TakeSnapshotSection({ root }: { root: string }) {
     </SettingsCollapsible>
   );
 }
+
+/**
+ * Headplane's own database is a separate thing from a configuration snapshot,
+ * so it gets its own card: the download takes local users, sessions, the audit
+ * log and the rest off the server, and nothing here can put it back.
+ */
+function DataBackupSection() {
+  const { t } = useI18n();
+
+  return (
+    <SettingsCollapsible
+      description={t("settings.snapshots.dataBackup.body")}
+      icon={DatabaseBackup}
+      title={t("settings.snapshots.dataBackup.title")}
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-0.5">
+          <p className="font-medium">{t("settings.snapshots.dataBackup.contentsTitle")}</p>
+          <p className="opacity-80">{t("settings.snapshots.dataBackup.contents")}</p>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="font-medium">{t("settings.snapshots.dataBackup.excludesTitle")}</p>
+          <p className="opacity-80">{t("settings.snapshots.dataBackup.excludes")}</p>
+        </div>
+      </div>
+      <SettingsActions>
+        <a className={DOWNLOAD_BUTTON} download href="/settings/snapshots/data-backup">
+          <Download className="h-4 w-4" />
+          {t("settings.snapshots.dataBackup.download")}
+        </a>
+      </SettingsActions>
+      <p className="text-xs text-mist-600 dark:text-mist-400">
+        {t("settings.snapshots.dataBackup.noRestore")}
+      </p>
+    </SettingsCollapsible>
+  );
+}
+
+/** The download is a plain link, so it carries the card's button look itself. */
+const DOWNLOAD_BUTTON =
+  "flex w-fit items-center gap-2 rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50";
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   return <PageError error={error} page="Settings" />;

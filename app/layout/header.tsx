@@ -95,7 +95,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
               <source srcSet={logoDark} media="(prefers-color-scheme: light)" />
               <img src={logoBg} alt={t("header.logoAlt")} />
             </picture>
-            <h1 className="text-2xl font-semibold">headplane</h1>
+            <h1 className="text-2xl font-semibold">{t("header.brand")}</h1>
           </div>
           {showTabs && (
             <nav className="hidden items-center gap-x-2 overflow-x-auto p-1 text-sm font-medium md:flex">

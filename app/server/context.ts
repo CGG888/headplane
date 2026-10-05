@@ -13,6 +13,7 @@ import { disabled, enabled, type Feature } from "./feature";
 import { createHeadscale, type HeadscaleClient } from "./headscale/api";
 import { loadHeadscaleConfig } from "./headscale/config-loader";
 import { createLiveStore, nodesResource, usersResource } from "./headscale/live-store";
+import { createNodeHistoryService } from "./history/service.server";
 import { type AgentManager, createAgentManager } from "./hp-agent";
 import { createOidcService, type OidcService } from "./oidc/provider";
 import { resolveTargetPath } from "./snapshots/paths";
@@ -32,6 +33,7 @@ export const headscaleApiKeyContext = createContext<AppContext["headscaleApiKey"
 export const headscaleConfigContext = createContext<AppContext["hs"]>();
 export const headscaleLiveStoreContext = createContext<AppContext["hsLive"]>();
 export const integrationContext = createContext<AppContext["integration"]>();
+export const nodeHistoryContext = createContext<AppContext["nodeHistory"]>();
 export const oidcContext = createContext<AppContext["oidc"]>();
 export const requestApiContext = createContext<AppContext["apiForRequest"]>();
 export const snapshotContext = createContext<AppContext["snapshots"]>();
@@ -99,6 +101,16 @@ export async function createAppContext(config: HeadplaneConfig) {
     hsLive,
   });
 
+  // Node availability history shares the live node store the UI already polls,
+  // so a sample costs nothing extra. It is inert without an API key and only
+  // ever writes to Headplane's own data directory.
+  const nodeHistory = createNodeHistoryService({
+    dataPath: config.server.data_path,
+    headscale,
+    apiKey: headscaleApiKey,
+    hsLive,
+  });
+
   // Snapshot targets are resolved on demand: the policy file can be configured
   // either in the Headscale config file or switched to database mode while
   // Headplane is running. Relative paths are resolved against the Headscale
@@ -126,6 +138,7 @@ export async function createAppContext(config: HeadplaneConfig) {
   const disposers: Array<() => Promise<void> | void> = [
     () => auth.stop(),
     () => alerts.dispose(),
+    () => nodeHistory.dispose(),
     () => hsLive.dispose(),
     () => headscale.dispose(),
   ];
@@ -144,6 +157,7 @@ export async function createAppContext(config: HeadplaneConfig) {
   function startServices() {
     auth.start();
     alerts.start();
+    nodeHistory.start();
   }
 
   async function dispose() {
@@ -168,6 +182,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     oidc,
     hsLive,
     hs,
+    nodeHistory,
     snapshots,
     integration,
     apiForRequest,

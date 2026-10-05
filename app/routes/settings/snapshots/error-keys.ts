@@ -1,4 +1,5 @@
 import type { TranslationKey } from "~/i18n";
+import type { DataBackupErrorCode } from "~/server/snapshots/data-backup.server";
 import type { SnapshotErrorCode } from "~/server/snapshots/types";
 
 /**
@@ -15,4 +16,10 @@ export const SNAPSHOT_ERROR_KEYS: Record<SnapshotActionErrorCode, TranslationKey
   unavailable: "settings.snapshots.errors.unavailable",
   copyFailed: "settings.snapshots.errors.copyFailed",
   invalidAction: "errors.generic.requestFailed",
+};
+
+/** Failure codes of the Headplane data backup, mapped like the action codes. */
+export const DATA_BACKUP_ERROR_KEYS: Record<DataBackupErrorCode, TranslationKey> = {
+  copyFailed: "settings.snapshots.dataBackup.errors.copyFailed",
+  unavailable: "settings.snapshots.dataBackup.errors.unavailable",
 };

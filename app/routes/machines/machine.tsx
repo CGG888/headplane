@@ -1,6 +1,7 @@
 import {
   Activity,
   CalendarClock,
+  ChartColumn,
   Info,
   Network,
   Route as RouteIcon,
@@ -15,6 +16,7 @@ import { data } from "react-router";
 import Button from "~/components/button";
 import Chip from "~/components/chip";
 import Link from "~/components/link";
+import { SettingsStatus } from "~/components/settings-nav";
 import { useI18n } from "~/i18n/provider";
 import {
   agentsContext,
@@ -22,17 +24,23 @@ import {
   headscaleConfigContext,
   headscaleContext,
   headscaleLiveStoreContext,
+  nodeHistoryContext,
   requestApiContext,
 } from "~/server/context";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
+import { computeNodeTimeline, uptimePercent, type NodeTimeline } from "~/server/history/timeline";
+import type { NodeHistoryDocument } from "~/server/history/types";
+import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
 import { getOSInfo, getTSVersion } from "~/utils/host-info";
 import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~/utils/node-info";
 import { getUserDisplayName } from "~/utils/user";
 
+import { deriveDerpPublicEndpoint } from "../settings/headscale/derp-settings";
 import type { Route } from "./+types/machine";
 import MachineAttribute from "./components/attribute";
 import DerpInfo from "./components/derp-info";
+import { NodeAvailabilityBar } from "./components/history-bar";
 import MachineCard from "./components/machine-card";
 import { mapTagsToComponents, uiTagsForNode } from "./components/machine-row";
 import MachineStatus from "./components/machine-status";
@@ -49,6 +57,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
+  const nodeHistory = context.get(nodeHistoryContext);
 
   if (!params.id) {
     throw new Error("No machine ID provided");
@@ -85,6 +94,21 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   const agentSync = agents?.lastSync();
   const policy = policyResult.status === "fulfilled" ? policyResult.value.policy : undefined;
 
+  // Availability comes from Headplane's own sampler. A store that has never
+  // been written, or one that cannot be read, leaves the card saying so rather
+  // than failing the page.
+  await nodeHistory.ready();
+  const availability = attemptNodeTimeline(nodeHistory.document(), node.id);
+
+  // The relay clients actually reach comes from Headscale's server_url and its
+  // DNS records, not from `derp.server`'s declared addresses. The lookup is
+  // cached and fail-soft, so a relay that cannot be resolved never fails the
+  // page — it only leaves the card saying why.
+  const derp = headscaleConfig.getDERPSettings();
+  const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
+  const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
+  const relay = buildRelayView(relayEndpoint, relayResolution).host;
+
   return {
     agent: agentSync
       ? {
@@ -93,13 +117,16 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
           nodeKey: agents?.agentNodeKey(),
         }
       : undefined,
+    availability,
     // Unlike `agent`, this stays true while the agent feature is on but no
     // agent has synced yet, so the page can tell "no agent" from "no data".
     agentEnabled: agents !== undefined,
-    derp: headscaleConfig.getDERPSettings(),
+    derp,
     // Manual names for the regions Headscale cannot name itself; a missing or
     // corrupt file simply resolves to no mapping.
     derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
+    relay,
+    relayResolution,
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
     policyTags: extractTagOwnerTags(policy),
@@ -123,8 +150,11 @@ export default function Page({
     magic,
     agent,
     agentEnabled,
+    availability,
     derp,
     derpRegionNames,
+    relay,
+    relayResolution,
     stats,
     existingTags,
     policyTags,
@@ -136,6 +166,7 @@ export default function Page({
   const [showRouting, setShowRouting] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
   const [showExpire, setShowExpire] = useState(false);
+  const uptime = availability ? uptimePercent(availability.uptime) : undefined;
 
   const uiTags = useMemo(() => {
     const tags = uiTagsForNode(node, agent?.nodeKey === node.nodeKey);
@@ -294,6 +325,44 @@ export default function Page({
         </MachineCard>
 
         <MachineCard
+          description={t("machines.detail.availability.body")}
+          icon={ChartColumn}
+          status={
+            <SettingsStatus tone={uptime === undefined ? "neutral" : "ok"}>
+              {uptime === undefined
+                ? t("machines.detail.availability.noDataChip")
+                : t("machines.detail.availability.uptime", { percent: uptime })}
+            </SettingsStatus>
+          }
+          title={t("machines.detail.availability.title")}
+        >
+          {availability !== undefined && uptime !== undefined ? (
+            <div className="flex flex-col gap-2">
+              <NodeAvailabilityBar
+                labels={{
+                  label: t("machines.detail.availability.title"),
+                  online: t("machines.detail.availability.legendOnline"),
+                  offline: t("machines.detail.availability.legendOffline"),
+                  unknown: t("machines.detail.availability.legendUnknown"),
+                }}
+                states={availability.buckets}
+              />
+              {availability.partial && availability.collectingSince ? (
+                <p className="text-xs text-mist-500 dark:text-mist-400">
+                  {t("machines.detail.availability.collectingSince", {
+                    at: new Date(availability.collectingSince).toLocaleString(locale),
+                  })}
+                </p>
+              ) : undefined}
+            </div>
+          ) : (
+            <p className="text-sm text-mist-500 dark:text-mist-400">
+              {t("machines.detail.availability.noData")}
+            </p>
+          )}
+        </MachineCard>
+
+        <MachineCard
           action={
             <Button onClick={() => setShowRouting(true)} variant="ghost">
               {t("machines.detail.review")}
@@ -416,6 +485,8 @@ export default function Page({
         <DerpInfo
           agentEnabled={agentEnabled}
           regionNames={derpRegionNames}
+          relay={relay}
+          relayResolution={relayResolution}
           server={derp.server}
           stats={stats}
         />
@@ -440,6 +511,22 @@ export default function Page({
       </MachineCard>
     </div>
   );
+}
+
+/**
+ * The node's availability timeline over the last day, or `undefined` when it
+ * cannot be derived. The maths is pure and defensive, but a loader must never
+ * fail because of a status card.
+ */
+function attemptNodeTimeline(
+  document: NodeHistoryDocument,
+  nodeId: string,
+): NodeTimeline | undefined {
+  try {
+    return computeNodeTimeline(document, nodeId, "24h", Date.now());
+  } catch {
+    return undefined;
+  }
 }
 
 function getIpv4Address(addresses: string[]) {

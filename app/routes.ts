@@ -16,6 +16,10 @@ export default [
   // outside the application layout instead of rendering the UI around them.
   route("/settings/snapshots/download", "routes/settings/snapshots/download.ts"),
 
+  // Headplane's own database is a second, clearly separate download: the route
+  // above only ever carries Headscale's configuration.
+  route("/settings/snapshots/data-backup", "routes/settings/snapshots/data-backup.ts"),
+
   // Audit exports are downloads too, so they get the same treatment.
   route("/settings/audit/export", "routes/settings/audit/export.ts"),
 

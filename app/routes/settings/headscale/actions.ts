@@ -40,6 +40,7 @@ import type {
   HeadscaleSettingsFailure,
   HeadscaleSettingsSuccess,
 } from "./error-keys";
+import { runOidcSelfTest } from "./oidc-self-test";
 import { validateTrustedProxyCidr } from "./trusted-proxies";
 
 const PKCE_METHODS = new Set(["plain", "S256"]);
@@ -64,14 +65,39 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
     throw data({ localized: { key: "errors.permission.modifyIam" } }, { status: 403 });
   }
 
-  if (!headscaleConfig.writable()) {
-    throw data({ localized: { key: "errors.headscaleConfigNotWritable" } }, { status: 403 });
-  }
-
   const formData = await request.formData();
   const action = formData.get("action_id")?.toString();
 
+  // The self-test only reads the configuration and the identity provider, so it
+  // stays available when Headscale's config file is mounted read-only.
+  if (action !== "test_oidc" && !headscaleConfig.writable()) {
+    throw data({ localized: { key: "errors.headscaleConfigNotWritable" } }, { status: 403 });
+  }
+
   switch (action) {
+    case "test_oidc": {
+      // Real checks against the provider, run server-side so the browser never
+      // talks to it directly. Nothing is written and the client secret is never
+      // read: the runner only learns whether one is configured.
+      const oidc = headscaleConfig.getOIDCSettings();
+      const appConfig = context.get(appConfigContext);
+      const selfTest = await runOidcSelfTest({
+        issuer: oidc?.issuer,
+        clientId: oidc?.clientId,
+        hasInlineClientSecret: oidc?.hasInlineClientSecret ?? false,
+        clientSecretPath: oidc?.clientSecretPath,
+        scope: oidc?.scope,
+        pkceEnabled: oidc?.pkceEnabled ?? false,
+        pkceMethod: oidc?.pkceMethod,
+        allowedDomains: oidc?.allowedDomains,
+        allowedGroups: oidc?.allowedGroups,
+        allowedUsers: oidc?.allowedUsers,
+        baseUrl: appConfig?.server.base_url,
+      });
+
+      return data({ success: true, selfTest } satisfies HeadscaleSettingsSuccess);
+    }
+
     case "save_oidc": {
       // Headscale treats an empty issuer as "OIDC disabled", so clearing the
       // field is a legitimate change. A configured provider, however, needs a

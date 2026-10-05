@@ -32,6 +32,7 @@ const en = {
   },
   header: {
     logoAlt: "Headplane logo",
+    brand: "Headplane Console",
     tabs: {
       overview: "Overview",
       machines: "Machines",
@@ -86,6 +87,7 @@ const en = {
       disabled: "Disabled",
       configured: "Configured",
       derived: "Derived",
+      resolved: "Resolved",
       reachable: "Reachable",
       unreachable: "Unreachable",
       healthy: "Healthy",
@@ -127,7 +129,7 @@ const en = {
       regionBody: "The embedded relay region, and where Headscale's DERP map comes from.",
       publicTitle: "Relay Addresses & STUN",
       publicBody:
-        "The addresses clients dial for relaying, and how the embedded server was told about them.",
+        "The relay endpoint clients dial, the addresses its hostname resolves to now, and the addresses derp.server declares.",
       region: "Region",
       regionValue: "#{id} · {code} · {name}",
       relaySource: "Relay sources",
@@ -146,6 +148,25 @@ const en = {
       publicEndpoint: "Clients connect to",
       publicEndpointNote: "Derived from Headscale's server_url; DERP shares its HTTPS endpoint.",
       publicUnavailable: "server_url is not a usable http(s) URL",
+      relayHostname: "Hostname",
+      relayHostnameNote: "The host part of Headscale's server_url, exactly as clients resolve it.",
+      relayPort: "Port",
+      relayPortNote: "The port clients dial; DERP shares Headscale's HTTPS endpoint.",
+      relayResolvedTitle: "Resolved from DNS",
+      relayResolvedNote:
+        "Resolved live from the hostname's A and AAAA records, cached for a few minutes.",
+      relayResolvedIpv4: "Resolved IPv4",
+      relayResolvedIpv6: "Resolved IPv6",
+      relayResolvedRefused: "checked but not resolved",
+      relayReasonNoRecords: "the DNS lookup returned no records",
+      relayReasonTimeout: "the DNS lookup timed out",
+      relayReasonResolverError: "the DNS lookup failed",
+      relayReasonHostMissing: "server_url names no host",
+      relayReasonInvalidHost: "the hostname is not a usable DNS name",
+      relayReasonUnavailable: "not resolved",
+      relayLiteralNote:
+        "The hostname is already an IPv6 address, so clients dial it as written and nothing is looked up.",
+      relayUnavailable: "server_url is not a usable http(s) URL",
       declaredIpv4: "Declared IPv4",
       declaredIpv6: "Declared IPv6",
       declaredNote:
@@ -197,6 +218,16 @@ const en = {
       snapshots: "Snapshots",
       snapshotsSize: "Size: {size}",
       snapshotsValue: "{count} · {size}",
+    },
+    history: {
+      title: "Node availability",
+      body: "How many nodes were online over the last 7 days, sampled every few minutes.",
+      summary: "Sampled {covered} of {total} periods · peak {peak} online",
+      collectingSince: "Collecting since {at}",
+      legendOnline: "Online",
+      legendOffline: "Offline",
+      legendUnknown: "Not sampled",
+      noData: "availability history has not been collected yet",
     },
     health: {
       title: "Health Summary",
@@ -297,6 +328,17 @@ const en = {
       exitNodeTooltip: "Whether this machine can act as an exit node for your tailnet.",
       allowed: "Allowed",
       edit: "Edit",
+      availability: {
+        title: "Availability",
+        body: "Whether this machine was online over the last 24 hours, sampled every few minutes.",
+        uptime: "{percent}% uptime",
+        noDataChip: "No data",
+        collectingSince: "Collecting since {at}",
+        legendOnline: "Online",
+        legendOffline: "Offline",
+        legendUnknown: "Not sampled",
+        noData: "Availability has not been recorded for this machine yet.",
+      },
       detailsTitle: "Machine Details",
       detailsBody: "Information about this machine’s network. Used to debug connection issues.",
       creator: "Creator",
@@ -340,7 +382,24 @@ const en = {
       natPmp: "NAT-PMP",
       derp: {
         title: "DERP Relays",
-        body: "Which DERP relay this machine uses. Live relay data comes from the Headplane Agent.",
+        body: "Where clients reach the relay, and which DERP relay this machine uses. Live relay data comes from the Headplane Agent.",
+        relayAddressTitle: "Relay clients reach",
+        relayHostname: "Hostname",
+        relayPort: "Port",
+        relayResolvedTitle: "Resolved addresses",
+        relayResolvedNote:
+          "Resolved live from the hostname's A and AAAA records, cached for a few minutes, so these are the addresses clients reach.",
+        relayResolvedIpv4: "Resolved IPv4",
+        relayResolvedIpv6: "Resolved IPv6",
+        relayResolvedUnavailable: "not resolved",
+        relayReasonNoRecords: "the DNS lookup returned no records",
+        relayReasonTimeout: "the DNS lookup timed out",
+        relayReasonResolverError: "the DNS lookup failed",
+        relayReasonHostMissing: "server_url names no host",
+        relayReasonInvalidHost: "the hostname is not a usable DNS name",
+        relayUnavailable:
+          "Headscale's server_url could not be read, so the relay clients reach is unknown.",
+        relayMachineTitle: "Relays this machine uses",
         agentRequired:
           "Live relay data needs the Headplane Agent. Enable the agent so Headplane can read this machine's home region, preferred region, and DERP latency.",
         empty: "This machine has not reported DERP relay information yet.",
@@ -1441,6 +1500,75 @@ const en = {
       addExtraParam: "Add parameter",
       removeExtraParam: "Remove",
       saveExtraParams: "Save extra parameters",
+      selfTestTitle: "OIDC configuration test",
+      selfTestBody:
+        "Checks the configured issuer and client credentials against the identity provider without signing anyone in. Nothing is written to disk, and the client secret is never sent back to this page.",
+      selfTestButton: "Test OIDC configuration",
+      selfTestRunning: "Running checks…",
+      selfTestSummary: "{passed} of {total} checks passed",
+      selfTestSkipped: "{count} checks were skipped",
+      selfTestStatusPass: "Passed",
+      selfTestStatusWarn: "Warning",
+      selfTestStatusFail: "Failed",
+      selfTestStatusSkip: "Skipped",
+      selfTestCheckIssuer: "Issuer URL",
+      selfTestCheckDiscovery: "Discovery document",
+      selfTestCheckEndpoints: "Provider endpoints",
+      selfTestCheckJwks: "Signing keys (JWKS)",
+      selfTestCheckScopes: "Requested scopes",
+      selfTestCheckPkce: "PKCE",
+      selfTestCheckCredentials: "Client credentials",
+      selfTestCheckAccess: "Sign-in restrictions",
+      selfTestCheckCallback: "Callback URL",
+      selfTestIssuerMissing: "No issuer is configured, so Headscale has nothing to discover.",
+      selfTestIssuerNotAbsolute:
+        "The issuer is not an absolute URL, so no discovery document can be fetched. Include the scheme, for example https://idp.example.com.",
+      selfTestIssuerInsecure:
+        "The issuer uses {scheme}, which sends the sign-in flow in the clear. That is only acceptable for an identity provider on a trusted local network; use https for anything reachable from the internet.",
+      selfTestIssuerUnsupportedScheme:
+        "The issuer uses {scheme}, which is neither http nor https, so Headscale cannot fetch a discovery document from it.",
+      selfTestIssuerOk: "The issuer is an absolute https URL.",
+      selfTestDiscoverySkipped: "Not checked because no usable issuer URL is configured.",
+      selfTestDiscoveryUnreachable:
+        "The discovery document could not be read ({error}). Headscale refuses to start when only_start_if_oidc_is_available is on, and sign-in fails otherwise.",
+      selfTestDiscoveryNoIssuer:
+        "The document has no issuer field. Headscale compares that field with the configured issuer and rejects the provider when it is missing.",
+      selfTestDiscoveryMismatch:
+        "The document reports {actual}, but {expected} is configured. Headscale compares the two and refuses to authenticate anyone.",
+      selfTestDiscoveryOk:
+        "The document is reachable and its issuer matches the configured issuer.",
+      selfTestEndpointsMissing:
+        "The document does not advertise {endpoints}, which Headscale needs for the sign-in flow.",
+      selfTestEndpointsOk: "The document advertises the authorization, token, and JWKS endpoints.",
+      selfTestSkippedPrerequisite: "Not checked because an earlier check could not run.",
+      selfTestJwksUnreachable: "The JWKS could not be read ({error}).",
+      selfTestJwksEmpty:
+        "The JWKS is reachable but contains no keys, so Headscale cannot verify any token.",
+      selfTestJwksOk: "The JWKS advertised by the document is reachable.",
+      selfTestScopesMissingOpenid:
+        "The requested scopes do not include openid, so the provider will not return an ID token.",
+      selfTestScopesMissingClaims:
+        "The requested scopes do not include {scopes}. Without email the provider reports no verified address for allowed_domains, and without profile Headplane shows no name or picture.",
+      selfTestScopesOk: "The requested scopes include openid, email, and profile.",
+      selfTestPkceDisabled: "PKCE is disabled in the configuration, so no challenge is sent.",
+      selfTestPkceMismatch:
+        "The provider advertises {advertised} for code_challenge_methods_supported, which does not include the configured {method}.",
+      selfTestPkceUnknown:
+        "The document does not advertise code_challenge_methods_supported, so support for {method} cannot be confirmed.",
+      selfTestPkceOk: "The provider advertises the configured PKCE method {method}.",
+      selfTestCredentialsMissingClientId:
+        "No client_id is configured, so Headscale cannot identify itself to the provider.",
+      selfTestCredentialsMissingSecret:
+        "Neither client_secret nor client_secret_path is set, and Headscale needs one of them to exchange the authorization code.",
+      selfTestCredentialsBoth:
+        "Both client_secret and client_secret_path are set. Headscale's own configuration comments call them mutually exclusive, so keep only one of the two.",
+      selfTestCredentialsOk: "A client ID and a client secret are configured.",
+      selfTestAccessMissing:
+        "None of allowed_domains, allowed_groups, or allowed_users is set, so every account the provider authenticates may sign in.",
+      selfTestAccessOk: "Sign-ins are limited by {lists}.",
+      selfTestCallbackUnknown:
+        "Headplane has no server.base_url, so the callback URL to register with the provider cannot be shown.",
+      selfTestCallbackOk: "Register this redirect URI with the identity provider: {url}",
       clientSecretPathLabel: "Client secret file path",
       clientSecretPathDescription:
         "Read the client secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave it empty to remove oidc.client_secret_path.",
@@ -1964,6 +2092,25 @@ const en = {
         unavailable:
           "The snapshot directory could not be used. Check that Headplane can write to its data directory.",
         copyFailed: "None of the configuration files could be read.",
+      },
+      dataBackup: {
+        title: "Download Headplane data",
+        body: "Configuration snapshots cover Headscale's configuration and policy files, and this page can restore them. This download covers Headplane itself: its own database, copied consistently while Headplane keeps running.",
+        contentsTitle: "What the copy contains",
+        contents:
+          "Headplane's own database: local users and their sessions, the audit log, and the host information reported by the Headplane agent.",
+        excludesTitle: "What the copy does not contain",
+        excludes:
+          "Secrets stay in config.yaml: cookie_secret and headscale.api_key are never written into the database. Data Headplane keeps in files beside the database, such as snapshot metadata, notification settings and delivery history, and node history, is not included either.",
+        noRestore:
+          "There is no one-click restore. Keep the file somewhere safe and put it back by hand if you ever need it.",
+        download: "Download data backup",
+        errors: {
+          copyFailed:
+            "Headplane's database could not be copied. Check the server logs and try again.",
+          unavailable:
+            "The backup could not be written to a temporary file. Check that the server has space in its temporary directory.",
+        },
       },
     },
     notifications: {

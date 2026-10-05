@@ -233,7 +233,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }
             title={t("settings.headscale.oidcTitle")}
           >
-            <OidcSettings isDisabled={isDisabled} oidc={oidc} />
+            <OidcSettings canTest={access} isDisabled={isDisabled} oidc={oidc} />
           </SettingsCollapsible>
         </SettingsPanel>
 

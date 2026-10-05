@@ -1,5 +1,7 @@
 import type { TranslationKey } from "~/i18n";
 
+import type { OidcSelfTestReport } from "./oidc-self-test";
+
 /**
  * Stable error codes returned by the Headscale settings action, mapped onto the
  * localized message the page renders. Kept free of server imports so the page
@@ -90,6 +92,8 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
 
 export interface HeadscaleSettingsSuccess {
   success: true;
+  /** Present only for the read-only `test_oidc` action. */
+  selfTest?: OidcSelfTestReport;
 }
 
 export interface HeadscaleSettingsFailure {

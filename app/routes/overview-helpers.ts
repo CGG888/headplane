@@ -13,6 +13,7 @@ import {
   formatDerpPublicEndpoint,
 } from "~/routes/settings/headscale/derp-settings";
 import { parseIpv4, parseIpv6 } from "~/routes/settings/headscale/trusted-proxies";
+import type { FleetTrend } from "~/server/history/timeline";
 
 // MARK: Counts
 
@@ -196,14 +197,79 @@ export function declaredDerpAddresses(server: {
   return addresses;
 }
 
+/** Where the endpoint host clients use comes from. */
+export type RelayHostSource = "hostname" | "literal" | "invalid";
+
+export interface RelayHostSummary {
+  /** `host:port` as written, or `undefined` when `server_url` cannot be read. */
+  endpoint?: string;
+  /** The host on its own, ready for a row of its own. */
+  host?: string;
+  /** The port clients dial, as text so the page never formats a number. */
+  port?: string;
+  source: RelayHostSource;
+}
+
 /**
- * The `host:port` clients dial for the embedded DERP server, derived from
- * Headscale's `server_url` (DERP shares Headscale's HTTPS endpoint). IPv6
- * literals keep their brackets. `undefined` when `server_url` cannot be read.
+ * The hostname and port clients actually dial, split out of `server_url`. An
+ * IPv6 literal arrives bracketed and is a host clients use as-is, so the page
+ * can say so instead of promising a DNS answer that does not exist.
  */
-export function derpEndpointSummary(serverUrl: string | undefined): string | undefined {
+export function relayHostSummary(serverUrl: string | undefined): RelayHostSummary {
   const endpoint = deriveDerpPublicEndpoint(serverUrl);
-  return endpoint ? formatDerpPublicEndpoint(endpoint) : undefined;
+  if (endpoint === undefined) {
+    return { source: "invalid" };
+  }
+
+  return {
+    endpoint: formatDerpPublicEndpoint(endpoint),
+    host: endpoint.host,
+    port: String(endpoint.port),
+    source: endpoint.host.startsWith("[") ? "literal" : "hostname",
+  };
+}
+
+/** The reason keys the resolver can report, without the renderer's em dash. */
+export type RelayReason =
+  | "no-records"
+  | "timeout"
+  | "resolver-error"
+  | "host-missing"
+  | "invalid-host"
+  | "unavailable";
+
+export interface RelayAddressDisplay {
+  ipv4?: string;
+  ipv4Reason?: RelayReason;
+  ipv6?: string;
+  ipv6Reason?: RelayReason;
+}
+
+/**
+ * The resolved addresses for a row: a newline-separated list per family, or the
+ * reason that family is empty. A timeout and a resolver failure are reported as
+ * such because they say "try again", while a name with no AAAA record simply
+ * has none. Without a reason at all the family reads "unavailable".
+ */
+export function relayAddressDisplay(
+  addresses: readonly { family: "ipv4" | "ipv6"; addresses: string[] }[] | undefined,
+  reason: RelayReason | undefined,
+): RelayAddressDisplay {
+  const display: RelayAddressDisplay = {};
+  const fallback = reason ?? "unavailable";
+
+  for (const family of ["ipv4", "ipv6"] as const) {
+    const entry = addresses?.find((row) => row.family === family);
+    const values = entry?.addresses ?? [];
+    const text = values.join("\n").trim();
+    if (text.length > 0) {
+      display[family] = text;
+    } else {
+      display[`${family}Reason`] = fallback;
+    }
+  }
+
+  return display;
 }
 
 /**
@@ -244,6 +310,40 @@ export function readExtraRecordsPath(config: unknown): string | undefined {
 
   const path = (dns as Record<string, unknown>).extra_records_path;
   return typeof path === "string" && path.trim().length > 0 ? path.trim() : undefined;
+}
+
+// MARK: Availability history
+
+export interface FleetTrendSummary {
+  /** Buckets the sampler covered; 0 means there is no history for this window. */
+  covered: number;
+  /** Buckets in the window, covered or not. */
+  total: number;
+  /** Most nodes seen online in one covered bucket. */
+  peak: number;
+}
+
+/**
+ * The one-line summary behind the fleet availability card. An uncovered bucket
+ * contributes nothing — neither to the coverage count nor to the peak — so a
+ * gap in the record can never be read as a fleet that was entirely offline.
+ */
+export function summarizeFleetTrend(trend: FleetTrend): FleetTrendSummary {
+  let covered = 0;
+  let peak = 0;
+
+  for (const bucket of trend.buckets) {
+    if (!bucket.covered) {
+      continue;
+    }
+
+    covered += 1;
+    if (bucket.online > peak) {
+      peak = bucket.online;
+    }
+  }
+
+  return { covered, total: trend.buckets.length, peak };
 }
 
 // MARK: Rendering inputs

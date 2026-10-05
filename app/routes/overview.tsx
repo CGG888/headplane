@@ -10,6 +10,7 @@ import {
   Network,
   Radar,
   Server,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -22,6 +23,7 @@ import Link from "~/components/link";
 import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
+import { FleetTrendBar } from "~/routes/machines/components/history-bar";
 import {
   agentsContext,
   appConfigContext,
@@ -30,13 +32,16 @@ import {
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
+  nodeHistoryContext,
   requestApiContext,
   snapshotContext,
 } from "~/server/context";
 import type { HeadscaleClient } from "~/server/headscale/api";
 import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
 import { formatServerVersion } from "~/server/headscale/api/server-version";
+import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import type { AgentManager } from "~/server/hp-agent";
+import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
 import cn from "~/utils/cn";
@@ -49,15 +54,22 @@ import {
   countNodesHomedInRegion,
   declaredDerpAddresses,
   type DeclaredDerpAddress,
-  derpEndpointSummary,
   formatByteSize,
   hasIpv6StunWarning,
   readExtraRecordsPath,
+  type RelayReason,
+  relayAddressDisplay,
+  relayHostSummary,
+  summarizeFleetTrend,
   tallyChecks,
   tallyEntries,
   textOrReason,
 } from "./overview-helpers";
-import { classifyDerpRelaySource, type DerpRelaySource } from "./settings/headscale/derp-settings";
+import {
+  classifyDerpRelaySource,
+  deriveDerpPublicEndpoint,
+  type DerpRelaySource,
+} from "./settings/headscale/derp-settings";
 import { loadConfigChecks, readHeadscaleConfig } from "./settings/system/config-probe";
 import {
   computeDiagnostics,
@@ -87,6 +99,16 @@ const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
   "embedded-and-map": "overview.derp.relaySourceEmbeddedAndMap",
   "map-only": "overview.derp.relaySourceMapOnly",
   none: "overview.derp.relaySourceNone",
+};
+
+/** Why a resolved family has no address, as a short clause after the em dash. */
+const RELAY_REASON_KEYS: Record<RelayReason, TranslationKey> = {
+  "no-records": "overview.derp.relayReasonNoRecords",
+  timeout: "overview.derp.relayReasonTimeout",
+  "resolver-error": "overview.derp.relayReasonResolverError",
+  "host-missing": "overview.derp.relayReasonHostMissing",
+  "invalid-host": "overview.derp.relayReasonInvalidHost",
+  unavailable: "overview.derp.relayReasonUnavailable",
 };
 
 const METRICS_STATE_KEYS: Record<MetricsReport["state"], TranslationKey> = {
@@ -164,6 +186,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const integration = context.get(integrationContext);
+  const nodeHistory = context.get(nodeHistoryContext);
   const getRequestApi = context.get(requestApiContext);
   const snapshots = context.get(snapshotContext);
 
@@ -256,6 +279,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     return snapshot;
   })();
 
+  // The fleet trend comes from Headplane's own sampler, not from Headscale: a
+  // store that has never been written simply leaves the card on its em dash.
+  const historyLookup = attempt(async (): Promise<FleetTrend> => {
+    await nodeHistory.ready();
+    return computeFleetTrend(nodeHistory.document(), "7d", Date.now());
+  });
+
   const [
     api,
     agent,
@@ -267,6 +297,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     rawConfig,
     auditEntries,
     snapshotList,
+    history,
   ] = await Promise.all([
     apiLookup,
     agentLookup,
@@ -278,6 +309,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     attempt(() => readHeadscaleConfig(configPath)),
     attempt(() => audit.count()),
     attempt(() => snapshots.list()),
+    historyLookup,
   ]);
 
   const serverVersion = headscale.version;
@@ -317,6 +349,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       )
     : undefined;
 
+  // The relay's real addresses come from DNS, not from the configuration. The
+  // lookup is cached for minutes and fail-soft, so a relay card never delays or
+  // breaks the dashboard because a name did not resolve.
+  const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
+  const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
+  const relayView = buildRelayView(relayEndpoint, relayResolution);
+  const relayHost = relayHostSummary(derp.serverUrl);
+  const relayAddress = relayAddressDisplay(relayView.address?.rows, relayView.address?.reason);
+
   return {
     versions: {
       headplane: {
@@ -342,7 +383,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       }),
       urlCount: derp.urls.length,
       pathCount: derp.paths.length,
-      publicEndpoint: derpEndpointSummary(derp.serverUrl),
+      relay: {
+        endpoint: relayView.host?.endpoint,
+        host: relayView.host?.hostname,
+        hostSource: relayHost.source,
+        port: relayHost.port,
+        endpointReason: relayView.endpointReason,
+        address: relayAddress,
+      },
       declared: declaredDerpAddresses(derp.server),
       stunListenAddr: derp.server.stunListenAddr,
       ipv6StunWarning: hasIpv6StunWarning({
@@ -378,6 +426,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       configChecks: configChecks.length > 0 ? tallyChecks(configChecks) : undefined,
       diagnostics: tallyChecks(diagnostics),
     },
+    history: {
+      trend: history.ok ? history.value : undefined,
+    },
   };
 }
 
@@ -400,8 +451,9 @@ async function countHomedInRegion(
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { t, tr } = useI18n();
-  const { versions, derp, service, counts, health } = loaderData;
+  const { t, tr, locale } = useI18n();
+  const { versions, derp, service, counts, health, history } = loaderData;
+  const trendSummary = history.trend ? summarizeFleetTrend(history.trend) : undefined;
 
   const reason = {
     agent: t("overview.reason.agentDisabled"),
@@ -447,6 +499,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const off = t("overview.status.off");
   const configured = { tone: "neutral" as const, label: t("overview.status.configured") };
   const derived = { tone: "neutral" as const, label: t("overview.status.derived") };
+  const relayReason = (reason: RelayReason) => t(RELAY_REASON_KEYS[reason]);
 
   return (
     <SettingsPage
@@ -603,16 +656,53 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }
             title={t("overview.derp.publicTitle")}
           >
-            <FactGroup title={t("overview.status.derived")}>
+            <FactGroup
+              title={t("overview.status.resolved")}
+              note={t("overview.derp.relayResolvedNote")}
+            >
               <Fact
                 code
-                label={t("overview.derp.publicEndpoint")}
-                note={t("overview.derp.publicEndpointNote")}
-                {...textOrReason(derp.publicEndpoint, t("overview.derp.publicUnavailable"))}
+                label={t("overview.derp.relayHostname")}
+                note={
+                  derp.relay.hostSource === "literal"
+                    ? t("overview.derp.relayLiteralNote")
+                    : t("overview.derp.relayHostnameNote")
+                }
+                {...textOrReason(
+                  derp.relay.host,
+                  derp.relay.endpointReason
+                    ? relayReason(derp.relay.endpointReason)
+                    : t("overview.derp.relayReasonUnavailable"),
+                )}
+              />
+              <Fact
+                code
+                label={t("overview.derp.relayPort")}
+                note={t("overview.derp.relayPortNote")}
+                {...textOrReason(derp.relay.port, reason.notConfigured)}
+              />
+              <Fact
+                code
+                label={t("overview.derp.relayResolvedIpv4")}
+                {...textOrReason(
+                  derp.relay.address.ipv4,
+                  relayReason(derp.relay.address.ipv4Reason ?? "unavailable"),
+                )}
+              />
+              <Fact
+                code
+                label={t("overview.derp.relayResolvedIpv6")}
+                {...textOrReason(
+                  derp.relay.address.ipv6,
+                  relayReason(derp.relay.address.ipv6Reason ?? "unavailable"),
+                )}
               />
             </FactGroup>
 
-            <FactGroup title={t("overview.status.configured")}>
+            <FactGroup
+              title={t("overview.status.configured")}
+              note={t("overview.derp.declaredNote")}
+            >
               <Fact
                 code
                 label={t("overview.derp.declaredIpv4")}
@@ -629,6 +719,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 label={t("overview.derp.stun")}
                 note={t("overview.derp.stunNote")}
                 {...textOrReason(derp.stunListenAddr, reason.notConfigured)}
+              />
+            </FactGroup>
+
+            <FactGroup title={t("overview.status.derived")}>
+              <Fact
+                code
+                label={t("overview.derp.publicEndpoint")}
+                note={t("overview.derp.publicEndpointNote")}
+                {...textOrReason(derp.relay.endpoint, t("overview.derp.publicUnavailable"))}
               />
             </FactGroup>
 
@@ -801,6 +900,46 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               />
             </dl>
           </Card>
+
+          <Card
+            description={t("overview.history.body")}
+            icon={TrendingUp}
+            title={t("overview.history.title")}
+          >
+            {history.trend !== undefined &&
+            trendSummary !== undefined &&
+            trendSummary.covered > 0 ? (
+              <div className="flex flex-col gap-2">
+                <FleetTrendBar
+                  buckets={history.trend.buckets}
+                  labels={{
+                    label: t("overview.history.title"),
+                    online: t("overview.history.legendOnline"),
+                    offline: t("overview.history.legendOffline"),
+                    unknown: t("overview.history.legendUnknown"),
+                  }}
+                />
+                <p className="text-xs text-mist-500 dark:text-mist-400">
+                  {t("overview.history.summary", {
+                    covered: trendSummary.covered,
+                    total: trendSummary.total,
+                    peak: trendSummary.peak,
+                  })}
+                </p>
+                {history.trend.partial && history.trend.collectingSince ? (
+                  <p className="text-xs text-mist-500 dark:text-mist-400">
+                    {t("overview.history.collectingSince", {
+                      at: new Date(history.trend.collectingSince).toLocaleString(locale),
+                    })}
+                  </p>
+                ) : undefined}
+              </div>
+            ) : (
+              <p className="text-sm text-mist-400 dark:text-mist-500">
+                {t("overview.unavailableReason", { reason: t("overview.history.noData") })}
+              </p>
+            )}
+          </Card>
         </Section>
 
         <Section title={t("overview.sections.health")}>
@@ -908,12 +1047,22 @@ function Facts({ children }: { children: ReactNode }) {
 }
 
 /** A labelled sub-section of facts, for a card that mixes two sources. */
-function FactGroup({ title, children }: { title: string; children: ReactNode }) {
+function FactGroup({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  /** One line under the heading, e.g. where these values come from. */
+  note?: string;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-1">
       <h3 className="text-xs font-medium tracking-wide text-mist-500 uppercase dark:text-mist-400">
         {title}
       </h3>
+      {note ? <p className="text-xs text-mist-500 dark:text-mist-400">{note}</p> : undefined}
       <Facts>{children}</Facts>
     </section>
   );

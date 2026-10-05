@@ -4,16 +4,19 @@ import {
   countNodesHomedInRegion,
   countNodeStatus,
   declaredDerpAddresses,
-  derpEndpointSummary,
   formatByteSize,
   hasIpv6StunWarning,
   isIpv4OnlyStunBind,
   readExtraRecordsPath,
+  relayAddressDisplay,
+  relayHostSummary,
   stunBindHost,
+  summarizeFleetTrend,
   tallyChecks,
   tallyEntries,
   textOrReason,
 } from "~/routes/overview-helpers";
+import type { FleetTrend } from "~/server/history/timeline";
 
 describe("countNodeStatus", () => {
   test("splits the nodes by their online flag", () => {
@@ -165,21 +168,66 @@ describe("declaredDerpAddresses", () => {
   });
 });
 
-describe("derpEndpointSummary", () => {
-  test("derives the client endpoint from server_url", () => {
-    expect(derpEndpointSummary("https://derp.example.com")).toBe("derp.example.com:443");
-    expect(derpEndpointSummary("http://derp.example.com:8080")).toBe("derp.example.com:8080");
+describe("relayHostSummary", () => {
+  test("splits the hostname and the port clients dial", () => {
+    expect(relayHostSummary("https://derp.example.com")).toEqual({
+      endpoint: "derp.example.com:443",
+      host: "derp.example.com",
+      port: "443",
+      source: "hostname",
+    });
+    expect(relayHostSummary("http://derp.example.com:8080")).toMatchObject({
+      endpoint: "derp.example.com:8080",
+      port: "8080",
+    });
   });
 
-  test("keeps IPv6 literals bracketed", () => {
-    expect(derpEndpointSummary("https://[2001:db8::1]:8443")).toBe("[2001:db8::1]:8443");
+  test("marks a bracketed IPv6 literal as a host clients use as-is", () => {
+    expect(relayHostSummary("https://[2001:db8::1]:8443")).toEqual({
+      endpoint: "[2001:db8::1]:8443",
+      host: "[2001:db8::1]",
+      port: "8443",
+      source: "literal",
+    });
   });
 
-  test("says nothing when server_url cannot be used", () => {
-    expect(derpEndpointSummary(undefined)).toBeUndefined();
-    expect(derpEndpointSummary("")).toBeUndefined();
-    expect(derpEndpointSummary("derp.example.com")).toBeUndefined();
-    expect(derpEndpointSummary("ftp://derp.example.com")).toBeUndefined();
+  test("says the endpoint is invalid when server_url cannot be read", () => {
+    expect(relayHostSummary(undefined)).toEqual({ source: "invalid" });
+    expect(relayHostSummary("derp.example.com")).toEqual({ source: "invalid" });
+  });
+});
+
+describe("relayAddressDisplay", () => {
+  test("joins the resolved records of one family with newlines", () => {
+    expect(
+      relayAddressDisplay(
+        [
+          { family: "ipv4", addresses: ["198.51.100.7", "198.51.100.8"] },
+          { family: "ipv6", addresses: ["2001:db8::7"] },
+        ],
+        undefined,
+      ),
+    ).toEqual({ ipv4: "198.51.100.7\n198.51.100.8", ipv6: "2001:db8::7" });
+  });
+
+  test("carries the resolver's reason for a family with no address", () => {
+    expect(
+      relayAddressDisplay([{ family: "ipv4", addresses: ["198.51.100.7"] }], "no-records"),
+    ).toEqual({
+      ipv4: "198.51.100.7",
+      ipv6Reason: "no-records",
+    });
+  });
+
+  test("reads as unavailable when no lookup ran and no reason was given", () => {
+    expect(relayAddressDisplay(undefined, undefined)).toEqual({
+      ipv4Reason: "unavailable",
+      ipv6Reason: "unavailable",
+    });
+    expect(relayAddressDisplay([], "timeout")).toEqual({
+      ipv4Reason: "timeout",
+      ipv6Reason: "timeout",
+    });
   });
 });
 
@@ -233,5 +281,54 @@ describe("textOrReason", () => {
     expect(textOrReason(undefined, "missing")).toEqual({ reason: "missing" });
     expect(textOrReason("   ", "missing")).toEqual({ reason: "missing" });
     expect(textOrReason(null, "missing")).toEqual({ reason: "missing" });
+  });
+});
+
+describe("summarizeFleetTrend", () => {
+  const trend = (buckets: { covered: boolean; online: number }[]): FleetTrend => ({
+    window: "24h",
+    from: "2026-01-07T12:00:00.000Z",
+    to: "2026-01-08T12:00:00.000Z",
+    buckets: buckets.map((bucket, index) => ({
+      from: `bucket-${index}`,
+      covered: bucket.covered,
+      online: bucket.online,
+      known: bucket.online,
+    })),
+    partial: false,
+  });
+
+  test("counts the covered buckets and the peak they held", () => {
+    expect(
+      summarizeFleetTrend(
+        trend([
+          { covered: true, online: 3 },
+          { covered: true, online: 7 },
+          { covered: true, online: 5 },
+        ]),
+      ),
+    ).toEqual({ covered: 3, total: 3, peak: 7 });
+  });
+
+  test("an uncovered bucket counts towards neither the coverage nor the peak", () => {
+    // The fleet was sampled twice, then nothing: the gap must not read as a
+    // fleet that dropped to zero nodes.
+    expect(
+      summarizeFleetTrend(
+        trend([
+          { covered: true, online: 2 },
+          { covered: false, online: 0 },
+          { covered: false, online: 0 },
+        ]),
+      ),
+    ).toEqual({ covered: 1, total: 3, peak: 2 });
+  });
+
+  test("a store with no samples covers nothing", () => {
+    expect(summarizeFleetTrend(trend([{ covered: false, online: 0 }]))).toEqual({
+      covered: 0,
+      total: 1,
+      peak: 0,
+    });
   });
 });
