@@ -1,10 +1,15 @@
 # Next
 
+# 0.22.0 (October 5, 2026)
+
 ## Changes
 
 - **Local DERP map files can be viewed, edited and created from an example in the UI.** Each path under "Local map files" now offers View (with a line gutter), Edit (validated inline as you type), Save, Roll back, and Create from example with three fully commented templates: one region with one node, two regions where one node is STUN-only, and a minimal skeleton. Saving is protected end to end — the path has to be one of the entries already listed in `derp.paths` (resolved on the server, never taken from the request), the file is capped at 256 KiB, the YAML is parsed and validated (a DERP map, unique region ids and codes, each node's region, hostname and ports, addresses), the file and its directory must be writable, a snapshot of that single file is taken first, and the write is a temp file plus rename that keeps the old mode. Every write, including a rollback, snapshots what it replaces, so the previous content is one click away. Headscale reads these files at startup, so the copy says a reload or restart is needed — and that editing requires the map directory (not the whole data directory) mounted read-write.
 - The configuration checks cover the same rules per map file: it exists, is readable and writable, its YAML parses, the schema is valid, and region ids and codes are unique — downgrading to "cannot check" when the container cannot see the path.
 - Removed the "machines homed in this region" line from the relay card together with its source chip and explanation.
+
+---
+
 # 0.21.11 (October 5, 2026)
 
 ## Changes
