@@ -1,11 +1,15 @@
 # Next
 
+# 0.18.0 (October 5, 2026)
+
 ## Changes
 
 - The Headscale settings page covers the last configuration Headplane was missing: **`oidc.extra_params`** (the parameters sent to your identity provider, e.g. `domain_hint`), **`oidc.client_secret_path`** (reading the secret from a file, the safer alternative to an inline secret) and the **HA subnet-router probing** options (`node.routes.ha.probe_interval` / `probe_timeout`), with Headscale's own rules enforced (an interval below 2s, a timeout that is not smaller than the interval, and so on).
 - A new **read-only overview** in the same section shows the settings Headplane deliberately does not write — `server_url`, `listen_addr`, IP `prefixes` and the allocation strategy, the database type and SQLite path, the metrics/gRPC listeners, the unix socket, the noise key path, the TLS/ACME summary and whether `tuning` is set — so looking something up no longer means opening the file on the host.
 - The **audit log can be exported** as CSV or JSON, honouring the active filters (actor, action, time range), capped and clearly labelled.
 - The system status page now says when **Headplane itself** has a newer release, and shows a **Prometheus metrics panel** for Headscale: key counters (nodes, users, DERP, policy reloads, uptime) parsed from the metrics listener, with the raw text available, and a clear explanation when that listener is not reachable from Headplane.
+
+---
 
 # 0.17.1 (October 5, 2026)
 
