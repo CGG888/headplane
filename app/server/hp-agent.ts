@@ -7,6 +7,7 @@ import { inArray, notInArray } from "drizzle-orm";
 import { NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
 
 import { HostInfo } from "~/types";
+import type { AgentHostRecord } from "~/utils/agent-coverage";
 import log from "~/utils/log";
 
 import { HeadplaneConfig } from "./config/config-schema";
@@ -22,7 +23,18 @@ export interface AgentManager {
     error?: string;
     errorCode?: AgentErrorCode;
     authUrl?: string;
+    /** Hosts the agent reported in its last successful sync, keyed by node key. */
+    hosts: Record<string, HostInfo>;
+    /** How often the agent refreshes its host information, in milliseconds. */
+    cacheTtl: number;
+    executablePath: string;
+    workDir: string;
+    tailscaleNetns: boolean;
   };
+  /** Stored host info for every node Headplane knows about, read-only. */
+  hostRecords(): Promise<AgentHostRecord[]>;
+  /** Whether the agent already has a `tailscaled.state` in its work directory. */
+  stateExists(): Promise<boolean>;
   agentNodeKey(): string | undefined;
   triggerSync(): Promise<void>;
   dispose(): void;
@@ -38,6 +50,8 @@ interface SyncState {
   syncedAt: Date | null;
   nodeCount: number;
   selfKey?: string;
+  /** What the agent reported the last time a sync succeeded. */
+  hosts?: Record<string, HostInfo>;
   error?: string;
   errorCode?: AgentErrorCode;
   authUrl?: string;
@@ -310,6 +324,7 @@ export async function createAgentManager(
       state.syncedAt = new Date();
       state.nodeCount = keys.length;
       state.selfKey = output.self || undefined;
+      state.hosts = output.hosts;
       state.error = undefined;
       state.errorCode = undefined;
 
@@ -410,7 +425,28 @@ export async function createAgentManager(
         error: state.error,
         errorCode: state.errorCode,
         authUrl: state.authUrl,
+        hosts: state.hosts ?? {},
+        cacheTtl,
+        executablePath,
+        workDir,
+        tailscaleNetns: Boolean(tailscaleNetNS),
       };
+    },
+
+    async hostRecords() {
+      const rows = await db.select().from(hostInfo);
+
+      return rows
+        .filter((row) => row.payload)
+        .map((row) => ({
+          nodeKey: row.host_id,
+          host: row.payload as HostInfo,
+          updatedAt: row.updated_at ?? null,
+        }));
+    },
+
+    async stateExists() {
+      return hasExistingState(workDir);
     },
 
     agentNodeKey() {

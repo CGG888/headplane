@@ -4,12 +4,17 @@ import type { Key } from "~/types";
 import { isNoExpiry } from "~/utils/node-info";
 
 import ExpireApiKey from "./dialogs/expire-api-key";
+import { isApiKeyExpired } from "./filters";
+import SelectCheckbox from "./select-checkbox";
 
 interface ApiKeyRowProps {
   apiKey: Key;
+  /** Omit to render the row without a selection box. */
+  onSelectedChange?: (selected: boolean) => void;
+  selected?: boolean;
 }
 
-export default function ApiKeyRow({ apiKey }: ApiKeyRowProps) {
+export default function ApiKeyRow({ apiKey, onSelectedChange, selected = false }: ApiKeyRowProps) {
   const { t, locale } = useI18n();
   const createdAt = new Date(apiKey.createdAt).toLocaleString(locale);
   const hasExpiry = !isNoExpiry(apiKey.expiration);
@@ -19,19 +24,36 @@ export default function ApiKeyRow({ apiKey }: ApiKeyRowProps) {
   const lastSeen = apiKey.lastSeen
     ? new Date(apiKey.lastSeen).toLocaleString(locale)
     : t("settings.apiKeys.never");
-  const isExpired = hasExpiry && new Date(apiKey.expiration).getTime() < Date.now();
+  const isExpired = isApiKeyExpired(apiKey);
 
   return (
-    <div className="w-full">
-      <Attribute isCopyable name={t("settings.apiKeys.prefix")} value={apiKey.prefix} />
-      <Attribute name={t("settings.apiKeys.created")} value={createdAt} />
-      <Attribute name={t("settings.apiKeys.expiration")} value={expiration} />
-      <Attribute name={t("settings.apiKeys.lastSeen")} value={lastSeen} />
-      {!isExpired && (
-        <div className="mt-2" suppressHydrationWarning>
-          <ExpireApiKey apiKey={apiKey} />
-        </div>
-      )}
+    <div className="flex w-full items-start gap-3">
+      {onSelectedChange ? (
+        <SelectCheckbox
+          aria-label={t("settings.apiKeys.selectKey", { prefix: apiKey.prefix })}
+          checked={selected}
+          className="mt-1"
+          disabled={isExpired}
+          onChange={onSelectedChange}
+        />
+      ) : null}
+      <div className="w-full">
+        <Attribute isCopyable name={t("settings.apiKeys.prefix")} value={apiKey.prefix} />
+        <Attribute name={t("settings.apiKeys.created")} value={createdAt} />
+        <Attribute name={t("settings.apiKeys.expiration")} value={expiration} />
+        <Attribute name={t("settings.apiKeys.lastSeen")} value={lastSeen} />
+        {isExpired ? (
+          // Headscale keeps expired keys in its list; say why there is no
+          // delete action next to the record it applies to.
+          <p className="mt-1 text-xs text-mist-500 dark:text-mist-400">
+            {t("settings.apiKeys.expiredNote")}
+          </p>
+        ) : (
+          <div className="mt-2" suppressHydrationWarning>
+            <ExpireApiKey apiKey={apiKey} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

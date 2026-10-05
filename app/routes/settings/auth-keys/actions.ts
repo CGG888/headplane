@@ -1,4 +1,4 @@
-﻿import { data } from "react-router";
+import { data } from "react-router";
 
 import { authContext, requestApiContext } from "~/server/context";
 import { isUserPrincipal } from "~/server/web/auth";
@@ -7,6 +7,7 @@ import { Capabilities } from "~/server/web/roles";
 import type { PreAuthKey } from "~/types";
 
 import type { Route } from "./+types/overview";
+import { PRE_AUTH_KEY_EXPIRED } from "./result";
 
 export async function authKeysAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
@@ -146,7 +147,7 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
         key,
         user: { id: user },
       } as unknown as PreAuthKey);
-      return data("Pre-auth key expired");
+      return data(PRE_AUTH_KEY_EXPIRED);
     }
 
     default:

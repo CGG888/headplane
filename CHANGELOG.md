@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **The agent page now shows what the agent actually synced.** A coverage card reports how many nodes have reported host info against how many the tailnet has (a mismatch stands out), the freshest and oldest report times, and a bounded table of the synced nodes with their reported version, OS and last update; a runtime card shows the executable path, work directory, cache TTL (and that the page is served from that cache), whether the network namespace mode is on and whether the agent already has its Tailscale state, plus the agent's reported version. The absolute last-sync time is shown next to the relative one, with the refresh cadence.
+- **Expired keys are easier to live with.** The API keys page gained the same status filter the pre-auth keys page has plus an count of expired ones, both pages explain on expired or already-used rows that Headscale keeps the record and that expiring is the way to revoke a key (there is no delete endpoint), and keys can now be **expired in bulk** — with already-expired keys excluded, since that would be a no-op.
 # 0.21.0 (October 5, 2026)
 
 ## Changes
