@@ -51,8 +51,8 @@ export default function BulkActions({
       <div
         aria-label={t("machines.bulk.actionsLabel")}
         className={cn(
-          "mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2",
-          "border-indigo-200 bg-indigo-50/70 shadow-surface",
+          "mb-3 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl border px-3 py-2",
+          "border-indigo-200/80 bg-indigo-50/70 shadow-surface",
           "dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:shadow-none",
         )}
         role="toolbar"
@@ -61,7 +61,7 @@ export default function BulkActions({
         <span className="flex items-center gap-x-2 pr-1 text-sm font-medium">
           <span
             className={cn(
-              "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5",
+              "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums",
               "bg-indigo-600 text-xs font-semibold text-white",
               "dark:bg-indigo-500",
             )}
@@ -75,11 +75,11 @@ export default function BulkActions({
         <span aria-hidden="true" className="h-5 w-px bg-indigo-200 dark:bg-indigo-500/30" />
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => setModal("tags")}>
-            <Tags className="h-4 w-4" />
+            <Tags className="h-4 w-4 shrink-0" />
             {t("machines.bulk.setTags")}
           </Button>
           <Button onClick={() => setModal("expire")}>
-            <CalendarClock className="h-4 w-4" />
+            <CalendarClock className="h-4 w-4 shrink-0" />
             {t("machines.bulk.setExpiry")}
           </Button>
           <Button
@@ -87,21 +87,22 @@ export default function BulkActions({
             onClick={() => setModal("move")}
             title={supportsNodeOwnerChange ? undefined : t("machines.bulk.errors.ownerUnsupported")}
           >
-            <UserRoundCog className="h-4 w-4" />
+            <UserRoundCog className="h-4 w-4 shrink-0" />
             {t("machines.bulk.changeOwner")}
           </Button>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button onClick={() => setModal("remove")} variant="danger">
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4 shrink-0" />
             {t("machines.bulk.delete")}
           </Button>
           <Button
             aria-label={t("machines.bulk.clearSelection")}
+            className="px-2"
             onClick={onClearSelection}
             variant="ghost"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4 shrink-0" />
           </Button>
         </div>
       </div>

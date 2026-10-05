@@ -26,9 +26,9 @@ import { useI18n } from "~/i18n/provider";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
 import RelayResolver from "~/routes/machines/components/relay-resolver";
 import {
-  relayFamilyVerdicts,
+  relayAddressLines,
   relayResolutionBlamesSystemResolver,
-  type RelayFamilyVerdict,
+  type RelayAddressLine,
 } from "~/routes/machines/relay-verdicts";
 import {
   agentsContext,
@@ -69,8 +69,6 @@ import {
   hasIpv6StunWarning,
   readExtraRecordsPath,
   type RelayReason,
-  relayAddressDisplay,
-  relayHostSummary,
   summarizeFleetTrend,
   tallyChecks,
   tallyEntries,
@@ -391,8 +389,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
   const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
-  const relayHost = relayHostSummary(derp.serverUrl);
-  const relayAddress = relayAddressDisplay(relayView.address?.rows, relayView.address?.reason);
 
   return {
     versions: {
@@ -422,17 +418,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       relay: {
         endpoint: relayView.host?.endpoint,
         host: relayView.host?.hostname,
-        hostSource: relayHost.source,
-        port: relayHost.port,
-        endpointReason: relayView.endpointReason,
-        address: relayAddress,
-        // Declared versus resolved, so the card says whether what derp.server
-        // advertises is what clients would actually reach. The verdicts are
-        // flattened to plain values here, because the card must not import a
-        // module that reaches Node-only code (see `./relay-verdicts`).
-        verdicts: relayFamilyVerdicts(relayView.address?.comparisons ?? []),
+        // One line per family: the address `derp.server` declares when it sets
+        // one, the lookup's own A/AAAA answer otherwise, so the card never asks
+        // an operator to compare a declared block against a resolved one. The
+        // lines are flattened to plain values here, because the card must not
+        // import a module that reaches Node-only code (see `./relay-verdicts`).
+        lines: relayAddressLines(derp.server, relayResolution),
         // Which resolver produced this answer, and whether this viewer may ask
-        // for a fresh one; the card shows both under the resolved addresses.
+        // for a fresh one; the card shows both under the addresses.
         resolution: relayResolution,
         canRefresh: auth.can(principal, Capabilities.configure_iam),
         suggestsConfigured: relayResolutionBlamesSystemResolver(relayResolution),
@@ -546,28 +539,38 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const configured = { tone: "neutral" as const, label: t("overview.status.configured") };
   const derived = { tone: "neutral" as const, label: t("overview.status.derived") };
   const relayReason = (reason: RelayReason) => t(RELAY_REASON_KEYS[reason]);
-  const relayVerdictOf = (family: RelayAddressFamily) =>
-    derp.relay.verdicts.find((entry) => entry.family === family);
+  const relayFamilyLabel = (family: RelayAddressLine["family"]) =>
+    family === "ipv4" ? t("overview.derp.relayIpv4") : t("overview.derp.relayIpv6");
+  const relayDeclaredMarker = {
+    tone: "neutral" as const,
+    label: t("overview.derp.relayDeclaredMarker"),
+  };
 
   /**
    * What a declared relay address and the resolved records say to each other.
-   * A match or a missing record with nothing declared says nothing worth a
-   * line: the row already shows what resolved (or why nothing did).
+   * The line builder already dropped a bare match, which only repeats the
+   * address it sits under, so what is left says something the line cannot.
    *
-   * The verdict itself is prepared by the loader, so this never imports the
-   * server relay module. `host` is the resolved hostname, so a hint can quote
-   * the exact `dig` command an operator has to run instead of describing it.
+   * `host` is the resolved hostname, so a hint can quote the exact `dig`
+   * command an operator has to run instead of describing it.
    */
-  const relayVerdictNote = (entry: RelayFamilyVerdict | undefined, host: string | undefined) => {
-    if (entry?.verdict === undefined) {
+  const relayVerdictNote = (line: RelayAddressLine, host: string | undefined) => {
+    const verdict = line.verdict;
+    if (verdict === undefined || line.addresses.length === 0) {
       return undefined;
     }
 
-    const address = entry.declared ?? "";
-    const note = t(RELAY_VERDICT_KEYS[entry.verdict], { address });
-    const fix = RELAY_FIX_KEYS[entry.family][entry.verdict];
+    const address = line.addresses[0] ?? "";
+    const note = t(RELAY_VERDICT_KEYS[verdict], { address });
+    const fix = RELAY_FIX_KEYS[line.family][verdict];
     return fix === undefined ? note : `${note} · ${t(fix, { host: host ?? "", address })}`;
   };
+
+  /** The one short line a family with nothing to print reads as. */
+  const relayLineText = (line: RelayAddressLine) =>
+    line.verdict === undefined
+      ? relayReason(line.reason ?? "unavailable")
+      : t(RELAY_VERDICT_KEYS[line.verdict], { address: "" });
 
   return (
     <SettingsPage
@@ -724,88 +727,42 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }
             title={t("overview.derp.publicTitle")}
           >
-            <FactGroup
-              title={t("overview.status.resolved")}
-              note={t("overview.derp.relayResolvedNote")}
-            >
+            <Facts>
               <Fact
                 code
-                label={t("overview.derp.relayHostname")}
-                note={
-                  derp.relay.hostSource === "literal"
-                    ? t("overview.derp.relayLiteralNote")
-                    : t("overview.derp.relayHostnameNote")
-                }
-                {...textOrReason(
-                  derp.relay.host,
-                  derp.relay.endpointReason
-                    ? relayReason(derp.relay.endpointReason)
-                    : t("overview.derp.relayReasonUnavailable"),
-                )}
+                label={t("overview.derp.relayClientAddress")}
+                {...textOrReason(derp.relay.endpoint, t("overview.derp.publicUnavailable"))}
               />
-              <Fact
-                code
-                label={t("overview.derp.relayPort")}
-                note={t("overview.derp.relayPortNote")}
-                {...textOrReason(derp.relay.port, reason.notConfigured)}
-              />
-              <Fact
-                code
-                label={t("overview.derp.relayResolvedIpv4")}
-                note={relayVerdictNote(relayVerdictOf("ipv4"), derp.relay.host)}
-                {...textOrReason(
-                  derp.relay.address.ipv4,
-                  relayReason(derp.relay.address.ipv4Reason ?? "unavailable"),
-                )}
-              />
-              <Fact
-                code
-                label={t("overview.derp.relayResolvedIpv6")}
-                note={relayVerdictNote(relayVerdictOf("ipv6"), derp.relay.host)}
-                {...textOrReason(
-                  derp.relay.address.ipv6,
-                  relayReason(derp.relay.address.ipv6Reason ?? "unavailable"),
-                )}
-              />
-            </FactGroup>
+              {derp.relay.lines.map((line) => (
+                <Fact
+                  key={line.family}
+                  label={relayFamilyLabel(line.family)}
+                  note={relayVerdictNote(line, derp.relay.host)}
+                  source={line.source === "declared" ? relayDeclaredMarker : undefined}
+                >
+                  {line.addresses.length > 0 ? (
+                    <span className="flex flex-col gap-0.5 sm:items-end">
+                      {line.addresses.map((address) => (
+                        <Code key={address}>{address}</Code>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-mist-500 dark:text-mist-400">
+                      {relayLineText(line)}
+                    </span>
+                  )}
+                </Fact>
+              ))}
+              {derp.stunListenAddr ? (
+                <Fact code label={t("overview.derp.stun")} text={derp.stunListenAddr} />
+              ) : undefined}
+            </Facts>
 
             <RelayResolver
               canRefresh={derp.relay.canRefresh}
               resolution={derp.relay.resolution}
               suggestsConfigured={derp.relay.suggestsConfigured}
             />
-
-            <FactGroup
-              title={t("overview.status.configured")}
-              note={t("overview.derp.declaredNote")}
-            >
-              <Fact
-                code
-                label={t("overview.derp.declaredIpv4")}
-                {...textOrReason(declaredAddress(derp.declared, "ipv4"), reason.notConfigured)}
-              />
-              <Fact
-                code
-                label={t("overview.derp.declaredIpv6")}
-                note={t("overview.derp.declaredNote")}
-                {...textOrReason(declaredAddress(derp.declared, "ipv6"), reason.notConfigured)}
-              />
-              <Fact
-                code
-                label={t("overview.derp.stun")}
-                note={t("overview.derp.stunNote")}
-                {...textOrReason(derp.stunListenAddr, reason.notConfigured)}
-              />
-            </FactGroup>
-
-            <FactGroup title={t("overview.status.derived")}>
-              <Fact
-                code
-                label={t("overview.derp.publicEndpoint")}
-                note={t("overview.derp.publicEndpointNote")}
-                {...textOrReason(derp.relay.endpoint, t("overview.derp.publicUnavailable"))}
-              />
-            </FactGroup>
 
             {derp.ipv6StunWarning ? (
               <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
@@ -1118,28 +1075,6 @@ function Card({ icon: Icon, title, description, status, children }: CardProps) {
 function Facts({ children }: { children: ReactNode }) {
   return (
     <dl className="flex flex-col divide-y divide-mist-100 dark:divide-mist-800/60">{children}</dl>
-  );
-}
-
-/** A labelled sub-section of facts, for a card that mixes two sources. */
-function FactGroup({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  /** One line under the heading, e.g. where these values come from. */
-  note?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-1">
-      <h3 className="text-xs font-medium tracking-wide text-mist-500 uppercase dark:text-mist-400">
-        {title}
-      </h3>
-      {note ? <p className="text-xs text-mist-500 dark:text-mist-400">{note}</p> : undefined}
-      <Facts>{children}</Facts>
-    </section>
   );
 }
 

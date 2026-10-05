@@ -48,7 +48,7 @@ export function HistoryBar({ columns, label, className }: HistoryBarProps) {
           {column.fill === undefined ? undefined : (
             <span
               className={cn(
-                "absolute inset-x-0 bottom-0",
+                "absolute inset-x-0 bottom-0 transition-[height] duration-200 ease-out",
                 column.tone === "online" ? "bg-emerald-500" : "bg-mist-400 dark:bg-mist-600",
               )}
               style={{ height: `${Math.round(clamp(column.fill) * 100)}%` }}

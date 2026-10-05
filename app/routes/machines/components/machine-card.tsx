@@ -37,7 +37,7 @@ export default function MachineCard({
     <section
       className={cn(
         "flex min-w-0 flex-col overflow-hidden rounded-xl border bg-white",
-        "dark:bg-mist-950/40",
+        "dark:bg-mist-900",
         isDanger ? "border-red-200 dark:border-red-500/30" : "border-mist-200 dark:border-mist-800",
         className,
       )}
@@ -55,7 +55,7 @@ export default function MachineCard({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-medium">{title}</h2>
+            <h2 className="leading-snug font-medium text-mist-900 dark:text-mist-50">{title}</h2>
             {status}
           </div>
           {description ? (
@@ -64,7 +64,7 @@ export default function MachineCard({
         </div>
         {action ? <div className="shrink-0">{action}</div> : undefined}
       </header>
-      <div className="min-w-0 flex-1 border-t border-mist-100 px-3.5 py-3 dark:border-mist-800">
+      <div className="min-w-0 flex-1 border-t border-mist-100 px-3.5 py-3 dark:border-mist-800/80">
         {children}
       </div>
     </section>

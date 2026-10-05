@@ -10,15 +10,18 @@
 // The relay cards therefore take plain, serializable values that their loaders
 // prepare here. This module is **loader-only**: importing its functions from a
 // component would drag the server relay module back into the client bundle.
-// Components import the `RelayFamilyVerdict` *type* only, which is erased.
+// Components import the `RelayAddressLine` *type* only, which is erased.
 
 import {
+  compareRelayAddresses,
   relayResolutionSuggestsConfiguredResolver,
   relayVerdictIsNoteworthy,
   type RelayAddressComparison,
   type RelayAddressFamily,
   type RelayAddressVerdict,
+  type RelayDeclaredAddresses,
   type RelayResolution,
+  type RelayResolutionReason,
 } from "~/server/relay-dns";
 
 /** One family's declared-versus-resolved verdict, as a card prints it. */
@@ -59,4 +62,77 @@ export function relayResolutionBlamesSystemResolver(
     relayResolutionSuggestsConfiguredResolver(resolution, "ipv4") ||
     relayResolutionSuggestsConfiguredResolver(resolution, "ipv6")
   );
+}
+
+/** Why a family has no address to print, including a lookup that never ran. */
+export type RelayFamilyReason = RelayResolutionReason | "unavailable";
+
+/** Which of the two sources a printed address came from. */
+export type RelayAddressSource = "declared" | "resolved" | "none";
+
+/**
+ * One address family as a card prints it: a single line, from a single source.
+ *
+ * The two cards used to list the declared addresses and the resolved ones side
+ * by side, which made an operator compare two blocks to answer one question.
+ * Instead the declared address wins whenever `derp.server` sets one, and the
+ * lookup answers for the families it does not; `source` is what a card needs to
+ * mark the value it is showing.
+ *
+ * `verdict` and `reason` are mutually exclusive, and each is only set when the
+ * card will print it: a verdict under an address that cannot say it itself
+ * (never a bare "matches", which repeats the address it sits under), and a
+ * reason as the whole line when the family has nothing to show.
+ */
+export interface RelayAddressLine {
+  family: RelayAddressFamily;
+  /** The addresses to print, in order; empty when neither source has one. */
+  addresses: string[];
+  source: RelayAddressSource;
+  verdict?: RelayAddressVerdict;
+  reason?: RelayFamilyReason;
+}
+
+/**
+ * Both address families as one line each: `derp.server`'s address when it is
+ * set, the hostname's own A/AAAA answer otherwise, and a short reason when
+ * neither exists.
+ */
+export function relayAddressLines(
+  declared: RelayDeclaredAddresses | undefined,
+  resolution: RelayResolution | undefined,
+): RelayAddressLine[] {
+  return compareRelayAddresses(declared, resolution).map((comparison) => {
+    // A match says nothing the address does not: the line already shows the
+    // value both sources agree on. Every other verdict answers a question the
+    // line cannot, so it is kept.
+    const verdict =
+      comparison.verdict !== "matches" && relayVerdictIsNoteworthy(comparison)
+        ? comparison.verdict
+        : undefined;
+    const declaredValue = comparison.declared;
+    const addresses = declaredValue === undefined ? [...comparison.resolved] : [declaredValue];
+    const source: RelayAddressSource =
+      declaredValue !== undefined
+        ? "declared"
+        : comparison.resolved.length > 0
+          ? "resolved"
+          : "none";
+
+    if (addresses.length > 0) {
+      return {
+        family: comparison.family,
+        addresses,
+        source,
+        ...(verdict === undefined ? {} : { verdict }),
+      };
+    }
+
+    return {
+      family: comparison.family,
+      addresses: [],
+      source,
+      ...(verdict === undefined ? { reason: resolution?.reason ?? "unavailable" } : { verdict }),
+    };
+  });
 }

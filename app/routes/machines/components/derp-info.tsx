@@ -1,6 +1,7 @@
 import { Radio } from "lucide-react";
 
 import Link from "~/components/link";
+import { SettingsStatus } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
@@ -8,7 +9,6 @@ import {
   type RelayAddressVerdict,
   type RelayHostView,
   type RelayResolution,
-  type RelayResolutionReason,
 } from "~/server/relay-dns";
 import type { HostInfo } from "~/types";
 import cn from "~/utils/cn";
@@ -22,7 +22,7 @@ import {
   type DerpRegionLabel,
   type DerpRegionNames,
 } from "../derp-info";
-import { type RelayFamilyVerdict } from "../relay-verdicts";
+import { type RelayAddressLine, type RelayFamilyReason } from "../relay-verdicts";
 import MachineAttribute from "./attribute";
 import MachineCard from "./machine-card";
 import RelayResolver from "./relay-resolver";
@@ -42,8 +42,8 @@ interface DerpInfoProps {
   relay: RelayHostView | undefined;
   /** The relay hostname's A and AAAA records, when the lookup ran. */
   relayResolution: RelayResolution | undefined;
-  /** Per-family declared-versus-resolved verdicts, prepared by the loader. */
-  relayVerdicts: readonly RelayFamilyVerdict[];
+  /** Per-family address lines, prepared by the loader. */
+  relayLines: readonly RelayAddressLine[];
   /** Whether an empty family is only the host's own resolver speaking. */
   relaySuggestsConfigured: boolean;
 }
@@ -53,13 +53,14 @@ function markedLabel(label: DerpRegionLabel, marker: string) {
   return label.isEmbedded ? `${label.label} (${marker})` : label.label;
 }
 
-/** Why the relay hostname has no address, as a short clause after the em dash. */
-const RELAY_UNAVAILABLE_KEYS: Record<RelayResolutionReason, TranslationKey> = {
+/** Why a family has no address, as the one short line its row reads as. */
+const RELAY_REASON_KEYS: Record<RelayFamilyReason, TranslationKey> = {
   "no-records": "machines.detail.derp.relayReasonNoRecords",
   timeout: "machines.detail.derp.relayReasonTimeout",
   "resolver-error": "machines.detail.derp.relayReasonResolverError",
   "host-missing": "machines.detail.derp.relayReasonHostMissing",
   "invalid-host": "machines.detail.derp.relayReasonInvalidHost",
+  unavailable: "machines.detail.derp.relayResolvedUnavailable",
 };
 
 /** What the declared address and the resolved records say to each other. */
@@ -88,23 +89,24 @@ const RELAY_FIX_KEYS: Record<
 };
 
 /**
- * The declared-versus-resolved verdict under one resolved address row.
+ * The verdict printed under one address line: only what the address cannot say
+ * itself, so a family the lookup merely confirmed is never announced twice.
  *
  * The verdict is prepared by the loader, so the client bundle never imports the
  * server relay module that decides it. `host` is the resolved hostname, so a
  * hint can quote the exact `dig` command an operator has to run instead of
  * describing it.
  */
-function RelayVerdict({ entry, host }: { entry: RelayFamilyVerdict | undefined; host?: string }) {
+function RelayVerdict({ line, host }: { line: RelayAddressLine; host?: string }) {
   const { t } = useI18n();
-  if (entry?.verdict === undefined) {
+  if (line.verdict === undefined || line.addresses.length === 0) {
     return undefined;
   }
 
-  const verdict = entry.verdict;
-  const fix = RELAY_FIX_KEYS[entry.family][verdict];
+  const verdict = line.verdict;
+  const fix = RELAY_FIX_KEYS[line.family][verdict];
   const needsAttention = verdict === "declared-but-not-resolved" || verdict === "no-records";
-  const address = entry.declared ?? "";
+  const address = line.addresses[0] ?? "";
 
   return (
     <span
@@ -137,7 +139,7 @@ export default function DerpInfo({
   stats,
   relay,
   relayResolution,
-  relayVerdicts,
+  relayLines,
   relaySuggestsConfigured,
 }: DerpInfoProps) {
   const { t } = useI18n();
@@ -152,32 +154,16 @@ export default function DerpInfo({
     )
     .join("\n");
 
-  // One reason per hostname: the resolver reports why neither family produced an
-  // address, and only one of the two can ever explain the other's absence.
-  const relayUnavailable =
-    relayResolution === undefined || relayResolution.reason === undefined
-      ? t("machines.detail.derp.relayResolvedUnavailable")
-      : t(RELAY_UNAVAILABLE_KEYS[relayResolution.reason]);
+  // Both families are one line each, exactly as the loader prepared them: the
+  // address `derp.server` declares when it sets one, the lookup's own answer
+  // otherwise, and — when neither exists — the single short reason why.
+  const familyLabel = (family: RelayAddressLine["family"]) =>
+    family === "ipv4" ? t("machines.detail.derp.relayIpv4") : t("machines.detail.derp.relayIpv6");
 
-  // One verdict per family: what `derp.server` declares against what the
-  // hostname actually resolves to, so an empty row always says why it is empty.
-  // The loader prepared them, because the rule lives in a server module.
-  const relayRows: {
-    label: string;
-    addresses: string[];
-    verdict: RelayFamilyVerdict | undefined;
-  }[] = [
-    {
-      label: t("machines.detail.derp.relayResolvedIpv4"),
-      addresses: relayResolution?.ipv4 ?? [],
-      verdict: relayVerdicts.find((entry) => entry.family === "ipv4"),
-    },
-    {
-      label: t("machines.detail.derp.relayResolvedIpv6"),
-      addresses: relayResolution?.ipv6 ?? [],
-      verdict: relayVerdicts.find((entry) => entry.family === "ipv6"),
-    },
-  ];
+  const emptyLine = (line: RelayAddressLine) =>
+    line.verdict === undefined
+      ? t(RELAY_REASON_KEYS[line.reason ?? "unavailable"])
+      : t(RELAY_VERDICT_KEYS[line.verdict], { address: line.addresses[0] ?? "" });
 
   const embeddedNote = (
     <p className="text-sm text-mist-600 dark:text-mist-400">
@@ -208,22 +194,23 @@ export default function DerpInfo({
         </span>
         {relay ? (
           <div className="flex flex-col gap-1.5">
+            <RelayLine
+              label={t("machines.detail.derp.relayClientAddress")}
+              value={relay.endpoint}
+            />
             <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-2">
-              <RelayLine label={t("machines.detail.derp.relayHostname")} value={relay.hostname} />
-              <RelayLine label={t("machines.detail.derp.relayPort")} value={String(relay.port)} />
-            </div>
-            <p className="text-xs text-mist-500 dark:text-mist-400">
-              {t("machines.detail.derp.relayResolvedNote")}
-            </p>
-            <span className="text-xs font-medium tracking-wide text-mist-500 uppercase dark:text-mist-400">
-              {t("machines.detail.derp.relayResolvedTitle")}
-            </span>
-            <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-2">
-              {relayRows.map((row) => (
-                <div className="flex flex-col gap-0.5" key={row.label}>
-                  <span className="text-xs text-mist-500 dark:text-mist-400">{row.label}</span>
-                  {row.addresses.length > 0 ? (
-                    row.addresses.map((address) => (
+              {relayLines.map((line) => (
+                <div className="flex flex-col gap-0.5" key={line.family}>
+                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-mist-500 dark:text-mist-400">
+                    {familyLabel(line.family)}
+                    {line.source === "declared" ? (
+                      <SettingsStatus tone="neutral">
+                        {t("machines.detail.derp.relayDeclaredMarker")}
+                      </SettingsStatus>
+                    ) : undefined}
+                  </span>
+                  {line.addresses.length > 0 ? (
+                    line.addresses.map((address) => (
                       <span
                         className="font-mono text-xs break-all text-mist-900 dark:text-mist-50"
                         key={address}
@@ -233,10 +220,10 @@ export default function DerpInfo({
                     ))
                   ) : (
                     <span className="text-xs text-mist-500 dark:text-mist-400">
-                      {relayUnavailable}
+                      {emptyLine(line)}
                     </span>
                   )}
-                  <RelayVerdict entry={row.verdict} host={relayResolution?.host} />
+                  <RelayVerdict host={relayResolution?.host} line={line} />
                 </div>
               ))}
             </div>

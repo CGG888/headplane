@@ -44,8 +44,10 @@ export default function MachineAttribute({
   };
 
   return (
-    <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-start gap-x-3 py-1.5 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
-      <dt className="flex items-start gap-x-1 pt-1 text-mist-600 dark:text-mist-400">
+    // Baseline alignment keeps the label and the first line of the value on one
+    // line even though the copyable value carries its own padding.
+    <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-3 py-1.5 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
+      <dt className="flex items-start gap-x-1 text-mist-600 dark:text-mist-400">
         <span className="min-w-0">{name}</span>
         {tooltip ? (
           <Tooltip content={tooltip}>
@@ -59,7 +61,8 @@ export default function MachineAttribute({
             className={cn(
               "group/copy flex w-full min-w-0 items-center gap-x-1.5 rounded-md px-1.5 py-1 text-left",
               "transition-colors hover:bg-mist-100/70 dark:hover:bg-mist-800/70",
-              "focus:outline-hidden focus:ring-2 focus:ring-indigo-500/40",
+              "focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:outline-hidden",
+              "dark:focus-visible:ring-indigo-400/40",
             )}
             onClick={handleCopy}
             title={value}
@@ -73,7 +76,7 @@ export default function MachineAttribute({
             )}
           </button>
         ) : (
-          <div className="px-1.5 py-1" title={value}>
+          <div className="min-w-0 px-1.5 py-1" title={value}>
             <AttributeValue isCode={isCode} value={value} />
           </div>
         )}

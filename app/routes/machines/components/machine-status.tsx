@@ -49,7 +49,9 @@ export default function MachineStatus({
   const state = machineState(node);
 
   return (
-    <span className={cn("inline-flex items-center gap-x-1.5", className)}>
+    // One fixed dot column plus a left-aligned chip: every row's status starts
+    // at the same x, so the column reads top to bottom at a glance.
+    <span className={cn("inline-flex min-w-0 items-center gap-x-2 whitespace-nowrap", className)}>
       <span aria-hidden="true" className={cn("h-2 w-2 shrink-0 rounded-full", STATE_DOTS[state])} />
       <SettingsStatus tone={STATE_TONES[state]}>{t(STATE_LABEL_KEYS[state])}</SettingsStatus>
     </span>

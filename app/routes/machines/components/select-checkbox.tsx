@@ -37,9 +37,12 @@ export default function SelectCheckbox({
       aria-label={ariaLabel}
       checked={checked}
       className={cn(
-        "h-4 w-4 cursor-pointer rounded border-mist-300 accent-indigo-500",
-        "focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1",
-        "dark:border-mist-600 dark:focus:ring-indigo-400/40 dark:focus:ring-offset-mist-900",
+        "h-4 w-4 shrink-0 cursor-pointer rounded-[4px] border-mist-300 accent-indigo-500",
+        "transition-colors duration-100",
+        // The ring is keyboard-only: a pointer click on the box should not leave
+        // a halo behind on the row it just selected.
+        "focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-1",
+        "dark:border-mist-600 dark:focus-visible:ring-indigo-400/40 dark:focus-visible:ring-offset-mist-900",
         "disabled:cursor-not-allowed disabled:opacity-40",
         className,
       )}

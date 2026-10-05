@@ -47,7 +47,14 @@ export default function MachineMenu({
   const supportsTailscaleSSH = node.hostInfo?.sshHostKeys && node.hostInfo?.sshHostKeys.length > 0;
 
   return (
-    <div className="flex items-center justify-end gap-1.5 px-4">
+    <div
+      className={cn(
+        "flex items-center justify-end gap-1.5",
+        // In the list the cell is narrow, so the quick actions anchor to it
+        // instead of padding themselves out of the column.
+        isFullButton ? "px-4" : "relative px-0",
+      )}
+    >
       {modal === "remove" && (
         <Delete
           isOpen={modal === "remove"}
@@ -125,11 +132,18 @@ export default function MachineMenu({
             <p>{t("machines.menu.ssh")}</p>
           </Button>
         ) : (
+          // The list row is too narrow to hold this button in flow: floating it
+          // over the row keeps every row the same height and keeps the icon
+          // column from overflowing into its neighbour.
           <Button
             className={cn(
-              "py-0.5 rounded-lg",
-              "opacity-0 pointer-events-none group-hover:opacity-100",
-              "group-hover:pointer-events-auto",
+              "absolute top-1/2 right-11 -translate-y-1/2",
+              "rounded-md px-2 py-1 text-xs whitespace-nowrap",
+              "shadow-surface dark:shadow-none",
+              "pointer-events-none opacity-0 transition-opacity duration-100",
+              "group-hover:pointer-events-auto group-hover:opacity-100",
+              "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+              "focus-visible:pointer-events-auto focus-visible:opacity-100",
             )}
             variant="light"
             onClick={() => {
@@ -149,7 +163,7 @@ export default function MachineMenu({
           className={
             isFullButton
               ? "gap-x-2 rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50"
-              : "w-10 rounded-full bg-transparent p-1 hover:bg-mist-100 dark:hover:bg-mist-800"
+              : "w-10 rounded-full bg-transparent p-1 text-mist-500 transition-colors hover:bg-mist-100 hover:text-mist-700 dark:text-mist-400 dark:hover:bg-mist-800 dark:hover:text-mist-200"
           }
         >
           {isFullButton ? (

@@ -1,4 +1,4 @@
-﻿import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import type { JSX } from "react";
 
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "~/components/menu";
@@ -22,6 +22,14 @@ const ROUTE_OPTIONS = [
   { value: "subnet", labelKey: "machines.filters.subnetRouter" },
 ] as const satisfies ReadonlyArray<{ value: string; labelKey: TranslationKey }>;
 
+/**
+ * Every control in the filter row shares one box: the search field's padding and
+ * border produce the same 2.375rem height, so the row sits on one baseline
+ * instead of stepping between pill and input sizes.
+ */
+const CONTROL =
+  "inline-flex items-center gap-x-1.5 rounded-md border px-3 py-2 text-sm leading-5 font-medium";
+
 function FilterDropdown({
   label,
   value,
@@ -41,16 +49,32 @@ function FilterDropdown({
     <Menu>
       <MenuTrigger
         className={cn(
-          "px-3 py-1.5 rounded-full text-sm font-medium",
-          "border transition-colors",
-          "flex items-center gap-1.5",
+          CONTROL,
+          "transition-colors duration-100",
           isActive
-            ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-            : "border-mist-200 dark:border-mist-700 text-mist-700 dark:text-mist-300 hover:border-mist-300 dark:hover:border-mist-600",
+            ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300"
+            : cn(
+                "border-mist-200 bg-white text-mist-700",
+                "hover:border-mist-300 hover:bg-mist-50",
+                "dark:border-mist-800 dark:bg-mist-900 dark:text-mist-300",
+                "dark:hover:border-mist-700 dark:hover:bg-mist-800/60",
+              ),
         )}
       >
-        {activeOption?.label ?? label}
-        <ChevronDown className="h-3.5 w-3.5" />
+        {/* A filled dot marks an applied filter without hiding which one it is. */}
+        {isActive ? (
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500 dark:bg-indigo-400"
+          />
+        ) : undefined}
+        <span className="truncate">{activeOption?.label ?? label}</span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-colors",
+            isActive ? "text-indigo-500 dark:text-indigo-400" : "text-mist-400 dark:text-mist-500",
+          )}
+        />
       </MenuTrigger>
       <MenuContent>
         {options.map((option) => (
@@ -145,19 +169,23 @@ export function MachineFilters({ users, populatedNodes }: MachineFiltersProps): 
         }))}
         value={filterRoute}
       />
+      {/* The reset stays a visible control rather than a hidden gesture, so the
+          way back to the full list is always one click away. */}
       {hasActiveFilters && (
         <button
           className={cn(
-            "flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium",
-            "border border-mist-200 dark:border-mist-700",
-            "text-mist-600 dark:text-mist-400",
-            "hover:border-mist-300 dark:hover:border-mist-600",
+            CONTROL,
+            "border-transparent bg-transparent text-mist-500",
+            "hover:bg-mist-100 hover:text-mist-900",
+            "dark:text-mist-400 dark:hover:bg-mist-800/60 dark:hover:text-mist-100",
+            "focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:outline-hidden",
+            "dark:focus-visible:ring-indigo-400/40",
           )}
           onClick={clearFilters}
           type="button"
         >
           {t("machines.filters.clearFilters")}
-          <X className="h-3.5 w-3.5" />
+          <X className="h-3.5 w-3.5 shrink-0" />
         </button>
       )}
     </>

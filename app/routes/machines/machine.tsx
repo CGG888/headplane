@@ -51,7 +51,7 @@ import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
 import { machineAction } from "./machine-actions";
-import { relayFamilyVerdicts, relayResolutionBlamesSystemResolver } from "./relay-verdicts";
+import { relayAddressLines, relayResolutionBlamesSystemResolver } from "./relay-verdicts";
 import { shouldRevalidateMachines } from "./should-revalidate";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -113,10 +113,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   const derp = headscaleConfig.getDERPSettings();
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
   const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
-  // The declared addresses join the view so each family can say whether what
-  // `derp.server` advertises is what clients would actually reach. The card
-  // receives the finished verdicts: it must never import a module that reaches
-  // Node-only code (see `./relay-verdicts`).
+  // The address lines join the declared addresses with the lookup, so each
+  // family reads as one line instead of a declared-versus-resolved pair. The
+  // card receives the finished lines: it must never import a module that
+  // reaches Node-only code (see `./relay-verdicts`).
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
   const relay = relayView.host;
 
@@ -142,7 +142,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
     relay,
     relayResolution,
-    relayVerdicts: relayFamilyVerdicts(relayView.address?.comparisons ?? []),
+    relayLines: relayAddressLines(derp.server, relayResolution),
     relaySuggestsConfigured: relayResolutionBlamesSystemResolver(relayResolution),
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
@@ -181,7 +181,7 @@ export default function Page({
     derpRegionNames,
     relay,
     relayResolution,
-    relayVerdicts,
+    relayLines,
     relaySuggestsConfigured,
     stats,
     existingTags,
@@ -520,9 +520,9 @@ export default function Page({
           canRefresh={canRefreshRelayDns}
           regionNames={derpRegionNames}
           relay={relay}
+          relayLines={relayLines}
           relayResolution={relayResolution}
           relaySuggestsConfigured={relaySuggestsConfigured}
-          relayVerdicts={relayVerdicts}
           server={derp.server}
           stats={stats}
         />
