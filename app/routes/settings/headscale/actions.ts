@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 import { data } from "react-router";
 
 import {
@@ -6,7 +8,9 @@ import {
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
+  snapshotContext,
 } from "~/server/context";
+import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
   readDerpRegionNames,
   removeDerpRegionName,
@@ -24,6 +28,7 @@ import {
   parseGoDurationSeconds,
   validateHaProbeSettings,
 } from "./advanced-settings";
+import type { DerpMapIssue } from "./derp-map-schema";
 import {
   defaultDerpPrivateKeyPath,
   isAbsoluteFilePath,
@@ -630,6 +635,59 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       return success();
     }
 
+    case "save_derp_map": {
+      // A local DERP map file is content Headscale reads at startup, so the
+      // server validates it the same way the editor does and refuses to write
+      // anything else. The submitted path is only matched against `derp.paths`;
+      // it can never name a file the operator did not configure.
+      const appConfig = context.get(appConfigContext);
+      const { paths } = headscaleConfig.getDERPSettings();
+      const configPath = appConfig?.headscale.config_path;
+      const result = await saveDerpMapFile({
+        configuredPaths: paths,
+        // Headscale resolves a relative derp.paths entry against its own config
+        // file, and the guard has to compare the same resolved path.
+        baseDir: configPath ? dirname(configPath) : undefined,
+        requestedPath: readField(formData, "path"),
+        content: formData.get("content")?.toString() ?? "",
+        snapshots: context.get(snapshotContext),
+      });
+
+      if (!result.ok) {
+        return failure(result.code, result.issues);
+      }
+
+      return data({
+        success: true,
+        snapshotId: result.snapshotId,
+        snapshotTaken: result.snapshotId !== undefined,
+      } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "restore_derp_map": {
+      // Rolling back writes a file too, so it goes through the same guard and
+      // the same atomic write; the snapshot it restores from was taken by
+      // Headplane before the write that is being undone.
+      const appConfig = context.get(appConfigContext);
+      const { paths } = headscaleConfig.getDERPSettings();
+      const configPath = appConfig?.headscale.config_path;
+      const result = await restoreDerpMapFile({
+        configuredPaths: paths,
+        baseDir: configPath ? dirname(configPath) : undefined,
+        requestedPath: readField(formData, "path"),
+        snapshots: context.get(snapshotContext),
+      });
+
+      if (!result.ok) {
+        return failure(result.code);
+      }
+
+      return data({
+        success: true,
+        snapshotId: result.snapshotId,
+      } satisfies HeadscaleSettingsSuccess);
+    }
+
     default: {
       return failure("invalidAction");
     }
@@ -661,8 +719,11 @@ function splitList(value: string): string[] {
   return [...new Set(value.split(/[\s,]+/).filter((entry) => entry.length > 0))];
 }
 
-function failure(errorCode: HeadscaleSettingsErrorCode) {
-  return data({ success: false, errorCode } satisfies HeadscaleSettingsFailure, { status: 400 });
+function failure(errorCode: HeadscaleSettingsErrorCode, issues?: DerpMapIssue[]) {
+  return data(
+    { success: false, errorCode, ...(issues ? { issues } : {}) } satisfies HeadscaleSettingsFailure,
+    { status: 400 },
+  );
 }
 
 function success() {

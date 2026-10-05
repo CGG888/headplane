@@ -1,5 +1,6 @@
 import type { TranslationKey } from "~/i18n";
 
+import type { DerpMapIssue, DerpMapIssueCode } from "./derp-map-schema";
 import type { OidcSelfTestReport } from "./oidc-self-test";
 
 /**
@@ -46,7 +47,15 @@ export type HeadscaleSettingsErrorCode =
   | "duplicateOidcExtraParam"
   | "invalidHaProbeInterval"
   | "invalidHaProbeTimeout"
-  | "invalidHaProbeCombination";
+  | "invalidHaProbeCombination"
+  | "invalidDerpMapPath"
+  | "derpMapPathNotConfigured"
+  | "derpMapTooLarge"
+  | "derpMapInvalid"
+  | "derpMapUnavailable"
+  | "derpMapNotWritable"
+  | "derpMapWriteFailed"
+  | "derpMapNoSnapshot";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -88,17 +97,70 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidHaProbeInterval: "settings.headscale.errors.invalidHaProbeInterval",
   invalidHaProbeTimeout: "settings.headscale.errors.invalidHaProbeTimeout",
   invalidHaProbeCombination: "settings.headscale.errors.invalidHaProbeCombination",
+  invalidDerpMapPath: "settings.headscale.errors.invalidDerpMapPath",
+  derpMapPathNotConfigured: "settings.headscale.errors.derpMapPathNotConfigured",
+  derpMapTooLarge: "settings.headscale.errors.derpMapTooLarge",
+  derpMapInvalid: "settings.headscale.errors.derpMapInvalid",
+  derpMapUnavailable: "settings.headscale.errors.derpMapUnavailable",
+  derpMapNotWritable: "settings.headscale.errors.derpMapNotWritable",
+  derpMapWriteFailed: "settings.headscale.errors.derpMapWriteFailed",
+  derpMapNoSnapshot: "settings.headscale.errors.derpMapNoSnapshot",
 };
 
 export interface HeadscaleSettingsSuccess {
   success: true;
   /** Present only for the read-only `test_oidc` action. */
   selfTest?: OidcSelfTestReport;
+  /** Present after a DERP map save: the snapshot taken before the write. */
+  snapshotId?: string;
+  /** Whether a snapshot of the previous content was taken at all. */
+  snapshotTaken?: boolean;
 }
 
 export interface HeadscaleSettingsFailure {
   success: false;
   errorCode: HeadscaleSettingsErrorCode;
+  /**
+   * Structural problems of a rejected DERP map file. The server never sends
+   * prose: each entry is a stable code plus the position the parser reported,
+   * and the browser localizes it.
+   */
+  issues?: DerpMapIssue[];
 }
 
 export type HeadscaleSettingsResult = HeadscaleSettingsSuccess | HeadscaleSettingsFailure;
+
+/**
+ * Every structural problem a DERP map file can have, mapped onto the localized
+ * sentence the editor shows. The server only ever sends the code and the
+ * position, so the wording lives in the catalogs.
+ */
+export const DERP_MAP_ISSUE_KEYS: Record<DerpMapIssueCode, TranslationKey> = {
+  yamlSyntax: "settings.headscale.derp.mapIssues.yamlSyntax",
+  derpMapTooLarge: "settings.headscale.derp.mapIssues.derpMapTooLarge",
+  derpMapInvalidRoot: "settings.headscale.derp.mapIssues.derpMapInvalidRoot",
+  derpMapMissingRegions: "settings.headscale.derp.mapIssues.derpMapMissingRegions",
+  derpMapInvalidRegions: "settings.headscale.derp.mapIssues.derpMapInvalidRegions",
+  derpRegionInvalid: "settings.headscale.derp.mapIssues.derpRegionInvalid",
+  derpRegionMissingId: "settings.headscale.derp.mapIssues.derpRegionMissingId",
+  derpRegionInvalidId: "settings.headscale.derp.mapIssues.derpRegionInvalidId",
+  derpRegionMissingCode: "settings.headscale.derp.mapIssues.derpRegionMissingCode",
+  derpRegionMissingName: "settings.headscale.derp.mapIssues.derpRegionMissingName",
+  derpRegionMissingNodes: "settings.headscale.derp.mapIssues.derpRegionMissingNodes",
+  derpRegionInvalidNodes: "settings.headscale.derp.mapIssues.derpRegionInvalidNodes",
+  derpRegionDuplicateId: "settings.headscale.derp.mapIssues.derpRegionDuplicateId",
+  derpRegionDuplicateCode: "settings.headscale.derp.mapIssues.derpRegionDuplicateCode",
+  derpNodeInvalid: "settings.headscale.derp.mapIssues.derpNodeInvalid",
+  derpNodeMissingName: "settings.headscale.derp.mapIssues.derpNodeMissingName",
+  derpNodeMissingHostname: "settings.headscale.derp.mapIssues.derpNodeMissingHostname",
+  derpNodeMissingRegionId: "settings.headscale.derp.mapIssues.derpNodeMissingRegionId",
+  derpNodeInvalidRegionId: "settings.headscale.derp.mapIssues.derpNodeInvalidRegionId",
+  derpNodeRegionMismatch: "settings.headscale.derp.mapIssues.derpNodeRegionMismatch",
+  derpNodeInvalidDerpPort: "settings.headscale.derp.mapIssues.derpNodeInvalidDerpPort",
+  derpNodeInvalidStunPort: "settings.headscale.derp.mapIssues.derpNodeInvalidStunPort",
+  derpNodeInvalidIpv4: "settings.headscale.derp.mapIssues.derpNodeInvalidIpv4",
+  derpNodeInvalidIpv6: "settings.headscale.derp.mapIssues.derpNodeInvalidIpv6",
+  derpNodeInvalidStunOnly: "settings.headscale.derp.mapIssues.derpNodeInvalidStunOnly",
+};
+
+export type { DerpMapIssue };

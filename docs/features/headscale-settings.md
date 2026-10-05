@@ -18,6 +18,9 @@ nothing is buried in one long scroll and nothing is hidden behind a panel.
 - Headscale's configuration file must be mounted **read-write** into Headplane
   and `headscale.config_path` must point at it. Without it Headplane can neither
   show nor save these values (see [Network Management](/install/docker#network-management)).
+- To edit the local DERP map files (`derp.paths`) from the DERP tab, the
+  directory holding them must be mounted **read-write** too; see
+  [Editing local DERP map files](#editing-local-derp-map-files).
 - Headscale reads most of this at startup, so changes only take effect after the
   Headscale process restarts. With the process integration enabled Headplane asks
   it to reload or restart for you.
@@ -110,9 +113,75 @@ edits how that map is used:
 | Setting                                              | What it does                                                                                                                                                                                                                                                    |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                  |
-| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk.                                                                                                                                                                                                       |
+| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry can also be viewed and edited right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                                                               |
 | `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
 | `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
+
+### Editing local DERP map files
+
+Each path in `derp.paths` is a map file Headscale merges at startup, and the DERP
+tab edits them in place. Every configured path gets its own row:
+
+| Action                  | What it does                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **View**                | Read-only rendering with a line-number gutter and light YAML colouring. Nothing is written.                                 |
+| **Edit**                | An editor that validates while you type, with the same rules the server enforces before it writes anything.                 |
+| **Save**                | Validates on the server, snapshots the current file, then replaces it atomically (temp file + rename in the same directory). |
+| **Roll back**           | Restores the snapshot taken before the last write, and snapshots the content it replaces first.                             |
+| **Create from example** | Loads one of three fully commented templates into the editor; nothing is written until you save.                            |
+
+A row also lists what Headplane found on disk: whether the file exists, is
+readable, is writable, parses, is a valid DERP map, and keeps its region ids and
+codes unique. A path this container cannot see at all is reported as **cannot
+check**, exactly like the rest of the configuration checks, because a missing bind
+mount is not a broken map.
+
+Nothing is written unless the path is **already listed in `derp.paths`**: the
+request may only name one of those entries, the path has to be absolute, and a
+`..` segment is refused. Files larger than **256 KiB** are neither loaded into the
+editor nor written.
+
+::: warning The map directory has to be mounted read-write
+Editing writes through the mount the container was given, so the directory holding
+the maps has to be shared **read-write**. Share only that directory rather than the
+whole Headscale data directory:
+
+```yaml
+volumes:
+  - "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"
+```
+
+With a read-only mount **View** still works while every save reports that the
+container cannot write the path. Headscale itself has to be able to read these
+files too, because it loads them when it starts.
+:::
+
+#### What the editor checks
+
+| Rule       | Detail                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| YAML       | The document parses; a syntax error is reported with the line and column the YAML parser gives.                                |
+| Region     | The document is a DERP map (a `regions` mapping), and every region has `regionid`, `regioncode`, `regionname` and `nodes`.     |
+| Uniqueness | Region ids and region codes each appear only once.                                                                            |
+| Node       | Every node has `name`, `regionid` and `hostname`; `derpport` and `stunport` are integers from 1 to 65535 (`stunport` may be 0). |
+| Addresses  | `ipv4`/`ipv6`, when present and non-empty, are valid addresses, and `stunonly` is a boolean.                                   |
+| Size       | No more than 256 KiB, so the container can read and write it comfortably.                                                     |
+
+Every problem is shown in your language, next to the line it came from. The server
+never sends English prose: it answers with a stable code plus the position, and the
+page words it.
+
+#### Taking effect
+
+Headscale reads `derp.paths` files **when it starts**, so a saved map is picked up
+after a reload or restart — **Settings → System** has that control when the process
+integration is enabled. Headplane deliberately does not reload Headscale for you
+here: a reload that does not re-read the map would look like it worked.
+
+The file is snapshotted before **every** write, so it appears on
+**Settings → Snapshots** with the reason `DERP map file: <name>` and can be
+restored from there or from the row's **Roll back** button. Rolling back snapshots
+the content it replaces first, so a rollback is itself reversible.
 
 ### Enabling your own relay in one step
 

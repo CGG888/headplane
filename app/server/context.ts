@@ -18,7 +18,7 @@ import { type AgentManager, createAgentManager } from "./hp-agent";
 import { createOidcService, type OidcService } from "./oidc/provider";
 import { configureSharedRelayDns } from "./relay-dns";
 import { readRelayDnsServers } from "./relay-dns-store";
-import { resolveTargetPath } from "./snapshots/paths";
+import { derpMapTargets, resolveTargetPath } from "./snapshots/paths";
 import { createSnapshotService } from "./snapshots/service.server";
 import type { SnapshotTarget } from "./snapshots/types";
 import { createAuthService, type Principal } from "./web/auth";
@@ -137,6 +137,11 @@ export async function createAppContext(config: HeadplaneConfig) {
       if (tailnet.policyMode === "file" && tailnet.policyPath) {
         targets.push({ path: resolveTargetPath(tailnet.policyPath, baseDir), kind: "policy" });
       }
+
+      // Local DERP map files are part of what Headscale loads at startup, and
+      // the DERP tab can edit them, so they belong in the allow-list too. A
+      // configured file that does not exist yet is skipped while snapshotting.
+      targets.push(...derpMapTargets(hs.getDERPSettings().paths, baseDir));
 
       return targets;
     },

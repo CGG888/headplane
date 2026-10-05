@@ -143,8 +143,6 @@ const zhHant = {
       countConfigured: "已設定 {count} 個",
       countFiles: "{count} 個檔案",
       none: "無",
-      machines: "歸屬此區域的機器",
-      machinesNote: "依各機器向 Headplane Agent 回報的歸屬中繼統計。",
       publicUnavailable: "server_url 不是可用的 http(s) 網址",
       relayClientAddress: "用戶端連線位址",
       relayIpv4: "IPv4",
@@ -1735,6 +1733,125 @@ const zhHant = {
         relayDnsSystemHint:
           "主機的解析器沒有傳回任何位址。請在上方新增一台 DNS 伺服器並點「重新解析」，確認該名稱是否真的有記錄：主機的解析器即使有記錄也可能傳回空結果，因為它會過濾或不轉送這類查詢。",
         relayDnsSettingsLink: "編輯中繼 DNS 設定",
+        mapsMountTitle: "線上編輯需要讀寫掛載",
+        mapsMountBody:
+          "Headplane 透過你給它的掛載讀寫這些檔案。建議只把存放 DERP 地圖的目錄以讀寫方式掛進容器，Headscale 其餘的資料目錄不要一起掛進來：",
+        mapsMountNote:
+          "目錄以唯讀方式掛載時，檢視仍可使用，但儲存會提示容器無法寫入該路徑。Headscale 本身也必須能讀取這些檔案，因為它是在啟動時載入它們的。",
+        mapsView: "檢視",
+        mapsEdit: "編輯",
+        mapsFromExample: "用範例建立",
+        mapsRollback: "回復",
+        mapsEditorLabel: "DERP 地圖檔案",
+        mapsValid: "這是一份有效的 DERP 地圖。",
+        mapsSave: "儲存 DERP 地圖",
+        mapsClose: "關閉",
+        mapsSaveNote:
+          "Headscale 在啟動時讀取 derp.paths 裡的檔案，因此儲存後的內容需要重新載入或重啟才會生效。每次寫入前都會自動建立一份快照。",
+        mapsSavedRestart:
+          "已儲存。Headscale 在啟動時讀取 derp.paths 檔案，請在「設定 → 系統」重新載入或重啟後才會生效。",
+        mapsSavedSnapshot:
+          "寫入前已建立一份快照（{snapshot}），可在快照頁面查看，也可以點「回復」還原它。",
+        mapsSavedNoSnapshot: "原本沒有內容可建立快照，因此這是新建的檔案，沒有可回復的副本。",
+        mapsRolledBack:
+          "已回復到 {snapshot}。被取代的內容也已先建立快照；Headscale 需要重新載入或重啟後才會重新讀取該檔案。",
+        mapsStatusValid: "DERP 地圖有效",
+        mapsTemplateIntro:
+          "每個範例都是一份完整檔案，註解逐項說明每個欄位。載入後會取代編輯器裡的內容，未按儲存前不會寫入任何檔案。",
+        mapsTemplateUse: "使用此範例",
+        pathCreateHint:
+          "Headscale 主機上的絕對路徑。Headscale 與本容器都必須能讀取它，請參考上面的掛載說明。",
+        mapIssues: {
+          position: "{message}（第 {line} 行，第 {column} 欄）",
+          yamlSyntax: "這不是合法的 YAML。",
+          derpMapTooLarge: "檔案超過 256 KiB。",
+          derpMapInvalidRoot: "DERP 地圖是一個帶 regions 鍵的 YAML 對應，而這份檔案不是對應。",
+          derpMapMissingRegions: "檔案裡沒有 regions 鍵。",
+          derpMapInvalidRegions: "regions 必須是「區域 ID → 區域」的對應。",
+          derpRegionInvalid:
+            "每個區域都必須是包含 regionid、regioncode、regionname 與 nodes 的對應。",
+          derpRegionMissingId: "該區域缺少 regionid。",
+          derpRegionInvalidId: "regionid 必須是正整數。",
+          derpRegionMissingCode: "該區域缺少 regioncode。",
+          derpRegionMissingName: "該區域缺少 regionname。",
+          derpRegionMissingNodes: "該區域沒有 nodes 清單，因此不提供任何中繼。",
+          derpRegionInvalidNodes: "nodes 必須是節點清單。",
+          derpRegionDuplicateId: "區域 ID {id} 出現了多次。",
+          derpRegionDuplicateCode: "區域代碼 {code} 出現了多次。",
+          derpNodeInvalid: "每個節點都必須是包含 name、regionid 與 hostname 的對應。",
+          derpNodeMissingName: "該節點缺少 name。",
+          derpNodeMissingHostname: "該節點缺少 hostname。",
+          derpNodeMissingRegionId: "該節點缺少 regionid。",
+          derpNodeInvalidRegionId: "regionid 必須是正整數。",
+          derpNodeRegionMismatch: "該節點宣告的 regionid 是 {node}，但它被放在區域 {region} 下面。",
+          derpNodeInvalidDerpPort:
+            "derpport 必須是 1 到 65535 之間的整數，省略時預設為 {default}。",
+          derpNodeInvalidStunPort:
+            "stunport 必須是 0 到 65535 之間的整數，填 0 表示該節點不提供 STUN。",
+          derpNodeInvalidIpv4: "ipv4 必須是 198.51.100.10 這樣的裸 IPv4 位址。",
+          derpNodeInvalidIpv6: "ipv6 必須是 2001:db8::10 這樣的裸 IPv6 位址。",
+          derpNodeInvalidStunOnly: "stunonly 只能是 true 或 false。",
+        },
+        mapChecks: {
+          exists: {
+            pass: "檔案存在。",
+            missing: "該路徑上還沒有檔案。",
+            notFile: "該路徑是目錄，不是檔案。",
+          },
+          readable: {
+            pass: "檔案可讀取。",
+            fail: "檔案無法讀取。",
+          },
+          writable: {
+            pass: "檔案可寫入。",
+            fail: "Headplane 無法寫入該路徑或其所在目錄。",
+          },
+          size: {
+            pass: "未超過 {limit} KiB 的編輯上限。",
+            fail: "超過 {limit} KiB 上限，因此不會載入編輯器。",
+          },
+          parses: {
+            pass: "YAML 可以解析。",
+            fail: "檔案不是合法的 YAML。",
+          },
+          schema: {
+            pass: "文件是有效的 DERP 地圖。",
+            fail: "文件不是有效的 DERP 地圖。",
+          },
+          unique: {
+            pass: "區域 ID 與區域代碼都不重複。",
+            fail: "有區域 ID 或區域代碼重複。",
+          },
+        },
+        mapTemplates: {
+          titleOneRegion: "一個區域、一個節點",
+          titleTwoRegions: "兩個區域，其中一個節點僅提供 STUN",
+          titleSkeleton: "帶註解的骨架",
+          noteOneRegion: "Headscale 能接受的最小地圖：一個中繼區域、一個節點。",
+          noteTwoRegions: "兩個區域，其中第二個節點只回應 STUN、不轉送 DERP 流量。",
+          noteSkeleton: "把每個欄位都註解成速查表，並在檔案末尾保留一份可直接使用的最小設定。",
+          fields: {
+            regionKey: "regions：以區域 ID 為鍵，鍵必須與區域裡的 regionid 一致。",
+            regionId:
+              "regionid：區域編號。它必須在 Headscale 合併的所有地圖裡唯一；如果啟用了內嵌伺服器（預設 999），請避開 900-999。",
+            regionCode: "regioncode：用戶端顯示的短代碼，例如 ams。",
+            regionName: "regionname：用戶端顯示的區域名稱。",
+            nodeName: "name：節點名稱，在同一區域內唯一，例如 901a。",
+            hostname: "hostname：用戶端連線的網域名稱，必須有 A 或 AAAA 記錄指向這台機器。",
+            derpPort: "derpport：DERP 連接埠，1 到 65535 的整數，省略時預設為 443。",
+            stunPort:
+              "stunport：STUN 連接埠（UDP），0 到 65535 的整數，省略時預設為 3478；填 0 表示該節點不提供 STUN。",
+            stunOnly:
+              "stunonly：填 true 表示該節點只做 STUN，協助用戶端發現自己的 NAT 對應，但不轉送 DERP 流量。",
+            ipv4: "ipv4：節點的公網 IPv4 位址，公告給用戶端，讓它們不必解析網域即可連線。",
+            ipv6: "ipv6：同上，只是 IPv6。",
+            optional: "下面把所有欄位都註解成速查表，檔案末尾是一份可直接使用的最小設定。",
+            resolve: "提醒：hostname 必須有 A 或 AAAA 記錄，否則用戶端無法連線該區域。",
+            ports:
+              "提醒：DERP 連接埠（TCP）與 STUN 連接埠（UDP）必須在這台機器前面的所有防火牆與 NAT 上放行。",
+            reload: "提醒：Headscale 在啟動時讀取 derp.paths 檔案，儲存後請重新載入或重啟它。",
+          },
+        },
       },
       errors: {
         invalidAction: "要求無效，請重新整理頁面後重試。",
@@ -1791,6 +1908,18 @@ const zhHant = {
         relayDnsServerNotFound: "此 DNS 伺服器不在清單中。",
         relayDnsWriteFailed:
           "Headplane 無法寫入中繼 DNS 伺服器。請檢查其資料目錄是否可寫入後重試。",
+        invalidDerpMapPath:
+          "請按 derp.paths 裡原樣的絕對路徑填寫；相對路徑或包含 .. 的路徑不能線上編輯。",
+        derpMapPathNotConfigured: "該路徑不在 derp.paths 中。請先把它加進清單，再來編輯檔案。",
+        derpMapTooLarge: "這份 DERP 地圖超過 256 KiB，Headplane 不會載入或寫入它。",
+        derpMapInvalid: "該檔案不是有效的 DERP 地圖，請先修正儲存按鈕上方列出的問題。",
+        derpMapUnavailable:
+          "Headplane 看不到該路徑，因此無法寫入。請把存放 DERP 地圖檔案的目錄掛進容器（參考上面的掛載說明）。",
+        derpMapNotWritable:
+          "Headplane 無法寫入該路徑。請把 DERP 地圖目錄以讀寫方式掛載，並確認容器對檔案本身有寫入權限。",
+        derpMapWriteFailed:
+          "Headplane 無法寫入該 DERP 地圖檔案。請檢查容器權限與剩餘磁碟空間後重試。",
+        derpMapNoSnapshot: "該檔案還沒有被 Headplane 編輯過，因此沒有可回復的快照。",
       },
     },
     agent: {

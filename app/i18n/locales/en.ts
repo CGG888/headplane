@@ -146,8 +146,6 @@ const en = {
       countConfigured: "{count} configured",
       countFiles: "{count} files",
       none: "None",
-      machines: "Machines homed here",
-      machinesNote: "Counted from the home relay each machine reported to the Headplane Agent.",
       publicUnavailable: "server_url is not a usable http(s) URL",
       relayClientAddress: "Client connect address",
       relayIpv4: "IPv4",
@@ -1844,6 +1842,136 @@ const en = {
         relayDnsSystemHint:
           "The host's resolver returned no address. Add a DNS server above and re-resolve to check whether the name really has a record: a host resolver can answer with nothing even when it does, because it filters or does not forward the query.",
         relayDnsSettingsLink: "Edit relay DNS settings",
+        mapsMountTitle: "Editing needs a read-write mount",
+        mapsMountBody:
+          "Headplane reads and writes these files through the mounts it was given. Share only the directory holding the DERP maps, read-write, and keep the rest of Headscale's data directory out of the container:",
+        mapsMountNote:
+          "With the directory mounted read-only, View still works while Save reports that the container cannot write the path. Headscale itself must also be able to read these files, because it loads them when it starts.",
+        mapsView: "View",
+        mapsEdit: "Edit",
+        mapsFromExample: "Create from example",
+        mapsRollback: "Roll back",
+        mapsEditorLabel: "DERP map file",
+        mapsValid: "This is a valid DERP map.",
+        mapsSave: "Save DERP map",
+        mapsClose: "Close",
+        mapsSaveNote:
+          "Headscale reads derp.paths files when it starts, so a saved map takes effect after a reload or restart. The file is snapshotted before every write.",
+        mapsSavedRestart:
+          "Saved. Headscale reads derp.paths files at startup, so reload or restart it (Settings → System) for the change to take effect.",
+        mapsSavedSnapshot:
+          "A snapshot of the previous content ({snapshot}) was taken before the write; the snapshots page lists it, and Roll back restores it.",
+        mapsSavedNoSnapshot:
+          "There was no previous content to snapshot, so this file was created without a rollback copy.",
+        mapsRolledBack:
+          "Rolled back to {snapshot}. The content that was replaced was snapshotted first, and Headscale picks the file up after a reload or restart.",
+        mapsStatusValid: "Valid DERP map",
+        mapsTemplateIntro:
+          "Each example is a complete file whose comments explain every field. Loading one replaces what is in the editor; nothing is written until you save.",
+        mapsTemplateUse: "Use this example",
+        pathCreateHint:
+          "An absolute path on the Headscale host. Headscale and this container must both be able to read it; see the mount note above.",
+        mapIssues: {
+          position: "{message} (line {line}, column {column})",
+          yamlSyntax: "This is not valid YAML.",
+          derpMapTooLarge: "The file is larger than 256 KiB.",
+          derpMapInvalidRoot:
+            "A DERP map is a YAML mapping with a regions key, and this file is not a mapping.",
+          derpMapMissingRegions: "The file has no regions key.",
+          derpMapInvalidRegions: "regions must be a mapping of region id to region.",
+          derpRegionInvalid:
+            "Every region must be a mapping with regionid, regioncode, regionname and nodes.",
+          derpRegionMissingId: "This region has no regionid.",
+          derpRegionInvalidId: "regionid must be a positive integer.",
+          derpRegionMissingCode: "This region has no regioncode.",
+          derpRegionMissingName: "This region has no regionname.",
+          derpRegionMissingNodes: "This region has no nodes list, so it relays nothing.",
+          derpRegionInvalidNodes: "nodes must be a list of nodes.",
+          derpRegionDuplicateId: "The region id {id} is used more than once.",
+          derpRegionDuplicateCode: "The region code {code} is used more than once.",
+          derpNodeInvalid: "Every node must be a mapping with name, regionid and hostname.",
+          derpNodeMissingName: "This node has no name.",
+          derpNodeMissingHostname: "This node has no hostname.",
+          derpNodeMissingRegionId: "This node has no regionid.",
+          derpNodeInvalidRegionId: "regionid must be a positive integer.",
+          derpNodeRegionMismatch:
+            "This node declares regionid {node}, but it is listed under region {region}.",
+          derpNodeInvalidDerpPort:
+            "derpport must be an integer between 1 and 65535; it defaults to {default}.",
+          derpNodeInvalidStunPort:
+            "stunport must be an integer between 0 and 65535, and 0 disables STUN on this node.",
+          derpNodeInvalidIpv4: "ipv4 must be a bare IPv4 address such as 198.51.100.10.",
+          derpNodeInvalidIpv6: "ipv6 must be a bare IPv6 address such as 2001:db8::10.",
+          derpNodeInvalidStunOnly: "stunonly must be true or false.",
+        },
+        mapChecks: {
+          exists: {
+            pass: "The file exists.",
+            missing: "There is no file at this path yet.",
+            notFile: "This path is a directory, not a file.",
+          },
+          readable: {
+            pass: "The file is readable.",
+            fail: "The file cannot be read.",
+          },
+          writable: {
+            pass: "The file is writable.",
+            fail: "Headplane cannot write this path or the directory holding it.",
+          },
+          size: {
+            pass: "Within the {limit} KiB editing limit.",
+            fail: "Larger than the {limit} KiB limit, so it is not loaded into the editor.",
+          },
+          parses: {
+            pass: "The YAML parses.",
+            fail: "The file is not valid YAML.",
+          },
+          schema: {
+            pass: "The document is a valid DERP map.",
+            fail: "The document is not a valid DERP map.",
+          },
+          unique: {
+            pass: "Region ids and codes are unique.",
+            fail: "A region id or code is used more than once.",
+          },
+        },
+        mapTemplates: {
+          titleOneRegion: "One region, one node",
+          titleTwoRegions: "Two regions, one STUN-only node",
+          titleSkeleton: "Commented skeleton",
+          noteOneRegion: "The smallest map Headscale accepts: a single relay region with one node.",
+          noteTwoRegions:
+            "Two regions where the second node only answers STUN and never relays DERP traffic.",
+          noteSkeleton:
+            "Every field, commented out as a reference, plus the minimal working map underneath.",
+          fields: {
+            regionKey:
+              "regions: keyed by region id. The key has to match the regionid inside the region.",
+            regionId:
+              "regionid: the region's number. It must be unique across every map Headscale merges, and it should stay out of 900-999 if you run the embedded server (that defaults to 999).",
+            regionCode:
+              "regioncode: the short code shown in the Tailscale client, for example ams.",
+            regionName: "regionname: the name clients display for this region.",
+            nodeName: "name: the node's name, unique inside its region, for example 901a.",
+            hostname:
+              "hostname: what clients connect to. It must resolve to this machine through an A or AAAA record.",
+            derpPort: "derpport: the DERP port, an integer from 1 to 65535. It defaults to 443.",
+            stunPort:
+              "stunport: the STUN port (UDP), an integer from 0 to 65535. It defaults to 3478, and 0 means this node does not answer STUN.",
+            stunOnly:
+              "stunonly: true makes a node STUN-only. It helps clients discover their NAT mapping but never relays DERP traffic.",
+            ipv4: "ipv4: the node's public IPv4 address, advertised to clients so they can connect without resolving the hostname.",
+            ipv6: "ipv6: the same for IPv6.",
+            optional:
+              "Every field is shown below, commented out, as a reference. The working minimum is at the end of the file.",
+            resolve:
+              "Reminder: hostname must have an A or AAAA record, otherwise no client can reach this region.",
+            ports:
+              "Reminder: the DERP port (TCP) and the STUN port (UDP) must be reachable through every firewall and NAT in front of this machine.",
+            reload:
+              "Reminder: Headscale reads derp.paths files when it starts, so reload or restart it after saving.",
+          },
+        },
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
@@ -1905,6 +2033,22 @@ const en = {
         relayDnsServerNotFound: "This DNS server is not in the list.",
         relayDnsWriteFailed:
           "Headplane could not write the relay DNS servers. Check that its data directory is writable and try again.",
+        invalidDerpMapPath:
+          "Enter an absolute path exactly as derp.paths lists it; a relative path, or one containing .., cannot be edited.",
+        derpMapPathNotConfigured:
+          "This path is not in derp.paths. Add it there first, then edit the file.",
+        derpMapTooLarge:
+          "This DERP map is larger than 256 KiB, which Headplane will not load or write.",
+        derpMapInvalid:
+          "This file is not a valid DERP map. Fix the problems listed above the save button.",
+        derpMapUnavailable:
+          "Headplane cannot see this path, so it cannot write it. Mount the directory holding the DERP map files into the container (see the mount note above).",
+        derpMapNotWritable:
+          "Headplane cannot write this path. Mount the DERP map directory read-write, and make sure the container may write the file itself.",
+        derpMapWriteFailed:
+          "Headplane could not write the DERP map file. Check the container's permissions and free space, then try again.",
+        derpMapNoSnapshot:
+          "There is no snapshot to roll back to for this file, because it has not been edited by Headplane yet.",
       },
     },
     agent: {

@@ -182,6 +182,36 @@ derp:
 - `derp.urls: []` 之后自建中继是**唯一**中继：它不可达时客户端之间无法通过 DERP 互联，
   建议先用一台客户端 `tailscale debug derp-map` 确认区域已出现再清空公开地图。
 
+### 可选：在线编辑本地 DERP 地图（`derp.paths`）
+
+除了内嵌服务器，Headscale 还能把磁盘上的 DERP 地图文件合并进它下发给客户端的地图：
+
+```yaml
+derp:
+  paths:
+    - /etc/headscale/derp-maps/home.yaml
+```
+
+DERP 页会把 `derp.paths` 里的每个路径列出来，并支持**查看 / 编辑 / 保存 / 回滚**，
+还能用「用示例创建」生成一份带中文注释的模板（一个区域一个节点、两个区域其中一个仅
+提供 STUN、以及一份注释骨架）。保存前 Headplane 会在服务端再校验一次：必须是合法的
+YAML、必须是一份 `regions` 映射、区域必须有 `regionid`/`regioncode`/`regionname`/`nodes`、
+区域 ID 与代码不能重复、节点必须有 `name`/`regionid`/`hostname`，端口与地址也要合法。
+
+::: warning 这个目录必须以**读写**方式挂进容器
+编辑是通过挂载写回宿主机的，所以只有把这个目录（不是整个数据目录）读写挂进去，
+保存才能成功：
+
+```yaml
+  - "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"
+```
+
+只读挂载时「查看」仍可用，但保存会提示容器无法写入该路径。Headscale 自身也必须能
+读取这些文件，因为它在**启动时**加载它们 —— 所以保存后要重载或重启 Headscale
+（`/settings/system` 的按钮，或直接重启 fnOS 里的 headscale 应用）才会生效。
+每次写入前 Headplane 都会先留一份快照，可在 `/settings/snapshots` 里看到并恢复。
+:::
+
 ## 五、准备 Headplane 目录
 
 ```bash
@@ -312,6 +342,10 @@ services:
       # 【可选】DNS 记录文件（配合 headscale 的 dns.extra_records_path）
       # 需先执行：printf '[]\n' > /vol1/@appdata/headscale/extra-records.json
       # - "/vol1/@appdata/headscale/extra-records.json:/etc/headscale/extra-records.json"
+
+      # 【可选】本地 DERP 地图目录（配合 headscale 的 derp.paths）
+      # 想在线编辑地图文件时，只把这个目录以读写方式挂进来 —— 不要挂整个数据目录
+      # - "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"
 
       # 【不需要】docker.sock：headscale 是原生进程而非容器，docker 集成用不上；
       # 而且挂载它等于把宿主机 root 权限交给容器
@@ -487,7 +521,7 @@ tailscale debug derp <你的 region_code>
 
 | 页面                  | 内容                                                                                                                                                                                                                                                 |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/settings/headscale` | OIDC 全量配置、可信代理、策略模式（file/database）、节点有效期 / 临时节点回收 / 日志级别与格式 / Taildrop / 自动更新 / logtail / 更新检查，以及 **DERP**（自定义 map、内嵌服务器预设、区域名称映射、连通性提示、由 `server_url` 推导的公开中继端口） |
+| `/settings/headscale` | OIDC 全量配置、可信代理、策略模式（file/database）、节点有效期 / 临时节点回收 / 日志级别与格式 / Taildrop / 自动更新 / logtail / 更新检查，以及 **DERP**（自定义 map、内嵌服务器预设、区域名称映射、连通性提示、由 `server_url` 推导的公开中继端口、以及 `derp.paths` 本地地图的**在线查看 / 编辑 / 保存 / 回滚 / 用示例创建**） |
 | `/settings/system`    | Headscale 版本与更新提示、诊断（可达性、API Key、版本、策略模式、OIDC、可信代理、配置可读性、集成）、**配置检查**（见下），以及由进程集成驱动的「重新加载配置 / 重启 Headscale」按钮                                                                 |
 | `/settings/api-keys`  | 创建、查看与**使 Headscale API Key 过期**                                                                                                                                                                                                            |
 | `/settings/audit`     | 操作审计：谁在什么时候改了什么                                                                                                                                                                                                                       |
@@ -509,6 +543,7 @@ tailscale debug derp <你的 region_code>
 | **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                    |
 | **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 发 SIGHUP 使其重载                        |
 | **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 Headplane                                                      |
+| **在线编辑 DERP 地图** | headscale 的 `derp.paths` + 把地图目录**读写**挂给 Headplane（见第四节）；保存后需重载/重启 headscale 才生效        |
 | **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它     |
 | **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                             |
 | **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **Headplane 用 OIDC 登录**（API Key 登录不支持）                            |
@@ -691,6 +726,31 @@ Headplane 的解析结果（包括「没有记录」这类否定结果）**会�
 同样的判定，中继卡片上的提示也会写出对应的 `dig` 命令。`derp.server.ipv4` 对应的告警通常
 意味着机器 IP 变过、声明的是旧地址。
 
+### 16. 保存本地 DERP 地图时报「看不到该路径 / 无法写入」
+
+**原因**：只挂了 `config.yaml`，没有把 `derp.paths` 指向的目录挂进容器；或者按第七节把
+数据目录整体挂成了 `:ro`。
+
+**解决**：只把**地图目录**以读写方式挂进来（不需要放开整个数据目录）：
+
+```yaml
+    volumes:
+      - "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"
+```
+
+并在 headscale 的配置里写上对应的容器内路径：
+
+```yaml
+derp:
+  paths:
+    - /etc/headscale/derp-maps/home.yaml
+```
+
+重建容器（`docker compose up -d`）后，DERP 页的该行会从「无法验证」变成真实的检查
+结果。宿主机上注意权限：文件要对运行 headscale 的用户和容器都可读写。保存成功后
+Headscale 需要**重载或重启**才会重新读取地图（它是启动时加载的），`/settings/system`
+的重载按钮可用时直接点它即可。
+
 ## 十四、验收清单
 
 部署完成后逐项打勾：
@@ -720,6 +780,9 @@ curl -s http://127.0.0.1:8480/health
 - [ ] `/settings/agent` 显示「上次同步」时间与节点数（正常状态）
 - [ ] `/settings/api-keys`、`/settings/audit`、`/settings/snapshots` 均可打开；快照列表里能看到自动生成的一份
 - [ ] 启用内嵌 DERP 后，DERP 页显示中继来源（仅内嵌 / 内嵌 + 公开地图）与由 `server_url` 推导的公开端口
+- [ ] 挂了 DERP 地图目录（读写）后，`/settings/headscale` 的本地地图行能「查看 / 编辑」，
+      保存成功并提示「重载或重启后生效」，且 `/settings/snapshots` 里出现一份
+      `DERP map file: …` 快照，点「回滚」能恢复上一份内容
 
 客户端侧（任一已加入 Tailnet 的机器）：
 

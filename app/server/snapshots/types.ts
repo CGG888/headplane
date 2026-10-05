@@ -1,6 +1,6 @@
 /** Shared snapshot types and the error codes the UI localizes. */
 
-export type SnapshotTargetKind = "headscale_config" | "policy";
+export type SnapshotTargetKind = "headscale_config" | "policy" | "derp_map";
 
 /** A file Headplane is allowed to snapshot and restore. */
 export interface SnapshotTarget {

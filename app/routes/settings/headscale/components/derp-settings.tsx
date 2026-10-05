@@ -14,6 +14,7 @@ import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import type { DERPSettingsView } from "~/server/headscale/config-loader";
+import type { DerpMapFileView } from "~/server/headscale/derp-map-files";
 import cn from "~/utils/cn";
 
 import {
@@ -25,11 +26,14 @@ import {
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
 import DerpConnectivityHints from "./derp-connectivity-hints";
 import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedded-preset";
+import DerpMapFiles from "./derp-map-files";
 import DerpPublicEndpoint from "./derp-public-endpoint";
 import RelayDnsResolver from "./relay-dns-resolver";
 
 interface DerpSettingsProps {
   isDisabled: boolean;
+  /** Inspection of every configured `derp.paths` entry, done by the loader. */
+  mapFiles: DerpMapFileView[];
   /** Documented location of the region signing key, prefilled by the preset. */
   privateKeyDefault: string;
   /** Where the relays come from, resolved by the page into a status pill. */
@@ -122,6 +126,7 @@ function RemoveButton({ disabled, label }: { disabled: boolean; label: string })
 
 export default function DerpSettings({
   isDisabled,
+  mapFiles,
   privateKeyDefault,
   relaySourceStatus,
   relaySourceSummary,
@@ -130,11 +135,11 @@ export default function DerpSettings({
   const { t } = useI18n();
 
   // One fetcher per control keeps each save button, error and confirmation
-  // attached to the fields it submitted.
+  // attached to the fields it submitted. The per-path controls own their own
+  // fetchers inside the map-file card.
   const addUrlFetcher = useFetcher<HeadscaleSettingsResult>();
   const removeUrlFetcher = useFetcher<HeadscaleSettingsResult>();
   const addPathFetcher = useFetcher<HeadscaleSettingsResult>();
-  const removePathFetcher = useFetcher<HeadscaleSettingsResult>();
   const refreshFetcher = useFetcher<HeadscaleSettingsResult>();
   const serverFetcher = useFetcher<HeadscaleSettingsResult>();
 
@@ -175,7 +180,7 @@ export default function DerpSettings({
   }, [addPathFetcher.state, addPathFetcher.data]);
 
   const urlBusy = addUrlFetcher.state !== "idle" || removeUrlFetcher.state !== "idle";
-  const pathBusy = addPathFetcher.state !== "idle" || removePathFetcher.state !== "idle";
+  const pathBusy = addPathFetcher.state !== "idle";
   const refreshDisabled = isDisabled || refreshFetcher.state !== "idle";
   const serverDisabled = isDisabled || serverFetcher.state !== "idle";
 
@@ -190,10 +195,6 @@ export default function DerpSettings({
   const addPathError =
     addPathFetcher.data && !addPathFetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[addPathFetcher.data.errorCode])
-      : undefined;
-  const removePathError =
-    removePathFetcher.data && !removePathFetcher.data.success
-      ? t(HEADSCALE_SETTINGS_ERROR_KEYS[removePathFetcher.data.errorCode])
       : undefined;
   const refreshError =
     refreshFetcher.data && !refreshFetcher.data.success
@@ -359,42 +360,27 @@ export default function DerpSettings({
         }}
         title={t("settings.headscale.derp.pathsTitle")}
       >
-        <section className="flex w-full flex-col">
-          <TableList>
-            {settings.paths.length === 0 ? (
+        <section className="flex w-full flex-col gap-4">
+          {settings.paths.length === 0 ? (
+            <TableList>
               <TableList.Item className="justify-center py-4 opacity-70">
                 <p className="font-semibold">{t("settings.headscale.derp.pathsEmpty")}</p>
               </TableList.Item>
-            ) : (
-              settings.paths.map((path) => (
-                <TableList.Item key={path}>
-                  <p className="font-mono text-sm">{path}</p>
-                  <removePathFetcher.Form method="post">
-                    <input name="action_id" type="hidden" value="remove_derp_path" />
-                    <input name="path" type="hidden" value={path} />
-                    <RemoveButton
-                      disabled={isDisabled || pathBusy}
-                      label={t("settings.headscale.derp.removePath")}
-                    />
-                  </removePathFetcher.Form>
-                </TableList.Item>
-              ))
-            )}
-          </TableList>
+            </TableList>
+          ) : (
+            // Each path is inspected, viewable, editable, and rollable-back on
+            // its own; the add form below only grows the list.
+            <DerpMapFiles
+              files={mapFiles}
+              isDisabled={isDisabled || pathBusy}
+              paths={settings.paths}
+            />
+          )}
 
-          {removePathError ? (
-            <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-              {removePathError}
-            </p>
-          ) : undefined}
-
-          <addPathFetcher.Form
-            className="mt-4 flex flex-col gap-3"
-            method="post"
-            onSubmit={onAddPath}
-          >
+          <addPathFetcher.Form className="flex flex-col gap-3" method="post" onSubmit={onAddPath}>
             <input name="action_id" type="hidden" value="add_derp_path" />
             <Input
+              description={t("settings.headscale.derp.pathCreateHint")}
               disabled={isDisabled || pathBusy}
               errorMessage={pathLocalError}
               invalid={Boolean(pathLocalError)}

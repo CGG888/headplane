@@ -1,5 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
+import type { SnapshotTarget } from "./types";
+
 /**
  * Pure path and naming helpers for snapshots. Kept free of filesystem access so
  * the naming rules and the traversal guards can be unit tested directly.
@@ -66,6 +68,19 @@ export function resolveTargetPath(path: string, baseDir?: string): string {
   }
 
   return resolve(baseDir, path);
+}
+
+/**
+ * The local DERP map files (`derp.paths`) Headplane may snapshot, restore, and
+ * edit. Headscale resolves a relative entry against its own config file, so the
+ * same base directory is used here; entries that are blank are dropped rather
+ * than turned into the base directory itself.
+ */
+export function derpMapTargets(paths: readonly string[], baseDir?: string): SnapshotTarget[] {
+  return paths
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => ({ path: resolveTargetPath(entry, baseDir), kind: "derp_map" as const }));
 }
 
 /** Path equality that tolerates the case-insensitive filesystems Windows uses. */

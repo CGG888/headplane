@@ -121,8 +121,16 @@ export function createSnapshotService(options: SnapshotServiceOptions) {
     return entries.find((entry) => entry.id === id);
   }
 
-  async function take(reason: string): Promise<SnapshotMeta> {
-    const targets = options.getTargets().filter((target) => target.path.length > 0);
+  /**
+   * Copies every allowed target into a new snapshot. `overrideTargets` narrows
+   * the snapshot to those files only, which is how the DERP map editor keeps a
+   * copy of the single file it is about to write: restoring such a snapshot
+   * cannot touch Headscale's configuration by accident.
+   */
+  async function take(reason: string, overrideTargets?: SnapshotTarget[]): Promise<SnapshotMeta> {
+    const targets = (overrideTargets ?? options.getTargets()).filter(
+      (target) => target.path.length > 0,
+    );
     if (targets.length === 0) {
       throw new SnapshotError("noTargets", "No Headscale configuration file is configured");
     }

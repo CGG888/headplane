@@ -39,7 +39,6 @@ The **Embedded Region** card describes `derp.server` and the DERP map:
 | Relay sources         | Where clients' relays come from, derived from `derp.server.enabled` and `derp.urls`: the embedded server only, the embedded server plus the public map, the public map only, or none |
 | DERP map URLs         | How many `derp.urls` entries are configured                                                                                                                  |
 | Local DERP map files  | How many `derp.paths` entries are configured                                                                                                                 |
-| Machines homed here   | How many machines report this region as their home relay; the count comes from the Headplane Agent, so it needs the agent to be running                       |
 
 The card's chip says whether the embedded server is enabled.
 

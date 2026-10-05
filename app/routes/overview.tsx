@@ -46,7 +46,6 @@ import type { HeadscaleClient } from "~/server/headscale/api";
 import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
 import { formatServerVersion } from "~/server/headscale/api/server-version";
 import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
-import type { AgentManager } from "~/server/hp-agent";
 import {
   buildRelayView,
   loadSharedRelayResolution,
@@ -62,7 +61,6 @@ import {
   type CheckStatus,
   type CheckTally,
   countNodeStatus,
-  countNodesHomedInRegion,
   declaredDerpAddresses,
   type DeclaredDerpAddress,
   formatByteSize,
@@ -198,8 +196,6 @@ interface ApiSnapshot {
   preAuthKeys?: PreAuthKey[];
   preAuthKeysSupported: boolean;
   apiKeys?: Key[];
-  /** Machines whose reported home relay is the embedded DERP region. */
-  homedInRegion?: number;
 }
 
 interface AgentSnapshot {
@@ -229,7 +225,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     throw data({ localized: { key: "errors.permission.view" } }, { status: 403 });
   }
 
-  const agents = agentsFeature.state === "enabled" ? agentsFeature.value : undefined;
   const configPath = appConfig.headscale.config_path;
 
   const derp = headscaleConfig.getDERPSettings();
@@ -275,10 +270,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     }
     if (apiKeys.ok) {
       snapshot.apiKeys = apiKeys.value;
-    }
-
-    if (agents && derp.server.enabled && nodes.ok) {
-      snapshot.homedInRegion = await countHomedInRegion(agents, nodes.value, derp.server.regionId);
     }
 
     return snapshot;
@@ -437,7 +428,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         ipv6: derp.server.ipv6,
         stunListenAddr: derp.server.stunListenAddr,
       }),
-      machinesInRegion: api.homedInRegion,
     },
     service: {
       url: appConfig.headscale.url,
@@ -471,24 +461,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
-/**
- * Counts the machines reporting the embedded region as their home relay. The
- * agent's host info is the only source for that, so a failure leaves the count
- * unknown instead of reporting zero.
- */
-async function countHomedInRegion(
-  agents: AgentManager,
-  nodes: readonly Machine[],
-  regionId: number,
-): Promise<number | undefined> {
-  try {
-    const stats = await agents.lookup(nodes.map((node) => node.nodeKey));
-    return countNodesHomedInRegion(stats, regionId);
-  } catch {
-    return undefined;
-  }
-}
-
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr, locale } = useI18n();
   const { versions, derp, service, counts, health, history } = loaderData;
@@ -520,13 +492,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const apiReadable = counts.nodes !== undefined || counts.users !== undefined;
   const preAuthReason =
     apiReadable && !counts.preAuthKeysSupported ? reason.unsupported : reason.api;
-  const machinesReason = !derp.enabled
-    ? reason.notConfigured
-    : !versions.agent.enabled
-      ? reason.agent
-      : apiReadable
-        ? reason.notReported
-        : reason.api;
 
   const healthTally = health.diagnostics;
   const healthTone: SettingsStatusTone =
@@ -706,13 +671,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     ? t("overview.derp.countFiles", { count: derp.pathCount })
                     : t("overview.derp.none")
                 }
-              />
-              <Fact
-                label={t("overview.derp.machines")}
-                note={t("overview.derp.machinesNote")}
-                reason={machinesReason}
-                source={derived}
-                text={derp.machinesInRegion}
               />
             </Facts>
           </Card>

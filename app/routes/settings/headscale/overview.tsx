@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 import {
   KeyRound,
   Network,
@@ -31,7 +33,9 @@ import {
   headscaleConfigContext,
   headscaleLiveStoreContext,
   requestApiContext,
+  snapshotContext,
 } from "~/server/context";
+import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
@@ -98,12 +102,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   const { policyMode, policyPath, trustedProxies } = headscaleConfig.getTailnetSettings();
+  const derp = headscaleConfig.getDERPSettings();
+  // The DERP tab can edit each configured map file, so the same loader reads
+  // them once and reports what it found: existence, permissions, and whether the
+  // content is a map Headscale would accept.
+  const derpMapFiles = await inspectDerpMapFiles(derp.paths, {
+    // A relative derp.paths entry is relative to Headscale's own config file.
+    baseDir: appConfig.headscale.config_path ? dirname(appConfig.headscale.config_path) : undefined,
+    snapshots: context.get(snapshotContext),
+  });
+
   return {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
-    derp: headscaleConfig.getDERPSettings(),
+    derp,
+    derpMapFiles,
     // Everything below is read-only: Headplane deliberately never writes it.
     overview: headscaleConfig.getServerOverview(),
     // Manual names for the regions Headscale cannot name itself, plus the
@@ -129,6 +144,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     oidc,
     advanced,
     derp,
+    derpMapFiles,
     overview,
     derpRegionNames,
     derpPrivateKeyDefault,
@@ -294,6 +310,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </p>
           <DerpSettings
             isDisabled={isDisabled}
+            mapFiles={derpMapFiles}
             privateKeyDefault={derpPrivateKeyDefault}
             relaySourceStatus={relaySourceStatus}
             relaySourceSummary={relaySourceSummary}
