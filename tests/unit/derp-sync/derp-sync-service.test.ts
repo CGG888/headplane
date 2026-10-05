@@ -4,9 +4,13 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { createDerpSyncService, type DerpSyncService } from "~/server/derp-sync/service.server";
+import {
+  createDerpSyncService,
+  derpSyncFailureReason,
+  type DerpSyncService,
+} from "~/server/derp-sync/service.server";
 import { readDerpSyncDocument, writeDerpSyncDocument } from "~/server/derp-sync/store";
-import type { DerpSyncSettings } from "~/server/derp-sync/types";
+import type { DerpSyncRun, DerpSyncSettings } from "~/server/derp-sync/types";
 import type { Headscale } from "~/server/headscale/api";
 import type { HostIpv6Addresses } from "~/server/host-addresses";
 import type { HostEchoResult } from "~/server/host-echo";
@@ -40,6 +44,8 @@ interface Harness {
   snapshot: ReturnType<typeof vi.fn>;
   audit: Array<Record<string, unknown>>;
   reload: ReturnType<typeof vi.fn>;
+  /** Every report the service handed to the notification service. */
+  alerts: Array<{ failed: boolean; reason?: string }>;
 }
 
 interface HarnessOptions {
@@ -50,6 +56,7 @@ interface HarnessOptions {
   echo?: () => Promise<HostEchoResult>;
   withIntegration?: boolean;
   withSnapshots?: boolean;
+  withAlerts?: boolean;
   intervalMs?: number;
 }
 
@@ -63,6 +70,7 @@ describe("DERP address sync service", () => {
 
     const patches: Array<{ path: string; value: unknown }> = [];
     const audit: Array<Record<string, unknown>> = [];
+    const alerts: Array<{ failed: boolean; reason?: string }> = [];
     const snapshot = vi.fn(async () => ({ id: "snap-1" }));
     const reload = vi.fn(async () => undefined);
 
@@ -92,6 +100,15 @@ describe("DERP address sync service", () => {
           audit.push(input as unknown as Record<string, unknown>);
         },
       },
+      ...(options.withAlerts === false
+        ? {}
+        : {
+            alerts: {
+              reportDerpSync: async (input: { failed: boolean; reason?: string }) => {
+                alerts.push(input);
+              },
+            },
+          }),
       headscale: {} as unknown as Headscale,
       ...(options.withIntegration === false ? {} : { integration: { onConfigChange: reload } }),
       resolveRelay: options.resolve ?? (async () => resolution([PUBLIC_IPV4])),
@@ -113,6 +130,7 @@ describe("DERP address sync service", () => {
       snapshot,
       audit,
       reload,
+      alerts,
     };
 
     harness = next;
@@ -131,10 +149,12 @@ describe("DERP address sync service", () => {
 
   test("detects both families and writes only the one that changed", async () => {
     const test1 = build({ initial: { ipv4: "9.9.9.9", ipv6: HOST_IPV6 } });
-    await test1.service.update({ enabled: true, families: "both" });
+    // The reload is turned off here so the write itself is the only effect.
+    await test1.service.update({ enabled: true, families: "both", autoReload: false });
 
     const run = await test1.service.runNow();
 
+    expect(run?.mode).toBe("run");
     expect(run?.outcome).toBe("changed");
     expect(run?.changes).toEqual([{ family: "ipv4", from: "9.9.9.9", to: PUBLIC_IPV4 }]);
     expect(run?.unchanged).toEqual(["ipv6"]);
@@ -144,23 +164,49 @@ describe("DERP address sync service", () => {
     expect(test1.audit).toHaveLength(1);
     expect(test1.audit[0].action).toBe("derp.address_sync");
     expect(test1.audit[0].detail).toBe(`${PUBLIC_IPV4} (was 9.9.9.9)`);
-    // The reload integration exists but auto-reload is off by default.
     expect(test1.reload).not.toHaveBeenCalled();
     expect(run?.reload).toBe("manual");
+    // A clean run reports success, so the notifier can clear a remembered
+    // failure without sending anything.
+    expect(test1.alerts).toEqual([{ failed: false }]);
+  });
+
+  test("a check reports what a run would write and writes nothing", async () => {
+    const test1b = build({ initial: { ipv4: "9.9.9.9", ipv6: HOST_IPV6 } });
+    await test1b.service.update({ enabled: true, families: "both", autoReload: true });
+
+    const run = await test1b.service.checkNow();
+
+    expect(run?.mode).toBe("check");
+    expect(run?.outcome).toBe("changed");
+    expect(run?.changes).toEqual([{ family: "ipv4", from: "9.9.9.9", to: PUBLIC_IPV4 }]);
+    expect(run?.unchanged).toEqual(["ipv6"]);
+    // Nothing was written: no patch, no snapshot, no audit entry, no reload.
+    expect(test1b.patches).toEqual([]);
+    expect(test1b.current()).toEqual({ ipv4: "9.9.9.9", ipv6: HOST_IPV6 });
+    expect(test1b.snapshot).not.toHaveBeenCalled();
+    expect(test1b.audit).toEqual([]);
+    expect(test1b.reload).not.toHaveBeenCalled();
+    expect(run?.reload).toBe("not-needed");
+    // A check is interactive, so it is not reported to the notifier either.
+    expect(test1b.alerts).toEqual([]);
   });
 
   test("writes nothing when every detected address already matches", async () => {
     const test2 = build({ initial: { ipv4: PUBLIC_IPV4, ipv6: HOST_IPV6 } });
-    await test2.service.update({ enabled: true, families: "both" });
+    await test2.service.update({ enabled: true, families: "both", autoReload: true });
 
     const run = await test2.service.runNow();
 
     expect(run?.outcome).toBe("unchanged");
     expect(run?.unchanged).toEqual(["ipv4", "ipv6"]);
+    expect(run?.failure).toBeUndefined();
     expect(test2.patches).toEqual([]);
     expect(test2.snapshot).not.toHaveBeenCalled();
     expect(test2.audit).toEqual([]);
     expect(run?.reload).toBe("not-needed");
+    // A run that changed nothing reports success, so it can never alert.
+    expect(test2.alerts).toEqual([{ failed: false }]);
   });
 
   test("a failed lookup keeps the previous value and records why", async () => {
@@ -210,17 +256,61 @@ describe("DERP address sync service", () => {
     expect(test5.current().ipv4).toBe(PUBLIC_IPV4);
   });
 
-  test("an unreadable host namespace skips IPv6 instead of guessing", async () => {
+  test("a bridged container skips IPv6 instead of advertising its own address", async () => {
+    // A bridge or veth is no proof of isolation, so the classifier reports
+    // "unknown" rather than "isolated"; the sync must treat that exactly like
+    // an unreadable namespace and keep the configured value.
     const test6 = build({
       initial: { ipv6: HOST_IPV6 },
-      host: async () => hostAddresses({ namespace: "isolated" }),
+      host: async () => hostAddresses({ namespace: "unknown" }),
     });
     await test6.service.update({ enabled: true, families: "ipv6" });
 
     const run = await test6.service.runNow();
 
     expect(run?.skipped).toContainEqual({ family: "ipv6", reason: "namespace-unavailable" });
+    expect(run?.detected.ipv6).toBeUndefined();
+    expect(test6.patches).toEqual([]);
     expect(test6.current().ipv6).toBe(HOST_IPV6);
+  });
+
+  test("a container-only address is never written while the namespace is unconfirmed", async () => {
+    const test6e = build({
+      host: async () =>
+        hostAddresses({
+          namespace: "unknown",
+          candidates: [{ address: HOST_IPV6, interfaceName: "eth0", realNic: false }],
+        }),
+    });
+    await test6e.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test6e.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.detected.ipv6).toBeUndefined();
+    expect(test6e.patches).toEqual([]);
+    expect(test6e.current().ipv6).toBe("");
+    // What the container saw is still reported, but never as chosen.
+    expect(run?.candidates).toContainEqual({
+      family: "ipv6",
+      address: HOST_IPV6,
+      source: "host",
+      chosen: false,
+      reason: "ranked-lower",
+      interfaceName: "eth0",
+    });
+  });
+
+  test("a confirmed host namespace writes the address it selected", async () => {
+    const test6f = build({ host: async () => hostAddresses({ namespace: "host" }) });
+    await test6f.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test6f.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: HOST_IPV6, source: "host" });
+    expect(run?.skipped).toEqual([{ family: "ipv4", reason: "family-disabled" }]);
+    expect(test6f.patches).toEqual([{ path: "derp.server.ipv6", value: HOST_IPV6 }]);
+    expect(test6f.current().ipv6).toBe(HOST_IPV6);
   });
 
   test("a rotating privacy address is never preferred over a stable one", async () => {
@@ -257,17 +347,18 @@ describe("DERP address sync service", () => {
     expect(test6c.patches).toEqual([{ path: "derp.server.ipv6", value: ECHO_IPV6 }]);
   });
 
-  test("an isolated container still writes the address the echo reported", async () => {
+  test("an unconfirmed namespace still writes the address the echo reported", async () => {
     const test6d = build({
-      host: async () => hostAddresses({ namespace: "isolated", candidates: [] }),
+      host: async () => hostAddresses({ namespace: "unknown", candidates: [] }),
       echo: async () => ({ address: ECHO_IPV6, attempted: [] }),
     });
     await test6d.service.update({ enabled: true, families: "ipv6" });
 
     const run = await test6d.service.runNow();
 
-    // Only the family the setting left out is skipped: the echo answer is
-    // written even though every local interface belongs to the container.
+    // Only the family the setting left out is skipped: the echo is the
+    // authority the provenance rule lets past, so it is written even though
+    // every local interface belongs to the container.
     expect(run?.skipped).toEqual([{ family: "ipv4", reason: "family-disabled" }]);
     expect(test6d.current().ipv6).toBe(ECHO_IPV6);
   });
@@ -280,6 +371,123 @@ describe("DERP address sync service", () => {
     const run = await test7.service.runNow();
 
     expect(run?.skipped).toContainEqual({ family: "ipv4", reason: "host-missing" });
+  });
+
+  test("the detection panel lists every candidate and why it was not chosen", async () => {
+    const test7b = build({
+      resolve: async () => resolution(["10.0.0.5", PUBLIC_IPV4]),
+      host: async () =>
+        hostAddresses({
+          candidates: [
+            { address: PRIVACY_IPV6, interfaceName: "ens18", temporary: true, realNic: true },
+            { address: HOST_IPV6, interfaceName: "ens18", temporary: false, realNic: true },
+          ],
+        }),
+    });
+    await test7b.service.update({ enabled: true, families: "both" });
+
+    const run = await test7b.service.runNow();
+
+    expect(run?.candidates).toEqual([
+      {
+        family: "ipv4",
+        address: "10.0.0.5",
+        source: "dns",
+        chosen: false,
+        reason: "not-public",
+        detail: "private",
+      },
+      { family: "ipv4", address: PUBLIC_IPV4, source: "dns", chosen: true, reason: "selected" },
+      {
+        family: "ipv6",
+        address: HOST_IPV6,
+        source: "host",
+        chosen: true,
+        reason: "selected",
+        interfaceName: "ens18",
+      },
+      {
+        family: "ipv6",
+        address: PRIVACY_IPV6,
+        source: "host",
+        chosen: false,
+        reason: "temporary",
+        temporary: true,
+        interfaceName: "ens18",
+      },
+    ]);
+  });
+
+  test("a privacy address is only chosen when it is the only one, and says so", async () => {
+    const test7c = build({
+      host: async () =>
+        hostAddresses({
+          candidates: [{ address: PRIVACY_IPV6, interfaceName: "ens18", temporary: true }],
+        }),
+    });
+    await test7c.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test7c.service.runNow();
+
+    // The card reads this to raise the "it rotates, prefer a stable one" hint.
+    expect(run?.candidates).toEqual([
+      {
+        family: "ipv6",
+        address: PRIVACY_IPV6,
+        source: "host",
+        chosen: true,
+        reason: "selected",
+        temporary: true,
+        interfaceName: "ens18",
+      },
+    ]);
+    expect(run?.detected.ipv6).toEqual({ address: PRIVACY_IPV6, source: "host" });
+  });
+
+  test("the external echo marks every local candidate as overridden", async () => {
+    const test7d = build({
+      echo: async () => ({
+        address: ECHO_IPV6,
+        attempted: ["https://api64.ipify.org?format=json"],
+      }),
+    });
+    await test7d.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test7d.service.runNow();
+
+    expect(run?.candidates).toEqual([
+      { family: "ipv6", address: ECHO_IPV6, source: "echo", chosen: true, reason: "selected" },
+      {
+        family: "ipv6",
+        address: HOST_IPV6,
+        source: "host",
+        chosen: false,
+        reason: "echo-wins",
+        interfaceName: "eth0",
+      },
+    ]);
+  });
+
+  test("an address the host probe excluded is shown with its reason", async () => {
+    const test7e = build({
+      host: async () =>
+        hostAddresses({
+          excluded: [{ address: "fd00::1", interfaceName: "eth0", kind: "ula" }],
+        }),
+    });
+    await test7e.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await test7e.service.runNow();
+
+    expect(run?.candidates).toContainEqual({
+      family: "ipv6",
+      address: "fd00::1",
+      source: "host",
+      chosen: false,
+      reason: "excluded",
+      interfaceName: "eth0",
+      detail: "ula",
+    });
   });
 
   test("the families a run may touch follow the setting", async () => {
@@ -317,14 +525,26 @@ describe("DERP address sync service", () => {
     expect(test10.patches).toEqual([{ path: "derp.server.ipv4", value: PUBLIC_IPV4 }]);
   });
 
-  test("auto-reload is only triggered when it was turned on", async () => {
+  test("auto-reload is on by default", async () => {
+    const test10b = build({ initial: { ipv4: "9.9.9.9" } });
+    await test10b.service.update({ enabled: true, families: "ipv4" });
+
+    const run = await test10b.service.runNow();
+
+    expect(test10b.service.settings().autoReload).toBe(true);
+    expect(test10b.reload).toHaveBeenCalledTimes(1);
+    expect(run?.reload).toBe("triggered");
+  });
+
+  test("turning the reload switch off reports a manual reload instead", async () => {
     const test11 = build({ initial: { ipv4: "9.9.9.9" } });
-    await test11.service.update({ enabled: true, families: "ipv4", autoReload: true });
+    await test11.service.update({ enabled: true, families: "ipv4", autoReload: false });
 
     const run = await test11.service.runNow();
 
-    expect(test11.reload).toHaveBeenCalledTimes(1);
-    expect(run?.reload).toBe("triggered");
+    expect(test11.reload).not.toHaveBeenCalled();
+    expect(run?.reload).toBe("manual");
+    expect(run?.outcome).toBe("changed");
   });
 
   test("a check that found nothing never reloads", async () => {
@@ -347,6 +567,52 @@ describe("DERP address sync service", () => {
     expect(run?.outcome).toBe("changed");
     expect(run?.reload).toBe("failed");
     expect(test13.current().ipv4).toBe(PUBLIC_IPV4);
+    // The write happened, but the address never reached Headscale, so the run
+    // counts as failed and says which step broke.
+    expect(run?.failure).toBe("reload-failed");
+    expect(test13.alerts).toEqual([{ failed: true, reason: "reload-failed" }]);
+  });
+
+  test("a run whose detection finds nothing usable alerts on that family", async () => {
+    const test13b = build({
+      initial: { ipv4: "9.9.9.9" },
+      resolve: async () => resolution([], { reason: "timeout" }),
+    });
+    await test13b.service.update({ enabled: true, families: "ipv4" });
+
+    const run = await test13b.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.failure).toBe("detection-unusable");
+    expect(test13b.alerts).toEqual([{ failed: true, reason: "detection-unusable" }]);
+    expect(test13b.current().ipv4).toBe("9.9.9.9");
+  });
+
+  test("a read-only configuration is reported as a failed write", async () => {
+    const test13c = build({ writable: false, initial: { ipv4: "9.9.9.9" } });
+    await test13c.service.update({ enabled: true, families: "ipv4" });
+
+    const run = await test13c.service.runNow();
+
+    expect(run?.failure).toBe("not-writable");
+    expect(test13c.alerts).toEqual([{ failed: true, reason: "not-writable" }]);
+    expect(test13c.patches).toEqual([]);
+  });
+
+  test("a check never reports to the notifier, even when it fails", async () => {
+    const test13d = build({
+      resolve: async () => {
+        throw new Error("boom");
+      },
+    });
+    await test13d.service.update({ enabled: true, families: "ipv4" });
+
+    const run = await test13d.service.checkNow();
+
+    expect(run?.mode).toBe("check");
+    expect(run?.outcome).toBe("failed");
+    expect(run?.failure).toBeUndefined();
+    expect(test13d.alerts).toEqual([]);
   });
 
   test("a scheduled tick does nothing while the sync is disabled", async () => {
@@ -418,7 +684,7 @@ describe("DERP address sync service", () => {
       enabled: true,
       intervalHours: 24,
       families: "ipv4",
-      autoReload: false,
+      autoReload: true,
     });
     expect(stored.last?.outcome).toBe("changed");
     expect(stored.last?.at).toBe(new Date(BASE).toISOString());
@@ -558,5 +824,51 @@ describe("DERP address sync scheduling", () => {
       interval.mockRestore();
       clear.mockRestore();
     }
+  });
+});
+
+describe("DERP address sync failure predicate", () => {
+  function run(overrides: Partial<DerpSyncRun> = {}): DerpSyncRun {
+    return {
+      at: new Date(BASE).toISOString(),
+      mode: "run",
+      outcome: "skipped",
+      detected: {},
+      candidates: [],
+      changes: [],
+      skipped: [],
+      unchanged: [],
+      reload: "not-needed",
+      ...overrides,
+    };
+  }
+
+  test("a run that changed nothing is not a failure", () => {
+    expect(derpSyncFailureReason(run({ outcome: "unchanged" }))).toBeUndefined();
+    // A family the operator turned off is a setting, not a failure.
+    expect(
+      derpSyncFailureReason(run({ skipped: [{ family: "ipv6", reason: "family-disabled" }] })),
+    ).toBeUndefined();
+  });
+
+  test("each way a run can fail gets its own code", () => {
+    expect(derpSyncFailureReason(run({ outcome: "failed" }))).toBe("unexpected");
+    expect(derpSyncFailureReason(run({ reload: "failed" }))).toBe("reload-failed");
+    expect(
+      derpSyncFailureReason(run({ skipped: [{ family: "ipv4", reason: "config-not-writable" }] })),
+    ).toBe("not-writable");
+    expect(
+      derpSyncFailureReason(run({ skipped: [{ family: "ipv6", reason: "no-host-address" }] })),
+    ).toBe("detection-unusable");
+  });
+
+  test("the most severe reason wins when a run failed in more than one way", () => {
+    const worst = run({
+      outcome: "failed",
+      reload: "failed",
+      skipped: [{ family: "ipv6", reason: "lookup-failed" }],
+    });
+
+    expect(derpSyncFailureReason(worst)).toBe("unexpected");
   });
 });

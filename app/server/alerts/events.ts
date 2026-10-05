@@ -33,7 +33,13 @@ const SEVERITIES: Record<string, AlertSeverity> = {
   nodeOnline: "info",
   apiKeyExpiring: "warning",
   configCheckFailed: "warning",
+  derpSyncFailed: "warning",
 };
+
+/** The severity one event id is reported with. */
+export function alertSeverity(id: AlertEvent["id"]): AlertSeverity {
+  return SEVERITIES[id];
+}
 
 /** The state a fresh process (or a corrupt document) starts from. */
 export function emptyAlertState(): AlertState {
@@ -44,6 +50,8 @@ export function emptyAlertState(): AlertState {
     offlineNodes: [],
     expiringKeys: [],
     failingChecks: [],
+    // A run that has not happened yet has not failed.
+    derpSyncFailed: false,
     sent: {},
   };
 }
@@ -53,10 +61,41 @@ function conditionKey(event: AlertEvent): string {
   return event.target === undefined ? event.id : `${event.id}:${event.target}`;
 }
 
+/**
+ * Applies the two guards that keep the stream quiet, for one candidate event:
+ * the enabled/selected filter, and the cooldown against the same condition.
+ * Records the send in `sent` and returns the event, or `undefined` when the
+ * event is suppressed. Shared with the DERP sync's out-of-band report, so both
+ * paths dedupe and cool down identically.
+ */
+export function emitAlertEvent(
+  sent: Record<string, string>,
+  event: AlertEvent,
+  settings: AlertSettings,
+  now: Date,
+): AlertEvent | undefined {
+  if (!settings.enabled || !settings.events.includes(event.id)) {
+    return undefined;
+  }
+
+  const key = conditionKey(event);
+  const last = sent[key];
+  if (last !== undefined) {
+    const lastMs = Date.parse(last);
+    if (Number.isFinite(lastMs) && now.getTime() - lastMs < settings.cooldownSeconds * 1000) {
+      return undefined;
+    }
+  }
+
+  sent[key] = event.at;
+  return event;
+}
+
 /** Compares two states, ignoring array and map ordering. */
 export function sameAlertState(a: AlertState, b: AlertState): boolean {
   return (
     a.reachable === b.reachable &&
+    a.derpSyncFailed === b.derpSyncFailed &&
     sameIds(a.offlineNodes, b.offlineNodes) &&
     sameIds(a.expiringKeys, b.expiringKeys) &&
     sameIds(a.failingChecks, b.failingChecks) &&
@@ -86,22 +125,15 @@ export function detectAlertEvents(
   const events: AlertEvent[] = [];
 
   function emit(id: AlertEvent["id"], extra: Pick<AlertEvent, "target" | "threshold"> = {}) {
-    const event: AlertEvent = { id, severity: SEVERITIES[id], at: nowIso, ...extra };
-    if (!settings.enabled || !settings.events.includes(id)) {
-      return;
+    const event = emitAlertEvent(
+      sent,
+      { id, severity: SEVERITIES[id], at: nowIso, ...extra },
+      settings,
+      now,
+    );
+    if (event !== undefined) {
+      events.push(event);
     }
-
-    const key = conditionKey(event);
-    const last = sent[key];
-    if (last !== undefined) {
-      const lastMs = Date.parse(last);
-      if (Number.isFinite(lastMs) && nowMs - lastMs < settings.cooldownSeconds * 1000) {
-        return;
-      }
-    }
-
-    sent[key] = nowIso;
-    events.push(event);
   }
 
   // Reachability: one alert when Headscale drops, one when it comes back.
@@ -170,6 +202,15 @@ export function detectAlertEvents(
 
   return {
     events,
-    state: { reachable: snapshot.reachable, offlineNodes, expiringKeys, failingChecks, sent },
+    state: {
+      reachable: snapshot.reachable,
+      offlineNodes,
+      expiringKeys,
+      failingChecks,
+      // The DERP sync reports its own outcome out of band, so a tick must not
+      // clear the flag that remembers whether the last run failed.
+      derpSyncFailed: previous.derpSyncFailed,
+      sent,
+    },
   };
 }

@@ -107,6 +107,9 @@ function parseState(value: unknown): AlertState {
     offlineNodes: list(source.offlineNodes),
     expiringKeys: list(source.expiringKeys),
     failingChecks: list(source.failingChecks),
+    // A document written before the sync could alert has no flag, and an
+    // unknown flag must not look like a failure waiting to be reported.
+    derpSyncFailed: source.derpSyncFailed === true,
     sent,
   };
 }

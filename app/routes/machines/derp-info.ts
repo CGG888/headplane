@@ -68,19 +68,44 @@ export interface DerpRegionLabel {
 }
 
 export interface DerpLatencyEntry {
-  /** Region id parsed from the agent's latency map key, when it is numeric. */
+  /** Region id parsed from the agent's latency map key, when the key names one. */
   regionId: number | undefined;
-  /** Region key exactly as the agent reported it. */
+  /** Region key exactly as the agent reported it, trimmed. */
   region: string;
   /** Measured round trip in seconds, as Tailscale reports it. */
   seconds: number;
 }
 
+/** One measured region, as the card prints it. */
+export interface DerpLatencyRow extends DerpLatencyEntry {
+  /** The region label, resolved through the one name chain. */
+  label: string;
+}
+
 export interface DerpLatencyRows {
-  rows: DerpLatencyEntry[];
+  rows: DerpLatencyRow[];
   /** Measured regions that did not fit into `rows`. */
   hidden: number;
 }
+
+/**
+ * A latency map key reduced to what a name lookup can use.
+ *
+ * Tailscale keys `NetInfo.DERPLatency` by the region a sample belongs to, with
+ * the address family it was measured over appended — `"901-v4"`, `"901-v6"`
+ * (`wgengine/magicsock`, `magicsock.go`) — while older clients used the STUN
+ * server's `host:port` and a hand-written map can carry a region code. The key
+ * is therefore normalised rather than assumed to be a bare region id.
+ */
+export interface DerpRegionKey {
+  /** Region id the key names (`901`, `901-v4`, `901-v6`); undefined otherwise. */
+  regionId: number | undefined;
+  /** The key exactly as reported, trimmed; its own fallback label when unnamed. */
+  key: string;
+}
+
+/** A bare region id, or the same id with the family suffix Tailscale appends. */
+const DERP_REGION_KEY_PATTERN = /^(\d+)(?:-v[46])?$/;
 
 export interface DerpInfoView {
   /** False when the agent has not reported any relay data for this machine. */
@@ -229,41 +254,161 @@ function isUnresolvedRegion(region: number | undefined, sources: DerpRegionLabel
   );
 }
 
-/** Region ids reach the page as JSON object keys, so parse those defensively. */
-export function parseDerpRegionId(region: string): number | undefined {
-  const trimmed = region.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    return undefined;
+/**
+ * Reduces a latency map key to the region it names, whatever shape it arrived
+ * in: a JSON object key (always a string at runtime, but a numeric record can
+ * be handed in), a bare region id, or the id with Tailscale's `-v4`/`-v6`
+ * family suffix. Anything else — a region code, a legacy STUN `host:port` —
+ * keeps its own text as the key, which is what a row then prints.
+ */
+export function parseDerpRegionKey(region: string | number): DerpRegionKey {
+  const key = String(region ?? "").trim();
+  const match = DERP_REGION_KEY_PATTERN.exec(key);
+  if (match === null) {
+    return { regionId: undefined, key };
   }
 
-  const parsed = Number(trimmed);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
+  const parsed = Number(match[1]);
+  return { regionId: Number.isSafeInteger(parsed) ? parsed : undefined, key };
 }
 
-/** Fastest first, dropping samples that are not finite numbers. */
+/** Region ids reach the page as JSON object keys, so parse those defensively. */
+export function parseDerpRegionId(region: string): number | undefined {
+  return parseDerpRegionKey(region).regionId;
+}
+
+/** The identity two samples share when they measure the same region. */
+function regionIdentity(key: DerpRegionKey): string {
+  return key.regionId === undefined ? `key:${key.key}` : `id:${key.regionId}`;
+}
+
+/**
+ * One entry per measured region, fastest first, dropping samples that are not
+ * finite numbers.
+ *
+ * Tailscale measures a region over both address families, so `DERPLatency`
+ * holds up to two samples for it (`"901-v4"` and `"901-v6"`). A row is a
+ * region and the card counts regions, so the fastest sample of each region
+ * stands for it: the family is how the sample was taken, not what the row is
+ * about. Keys no id parses out of (a legacy `host:port`, a code) stand alone.
+ */
 export function sortDerpLatencies(
-  latencies: Record<string, number> | undefined,
+  latencies: Record<string | number, number> | undefined,
 ): DerpLatencyEntry[] {
-  return Object.entries(latencies ?? {})
-    .filter(([, seconds]) => typeof seconds === "number" && Number.isFinite(seconds))
-    .map(([region, seconds]) => ({
-      region,
-      regionId: parseDerpRegionId(region),
-      seconds,
-    }))
-    .sort((a, b) => a.seconds - b.seconds);
+  const fastest = new Map<string, DerpLatencyEntry>();
+  for (const [region, seconds] of Object.entries(latencies ?? {})) {
+    if (typeof seconds !== "number" || !Number.isFinite(seconds)) {
+      continue;
+    }
+
+    const key = parseDerpRegionKey(region);
+    const identity = regionIdentity(key);
+    const existing = fastest.get(identity);
+    if (existing === undefined || seconds < existing.seconds) {
+      fastest.set(identity, { region: key.key, regionId: key.regionId, seconds });
+    }
+  }
+
+  return [...fastest.values()].sort((a, b) => a.seconds - b.seconds);
+}
+
+/** The fastest measured regions, and how many did not fit. */
+export interface DerpLatencySelection {
+  rows: DerpLatencyEntry[];
+  hidden: number;
 }
 
 /** Keeps the fastest rows and counts how many regions were left out. */
 export function capDerpLatencies(
   entries: DerpLatencyEntry[],
   limit = DERP_LATENCY_ROW_LIMIT,
-): DerpLatencyRows {
+): DerpLatencySelection {
   const capped = Math.max(0, limit);
   return {
     rows: entries.slice(0, capped),
     hidden: Math.max(0, entries.length - capped),
   };
+}
+
+/** Labels every capped entry with the region name the one chain resolves. */
+function labelDerpLatencies(
+  selection: DerpLatencySelection,
+  sources: DerpRegionLabelSources,
+  unknown: string,
+): DerpLatencyRows {
+  return {
+    rows: selection.rows.map((entry) => ({
+      ...entry,
+      label: resolveDerpLatencyKeyLabel(entry.region, sources, unknown),
+    })),
+    hidden: selection.hidden,
+  };
+}
+
+/** The lowest region id a map gives one code, or undefined when it gives none. */
+function mappedCodeRegionId(map: DerpRegionMap | undefined, code: string): number | undefined {
+  let found: number | undefined;
+  for (const entry of Object.values(map ?? {})) {
+    if (entry.code?.trim().toLowerCase() !== code || !Number.isFinite(entry.regionId)) {
+      continue;
+    }
+
+    if (found === undefined || entry.regionId < found) {
+      found = entry.regionId;
+    }
+  }
+
+  return found;
+}
+
+/**
+ * The region a code-like key belongs to, from the same sources and in the same
+ * precedence order as every other label: the local map files, the remote maps,
+ * then the embedded region.
+ */
+function regionIdForCode(sources: DerpRegionLabelSources, code: string): number | undefined {
+  const wanted = code.toLowerCase();
+  if (wanted === "") {
+    return undefined;
+  }
+
+  const matched =
+    mappedCodeRegionId(sources.local, wanted) ?? mappedCodeRegionId(sources.remote, wanted);
+  if (matched !== undefined) {
+    return matched;
+  }
+
+  const embeddedCode = sources.embedded?.code?.trim().toLowerCase();
+  return embeddedCode === wanted ? sources.embedded?.regionId : undefined;
+}
+
+/**
+ * The label one latency row prints.
+ *
+ * A key carrying a region id resolves through {@link resolveDerpRegionLabel},
+ * so a latency row words its region exactly like the home and preferred rows. A
+ * key naming a region code is matched against the configured maps first, so a
+ * sample keyed by code still reads as the region it belongs to. Any other key
+ * prints as the key itself — a legacy STUN `host:port` says more than the word
+ * "unknown" — and only a key that is not there at all falls back to the
+ * caller's localized unknown.
+ */
+export function resolveDerpLatencyKeyLabel(
+  key: string | number,
+  sources: DerpRegionLabelSources,
+  unknown: string,
+): string {
+  const parsed = parseDerpRegionKey(key);
+  if (parsed.key === "") {
+    return unknown;
+  }
+
+  if (parsed.regionId !== undefined) {
+    return resolveDerpRegionLabel(parsed.regionId, sources, unknown).label;
+  }
+
+  const byCode = regionIdForCode(sources, parsed.key);
+  return byCode === undefined ? parsed.key : resolveDerpRegionLabel(byCode, sources, unknown).label;
 }
 
 /** Tailscale reports DERP latency in seconds; the UI shows milliseconds. */
@@ -295,7 +440,7 @@ export function buildDerpInfo(
     hasRelayData: home !== undefined || preferred !== undefined || latencies.length > 0,
     home: resolveDerpRegionLabel(home, sources, unknown),
     preferred: resolveDerpRegionLabel(preferred, sources, unknown),
-    latencies: capDerpLatencies(latencies),
+    latencies: labelDerpLatencies(capDerpLatencies(latencies), sources, unknown),
     hasIdOnlyRegions:
       isUnresolvedRegion(home, sources) ||
       isUnresolvedRegion(preferred, sources) ||
@@ -304,5 +449,11 @@ export function buildDerpInfo(
 }
 
 function readRegionId(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  // The agent sends these as JSON numbers, but a re-serialised payload can hand
+  // an id over as a string; an id that arrived is still an id to name.
+  return typeof value === "string" ? parseDerpRegionKey(value).regionId : undefined;
 }

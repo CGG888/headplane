@@ -46,6 +46,8 @@ export type HeadscaleSettingsErrorCode =
   | "invalidDerpSyncInterval"
   | "invalidDerpSyncFamilies"
   | "derpSyncSaveFailed"
+  | "invalidHostEchoUrl"
+  | "hostEchoSaveFailed"
   | "invalidOidcExtraParams"
   | "duplicateOidcExtraParam"
   | "invalidHaProbeInterval"
@@ -98,6 +100,8 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidDerpSyncInterval: "settings.headscale.errors.invalidDerpSyncInterval",
   invalidDerpSyncFamilies: "settings.headscale.errors.invalidDerpSyncFamilies",
   derpSyncSaveFailed: "settings.headscale.errors.derpSyncSaveFailed",
+  invalidHostEchoUrl: "settings.headscale.errors.invalidHostEchoUrl",
+  hostEchoSaveFailed: "settings.headscale.errors.hostEchoSaveFailed",
   invalidOidcExtraParams: "settings.headscale.errors.invalidOidcExtraParams",
   duplicateOidcExtraParam: "settings.headscale.errors.duplicateOidcExtraParam",
   invalidHaProbeInterval: "settings.headscale.errors.invalidHaProbeInterval",

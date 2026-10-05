@@ -17,21 +17,36 @@ import { dirname } from "node:path";
 
 import { parseDocument } from "yaml";
 
+import type { DerpMapCheckInput } from "~/routes/settings/headscale/derp-map-checks";
+import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import { loadSharedRelayResolution } from "~/server/relay-dns";
 
 import {
   computeConfigChecks,
+  configDerpMapPaths,
   configProbeTargets,
   configRelayLookupTarget,
   type ConfigCheck,
   type ConfigProbe,
 } from "./config-checks";
 
+export interface LoadConfigChecksOptions {
+  /**
+   * Whether to add the per-path DERP map checks the DERP card shows. Off by
+   * default: the dashboard and the alert notifier also read this list, and a
+   * DERP map file is a problem only the configuration page has to report.
+   */
+  readonly includeDerpMaps?: boolean;
+}
+
 /**
  * Computes the configuration checks for the Headscale config file at `path`.
  * Returns an empty list when there is nothing readable to check.
  */
-export async function loadConfigChecks(path: string | undefined): Promise<ConfigCheck[]> {
+export async function loadConfigChecks(
+  path: string | undefined,
+  options: LoadConfigChecksOptions = {},
+): Promise<ConfigCheck[]> {
   const config = await readHeadscaleConfig(path);
   if (config === undefined) {
     return [];
@@ -69,7 +84,44 @@ export async function loadConfigChecks(path: string | undefined): Promise<Config
       noiseKey,
     },
     relayResolution,
+    derpMaps: options.includeDerpMaps ? await inspectDerpMaps(config, path) : undefined,
   });
+}
+
+/**
+ * Inspects every `derp.paths` entry with the same code the DERP card's loader
+ * uses, so the two pages cannot word a path differently. Fail-soft twice over:
+ * no configured path means nothing to inspect, and anything that goes wrong
+ * while inspecting leaves the rest of the configuration list intact.
+ */
+async function inspectDerpMaps(
+  config: unknown,
+  configPath: string | undefined,
+): Promise<DerpMapCheckInput[]> {
+  const paths = configDerpMapPaths(config);
+  if (paths.length === 0) {
+    return [];
+  }
+
+  try {
+    const files = await inspectDerpMapFiles(paths, {
+      // A relative derp.paths entry is relative to Headscale's own config file.
+      baseDir: configPath ? dirname(configPath) : undefined,
+    });
+
+    return files.map((file) => ({
+      path: file.path,
+      exists: file.exists,
+      isFile: file.isFile,
+      readable: file.readable,
+      writable: file.writable,
+      tooLarge: file.tooLarge,
+      unavailable: file.unavailable,
+      issues: file.issues,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**

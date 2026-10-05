@@ -144,6 +144,12 @@ const zhHans = {
       publicUnavailable: "server_url 不是可用的 http(s) 地址",
       relayClientAddress: "客户端连接地址",
       syncChangedAt: "对外公布的地址已于 {at} 更新。",
+      syncUnchangedAt: "上次地址检查 {at}：没有变化。",
+      syncSkippedAt: "上次地址检查 {at}：没有需要更新的内容。",
+      syncFailedAt: "上次地址检查 {at} 失败。",
+      syncNever: "尚未运行任何地址检查。",
+      relaySetup: "中继地址、回显探测和地址同步都在 Headscale 设置中。{link}",
+      relaySetupLink: "前往设置",
       relayIpv4: "IPv4",
       relayIpv6: "IPv6",
       relayDeclaredMarker: "derp.server",
@@ -166,14 +172,9 @@ const zhHans = {
       relaySourceHost: "宿主机",
       relaySourceDnsUnverified: "DNS 未验证",
       relaySourceEcho: "互联网（回显）",
-      relaySourceHostUnconfirmed: "宿主机（未确认）",
       ipv6EchoMatches: "互联网看到的地址是 {address}，这台机器正好持有它。",
       ipv6EchoForwarded:
         "互联网看到的地址是 {address}，这台机器的任何网卡都没有它：客户端是通过 NAT66 或转发地址的路由器到达该地址的。",
-      ipv6UnconfirmedUnknown:
-        "Headplane 无法确认该容器与宿主机共用网络命名空间，因此这些地址可能属于容器本身。之所以仍然显示，是因为容器也可能确实共用宿主机的网络栈。",
-      ipv6UnconfirmedIsolated:
-        "该容器有自己的网络命名空间（发现了 veth 或网桥），因此这些地址属于容器，而不是宿主机。",
       ipv6ContradictionTitle: "声明的地址并非客户端实际可达的地址",
       ipv6ContradictionEcho: "derp.server.ipv6 声明了 {declared}，但互联网看到的是 {detected}。",
       ipv6ContradictionHost:
@@ -186,48 +187,14 @@ const zhHans = {
       ipv6ReasonEchoTimeout: "外部 IPv6 回显超时未应答。",
       ipv6ReasonEchoUnreachable: "无法连接到外部 IPv6 回显。",
       ipv6ReasonEchoInvalid: "外部 IPv6 回显没有返回可用的 IPv6 地址。",
-      candidatesTitle: "探测到的 IPv6 地址",
-      candidatesBody:
-        "Headplane 找到的全部公网 IPv6 地址、每个地址是否稳定，以及最终选中的是哪一个。",
-      candidatesSummary: "在这台机器上找到 {count} 个",
-      candidatesExcluded:
-        "另有 {count} 个地址被排除：链路本地、唯一本地、环回、组播、未指定以及 IPv4 映射地址都无法被客户端访问。",
-      candidateChosen: "已选中",
-      candidateStable: "稳定",
-      candidateUnknown: "稳定性未知",
-      candidateTemporary: "临时地址，会轮换",
-      candidateDns: "域名的 AAAA 指向它",
-      candidateEcho: "回显已确认",
-      candidateRealNic: "真实网卡 {interface}",
-      candidateVirtualNic: "虚拟网卡 {interface}",
-      candidateSources: "来自 {sources}",
-      echoTitle: "外部 IPv6 回显",
-      echoBody:
-        "向公共端点询问互联网看到的 IPv6 地址。当宿主机位于 NAT66 之后，或路由器转发了另一个地址时，这是唯一正确的来源。",
-      echoEnabledLabel: "使用公共回显端点",
-      echoEnabledDescription:
-        "默认关闭，因为这会向第三方发起请求。当客户端可达的地址可能不属于这台机器时再开启。",
-      echoUrlLabel: "回显端点",
-      echoUrlDescription: "优先请求的网址，仅通过 IPv6 发出。",
-      echoNote:
-        "请求只通过 IPv6 发出，并与其他查询一样带缓存。当该端点无响应时，会依次请求：{urls}",
-      echoSummary: "正在请求 {url}。",
-      echoSave: "保存回显设置",
-      echoSaved: "已保存。",
-      echoInvalidUrl: "请输入 http(s) 网址。",
-      echoWriteFailed: "Headplane 无法把该设置写入数据目录。",
-      echoInvalidAction: "不支持该操作。",
       ipv6NoneBody:
         "这台机器没有公网 IPv6 地址。请在 derp.server.ipv6 中声明一个，或修正域名的 DNS。",
       ipv6Alternates: "这台机器上的其他地址：{addresses}",
-      ipv6TemporaryNote:
-        "这台机器唯一的 IPv6 地址是临时（隐私）地址，会轮换。请在 derp.server.ipv6 中声明一个稳定地址。",
       ipv6MismatchTitle: "域名指向别处",
       ipv6MismatchBody:
         "域名的 AAAA 记录是 {dns}，但这台机器持有 {host}。该记录可能指向另一台机器，或是临时的隐私地址——请改用宿主机地址。",
       ipv6HostCopy: "复制宿主机地址",
-      ipv6UnverifiedNote:
-        "Headplane 在这里读不到宿主机自身的地址：容器没有与宿主机共用网络命名空间（请使用 network_mode: host）。这里显示的是域名的 DNS 答案，未经验证。",
+      ipv6UnverifiedNote: "域名的 DNS 答案，Headplane 无法与这台机器自身的地址核对。",
       stun: "STUN 监听地址",
       ipv6StunTitle: "STUN 仅监听 IPv4",
       ipv6StunBody:
@@ -1389,6 +1356,15 @@ const zhHans = {
           missingRecord:
             "derp.server.ipv6 声明了 {address}，但 {host} 完全没有 AAAA 记录，客户端无法通过 IPv6 使用中继。请为该主机名添加指向运行中继机器的 AAAA 记录，或接受仅 IPv4。主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 Headplane 即可清除。",
         },
+        derpMap: {
+          exists: { title: "DERP 地图文件存在（{path}）" },
+          readable: { title: "DERP 地图文件可读（{path}）" },
+          writable: { title: "DERP 地图文件可写（{path}）" },
+          size: { title: "DERP 地图文件在编辑大小上限内（{path}）" },
+          parses: { title: "DERP 地图是有效的 YAML（{path}）" },
+          schema: { title: "DERP 地图结构有效（{path}）" },
+          unique: { title: "DERP 地图区域 ID 与代码不重复（{path}）" },
+        },
       },
       selfUpdate: {
         title: "Headplane 有新版本",
@@ -1435,6 +1411,7 @@ const zhHans = {
         policy: "访问控制策略",
         dns: "DNS 记录",
         relay: "内嵌中继",
+        derpMaps: "DERP 地图文件",
       },
     },
     headscale: {
@@ -1852,9 +1829,11 @@ const zhHans = {
         sync: {
           title: "地址自动同步",
           body: "让 derp.server.ipv4 与 derp.server.ipv6 始终指向客户端可访问的地址。Headplane 会按计划检查，仅在地址确实变化时才写入 Headscale 配置文件。",
-          note: "IPv4 取自 server_url 的 A 记录，因为位于 NAT 之后的机器无法得知自己的公网地址；IPv6 取自本机自身的全局单播地址。检查失败时会保留原有配置值。",
+          note: "IPv4 取自 server_url 的 A 记录，因为位于 NAT 之后的机器无法得知自己的公网地址；IPv6 取自本机自身的全局单播地址，启用下方外部回显时则取自回显结果。未能获得可用地址时会完全保留原有配置值。",
+          overrideNote:
+            "检测到的地址始终优先。当它与 derp.server.ipv4 或 derp.server.ipv6 不一致时，运行会写入它——按地址族各写一个键，且只写真正发生变化的那一个——并在此之前创建快照、记录审计条目。",
           enabledLabel: "同步对外公布的地址",
-          enabledDescription: "按下方计划执行检查。默认关闭；无论是否开启，都可以点击“立即检查”。",
+          enabledDescription: "按下方计划执行两项检查。无论计划是否开启，检查与立即运行都可用。",
           intervalLabel: "检查间隔",
           intervalDescription: "多久检查一次地址。地址变化很慢，6、12 或 24 小时已经足够。",
           interval6: "每 6 小时",
@@ -1867,16 +1846,35 @@ const zhHans = {
           familyIpv6: "仅 IPv6",
           autoReloadLabel: "变更后重载 Headscale",
           autoReloadDescription:
-            "同步写入地址后，触发已配置的重载或重启集成。这会短暂中断所有已连接的客户端，因此默认关闭。",
+            "默认开启，写入的地址可立即生效。触发已配置的重载或重启会短暂中断所有已连接的客户端；关闭后可改为手动重载。没有发生变化的运行不会重载。",
           save: "保存同步设置",
-          runNow: "立即检查",
-          running: "正在检查…",
+          checkNow: "检查",
+          checking: "正在检查…",
+          runNow: "立即运行",
+          running: "正在运行…",
+          buttonsBody:
+            "两个按钮执行同样的两项检查：IPv4 取自 server_url 的 A 记录，IPv6 取自本机或外部回显。两者都会报告发现了什么、已变更或将要变更什么，以及跳过了什么。",
+          checkNote:
+            "「检查」不写入任何内容：不创建快照、不修改配置、也不会重载。「立即运行」只写入地址确实发生变化的键，然后按重载开关处理。",
+          alertNote:
+            "运行失败时——某个地址族未能获得可用地址、写入失败或重载失败——会通过「通知」页面上的通知设置上报。没有发生变化的运行不会告警，地址本身的变更也不会告警。",
           lastRun: "上次运行：{at}",
+          lastCheck: "上次检查：{at}",
           never: "尚未检查过对外公布的地址。",
+          checkWroteNothing: "这是一次检查：没有写入任何内容，也没有重载。",
           outcomeChanged: "地址已更新",
           outcomeUnchanged: "已是最新",
           outcomeSkipped: "无需更新",
           outcomeFailed: "检查失败",
+          outcomeWouldChange: "地址将被更新",
+          changesTitle: "变更",
+          wouldChangeTitle: "将要变更",
+          failureTitle: "本次运行失败的原因",
+          failureDetectionUnusable: "某个地址族未能获得可用地址，因此该键保持原样。",
+          failureNotWritable: "Headscale 配置文件不可写，因此无法写入变更后的地址。",
+          failureReloadFailed: "地址已写入，但自动重载失败。",
+          failureUnexpected: "运行因意外错误而中止。",
+          failureReported: "在通知设置启用时，该失败已通过通知设置上报。",
           detectedTitle: "检测结果",
           detectedLine: "{family}：{address}（{source}）",
           changeLine: "{family}：{from} → {to}",
@@ -1891,6 +1889,20 @@ const zhHans = {
           skipNoHostAddress: "{family}：本机没有全局单播地址。",
           skipNamespace: "{family}：Headplane 无法看到主机的网络命名空间。",
           skipConfigNotWritable: "Headscale 配置文件不可写，因此没有写入任何内容。",
+          detectionTitle: "检测候选地址",
+          detectionSummary: "{count} 个候选地址",
+          detectionBody:
+            "检查考虑过的每个地址，按排序排列，并说明每个地址被选中或未被选中的原因。为保持卡片紧凑，该面板默认折叠。",
+          detectionEmpty: "尚未执行过检测。",
+          candidateLine: "{family}：{address} — {source}，{reason}",
+          candidateSelected: "已选中",
+          candidateRankedLower: "可用，但排序低于另一个地址",
+          candidateTemporary: "会轮换的隐私地址，因此优先选择了稳定地址",
+          candidateNotPublic: "不是可用的公网地址，因此被拒绝",
+          candidateEchoWins: "被外部回显结果覆盖",
+          candidateExcluded: "在网卡上出现，但不是全局单播地址",
+          temporaryHint:
+            "选中的 IPv6 地址是临时（隐私）地址，会轮换并再次变化。建议改用同一网卡上的稳定地址，并在其变化后检查 derp.server.ipv6。",
           sourceDns: "DNS A 记录",
           sourceHost: "主机网卡",
           sourceEcho: "外部 IPv6 回显",
@@ -1900,6 +1912,20 @@ const zhHans = {
           reloadTriggered: "已自动重载 Headscale；已连接的客户端曾被短暂中断。",
           reloadFailed: "自动重载失败。请手动重载或重启 Headscale 使变更生效。",
           snapshotNote: "写入前已先为原有配置创建快照：{snapshot}。",
+          echoTitle: "外部 IPv6 回显",
+          echoBody:
+            "向公共端点查询互联网看到的 IPv6 地址。这才是客户端真正可访问的地址，因此只要它给出应答，就优先于本机持有的任何地址。",
+          echoEnabledLabel: "使用外部 IPv6 回显",
+          echoEnabledDescription:
+            "默认关闭。开启后，Headplane 每次运行或检查都会向下方的端点发出一次 IPv6 请求。",
+          echoUrlLabel: "回显端点",
+          echoUrlDescription: "优先查询的端点。它无应答时会依次尝试内置的备用端点。",
+          echoNote:
+            "备用端点为 {urls}。该请求仅使用 IPv6，因此没有可用 IPv6 路由的主机不会得到应答。",
+          echoPrivacy:
+            "这是向第三方发出的请求：该端点会得知本机访问互联网所用的 IPv6 地址。相关信息不会写入 Headscale 配置，除该请求外也不会发送任何数据。",
+          echoSave: "保存回显设置",
+          echoSaved: "回显设置已保存。",
         },
         mapIssues: {
           position: "{message}（第 {line} 行，第 {column} 列）",
@@ -2039,6 +2065,8 @@ const zhHans = {
         invalidDerpSyncInterval: "请选择 6、12 或 24 小时作为检查间隔。",
         invalidDerpSyncFamilies: "请选择同步可以更新的地址族。",
         derpSyncSaveFailed: "同步设置无法保存。请确认 Headplane 可以写入其数据目录。",
+        invalidHostEchoUrl: "请输入 IPv6 回显端点的绝对 http 或 https URL。",
+        hostEchoSaveFailed: "回显设置无法写入 Headplane 的数据目录。",
         invalidOidcExtraParams: "每个额外参数都需要不含空格的名称和值，请删除空行或填写完整。",
         duplicateOidcExtraParam: "同一个参数名出现了多次，每个名称只能保留一行。",
         invalidHaProbeInterval: "请输入不小于 2s 的时长（例如 10s），或填 0 停用 HA 探测。",
@@ -2509,6 +2537,7 @@ const zhHans = {
       eventNodeOnline: "节点恢复在线",
       eventApiKeyExpiring: "API 密钥即将过期",
       eventConfigCheckFailed: "配置检查失败",
+      eventDerpSyncFailed: "DERP 地址同步失败",
       eventTest: "测试通知",
       errors: {
         invalidAction: "无法识别该请求。",

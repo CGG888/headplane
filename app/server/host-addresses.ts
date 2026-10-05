@@ -41,8 +41,10 @@
  *
  * A process whose network namespace cannot be shown to be the host's still gets
  * its candidates reported — the container may legitimately share the host's
- * stack — but they are marked unconfirmed, with the reason, instead of being
- * hidden or silently promoted to "the host's address".
+ * stack — but they are marked unconfirmed, with the namespace verdict next to
+ * them, instead of being hidden or silently promoted to "the host's address". A
+ * container interface is never read as proof of isolation: a host that runs
+ * Docker shows the same bridges and veths in its own namespace.
  *
  * Everything here is read-only and fail-soft: an unreadable interface list, a
  * missing `/proc` entry or a platform without `/sys/class/net` degrades to an
@@ -698,8 +700,11 @@ export function selectRelayIpv6(input: RelayIpv6Input = {}): RelayIpv6Selection 
  * Where the process's network namespace stands relative to the host's.
  *
  * `host` means the machine's addresses can be trusted; `isolated` means the
- * process has its own namespace and enumerates its own interfaces; `unknown`
- * means neither could be shown, which is reported instead of guessed at.
+ * process is known to have its own namespace and enumerates only its own
+ * interfaces; `unknown` means neither could be shown, which is reported instead
+ * of guessed at. {@link classifyNetworkNamespace} never returns `isolated`:
+ * a container interface is not proof of anything, so the strongest verdict that
+ * rule can justify is `host` or "cannot tell".
  */
 export type HostNamespace = "host" | "isolated" | "unknown";
 
@@ -708,8 +713,12 @@ export interface NetworkNamespaceProbe {
   platform: string;
   /** True when a container runtime marker was found. */
   containerized: boolean;
-  /** Interfaces backed by a real device (`/sys/class/net/<name>/device`). */
-  deviceBacked: readonly string[];
+  /**
+   * Interfaces that are backed by a real device
+   * (`/sys/class/net/<name>/device`) *and* carry a global unicast address. That
+   * combination is the one shape only the host's own NIC can have.
+   */
+  deviceBackedGlobal: readonly string[];
   /** Interfaces whose peer lives in another namespace (`iflink != ifindex`). */
   vethLike: readonly string[];
 }
@@ -718,33 +727,32 @@ export interface NetworkNamespaceProbe {
  * Whether this process shares the host's network namespace.
  *
  * Only Linux isolates a process into a network namespace, so every other
- * platform is the host. In a container, the two shapes are unambiguous: a
- * container with its own namespace reaches the network through a veth (whose
- * `iflink` names a peer in another namespace) and never sees a device-backed
- * NIC, while `network_mode: host` shows the host's own NICs, which stay
- * device-backed even when they are virtio. Neither shape means "cannot tell",
- * and that is what gets reported rather than a guess.
+ * platform is the host. There, a device-backed NIC that carries a global
+ * unicast address settles it: a container with its own namespace reaches the
+ * network through a veth and never sees one, while `network_mode: host` shows
+ * the host's NICs exactly as they are.
+ *
+ * Bridges and veths decide nothing. A host that runs Docker always has
+ * `docker0`, `br-*` and `veth*` in the very namespace this process is reading,
+ * so finding them says nothing about which namespace that is — the earlier
+ * reading of them as proof of isolation was wrong. Without such a NIC the
+ * verdict is therefore "cannot tell" whenever a container marker or a
+ * container-style interface is in play, and it is never asserted that the
+ * process is isolated.
  */
 export function classifyNetworkNamespace(probe: NetworkNamespaceProbe): HostNamespace {
   if (probe.platform !== "linux") {
     return "host";
   }
 
-  if (probe.containerized) {
-    if (probe.vethLike.length > 0) {
-      return "isolated";
-    }
-
-    return probe.deviceBacked.length > 0 ? "host" : "unknown";
-  }
-
-  // A host that merely runs containers keeps its own device-backed NIC as well,
-  // which is what the first branch checks before a stray veth means anything.
-  if (probe.deviceBacked.length > 0) {
+  if (probe.deviceBackedGlobal.length > 0) {
     return "host";
   }
 
-  return probe.vethLike.length > 0 ? "unknown" : "host";
+  // No NIC of the host's own carries a global address. A veth or a bridge is a
+  // hint that this may be a container-only view, never a demonstration of it,
+  // so it is reported as "unknown" rather than as "isolated".
+  return probe.containerized || probe.vethLike.length > 0 ? "unknown" : "host";
 }
 
 // MARK: Reading the machine
@@ -963,38 +971,39 @@ async function probeInterfaces(
   return { evidence, readable: true };
 }
 
-/** What {@link classifyNetworkNamespace} decided, from the same sources. */
-async function probeNamespace(
+/** Whether a container runtime marker was found; a failed probe reads as "no". */
+async function probeContainerized(deps: HostAddressProbeDeps): Promise<boolean> {
+  if (deps.platform !== "linux") {
+    return false;
+  }
+
+  try {
+    return await deps.containerized();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The interfaces whose peer lives in another namespace. They are collected only
+ * as a hint for {@link classifyNetworkNamespace}: on a machine that runs Docker
+ * the host's own namespace holds them too, so finding one proves nothing.
+ */
+async function probeVethLike(
   deps: HostAddressProbeDeps,
   names: readonly string[],
-): Promise<HostNamespace> {
+): Promise<string[]> {
   if (deps.platform !== "linux") {
-    return "host";
+    return [];
   }
 
-  const usable = names.filter(isSafeInterfaceName);
-  let containerized = false;
-  try {
-    containerized = await deps.containerized();
-  } catch {
-    containerized = false;
-  }
+  const found = await Promise.all(
+    names
+      .filter(isSafeInterfaceName)
+      .map(async (name) => ((await isVethLike(deps, name)) ? name : undefined)),
+  );
 
-  const [deviceBacked, vethLike] = await Promise.all([
-    Promise.all(
-      usable.map(async (name) =>
-        (await sysFlag(deps, `${SYS_CLASS_NET}/${name}/device`)) ? name : undefined,
-      ),
-    ),
-    Promise.all(usable.map(async (name) => ((await isVethLike(deps, name)) ? name : undefined))),
-  ]);
-
-  return classifyNetworkNamespace({
-    platform: deps.platform,
-    containerized,
-    deviceBacked: deviceBacked.filter((name): name is string => name !== undefined),
-    vethLike: vethLike.filter((name): name is string => name !== undefined),
-  });
+  return found.filter((name): name is string => name !== undefined);
 }
 
 /** One candidate while the sources are being merged. */
@@ -1036,9 +1045,10 @@ async function collect(deps: HostAddressProbeDeps): Promise<HostIpv6Addresses> {
     ...new Set([...Object.keys(interfaces), ...proc.map((entry) => entry.interfaceName)]),
   ].filter(isSafeInterfaceName);
 
-  const [{ evidence, readable: sysReadable }, namespace] = await Promise.all([
+  const [{ evidence, readable: sysReadable }, vethLike, containerized] = await Promise.all([
     probeInterfaces(deps, names),
-    probeNamespace(deps, names),
+    probeVethLike(deps, names),
+    probeContainerized(deps),
   ]);
   if (!sysReadable) {
     reasons.push("sys-unreadable");
@@ -1102,6 +1112,23 @@ async function collect(deps: HostAddressProbeDeps): Promise<HostIpv6Addresses> {
       origins: [...candidate.origins].sort(),
     }))
     .sort(compareHostIpv6Candidates);
+
+  // A real NIC that carries one of these global addresses can only be the
+  // host's own, whatever bridges and veths are also visible; the namespace rule
+  // reads that fact from the candidates rather than from a second `/sys` pass.
+  const deviceBackedGlobal = [
+    ...new Set(
+      [...candidates.values()]
+        .filter((candidate) => candidate.realNic === true)
+        .map((candidate) => candidate.interfaceName),
+    ),
+  ];
+  const namespace = classifyNetworkNamespace({
+    platform: deps.platform,
+    containerized,
+    deviceBackedGlobal,
+    vethLike,
+  });
 
   return {
     namespace,

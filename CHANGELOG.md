@@ -1,5 +1,17 @@
 # Next
 
+## Changes
+
+- **The relay addresses are configured in one place now.** Everything — the schedule (6/12/24 hours), which families to sync, the auto-reload switch, the **external IPv6 echo** with its URL, and the detection panel listing every candidate with its origin and why it was or was not chosen — lives in **Settings → Headscale → DERP → address auto-sync**. **Check** runs both detections and the comparison and writes nothing; **Run now** writes only the key that changed, after snapshotting the configuration and recording an audit entry. The detected address is authoritative (state it plainly), **auto-reload defaults to on** so clients see a change immediately — with the warning that it briefly interrupts them, and a run that changes nothing never reloads. A failing run raises a notification through the existing alert system (a successful change does not), and the temporary/privacy-address hint lives only here.
+- **The Overview relay card is read-only.** It shows the resulting IPv4 and IPv6 with the copy affordance, the STUN row, a one-line last-run status and a link to the settings card, with amber warnings only when something is genuinely wrong. The resolver pill, the re-resolve button, the echo switch, the candidate list and the namespace explanations are gone.
+
+## Fixes
+
+- **"Latency by region" no longer says "unknown".** The agent reports its measurements under keys of the shape `<regionID>-v4` / `<regionID>-v6`, not bare ids, so every row used to fall back to the unknown label; the parser now accepts string, numeric, suffixed and code-like keys, still resolves names through the existing chain, shows the raw key when nothing matches, and collapses a region measured over both families into one row.
+- **A host running Docker is recognised as the host again.** `docker0`, `br-*` and `veth*` are always visible in a `network_mode: host` container, so their presence is no longer treated as evidence that the container has its own network namespace — a device-backed NIC carrying a global address is what says "host". The auto-sync accordingly never writes an address whose provenance is not trustworthy: a family is skipped when the namespace is not the host's, unless the external echo (the authority when a router forwards or translates) provided the value.
+- The page no longer reloads in a loop when a route chunk is missing during hydration: the client checks the guard before hydrating and shows the localized "your page is out of date" notice with a manual reload instead of letting the router reload again.
+- The local DERP map file checks (exists, readable, writable, size, parses, schema, unique region ids and codes) now also appear in the system page's configuration check list.
+- The machine detail relay card shows the relay's IPv4 and IPv6 with the same copy affordance, taken from the same configuration values the settings page manages, so the three views always agree.
 # 0.22.4 (October 6, 2026)
 
 ## Fixes

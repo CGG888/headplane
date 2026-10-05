@@ -47,6 +47,8 @@ const ULA = "fd9b:d247:c700::793";
 const ULA_TEMP = "fd9b:d247:c700:0:152f:808e:9eb1:31c9";
 const LINK_LOCAL = "fe80::1";
 const BRIDGE_LINK_LOCAL = "fe80::42:acff:fe11:1";
+/** A global address that sits on a veth, so on no device-backed NIC at all. */
+const VETH_GLOBAL = "240e:3b3:4030:1510::9";
 
 const HOST_INTERFACES: Record<string, NetworkInterfaceInfo[] | undefined> = {
   lo: [iface("::1", "IPv6", true), iface("127.0.0.1", "IPv4", true)],
@@ -197,7 +199,7 @@ describe("loadHostIpv6Addresses", () => {
     expect(result.namespace).toBe("unknown");
   });
 
-  test("a bridged container is isolated and still reports its own addresses", async () => {
+  test("a bridged container is never asserted to be isolated", async () => {
     const result = await loadHostIpv6Addresses({
       deps: hostDeps({
         networkInterfaces: () => ({
@@ -220,9 +222,46 @@ describe("loadHostIpv6Addresses", () => {
       }),
     });
 
-    expect(result.namespace).toBe("isolated");
+    // A veth is a hint, not a demonstration: the container may be sharing the
+    // host's stack, and nothing here can tell the two apart.
+    expect(result.namespace).toBe("unknown");
     // Only link-local IPv6 addresses exist, so there is nothing to advertise.
     expect(result.candidates).toEqual([]);
+  });
+
+  test("a host-networked container with docker bridges and veths is still the host", async () => {
+    // The reported bug: `network_mode: host` on a machine that runs Docker sees
+    // docker0, the container bridges and their veths in the host's own
+    // namespace. The device-backed NIC carrying a global address settles it.
+    const result = await loadHostIpv6Addresses({
+      deps: hostDeps({
+        networkInterfaces: () => ({
+          ...HOST_INTERFACES,
+          veth1a2b: [iface(BRIDGE_LINK_LOCAL, "IPv6"), iface(VETH_GLOBAL, "IPv6")],
+        }),
+        readText: async (path) => {
+          if (path === "/proc/net/if_inet6") {
+            return HOST_PROC;
+          }
+
+          if (path.endsWith("/iflink")) {
+            return path.includes("veth") ? "9\n" : "2\n";
+          }
+
+          if (path.endsWith("/ifindex")) {
+            return path.includes("veth") ? "42\n" : "2\n";
+          }
+
+          throw new Error(`ENOENT: ${path}`);
+        },
+        containerized: async () => true,
+      }),
+    });
+
+    expect(result.namespace).toBe("host");
+    // The veth's own global address is visible, but it is not a device-backed
+    // NIC, so it keeps its unknown stability and ranks after the stable one.
+    expect(result.candidates.map((entry) => entry.address)).toEqual([STABLE, VETH_GLOBAL, PRIVACY]);
   });
 
   test("an unreadable OS list still leaves what /proc knows", async () => {
@@ -422,70 +461,68 @@ describe("classifyNetworkNamespace", () => {
       classifyNetworkNamespace({
         platform: "win32",
         containerized: true,
-        deviceBacked: [],
+        deviceBackedGlobal: [],
         vethLike: ["eth0"],
       }),
     ).toBe("host");
   });
 
-  test("a container with its own veth is isolated", () => {
+  test("a real NIC with a global address is the host, whatever else is visible", () => {
+    // The reported bug: a `network_mode: host` container on a host that runs
+    // Docker sees docker0, br-* and veth* as well. Their presence is not
+    // evidence of isolation — the host's own namespace holds them too — and the
+    // device-backed NIC settles it.
     expect(
       classifyNetworkNamespace({
         platform: "linux",
         containerized: true,
-        deviceBacked: [],
+        deviceBackedGlobal: ["ens18"],
+        vethLike: ["veth1a2b", "br-9c1f4d2e8a70"],
+      }),
+    ).toBe("host");
+  });
+
+  test("a container with only a veth is unknown, never isolated", () => {
+    expect(
+      classifyNetworkNamespace({
+        platform: "linux",
+        containerized: true,
+        deviceBackedGlobal: [],
         vethLike: ["eth0"],
       }),
-    ).toBe("isolated");
-  });
-
-  test("a host-networked container sees the host's own NICs", () => {
+    ).toBe("unknown");
+    // A device-backed NIC that carries no global address proves nothing either:
+    // a host-networked container on a machine with no public IPv6 looks the
+    // same as a bridged one.
     expect(
       classifyNetworkNamespace({
         platform: "linux",
         containerized: true,
-        deviceBacked: ["eth0"],
-        vethLike: [],
-      }),
-    ).toBe("host");
-  });
-
-  test("a container with neither shape cannot be told apart", () => {
-    expect(
-      classifyNetworkNamespace({
-        platform: "linux",
-        containerized: true,
-        deviceBacked: [],
+        deviceBackedGlobal: [],
         vethLike: [],
       }),
     ).toBe("unknown");
   });
 
-  test("a bare-metal host with only container bridges stays the host", () => {
+  test("a plain host with no container interfaces stays the host", () => {
     expect(
       classifyNetworkNamespace({
         platform: "linux",
         containerized: false,
-        deviceBacked: [],
-        vethLike: ["veth1a2b"],
-      }),
-    ).toBe("unknown");
-    expect(
-      classifyNetworkNamespace({
-        platform: "linux",
-        containerized: false,
-        deviceBacked: ["eno1"],
-        vethLike: ["veth1a2b"],
-      }),
-    ).toBe("host");
-    expect(
-      classifyNetworkNamespace({
-        platform: "linux",
-        containerized: false,
-        deviceBacked: [],
+        deviceBackedGlobal: [],
         vethLike: [],
       }),
     ).toBe("host");
+    // A host that runs containers, but whose own NIC carries no global address,
+    // cannot be told from a container: "cannot tell", not a guess.
+    expect(
+      classifyNetworkNamespace({
+        platform: "linux",
+        containerized: false,
+        deviceBackedGlobal: [],
+        vethLike: ["veth1a2b"],
+      }),
+    ).toBe("unknown");
   });
 });
 
@@ -588,23 +625,18 @@ describe("selectRelayIpv6", () => {
       mismatch: true,
       dns: ["2001:db8::99"],
     });
-    expect(relayIpv6NoteKind(selection)).toEqual({
-      kind: "unconfirmed",
-      namespace: "isolated",
-    });
+    // The card never words the namespace verdict any more: no note at all.
+    expect(relayIpv6NoteKind(selection)).toBeUndefined();
   });
 
-  test("an unconfirmed namespace keeps the address and labels it", () => {
+  test("an unconfirmed namespace keeps the address and says nothing about it", () => {
     const selection = selectRelayIpv6({
       candidates: [candidate("2001:db8::1")],
       namespace: "unknown",
     });
 
     expect(selection).toMatchObject({ source: "host", unconfirmed: true, namespace: "unknown" });
-    expect(relayIpv6NoteKind(selection)).toEqual({
-      kind: "unconfirmed",
-      namespace: "unknown",
-    });
+    expect(relayIpv6NoteKind(selection)).toBeUndefined();
   });
 
   test("a container with nothing found reports the resolver's reason", () => {
@@ -641,14 +673,15 @@ describe("selectRelayIpv6", () => {
     });
   });
 
-  test("a machine that only holds a privacy address says it rotates", () => {
+  test("a machine that only holds a privacy address rotates silently", () => {
     const selection = selectRelayIpv6({
       candidates: [candidate(PRIVACY, "ens18", { temporary: true, realNic: true })],
       namespace: "host",
     });
 
     expect(selection).toMatchObject({ source: "host", temporary: true });
-    expect(relayIpv6NoteKind(selection)).toEqual({ kind: "temporary" });
+    // The hint lives in the settings card now; this card does not word it.
+    expect(relayIpv6NoteKind(selection)).toBeUndefined();
   });
 
   test("a declared address no source agrees with becomes a contradiction", () => {

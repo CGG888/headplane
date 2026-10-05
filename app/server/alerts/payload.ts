@@ -44,6 +44,10 @@ const EVENT_TEXT: Record<AlertHistoryEventId, { title: string; summary: string }
     title: "Configuration check failing",
     summary: "The Headscale configuration check {target} is failing.",
   },
+  derpSyncFailed: {
+    title: "DERP address sync failed",
+    summary: "The embedded DERP address sync failed ({target}).",
+  },
   test: {
     title: "Test notification",
     summary: "This is a test notification from Headplane.",

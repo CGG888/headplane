@@ -16,7 +16,7 @@ import type { Headscale } from "~/server/headscale/api";
 import { nodesResource, type LiveStore } from "~/server/headscale/live-store";
 import log from "~/utils/log";
 
-import { detectAlertEvents, sameAlertState } from "./events";
+import { alertSeverity, detectAlertEvents, emitAlertEvent, sameAlertState } from "./events";
 import {
   createAlertDelivery,
   notifyAlert,
@@ -71,6 +71,12 @@ export interface AlertService {
   test(override?: Pick<AlertSettings, "webhookUrl" | "secret">): Promise<AlertDeliveryOutcome>;
   /** One detection pass; a no-op while notifications are disabled. */
   runOnce(): Promise<void>;
+  /**
+   * Reports the newest DERP address sync result. A run that starts failing
+   * alerts once, through the same rules and history as every other event; a
+   * successful run only clears the remembered failure.
+   */
+  reportDerpSync(input: { failed: boolean; reason?: string }): Promise<void>;
   start(): void;
   dispose(): void;
 }
@@ -250,6 +256,81 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
     }
   }
 
+  /**
+   * The DERP sync's out-of-band report. It goes through the same emitter (so the
+   * enabled/selected filter and the cooldown apply) and the same notifier (so
+   * the delivery lands in the history), but the transition it compares against
+   * is the sync's own state flag rather than a snapshot section.
+   */
+  async function reportDerpSync(input: { failed: boolean; reason?: string }): Promise<void> {
+    await ensureLoaded();
+    if (!document.settings.enabled || !isValidAlertWebhookUrl(document.settings.webhookUrl)) {
+      // The notifier is off, so nothing is recorded: turning it on later and
+      // seeing another failure is a real transition worth reporting.
+      return;
+    }
+
+    const previous = document.state;
+
+    if (!input.failed) {
+      // A run that succeeded clears the flag so the next failure is a new
+      // transition; it never sends anything.
+      if (previous.derpSyncFailed) {
+        document = { ...document, state: { ...previous, derpSyncFailed: false } };
+        await persist();
+      }
+
+      return;
+    }
+
+    if (previous.derpSyncFailed) {
+      // Still failing: the transition already fired, so nothing is re-sent.
+      return;
+    }
+
+    const at = now();
+    const sent = { ...previous.sent };
+    const event = emitAlertEvent(
+      sent,
+      {
+        id: "derpSyncFailed",
+        severity: alertSeverity("derpSyncFailed"),
+        at: at.toISOString(),
+        ...(input.reason === undefined ? {} : { target: input.reason }),
+      },
+      document.settings,
+      at,
+    );
+
+    if (event === undefined) {
+      // Suppressed (notifications off, the event deselected, or the cooldown):
+      // remember the failure without delivering it, exactly like a change the
+      // detector would have recorded but not sent.
+      document = { ...document, state: { ...previous, derpSyncFailed: true, sent } };
+      await persist();
+      return;
+    }
+
+    const result = await notifyAlert({
+      settings: document.settings,
+      payload: buildAlertPayload(event, __VERSION__),
+      history: document.history,
+      event: event.id,
+      target: event.target,
+      threshold: event.threshold,
+      at: now(),
+      timeoutMs: options.timeoutMs,
+      fetchImpl: options.fetchImpl,
+    });
+
+    document = {
+      ...document,
+      history: result.history,
+      state: { ...previous, derpSyncFailed: true, sent },
+    };
+    await persist();
+  }
+
   return {
     async ready() {
       await ensureLoaded();
@@ -305,6 +386,8 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
     },
 
     runOnce,
+
+    reportDerpSync,
 
     start() {
       // Lazy: startup must not wait on the store, and a disabled configuration

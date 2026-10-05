@@ -10,6 +10,7 @@ export const ALERT_EVENT_ORDER = [
   "nodeOnline",
   "apiKeyExpiring",
   "configCheckFailed",
+  "derpSyncFailed",
 ] as const satisfies readonly AlertEventId[];
 
 /** Localized label for every event the delivery history can contain. */
@@ -20,5 +21,6 @@ export const ALERT_EVENT_KEYS: Record<AlertHistoryEventId, TranslationKey> = {
   nodeOnline: "settings.notifications.eventNodeOnline",
   apiKeyExpiring: "settings.notifications.eventApiKeyExpiring",
   configCheckFailed: "settings.notifications.eventConfigCheckFailed",
+  derpSyncFailed: "settings.notifications.eventDerpSyncFailed",
   test: "settings.notifications.eventTest",
 };

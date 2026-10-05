@@ -25,6 +25,7 @@ import {
 } from "../derp-info";
 import { type RelayAddressLine, type RelayFamilyReason } from "../relay-verdicts";
 import MachineAttribute from "./attribute";
+import CopyValue from "./copy-value";
 import MachineCard from "./machine-card";
 import RelayResolver from "./relay-resolver";
 
@@ -140,10 +141,7 @@ export default function DerpInfo({
   const view = buildDerpInfo(stats, server, unknown, regions);
 
   const latency = view.latencies.rows
-    .map(
-      (row) =>
-        `${resolveDerpRegionLabel(row.regionId, sources, unknown).label} · ${formatDerpLatency(row.seconds)}`,
-    )
+    .map((row) => `${row.label} · ${formatDerpLatency(row.seconds)}`)
     .join("\n");
 
   // Both families are one line each, exactly as the loader prepared them: the
@@ -202,12 +200,13 @@ export default function DerpInfo({
                   </span>
                   {line.addresses.length > 0 ? (
                     line.addresses.map((address) => (
-                      <span
-                        className="font-mono text-xs break-all text-mist-900 dark:text-mist-50"
+                      <CopyValue
+                        className="w-auto"
+                        copiedMessage={t("common.copied")}
                         key={address}
-                      >
-                        {address}
-                      </span>
+                        reveal="always"
+                        value={address}
+                      />
                     ))
                   ) : (
                     <span className="text-xs text-mist-500 dark:text-mist-400">

@@ -19,7 +19,13 @@
 import { parseIpv4, parseIpv6 } from "~/routes/settings/headscale/trusted-proxies";
 import { classifyIpv6Address } from "~/server/host-addresses";
 
-import type { DerpSyncFamily, DerpSyncValue } from "./types";
+import type {
+  DerpSyncCandidate,
+  DerpSyncCandidateReason,
+  DerpSyncFamily,
+  DerpSyncSource,
+  DerpSyncValue,
+} from "./types";
 
 // MARK: IPv4
 
@@ -166,9 +172,107 @@ export function canonicalSyncAddress(family: DerpSyncFamily, value: string): str
   return canonical ?? value.trim().toLowerCase();
 }
 
-/** Whether the configured address and the detected one are the same address. */
+/** The configured address and the detected one are the same address. */
 export function syncAddressesMatch(family: DerpSyncFamily, a: string, b: string): boolean {
   return canonicalSyncAddress(family, a) === canonicalSyncAddress(family, b);
+}
+
+// MARK: Candidates
+//
+// The settings card shows the whole decision, not just its outcome, so every
+// detection reports the answers it considered. These builders turn the raw
+// answers into panel rows: the chosen one, the usable alternates that ranked
+// below it, and the answers a rule rejected.
+
+/** One IPv4 answer a detection considered, before it is ranked. */
+export interface DerpSyncIpv4CandidateInput {
+  address: string;
+  /** A DNS answer or a literal address in `server_url`. */
+  source: DerpSyncSource;
+}
+
+/** Panel rows for the IPv4 answers a detection saw. */
+export function buildIpv4Candidates(
+  inputs: readonly DerpSyncIpv4CandidateInput[],
+  chosen: string | undefined,
+): DerpSyncCandidate[] {
+  return inputs.map((input) => {
+    const address = input.address.trim();
+    const selected = chosen !== undefined && syncAddressesMatch("ipv4", address, chosen);
+    const kind = classifySyncIpv4(address);
+    const publicAddress = kind === "public";
+
+    return {
+      family: "ipv4",
+      address,
+      source: input.source,
+      chosen: selected,
+      reason: selected ? "selected" : publicAddress ? "ranked-lower" : "not-public",
+      ...(publicAddress ? {} : { detail: kind }),
+    } satisfies DerpSyncCandidate;
+  });
+}
+
+/** One address read from a host interface, as the IPv6 detection saw it. */
+export interface DerpSyncIpv6CandidateInput {
+  address: string;
+  interfaceName: string;
+  /** The kernel marks it as a rotating RFC 4941 privacy address. */
+  temporary: boolean;
+}
+
+/**
+ * Panel rows for the host's own IPv6 addresses.
+ *
+ * `echoApplied` says the external echo answer won, which is why none of these
+ * was chosen; a temporary candidate then reads as overridden rather than as
+ * merely outranked.
+ */
+export function buildIpv6HostCandidates(
+  inputs: readonly DerpSyncIpv6CandidateInput[],
+  chosen: string | undefined,
+  echoApplied: boolean,
+): DerpSyncCandidate[] {
+  return inputs.map((input) => {
+    const address = input.address.trim();
+    const selected = chosen !== undefined && syncAddressesMatch("ipv6", address, chosen);
+    const reason: DerpSyncCandidateReason = selected
+      ? "selected"
+      : echoApplied
+        ? "echo-wins"
+        : input.temporary
+          ? "temporary"
+          : "ranked-lower";
+
+    return {
+      family: "ipv6",
+      address,
+      source: "host",
+      chosen: selected,
+      reason,
+      ...(input.temporary ? { temporary: true } : {}),
+      ...(input.interfaceName.length > 0 ? { interfaceName: input.interfaceName } : {}),
+    } satisfies DerpSyncCandidate;
+  });
+}
+
+/**
+ * Panel rows for the addresses the host probe saw and excluded. They are shown
+ * rather than hidden, so "this machine has an address but it is a ULA" is
+ * visible instead of looking like a machine with no IPv6 at all.
+ */
+export function buildIpv6ExcludedCandidates(
+  excluded: readonly { address: string; interfaceName: string; kind: string }[],
+): DerpSyncCandidate[] {
+  return excluded.map((entry) => ({
+    family: "ipv6",
+    address: entry.address.trim(),
+    source: "host",
+    chosen: false,
+    reason: "excluded",
+    ...(entry.interfaceName.length > 0 ? { interfaceName: entry.interfaceName } : {}),
+    detail: entry.kind,
+  }));
 }
 
 // MARK: Server URL

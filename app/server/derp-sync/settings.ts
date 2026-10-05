@@ -18,8 +18,10 @@ export const DEFAULT_DERP_SYNC_SETTINGS: DerpSyncSettings = {
   enabled: false,
   intervalHours: 12,
   families: "both",
-  // A reload briefly interrupts clients, so it is never implied by "enabled".
-  autoReload: false,
+  // On by default: an address written into the configuration file only reaches
+  // clients after a reload, and a reload briefly interrupts them. The switch
+  // exists so an operator can decide to reload by hand instead.
+  autoReload: true,
 };
 
 /** Only the offered intervals are accepted; anything else is not schedulable. */
@@ -59,7 +61,9 @@ export function normalizeDerpSyncSettings(value: unknown): DerpSyncSettings {
     families: isDerpSyncFamilies(source.families)
       ? source.families
       : DEFAULT_DERP_SYNC_SETTINGS.families,
-    autoReload: source.autoReload === true,
+    // Only an explicit "false" turns the reload off; a document written before
+    // the default changed, or one missing the key, gets the default (on).
+    autoReload: source.autoReload !== false,
   };
 }
 

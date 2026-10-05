@@ -10,6 +10,7 @@ import {
   readExtraRecordsPath,
   relayAddressDisplay,
   relayHostSummary,
+  relayIpv6NoteKind,
   stunBindHost,
   summarizeFleetTrend,
   tallyChecks,
@@ -17,6 +18,7 @@ import {
   textOrReason,
 } from "~/routes/overview-helpers";
 import type { FleetTrend } from "~/server/history/timeline";
+import { selectRelayIpv6 } from "~/server/host-addresses";
 
 describe("countNodeStatus", () => {
   test("splits the nodes by their online flag", () => {
@@ -281,6 +283,51 @@ describe("textOrReason", () => {
     expect(textOrReason(undefined, "missing")).toEqual({ reason: "missing" });
     expect(textOrReason("   ", "missing")).toEqual({ reason: "missing" });
     expect(textOrReason(null, "missing")).toEqual({ reason: "missing" });
+  });
+});
+
+describe("relayIpv6NoteKind", () => {
+  const candidate = (address: string, extra: Record<string, unknown> = {}) => ({
+    address,
+    interfaceName: "eth0",
+    ...extra,
+  });
+
+  test("an unconfirmed namespace and a rotating address are silent on the card", () => {
+    // Both used to be worded here; the temporary hint lives in the settings
+    // card now, and the namespace verdict is gone rather than guessed at.
+    expect(
+      relayIpv6NoteKind(
+        selectRelayIpv6({ candidates: [candidate("2001:db8::1")], namespace: "unknown" }),
+      ),
+    ).toBeUndefined();
+    expect(
+      relayIpv6NoteKind(
+        selectRelayIpv6({
+          candidates: [candidate("2001:db8::9", { temporary: true })],
+          namespace: "host",
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a DNS row nobody could check against this machine keeps its note", () => {
+    expect(
+      relayIpv6NoteKind(
+        selectRelayIpv6({ candidates: [], dns: ["2001:db8::99"], namespace: "unknown" }),
+      ),
+    ).toEqual({ kind: "unverified" });
+  });
+
+  test("a value that speaks for itself has no note", () => {
+    expect(
+      relayIpv6NoteKind(
+        selectRelayIpv6({
+          candidates: [candidate("2001:db8::1", { temporary: false, realNic: true })],
+          namespace: "host",
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 

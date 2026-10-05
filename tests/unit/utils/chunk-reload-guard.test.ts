@@ -2,14 +2,17 @@ import { describe, expect, test } from "vitest";
 
 import {
   AUTO_RELOAD_WINDOW_MS,
+  browserGuardStorage,
   CHUNK_RELOAD_STORAGE_KEY,
   clearReloadAttempt,
+  createBrowserChunkReloadGuard,
   createChunkReloadGuard,
   isChunkAssetUrl,
   isChunkLoadErrorMessage,
   readReloadAttempt,
   recordReloadAttempt,
   shouldAutoReload,
+  shouldSkipAutoReloadOnBoot,
   type GuardStorage,
 } from "~/utils/chunk-reload-guard";
 
@@ -93,6 +96,62 @@ describe("storage helpers", () => {
     expect(readReloadAttempt(hostile)).toBeNull();
     expect(() => recordReloadAttempt(hostile, 1)).not.toThrow();
     expect(() => clearReloadAttempt(hostile)).not.toThrow();
+  });
+});
+
+describe("shouldSkipAutoReloadOnBoot", () => {
+  test("stops a boot that follows a failure inside the window", () => {
+    const storage = memoryStorage({ [CHUNK_RELOAD_STORAGE_KEY]: "10000" });
+
+    expect(shouldSkipAutoReloadOnBoot(storage, 10_000)).toBe(true);
+    expect(shouldSkipAutoReloadOnBoot(storage, 10_000 + AUTO_RELOAD_WINDOW_MS - 1)).toBe(true);
+  });
+
+  test("lets a boot hydrate when nothing was recorded", () => {
+    expect(shouldSkipAutoReloadOnBoot(memoryStorage(), 10_000)).toBe(false);
+  });
+
+  test("re-arms once the window has elapsed", () => {
+    const storage = memoryStorage({ [CHUNK_RELOAD_STORAGE_KEY]: "10000" });
+
+    expect(shouldSkipAutoReloadOnBoot(storage, 10_000 + AUTO_RELOAD_WINDOW_MS)).toBe(false);
+    expect(shouldSkipAutoReloadOnBoot(storage, 10_000 + AUTO_RELOAD_WINDOW_MS * 10)).toBe(false);
+  });
+
+  test("ignores a malformed record and honours a custom window", () => {
+    expect(
+      shouldSkipAutoReloadOnBoot(memoryStorage({ [CHUNK_RELOAD_STORAGE_KEY]: "yesterday" }), 1_000),
+    ).toBe(false);
+    expect(shouldSkipAutoReloadOnBoot(memoryStorage(), 1_000, 500)).toBe(false);
+  });
+
+  test("keeps a timestamp from the future recent, so a skewed clock cannot re-arm", () => {
+    const storage = memoryStorage({ [CHUNK_RELOAD_STORAGE_KEY]: "20000" });
+
+    expect(shouldSkipAutoReloadOnBoot(storage, 10_000)).toBe(true);
+  });
+
+  test("stays out of the way when storage refuses access", () => {
+    const hostile = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    } satisfies GuardStorage;
+
+    expect(shouldSkipAutoReloadOnBoot(hostile, 1_000)).toBe(false);
+  });
+});
+
+describe("browser wiring", () => {
+  test("has no storage and no guard outside a browser", () => {
+    expect(browserGuardStorage()).toBeNull();
+    expect(createBrowserChunkReloadGuard()).toBeNull();
   });
 });
 

@@ -209,20 +209,21 @@ export function declaredDerpAddresses(server: {
 // MARK: Relay IPv6 row
 
 /**
- * The one line an IPv6 row shows under its value, decided here rather than in
- * the component so the precedence is testable: a row that could not confirm the
- * host's namespace says so before it says anything about stability, an address
- * the internet sees and the machine does not hold says that first, and the
- * remaining notes explain the alternates and the sources that could not be read.
+ * The one line an IPv6 row explains itself with, decided here rather than in the
+ * component so the precedence is testable. It is hover text now, not card copy:
+ * the row itself is the value and its copy affordance, and only the notes that
+ * outlive the slim-down survive here — an address the internet sees and the
+ * machine does not hold, a DNS-only answer nobody could check against this
+ * machine, and the sources that could not be read. An unconfirmed namespace and
+ * a rotating (temporary) address are deliberately absent: neither is worded on
+ * this card any more, so nothing here may claim or hint at isolation.
  */
 export type Ipv6NoteKind =
   | { kind: "declared" }
   | { kind: "echo-match"; address: string }
   | { kind: "echo-forwarded"; address: string }
-  | { kind: "unconfirmed"; namespace: "isolated" | "unknown" }
   | { kind: "unverified" }
   | { kind: "dns-fallback" }
-  | { kind: "temporary" }
   | { kind: "probe"; reasons: HostProbeReason[] }
   | { kind: "alternates"; addresses: string[] };
 
@@ -240,21 +241,10 @@ export function relayIpv6NoteKind(selection: RelayIpv6Selection): Ipv6NoteKind |
       : { kind: "echo-forwarded", address: selection.echo.address };
   }
 
-  if (selection.source === "host" && selection.unconfirmed) {
-    return {
-      kind: "unconfirmed",
-      namespace: selection.namespace === "isolated" ? "isolated" : "unknown",
-    };
-  }
-
   if (selection.source === "dns") {
     // Nothing local was found: on the host that is the honest "no public IPv6",
     // and in a container it is an answer nobody could check against the host.
     return selection.namespace === "host" ? { kind: "dns-fallback" } : { kind: "unverified" };
-  }
-
-  if (selection.temporary) {
-    return { kind: "temporary" };
   }
 
   if (selection.probeReasons.length > 0) {
@@ -720,17 +710,6 @@ export function summarizeFleetTrend(trend: FleetTrend): FleetTrendSummary {
 
   return { covered, total: trend.buckets.length, peak };
 }
-
-// MARK: External IPv6 echo
-
-/** Stable codes the Overview echo form renders in the page's language. */
-export type HostEchoErrorCode = "invalidUrl" | "writeFailed" | "invalidAction";
-
-/**
- * What the echo settings form gets back. The response never carries English: a
- * rejection is a code the form maps onto a localized message.
- */
-export type HostEchoActionResult = { ok: true } | { ok: false; errorCode: HostEchoErrorCode };
 
 // MARK: Rendering inputs
 

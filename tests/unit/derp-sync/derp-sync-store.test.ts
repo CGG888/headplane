@@ -18,11 +18,40 @@ import type { DerpSyncRun } from "~/server/derp-sync/types";
 
 const RUN: DerpSyncRun = {
   at: "2026-01-01T00:00:00.000Z",
+  mode: "run",
   outcome: "changed",
   detected: {
     ipv4: { address: "8.8.8.8", source: "dns" },
     ipv6: { address: "2606:4700::1111", source: "host" },
   },
+  candidates: [
+    {
+      family: "ipv4",
+      address: "10.0.0.5",
+      source: "dns",
+      chosen: false,
+      reason: "not-public",
+      detail: "private",
+    },
+    { family: "ipv4", address: "8.8.8.8", source: "dns", chosen: true, reason: "selected" },
+    {
+      family: "ipv6",
+      address: "2606:4700::1111",
+      source: "host",
+      chosen: true,
+      reason: "selected",
+      interfaceName: "eth0",
+    },
+    {
+      family: "ipv6",
+      address: "2606:4700:0:0:152f:808e:9eb1:31c9",
+      source: "host",
+      chosen: false,
+      reason: "temporary",
+      temporary: true,
+      interfaceName: "eth0",
+    },
+  ],
   changes: [{ family: "ipv4", from: "9.9.9.9", to: "8.8.8.8" }],
   skipped: [{ family: "ipv6", reason: "family-disabled" }],
   unchanged: ["ipv6"],
@@ -52,6 +81,16 @@ describe("DERP sync document parsing", () => {
       families: "ipv4",
       autoReload: true,
     });
+
+    // A stored document without the key was written before the default became
+    // "on"; the switch is only off when the document says so.
+    expect(
+      parseDerpSyncDocument(JSON.stringify({ settings: { enabled: true } })).settings.autoReload,
+    ).toBe(true);
+    expect(
+      parseDerpSyncDocument(JSON.stringify({ settings: { autoReload: false } })).settings
+        .autoReload,
+    ).toBe(false);
   });
 
   test("drops parts of the last run that are not usable", () => {
@@ -61,6 +100,12 @@ describe("DERP sync document parsing", () => {
           at: "2026-01-01T00:00:00.000Z",
           outcome: "not-an-outcome",
           detected: { ipv4: { address: "8.8.8.8", source: "nope" }, ipv6: "junk" },
+          candidates: [
+            { family: "ipv4", address: "8.8.8.8", source: "dns", reason: "selected" },
+            { family: "ipv4", address: "8.8.8.8", source: "dns", reason: "why" },
+            { family: "ipv9", address: "8.8.8.8", source: "dns", reason: "selected" },
+            "junk",
+          ],
           changes: [{ family: "ipv4", to: "8.8.8.8" }, { family: "ipv9", to: "x" }, "junk"],
           skipped: [
             { family: "ipv6", reason: "no-records" },
@@ -68,16 +113,42 @@ describe("DERP sync document parsing", () => {
           ],
           unchanged: ["ipv4", "ipv4", "ipv9"],
           reload: "nonsense",
+          failure: "nonsense",
         },
       }),
     );
 
     expect(document.last?.outcome).toBe("failed");
     expect(document.last?.detected).toEqual({ ipv4: { address: "8.8.8.8", source: "dns" } });
+    expect(document.last?.candidates).toEqual([
+      { family: "ipv4", address: "8.8.8.8", source: "dns", chosen: false, reason: "selected" },
+    ]);
     expect(document.last?.changes).toEqual([{ family: "ipv4", to: "8.8.8.8" }]);
     expect(document.last?.skipped).toEqual([{ family: "ipv6", reason: "no-records" }]);
     expect(document.last?.unchanged).toEqual(["ipv4"]);
     expect(document.last?.reload).toBe("manual");
+    // An unknown failure code is dropped rather than shown as a real reason.
+    expect(document.last?.failure).toBeUndefined();
+    // A document written before the two buttons existed records a run.
+    expect(document.last?.mode).toBe("run");
+  });
+
+  test("keeps a check run and its failure code", () => {
+    const document = parseDerpSyncDocument(
+      JSON.stringify({
+        last: {
+          at: "2026-01-01T00:00:00.000Z",
+          mode: "check",
+          outcome: "changed",
+          failure: "detection-unusable",
+          reload: "not-needed",
+        },
+      }),
+    );
+
+    expect(document.last?.mode).toBe("check");
+    expect(document.last?.failure).toBe("detection-unusable");
+    expect(document.last?.candidates).toEqual([]);
   });
 
   test("serializes stable JSON with a trailing newline", () => {

@@ -10,17 +10,29 @@
 // value exactly as it is. IPv6 is read from the host's own global unicast
 // address through `loadHostIpv6Addresses`, the same probe the relay card uses,
 // and ranked by the same selection, so a rotating privacy address is never
-// preferred over a stable one. When the operator enabled the external IPv6 echo
-// (off by default), its answer wins: it is what the internet actually sees, so
-// it is right even when every local address is the container's or the router's.
+// preferred over a stable one. A local address is only written when the probe
+// could confirm this process shares the host's network namespace; a bridged
+// container reads `unknown` rather than `isolated`, and is skipped rather than
+// advertising a container-only address. When the operator enabled the external
+// IPv6 echo (off by default, configured on this same settings card), its answer
+// wins: it is what the internet actually sees, so it is right even when every
+// local address is the container's or the router's.
+//
+// Override policy A: the detected address is always authoritative. If it differs
+// from `derp.server.ipv4`/`ipv6` the run writes it, per family and only for the
+// key that actually changed, after taking the snapshot and recording the audit
+// entry.
+//
+// Two entry points share one detection path: `checkNow()` reports what a run
+// would do and writes nothing, `runNow()` writes what changed and then follows
+// the reload switch. Auto-reload defaults to on, because an address written into
+// the configuration file only reaches clients after Headscale reloads.
 //
 // Lifecycle mirrors the other services on the app context: `start()` returns
 // immediately and schedules nothing while the sync is disabled, and `dispose()`
 // clears the timer on shutdown or HMR reload. A tick is guarded against overlap
-// and against throwing, and it writes only when a detected address differs from
-// the configuration — after taking a snapshot, and with an audit entry behind
-// it. The configured reload/restart integration is only ever triggered by a
-// change, never by a check that found nothing to do.
+// and against throwing. A failing run is reported to the notification service;
+// a run that found nothing to change never is.
 
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
 import type { Headscale } from "~/server/headscale/api";
@@ -32,6 +44,9 @@ import type { SnapshotTarget } from "~/server/snapshots/types";
 import log from "~/utils/log";
 
 import {
+  buildIpv4Candidates,
+  buildIpv6ExcludedCandidates,
+  buildIpv6HostCandidates,
   isPublicSyncIpv4,
   isPublicSyncIpv6,
   literalSyncIpv4,
@@ -43,8 +58,11 @@ import {
 import { derpSyncIntervalMs, normalizeDerpSyncSettings, selectedFamilies } from "./settings";
 import { readDerpSyncDocument, writeDerpSyncDocument } from "./store";
 import type {
+  DerpSyncCandidate,
   DerpSyncDocument,
+  DerpSyncFailureReason,
   DerpSyncFamily,
+  DerpSyncMode,
   DerpSyncOutcome,
   DerpSyncReload,
   DerpSyncRun,
@@ -83,6 +101,15 @@ export interface DerpSyncAuditPort {
   }): Promise<unknown>;
 }
 
+/**
+ * The notification sink, as the service needs it: the alert service's own
+ * transition, cooldown and history handling, with the sync's failure code as the
+ * subject. Kept structural so neither service imports the other's types.
+ */
+export interface DerpSyncAlertPort {
+  reportDerpSync(input: { failed: boolean; reason?: string }): Promise<unknown>;
+}
+
 export interface DerpSyncServiceOptions {
   /** Headplane's `server.data_path`; the JSON store lives directly inside it. */
   dataPath: string;
@@ -91,6 +118,8 @@ export interface DerpSyncServiceOptions {
   getSnapshotTargets: () => SnapshotTarget[];
   snapshots?: SnapshotService;
   audit?: DerpSyncAuditPort;
+  /** The notification service; a failing run is reported through it. */
+  alerts?: DerpSyncAlertPort;
   headscale: Headscale;
   integration?: DerpSyncReloadPort;
   /** Resolves the relay hostname; defaults to the shared, cached resolver. */
@@ -98,7 +127,7 @@ export interface DerpSyncServiceOptions {
   /** Enumerates the host's own global unicast IPv6 addresses. */
   loadHostIpv6?: () => Promise<Awaited<ReturnType<typeof loadHostIpv6Addresses>>>;
   /**
-   * The external IPv6 echo answer, read from the same setting the Overview card
+   * The external IPv6 echo answer, read from the same setting this settings card
    * offers. Off by default, so this only reaches the network when an operator
    * turned the probe on.
    */
@@ -121,7 +150,9 @@ export interface DerpSyncService {
   /** The newest run, as the store holds it; `undefined` before the first run. */
   last(): DerpSyncRun | undefined;
   update(patch: Partial<DerpSyncSettings>): Promise<DerpSyncUpdateResult>;
-  /** One run from the settings card; works even while the schedule is off. */
+  /** The "Check" button: both detections and the comparison, writing nothing. */
+  checkNow(): Promise<DerpSyncRun | undefined>;
+  /** The "Run now" button: detect, write what changed, follow the reload switch. */
   runNow(): Promise<DerpSyncRun | undefined>;
   /** One scheduled tick; a no-op while the sync is disabled. */
   runOnce(): Promise<DerpSyncRun | undefined>;
@@ -133,10 +164,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One family's detection outcome: either a value, or the reason it was skipped. */
+/** One family's detection outcome: a value, the reason it was skipped, and the
+ * candidates that decision was made from. */
 interface FamilyDetection {
   value?: DerpSyncValue;
   skip?: DerpSyncSkip;
+  candidates: DerpSyncCandidate[];
+}
+
+/**
+ * Why a finished run counts as failed: an unexpected error, a reload that did
+ * not happen, a write that could not be made, or a family that yielded nothing
+ * usable. A run that only found a disabled family, or nothing at all to change,
+ * is not a failure.
+ */
+export function derpSyncFailureReason(run: DerpSyncRun): DerpSyncFailureReason | undefined {
+  if (run.outcome === "failed") {
+    return "unexpected";
+  }
+
+  if (run.reload === "failed") {
+    return "reload-failed";
+  }
+
+  if (run.skipped.some((skip) => skip.reason === "config-not-writable")) {
+    return "not-writable";
+  }
+
+  if (run.skipped.some((skip) => skip.reason !== "family-disabled")) {
+    return "detection-unusable";
+  }
+
+  return undefined;
 }
 
 export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSyncService {
@@ -188,7 +247,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
     timer = setInterval(
       () => {
-        void execute(false);
+        void execute("run", false);
       },
       options.intervalMs ?? derpSyncIntervalMs(document.settings.intervalHours),
     );
@@ -211,68 +270,144 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
           reason: serverUrl.trim().length === 0 ? "host-missing" : "invalid-host",
           ...(serverUrl.trim().length > 0 ? { detail: serverUrl.trim() } : {}),
         },
+        candidates: [],
       };
     }
 
     const literal = literalSyncIpv4(host);
     if (literal !== undefined) {
+      const candidates = buildIpv4Candidates([{ address: literal, source: "literal" }], literal);
       return isPublicSyncIpv4(literal)
-        ? { value: { address: literal, source: "literal" } }
-        : { skip: { family: "ipv4", reason: "not-public", detail: literal } };
+        ? { value: { address: literal, source: "literal" }, candidates }
+        : { skip: { family: "ipv4", reason: "not-public", detail: literal }, candidates };
     }
 
     const resolution = await resolveRelay(host);
     if (resolution === undefined) {
-      return { skip: { family: "ipv4", reason: "lookup-failed", detail: host } };
+      return { skip: { family: "ipv4", reason: "lookup-failed", detail: host }, candidates: [] };
     }
 
+    const answers = resolution.ipv4.map((address) => ({ address, source: "dns" as const }));
     if (resolution.ipv4.length === 0) {
       const reason =
         resolution.reason === "timeout" || resolution.reason === "resolver-error"
           ? "lookup-failed"
           : "no-records";
-      return { skip: { family: "ipv4", reason, detail: host } };
+      return { skip: { family: "ipv4", reason, detail: host }, candidates: [] };
     }
 
     const accepted = pickPublicSyncIpv4(resolution.ipv4);
+    const candidates = buildIpv4Candidates(answers, accepted);
     if (accepted === undefined) {
       return {
         skip: { family: "ipv4", reason: "not-public", detail: resolution.ipv4.join(", ") },
+        candidates,
       };
     }
 
-    return { value: { address: accepted, source: "dns" } };
+    return { value: { address: accepted, source: "dns" }, candidates };
   }
 
   /**
    * The address clients must be able to reach, IPv6 side.
    *
-   * A process that does not share the host's network namespace can only see its
-   * own interfaces, so a veth-backed container reports that instead of
-   * advertising an address the host does not have. An unknown namespace is
-   * treated as the host's, because the container may legitimately share the
-   * host's stack, and the external echo — when the operator enabled it — wins
-   * over both: it is the one source that knows what the internet sees, which is
-   * exactly the NAT66 case where no local address is right.
+   * A local address is only advertised when the process can show it shares the
+   * host's network namespace: a bridged container reads `unknown` rather than
+   * `isolated` (see `classifyNetworkNamespace`), and the interfaces it sees are
+   * its own, so any namespace that is not confirmed to be the host's is skipped
+   * with a reason instead of being assumed to be the host. The external echo —
+   * when the operator enabled it — wins over that rule: it is the one source
+   * that knows what the internet sees, which is exactly the NAT66 or
+   * forwarded-address case where no local address is right.
    */
   async function detectIpv6(): Promise<FamilyDetection> {
     const [host, echo] = await Promise.all([loadHostIpv6(), resolveHostEcho()]);
-    if (echo.address !== undefined && isPublicSyncIpv6(echo.address)) {
-      return { value: { address: echo.address, source: "echo" } };
-    }
+    const echoAddress = echo.address;
+    const echoUsable = echoAddress !== undefined && isPublicSyncIpv6(echoAddress);
+    // Only a namespace Headplane could confirm is the host's makes a local
+    // address trustworthy; the echo below is the one exception to that.
+    const trusted = host.namespace === "host";
+    const excluded = buildIpv6ExcludedCandidates(
+      (host.excluded ?? []).map((entry) => ({
+        address: entry.address,
+        interfaceName: entry.interfaceName,
+        kind: entry.kind,
+      })),
+    );
 
-    if (host.namespace === "isolated") {
-      return { skip: { family: "ipv6", reason: "namespace-unavailable" } };
-    }
+    // An answer that is present but unusable is still worth showing: it is why
+    // the echo did not decide the address.
+    const rejectedEcho: DerpSyncCandidate[] =
+      echoAddress === undefined || echoUsable
+        ? []
+        : [
+            {
+              family: "ipv6",
+              address: echoAddress,
+              source: "echo",
+              chosen: false,
+              reason: "not-public",
+            },
+          ];
 
+    // The selection is built even when the namespace is not the host's, so the
+    // panel can show what this process saw; it is only ever written from a
+    // namespace that could be confirmed as the host's.
     const selection = selectHostIpv6Address(host.candidates);
-    if (selection.address === undefined) {
-      return { skip: { family: "ipv6", reason: "no-host-address" } };
+    const localCandidates = buildIpv6HostCandidates(
+      selection.candidates.map((candidate) => ({
+        address: candidate.address,
+        interfaceName: candidate.interfaceName,
+        temporary: candidate.temporary,
+      })),
+      echoUsable ? echoAddress : trusted ? selection.address : undefined,
+      echoUsable,
+    );
+
+    if (echoUsable) {
+      return {
+        value: { address: echoAddress, source: "echo" },
+        candidates: [
+          {
+            family: "ipv6",
+            address: echoAddress,
+            source: "echo",
+            chosen: true,
+            reason: "selected",
+          },
+          ...localCandidates,
+          ...excluded,
+        ],
+      };
     }
 
-    return isPublicSyncIpv6(selection.address)
-      ? { value: { address: selection.address, source: "host" } }
-      : { skip: { family: "ipv6", reason: "not-public", detail: selection.address } };
+    if (!trusted) {
+      // A container that does not share the host's stack enumerates its own
+      // interfaces, so writing one would advertise an address clients cannot
+      // reach. The addresses it did see are still reported as candidates.
+      return {
+        skip: { family: "ipv6", reason: "namespace-unavailable" },
+        candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+      };
+    }
+
+    const chosen = selection.address;
+    if (chosen === undefined) {
+      return {
+        skip: { family: "ipv6", reason: "no-host-address" },
+        candidates: [...rejectedEcho, ...excluded],
+      };
+    }
+
+    return isPublicSyncIpv6(chosen)
+      ? {
+          value: { address: chosen, source: "host" },
+          candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+        }
+      : {
+          skip: { family: "ipv6", reason: "not-public", detail: chosen },
+          candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+        };
   }
 
   /** Takes a snapshot of the configuration file; a failure never blocks a write. */
@@ -321,8 +456,8 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
   /**
    * Whether Headscale has to be reloaded, and whether this run already did it.
-   * The integration only runs when the operator turned it on: reloading
-   * Headscale briefly interrupts every connected client.
+   * The integration only runs while the reload switch is on: reloading Headscale
+   * briefly interrupts every connected client.
    */
   async function reloadAfterWrite(settings: DerpSyncSettings): Promise<DerpSyncReload> {
     if (options.integration === undefined || !settings.autoReload) {
@@ -342,7 +477,31 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
     }
   }
 
-  async function execute(manual: boolean): Promise<DerpSyncRun | undefined> {
+  /**
+   * Reports one finished run to the notification service. Only a writing run is
+   * reported: a check is interactive and shows its own result, and a run that
+   * found nothing to change is not a failure. Never throws.
+   */
+  async function reportToAlerts(run: DerpSyncRun): Promise<void> {
+    if (options.alerts === undefined || run.mode !== "run") {
+      return;
+    }
+
+    try {
+      await options.alerts.reportDerpSync({
+        failed: run.failure !== undefined,
+        ...(run.failure === undefined ? {} : { reason: run.failure }),
+      });
+    } catch (error) {
+      log.warn(
+        "server",
+        "Unable to report the DERP address sync result to the notifier: %s",
+        errorMessage(error),
+      );
+    }
+  }
+
+  async function execute(mode: DerpSyncMode, manual: boolean): Promise<DerpSyncRun | undefined> {
     if (ticking) {
       // Overlap guard: a slow DNS answer must not stack a second writer on top
       // of the first one.
@@ -361,6 +520,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
       const wanted = selectedFamilies(settings.families);
       const detected: Partial<Record<DerpSyncFamily, DerpSyncValue>> = {};
       const skipped: DerpSyncSkip[] = [];
+      const candidates: DerpSyncCandidate[] = [];
 
       for (const family of ["ipv4", "ipv6"] as const) {
         if (!wanted.includes(family)) {
@@ -370,6 +530,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
       if (wanted.includes("ipv4")) {
         const result = await detectIpv4(derp.serverUrl);
+        candidates.push(...result.candidates);
         if (result.value !== undefined) {
           detected.ipv4 = result.value;
         }
@@ -380,6 +541,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
       if (wanted.includes("ipv6")) {
         const result = await detectIpv6();
+        candidates.push(...result.candidates);
         if (result.value !== undefined) {
           detected.ipv6 = result.value;
         }
@@ -390,6 +552,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
       const plan = planDerpSync({ ipv4: derp.server.ipv4, ipv6: derp.server.ipv6 }, detected);
       const at = now();
+      const writing = mode === "run";
 
       let outcome: DerpSyncOutcome;
       let snapshotId: string | undefined;
@@ -404,6 +567,10 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         }
 
         outcome = "skipped";
+      } else if (!writing) {
+        // The check reports what a run would write and leaves the configuration
+        // file, the snapshots and the audit log exactly as they were.
+        outcome = "changed";
       } else {
         snapshotId = await takeSnapshot();
         await options.config.patch(plan.patches);
@@ -414,8 +581,10 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
       const run: DerpSyncRun = {
         at: at.toISOString(),
+        mode,
         outcome,
         detected,
+        candidates,
         changes: plan.changes,
         skipped,
         unchanged: plan.unchanged,
@@ -423,34 +592,48 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         reload,
       };
 
-      document = { settings, last: run };
+      const failure = writing ? derpSyncFailureReason(run) : undefined;
+      const settled: DerpSyncRun = {
+        ...run,
+        ...(failure === undefined ? {} : { failure }),
+      };
+
+      document = { settings, last: settled };
       await persist();
 
       log.info(
         "config",
-        "DERP address sync: %s (%d change(s), %d skipped)",
+        "DERP address sync %s: %s (%d change(s), %d skipped)",
+        mode,
         outcome,
         plan.changes.length,
         skipped.length,
       );
 
-      return run;
+      await reportToAlerts(settled);
+
+      return settled;
     } catch (error) {
       // Belt and braces: a tick must never surface as an unhandled rejection.
       const run: DerpSyncRun = {
         at: now().toISOString(),
+        mode,
         outcome: "failed",
         detected: {},
+        candidates: [],
         changes: [],
         skipped: [],
         unchanged: [],
         reload: "not-needed",
+        ...(mode === "run" ? { failure: "unexpected" as const } : {}),
         error: errorMessage(error),
       };
 
       document = { settings: document.settings, last: run };
       await persist();
       log.error("config", "DERP address sync failed: %s", errorMessage(error));
+
+      await reportToAlerts(run);
 
       return run;
     } finally {
@@ -487,12 +670,16 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
       return { success: true, settings };
     },
 
+    checkNow() {
+      return execute("check", true);
+    },
+
     runNow() {
-      return execute(true);
+      return execute("run", true);
     },
 
     runOnce() {
-      return execute(false);
+      return execute("run", false);
     },
 
     start() {

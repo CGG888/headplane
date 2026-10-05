@@ -155,8 +155,9 @@ export async function createAppContext(config: HeadplaneConfig) {
   // cannot know its own public address) and IPv6 from the host's own global
   // unicast address. It writes only on a real change, snapshots the
   // configuration first, and is inert until the operator enables it. A write
-  // can optionally trigger the integration above, off by default because a
-  // reload briefly interrupts connected clients.
+  // triggers the integration above unless the reload switch was turned off,
+  // because a written address only reaches clients after Headscale reloads. A
+  // failing run is reported to the notifier, which dedupes and cools it down.
   const derpSync = createDerpSyncService({
     dataPath: config.server.data_path,
     config: hs,
@@ -173,6 +174,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     },
     snapshots,
     audit,
+    alerts,
     headscale,
     integration,
   });

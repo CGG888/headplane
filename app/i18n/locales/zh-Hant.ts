@@ -145,6 +145,12 @@ const zhHant = {
       publicUnavailable: "server_url 不是可用的 http(s) 網址",
       relayClientAddress: "用戶端連線位址",
       syncChangedAt: "對外公布的位址已於 {at} 更新。",
+      syncUnchangedAt: "上次位址檢查 {at}：沒有變化。",
+      syncSkippedAt: "上次位址檢查 {at}：沒有需要更新的內容。",
+      syncFailedAt: "上次位址檢查 {at} 失敗。",
+      syncNever: "尚未執行任何位址檢查。",
+      relaySetup: "中繼位址、回顯探測和位址同步都在 Headscale 設定中。{link}",
+      relaySetupLink: "前往設定",
       relayIpv4: "IPv4",
       relayIpv6: "IPv6",
       relayDeclaredMarker: "derp.server",
@@ -167,14 +173,9 @@ const zhHant = {
       relaySourceHost: "主機",
       relaySourceDnsUnverified: "DNS 未驗證",
       relaySourceEcho: "網際網路（回顯）",
-      relaySourceHostUnconfirmed: "主機（未確認）",
       ipv6EchoMatches: "網際網路看到的位址是 {address}，而這臺機器正好持有它。",
       ipv6EchoForwarded:
         "網際網路看到的位址是 {address}，這臺機器的任何網路介面都沒有它：用戶端是透過 NAT66 或轉送位址的路由器到達該位址的。",
-      ipv6UnconfirmedUnknown:
-        "Headplane 無法確認該容器與主機共用網路命名空間，因此這些位址可能屬於容器本身。之所以仍然顯示，是因為容器也可能確實共用主機的網路堆疊。",
-      ipv6UnconfirmedIsolated:
-        "該容器有自己的網路命名空間（發現了 veth 或橋接介面），因此這些位址屬於容器，而不是主機。",
       ipv6ContradictionTitle: "宣告的位址並非用戶端實際可達的位址",
       ipv6ContradictionEcho: "derp.server.ipv6 宣告了 {declared}，但網際網路看到的是 {detected}。",
       ipv6ContradictionHost:
@@ -187,48 +188,14 @@ const zhHant = {
       ipv6ReasonEchoTimeout: "外部 IPv6 回顯逾時未回應。",
       ipv6ReasonEchoUnreachable: "無法連線到外部 IPv6 回顯。",
       ipv6ReasonEchoInvalid: "外部 IPv6 回顯沒有傳回可用的 IPv6 位址。",
-      candidatesTitle: "偵測到的 IPv6 位址",
-      candidatesBody:
-        "Headplane 找到的全部公網 IPv6 位址、每個位址是否穩定，以及最終選中的是哪一個。",
-      candidatesSummary: "在這臺機器上找到 {count} 個",
-      candidatesExcluded:
-        "另有 {count} 個位址被排除：連結本地、唯一本地、迴路、群播、未指定以及 IPv4 對應位址都無法被用戶端存取。",
-      candidateChosen: "已選中",
-      candidateStable: "穩定",
-      candidateUnknown: "穩定性未知",
-      candidateTemporary: "臨時位址，會輪換",
-      candidateDns: "網域的 AAAA 指向它",
-      candidateEcho: "回顯已確認",
-      candidateRealNic: "實體網卡 {interface}",
-      candidateVirtualNic: "虛擬介面 {interface}",
-      candidateSources: "來自 {sources}",
-      echoTitle: "外部 IPv6 回顯",
-      echoBody:
-        "向公共端點詢問網際網路看到的 IPv6 位址。當主機位於 NAT66 之後，或路由器轉送了另一個位址時，這是唯一正確的來源。",
-      echoEnabledLabel: "使用公共回顯端點",
-      echoEnabledDescription:
-        "預設關閉，因為這會向第三方發起請求。當用戶端可達的位址可能不屬於這臺機器時再開啟。",
-      echoUrlLabel: "回顯端點",
-      echoUrlDescription: "優先請求的網址，僅透過 IPv6 送出。",
-      echoNote:
-        "請求只透過 IPv6 送出，並與其他查詢一樣帶快取。當該端點無回應時，會依序請求：{urls}",
-      echoSummary: "正在請求 {url}。",
-      echoSave: "儲存回顯設定",
-      echoSaved: "已儲存。",
-      echoInvalidUrl: "請輸入 http(s) 網址。",
-      echoWriteFailed: "Headplane 無法把該設定寫入資料目錄。",
-      echoInvalidAction: "不支援該操作。",
       ipv6NoneBody:
         "這臺機器沒有公網 IPv6 位址。請在 derp.server.ipv6 中宣告一個，或修正網域的 DNS。",
       ipv6Alternates: "這臺機器上的其他位址：{addresses}",
-      ipv6TemporaryNote:
-        "這臺機器唯一的 IPv6 位址是臨時（隱私）位址，會輪換。請在 derp.server.ipv6 中宣告一個穩定位址。",
       ipv6MismatchTitle: "網域指向別處",
       ipv6MismatchBody:
         "網域的 AAAA 記錄是 {dns}，但這臺機器持有 {host}。該記錄可能指向另一臺機器，或是臨時的隱私位址——請改用主機位址。",
       ipv6HostCopy: "複製主機位址",
-      ipv6UnverifiedNote:
-        "Headplane 在這裡讀不到主機自身的位址：容器沒有與主機共用網路命名空間（請使用 network_mode: host）。這裡顯示的是網域的 DNS 答案，未經驗證。",
+      ipv6UnverifiedNote: "網域的 DNS 答案，Headplane 無法與這臺機器自身的位址核對。",
       stun: "STUN 監聽位址",
       ipv6StunTitle: "STUN 僅監聽 IPv4",
       ipv6StunBody:
@@ -1390,6 +1357,15 @@ const zhHant = {
           missingRecord:
             "derp.server.ipv6 宣告了 {address}，但 {host} 完全沒有 AAAA 記錄，用戶端無法透過 IPv6 使用中繼。請為該主機名稱新增指向執行中繼機器的 AAAA 記錄，或接受僅 IPv4。主機解析器可能在該名稱確有 AAAA 記錄時仍傳回空結果：用 `dig @1.1.1.1 +short AAAA {host}` 與 `dig +short AAAA {host}` 對照即可確認；若前者有結果，請把該主機的 DNS 指向能傳回 AAAA 的解析器。否定結果會快取五分鐘，重新啟動 Headplane 即可清除。",
         },
+        derpMap: {
+          exists: { title: "DERP 地圖檔案存在（{path}）" },
+          readable: { title: "DERP 地圖檔案可讀（{path}）" },
+          writable: { title: "DERP 地圖檔案可寫（{path}）" },
+          size: { title: "DERP 地圖檔案在編輯大小上限內（{path}）" },
+          parses: { title: "DERP 地圖是有效的 YAML（{path}）" },
+          schema: { title: "DERP 地圖結構有效（{path}）" },
+          unique: { title: "DERP 地圖區域 ID 與代碼不重複（{path}）" },
+        },
       },
       selfUpdate: {
         title: "Headplane 有新版本",
@@ -1436,6 +1412,7 @@ const zhHant = {
         policy: "存取控制策略",
         dns: "DNS 記錄",
         relay: "內嵌中繼",
+        derpMaps: "DERP 地圖檔案",
       },
     },
     headscale: {
@@ -1853,10 +1830,11 @@ const zhHant = {
         sync: {
           title: "位址自動同步",
           body: "讓 derp.server.ipv4 與 derp.server.ipv6 一律指向用戶端可連線的位址。Headplane 會依排程檢查，只有在位址確實變更時才寫入 Headscale 設定檔。",
-          note: "IPv4 取自 server_url 的 A 記錄，因為位於 NAT 之後的機器無法得知自己的公網位址；IPv6 取自本機自身的全域單播位址。檢查失敗時會保留原有的設定值。",
+          note: "IPv4 取自 server_url 的 A 記錄，因為位於 NAT 之後的機器無法得知自己的公網位址；IPv6 取自本機自身的全域單播位址，啟用下方外部回顯時則取自回顯結果。未能取得可用位址時會完全保留原有的設定值。",
+          overrideNote:
+            "偵測到的位址一律優先。當它與 derp.server.ipv4 或 derp.server.ipv6 不一致時，執行會寫入它——依位址家族各寫一個鍵，且只寫真正變更的那一個——並在此之前建立快照、記錄稽核項目。",
           enabledLabel: "同步對外公布的位址",
-          enabledDescription:
-            "依下方排程執行檢查。預設為關閉；無論是否開啟，都可以點選「立即檢查」。",
+          enabledDescription: "依下方排程執行兩項檢查。無論排程是否開啟，檢查與立即執行都可使用。",
           intervalLabel: "檢查間隔",
           intervalDescription: "多常檢查位址。位址變動緩慢，6、12 或 24 小時已足夠。",
           interval6: "每 6 小時",
@@ -1869,16 +1847,35 @@ const zhHant = {
           familyIpv6: "僅 IPv6",
           autoReloadLabel: "變更後重新載入 Headscale",
           autoReloadDescription:
-            "同步寫入位址後，觸發已設定的重新載入或重啟整合。這會短暫中斷所有已連線的用戶端，因此預設為關閉。",
+            "預設為開啟，寫入的位址可立即生效。觸發已設定的重新載入或重啟會短暫中斷所有已連線的用戶端；關閉後可改為手動重新載入。沒有發生變化的執行不會重新載入。",
           save: "儲存同步設定",
-          runNow: "立即檢查",
-          running: "正在檢查…",
+          checkNow: "檢查",
+          checking: "正在檢查…",
+          runNow: "立即執行",
+          running: "正在執行…",
+          buttonsBody:
+            "兩個按鈕執行同樣的兩項檢查：IPv4 取自 server_url 的 A 記錄，IPv6 取自本機或外部回顯。兩者都會報告發現了什麼、已變更或將要變更什麼，以及略過了什麼。",
+          checkNote:
+            "「檢查」不寫入任何內容：不建立快照、不修改設定、也不會重新載入。「立即執行」只寫入位址確實變更的鍵，然後依重新載入開關處理。",
+          alertNote:
+            "執行失敗時——某個位址家族未能取得可用位址、寫入失敗或重新載入失敗——會透過「通知」頁面上的通知設定回報。沒有發生變化的執行不會告警，位址本身的變更也不會告警。",
           lastRun: "上次執行：{at}",
+          lastCheck: "上次檢查：{at}",
           never: "尚未檢查過對外公布的位址。",
+          checkWroteNothing: "這是一次檢查：沒有寫入任何內容，也沒有重新載入。",
           outcomeChanged: "位址已更新",
           outcomeUnchanged: "已是最新",
           outcomeSkipped: "無須更新",
           outcomeFailed: "檢查失敗",
+          outcomeWouldChange: "位址將被更新",
+          changesTitle: "變更",
+          wouldChangeTitle: "將要變更",
+          failureTitle: "本次執行失敗的原因",
+          failureDetectionUnusable: "某個位址家族未能取得可用位址，因此該鍵保持原樣。",
+          failureNotWritable: "Headscale 設定檔不可寫入，因此無法寫入變更後的位址。",
+          failureReloadFailed: "位址已寫入，但自動重新載入失敗。",
+          failureUnexpected: "執行因未預期的錯誤而中止。",
+          failureReported: "在通知設定啟用時，該失敗已透過通知設定回報。",
           detectedTitle: "偵測結果",
           detectedLine: "{family}：{address}（{source}）",
           changeLine: "{family}：{from} → {to}",
@@ -1893,6 +1890,20 @@ const zhHant = {
           skipNoHostAddress: "{family}：本機沒有全域單播位址。",
           skipNamespace: "{family}：Headplane 看不到主機的網路命名空間。",
           skipConfigNotWritable: "Headscale 設定檔不可寫入，因此沒有寫入任何內容。",
+          detectionTitle: "偵測候選位址",
+          detectionSummary: "{count} 個候選位址",
+          detectionBody:
+            "檢查考慮過的每個位址，依排序排列，並說明每個位址被選中或未被選中的原因。為保持卡片精簡，該面板預設摺疊。",
+          detectionEmpty: "尚未執行過偵測。",
+          candidateLine: "{family}：{address} — {source}，{reason}",
+          candidateSelected: "已選中",
+          candidateRankedLower: "可用，但排序低於另一個位址",
+          candidateTemporary: "會輪換的隱私位址，因此優先選擇了穩定位址",
+          candidateNotPublic: "不是可用的公網位址，因此被拒絕",
+          candidateEchoWins: "被外部回顯結果覆寫",
+          candidateExcluded: "在網路介面上出現，但不是全域單播位址",
+          temporaryHint:
+            "選中的 IPv6 位址是臨時（隱私）位址，會輪換並再次變化。建議改用同一網路介面上的穩定位址，並在其變化後檢查 derp.server.ipv6。",
           sourceDns: "DNS A 記錄",
           sourceHost: "主機網路介面",
           sourceEcho: "外部 IPv6 回顯",
@@ -1902,6 +1913,20 @@ const zhHant = {
           reloadTriggered: "已自動重新載入 Headscale；已連線的用戶端曾被短暫中斷。",
           reloadFailed: "自動重新載入失敗。請手動重新載入或重啟 Headscale 使變更生效。",
           snapshotNote: "寫入前已先為原有設定建立快照：{snapshot}。",
+          echoTitle: "外部 IPv6 回顯",
+          echoBody:
+            "向公共端點查詢網際網路看到的 IPv6 位址。這才是用戶端真正可連線的位址，因此只要它給出回應，就優先於本機持有的任何位址。",
+          echoEnabledLabel: "使用外部 IPv6 回顯",
+          echoEnabledDescription:
+            "預設為關閉。開啟後，Headplane 每次執行或檢查都會向下方的端點發出一次 IPv6 請求。",
+          echoUrlLabel: "回顯端點",
+          echoUrlDescription: "優先查詢的端點。它沒有回應時會依序嘗試內建的備用端點。",
+          echoNote:
+            "備用端點為 {urls}。該請求僅使用 IPv6，因此沒有可用 IPv6 路由的主機不會取得回應。",
+          echoPrivacy:
+            "這是向第三方發出的請求：該端點會得知本機連上網際網路所用的 IPv6 位址。相關資訊不會寫入 Headscale 設定，除該請求外也不會傳送任何資料。",
+          echoSave: "儲存回顯設定",
+          echoSaved: "回顯設定已儲存。",
         },
         mapIssues: {
           position: "{message}（第 {line} 行，第 {column} 欄）",
@@ -2041,6 +2066,8 @@ const zhHant = {
         invalidDerpSyncInterval: "請選擇 6、12 或 24 小時作為檢查間隔。",
         invalidDerpSyncFamilies: "請選擇同步可以更新的位址家族。",
         derpSyncSaveFailed: "同步設定無法儲存。請確認 Headplane 可以寫入其資料目錄。",
+        invalidHostEchoUrl: "請輸入 IPv6 回顯端點的絕對 http 或 https URL。",
+        hostEchoSaveFailed: "回顯設定無法寫入 Headplane 的資料目錄。",
         invalidOidcExtraParams: "每個額外參數都需要不含空白的名稱與值，請刪除空行或填寫完整。",
         duplicateOidcExtraParam: "同一個參數名稱出現了多次，每個名稱只能保留一行。",
         invalidHaProbeInterval: "請輸入不小於 2s 的時長（例如 10s），或填 0 停用 HA 探測。",
@@ -2512,6 +2539,7 @@ const zhHant = {
       eventNodeOnline: "節點恢復連線",
       eventApiKeyExpiring: "API 金鑰即將到期",
       eventConfigCheckFailed: "設定檢查失敗",
+      eventDerpSyncFailed: "DERP 位址同步失敗",
       eventTest: "測試通知",
       errors: {
         invalidAction: "無法辨識此請求。",

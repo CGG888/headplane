@@ -148,6 +148,13 @@ const en = {
       publicUnavailable: "server_url is not a usable http(s) URL",
       relayClientAddress: "Client connect address",
       syncChangedAt: "Advertised addresses updated {at}.",
+      syncUnchangedAt: "Last address check {at}: no change.",
+      syncSkippedAt: "Last address check {at}: nothing to update.",
+      syncFailedAt: "Last address check {at} failed.",
+      syncNever: "No address check has run yet.",
+      relaySetup:
+        "The relay address, the echo probe and the address sync are set up in Headscale settings. {link}",
+      relaySetupLink: "Set this up",
       relayIpv4: "IPv4",
       relayIpv6: "IPv6",
       relayDeclaredMarker: "derp.server",
@@ -173,14 +180,9 @@ const en = {
       relaySourceHost: "Host",
       relaySourceDnsUnverified: "DNS-unverified",
       relaySourceEcho: "Internet (echo)",
-      relaySourceHostUnconfirmed: "Host (unconfirmed)",
       ipv6EchoMatches: "The internet sees {address}, and this machine holds it.",
       ipv6EchoForwarded:
         "The internet sees {address}, which no interface on this machine holds: clients reach it through NAT66 or a router that forwards another address.",
-      ipv6UnconfirmedUnknown:
-        "Headplane could not confirm that this container shares the host's network namespace, so these addresses may be the container's own. They are shown rather than hidden, because a container can legitimately share the host's stack.",
-      ipv6UnconfirmedIsolated:
-        "This container has its own network namespace (a veth or bridge was found), so these addresses belong to the container, not to the host.",
       ipv6ContradictionTitle: "The declared address is not what clients reach",
       ipv6ContradictionEcho:
         "derp.server.ipv6 declares {declared}, but the internet sees {detected}.",
@@ -196,48 +198,15 @@ const en = {
       ipv6ReasonEchoTimeout: "The external IPv6 echo did not answer in time.",
       ipv6ReasonEchoUnreachable: "The external IPv6 echo could not be reached.",
       ipv6ReasonEchoInvalid: "The external IPv6 echo returned no usable IPv6 address.",
-      candidatesTitle: "Detected IPv6 addresses",
-      candidatesBody:
-        "Every public IPv6 address Headplane found, whether each one is stable, and which one was chosen.",
-      candidatesSummary: "{count} found on this machine",
-      candidatesExcluded:
-        "{count} further addresses were excluded: link-local, unique-local, loopback, multicast, unspecified and IPv4-mapped addresses can never be reached by a client.",
-      candidateChosen: "chosen",
-      candidateStable: "stable",
-      candidateUnknown: "stability unknown",
-      candidateTemporary: "temporary, rotates",
-      candidateDns: "named by the domain's AAAA",
-      candidateEcho: "confirmed by the echo",
-      candidateRealNic: "real NIC {interface}",
-      candidateVirtualNic: "virtual interface {interface}",
-      candidateSources: "read from {sources}",
-      echoTitle: "External IPv6 echo",
-      echoBody:
-        "Ask a public endpoint which IPv6 address the internet sees. It is the only source that is right when the host is behind NAT66 or a router that forwards a different address.",
-      echoEnabledLabel: "Ask a public echo endpoint",
-      echoEnabledDescription:
-        "Off by default, because this makes Headplane contact a third party. Turn it on when the address clients reach may not be one this machine holds.",
-      echoUrlLabel: "Echo endpoint",
-      echoUrlDescription: "The URL asked first, over IPv6 only.",
-      echoNote:
-        "The request goes out over IPv6 only and is cached like the other lookups. When the endpoint does not answer, these are asked in turn: {urls}",
-      echoSummary: "Asking {url}.",
-      echoSave: "Save echo settings",
-      echoSaved: "Saved.",
-      echoInvalidUrl: "Enter an http(s) URL.",
-      echoWriteFailed: "Headplane could not write the setting to its data directory.",
-      echoInvalidAction: "That action is not supported.",
       ipv6NoneBody:
         "This machine has no public IPv6 address. Declare one in derp.server.ipv6, or fix the domain's DNS.",
       ipv6Alternates: "Other addresses on this machine: {addresses}",
-      ipv6TemporaryNote:
-        "The only IPv6 address this machine holds is temporary (a privacy address) and rotates. Declare a stable one in derp.server.ipv6.",
       ipv6MismatchTitle: "The domain points elsewhere",
       ipv6MismatchBody:
         "The domain's AAAA answer is {dns}, but this machine holds {host}. The record may point at another machine, or be a temporary privacy address — publish the host address instead.",
       ipv6HostCopy: "Copy host address",
       ipv6UnverifiedNote:
-        "Headplane cannot see the host's own addresses here: this container does not demonstrably share the host's network namespace (use network_mode: host). What is shown is the domain's DNS answer, unverified.",
+        "The domain's DNS answer, which Headplane could not check against this machine's own addresses.",
       stun: "STUN listen address",
       ipv6StunTitle: "STUN listens on IPv4 only",
       ipv6StunBody:
@@ -1476,6 +1445,15 @@ const en = {
           missingRecord:
             "derp.server.ipv6 declares {address}, but {host} has no AAAA record at all, so clients cannot use the relay over IPv6. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only. A host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it.",
         },
+        derpMap: {
+          exists: { title: "DERP map file exists ({path})" },
+          readable: { title: "DERP map file is readable ({path})" },
+          writable: { title: "DERP map file is writable ({path})" },
+          size: { title: "DERP map file is within the editing size limit ({path})" },
+          parses: { title: "DERP map is valid YAML ({path})" },
+          schema: { title: "DERP map document is valid ({path})" },
+          unique: { title: "DERP map region ids and codes are unique ({path})" },
+        },
       },
       selfUpdate: {
         title: "Headplane update available",
@@ -1523,6 +1501,7 @@ const en = {
         policy: "Access control policy",
         dns: "DNS records",
         relay: "Embedded relay",
+        derpMaps: "DERP map files",
       },
     },
     headscale: {
@@ -1967,10 +1946,12 @@ const en = {
         sync: {
           title: "Address auto-sync",
           body: "Keep derp.server.ipv4 and derp.server.ipv6 pointing at the addresses clients can reach. Headplane checks them on a schedule and writes Headscale's configuration file only when a value actually changed.",
-          note: "IPv4 comes from the A record of server_url, because a machine behind NAT cannot know its own public address. IPv6 comes from this host's own global unicast address. A check that fails leaves the configured value untouched.",
+          note: "IPv4 comes from the A record of server_url, because a machine behind NAT cannot know its own public address. IPv6 comes from this host's own global unicast address, or from the external echo below while it is enabled. A detection that finds nothing usable leaves the configured value exactly as it is.",
+          overrideNote:
+            "The detected address always wins. When it differs from derp.server.ipv4 or derp.server.ipv6, a run writes it — one key per family, and only for the family that actually changed — after taking a snapshot and recording an audit entry.",
           enabledLabel: "Sync the advertised addresses",
           enabledDescription:
-            "Run the check on the schedule below. It is off by default, and Run the check now works either way.",
+            "Run both checks on the schedule below. Check and Run now work whether or not the schedule is on.",
           intervalLabel: "Check interval",
           intervalDescription:
             "How often the addresses are checked. They change slowly, so 6, 12 or 24 hours is enough.",
@@ -1984,16 +1965,37 @@ const en = {
           familyIpv6: "IPv6 only",
           autoReloadLabel: "Reload Headscale after a change",
           autoReloadDescription:
-            "Trigger the configured reload or restart integration whenever the sync writes an address. This briefly interrupts every connected client, so it is off by default.",
+            "On by default, so a written address takes effect immediately. Triggering the configured reload or restart briefly interrupts every connected client: turn this off to reload by hand instead. A run that changes nothing never reloads.",
           save: "Save sync settings",
-          runNow: "Run the check now",
-          running: "Running the check…",
+          checkNow: "Check",
+          checking: "Checking…",
+          runNow: "Run now",
+          running: "Running…",
+          buttonsBody:
+            "Both buttons run the same two checks: IPv4 from the A record of server_url, IPv6 from this host or from the external echo. Both report what they found, what changed or would change, and what they skipped.",
+          checkNote:
+            "Check writes nothing: no snapshot, no configuration change and no reload. Run now writes only the keys whose address actually changed, then follows the reload switch.",
+          alertNote:
+            "A failing run — a detection that finds nothing usable for a family, a write that fails, or a reload that fails — is reported through the notification settings on the Notifications page. A run that changes nothing never alerts, and an address change itself is not an alert.",
           lastRun: "Last run: {at}",
+          lastCheck: "Last check: {at}",
           never: "The advertised addresses have not been checked yet.",
+          checkWroteNothing: "This was a check: nothing was written and nothing was reloaded.",
           outcomeChanged: "Addresses updated",
           outcomeUnchanged: "Already up to date",
           outcomeSkipped: "Nothing to update",
           outcomeFailed: "The check failed",
+          outcomeWouldChange: "Addresses would be updated",
+          changesTitle: "Changes",
+          wouldChangeTitle: "Would change",
+          failureTitle: "Why this run failed",
+          failureDetectionUnusable:
+            "A detection found nothing usable for an address family, so that key was left as it is.",
+          failureNotWritable:
+            "The Headscale configuration file is not writable, so the changed address could not be written.",
+          failureReloadFailed: "The address was written, but the automatic reload failed.",
+          failureUnexpected: "The run stopped on an unexpected error.",
+          failureReported: "Reported through the notification settings when they are enabled.",
           detectedTitle: "Detected",
           detectedLine: "{family}: {address} ({source})",
           changeLine: "{family}: {from} → {to}",
@@ -2009,6 +2011,20 @@ const en = {
           skipNamespace: "{family}: Headplane cannot see the host's network namespace.",
           skipConfigNotWritable:
             "The Headscale configuration file is not writable, so nothing was written.",
+          detectionTitle: "Detection candidates",
+          detectionSummary: "{count} candidates",
+          detectionBody:
+            "Every address the checks considered, in ranked order, and why each was or was not chosen. Collapsed by default so this card stays compact.",
+          detectionEmpty: "No detection has run yet.",
+          candidateLine: "{family}: {address} — {source}, {reason}",
+          candidateSelected: "chosen",
+          candidateRankedLower: "usable, but another address ranked higher",
+          candidateTemporary: "a rotating privacy address, so a stable one was preferred",
+          candidateNotPublic: "not a usable public address, so it was rejected",
+          candidateEchoWins: "overridden by the external echo answer",
+          candidateExcluded: "seen on an interface but not a global unicast address",
+          temporaryHint:
+            "The selected IPv6 address is a temporary (privacy) address, so it rotates and will change again. Prefer a stable address on the same interface, and check derp.server.ipv6 after it changes.",
           sourceDns: "DNS A record",
           sourceHost: "host interface",
           sourceEcho: "external IPv6 echo",
@@ -2020,6 +2036,21 @@ const en = {
           reloadFailed:
             "The automatic reload failed. Reload or restart Headscale for the change to take effect.",
           snapshotNote: "A snapshot of the previous configuration was taken first: {snapshot}.",
+          echoTitle: "External IPv6 echo",
+          echoBody:
+            "Ask a public endpoint what IPv6 address the internet sees. That is the address clients actually reach, so while it answers it wins over every address this host holds.",
+          echoEnabledLabel: "Use the external IPv6 echo",
+          echoEnabledDescription:
+            "Off by default. While it is on, Headplane makes one outbound IPv6 request to the endpoint below per run or check.",
+          echoUrlLabel: "Echo endpoint",
+          echoUrlDescription:
+            "The endpoint asked first. The built-in fallbacks are tried in order when it does not answer.",
+          echoNote:
+            "The fallback endpoints are {urls}. The request is IPv6-only, so a host without a usable IPv6 route simply gets no answer.",
+          echoPrivacy:
+            "This is a request to a third party: that endpoint learns the IPv6 address this host uses to reach the internet. Nothing about it is written into Headscale's configuration, and nothing beyond the request itself is sent.",
+          echoSave: "Save echo settings",
+          echoSaved: "Echo settings saved.",
         },
         mapIssues: {
           position: "{message} (line {line}, column {column})",
@@ -2172,6 +2203,8 @@ const en = {
         invalidDerpSyncFamilies: "Choose which address families the sync may update.",
         derpSyncSaveFailed:
           "The sync settings could not be saved. Check that Headplane can write its data directory.",
+        invalidHostEchoUrl: "Enter an absolute http or https URL for the IPv6 echo endpoint.",
+        hostEchoSaveFailed: "The echo setting could not be written to Headplane's data directory.",
         invalidOidcExtraParams:
           "Each extra parameter needs a name without spaces and a value. Remove the empty row or fill it in.",
         duplicateOidcExtraParam: "The same parameter name is used twice. Keep one row per name.",
@@ -2676,6 +2709,7 @@ const en = {
       eventNodeOnline: "Node came back online",
       eventApiKeyExpiring: "API key expiring",
       eventConfigCheckFailed: "Configuration check failed",
+      eventDerpSyncFailed: "DERP address sync failed",
       eventTest: "Test notification",
       errors: {
         invalidAction: "The request was not understood.",

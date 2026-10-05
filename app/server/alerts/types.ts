@@ -14,6 +14,7 @@ export const ALERT_EVENT_IDS = [
   "nodeOnline",
   "apiKeyExpiring",
   "configCheckFailed",
+  "derpSyncFailed",
 ] as const;
 
 export type AlertEventId = (typeof ALERT_EVENT_IDS)[number];
@@ -109,6 +110,12 @@ export interface AlertState {
   offlineNodes: string[];
   expiringKeys: string[];
   failingChecks: string[];
+  /**
+   * Whether the newest DERP address sync run failed. The sync reports into the
+   * notifier directly, so this is the transition it compares against: one alert
+   * when a run starts failing, and silence while it keeps failing.
+   */
+  derpSyncFailed: boolean;
   /** Condition key to the ISO time it was last reported at, for the cooldown. */
   sent: Record<string, string>;
 }

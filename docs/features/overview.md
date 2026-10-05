@@ -44,15 +44,25 @@ The card's chip says whether the embedded server is enabled.
 
 ## Relay addresses and STUN
 
-The second card separates what clients actually dial from what the configuration
-file declares:
+This card is **read-only**. It reports what clients are given and configures
+nothing: the schedule, the address families, the auto-reload switch, the external
+IPv6 echo and the detection panel all live in
+[Settings → Headscale → DERP](/features/headscale-settings#address-auto-sync),
+which the card links to.
 
-| Row                  | Chip       | Meaning                                                                                                                                                                  |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Clients connect to   | Derived    | The public `host:port` for the relay, derived from Headscale's `server_url`. DERP shares Headscale's HTTPS endpoint, so the port comes from the URL — 443 when it carries none — and never from `listen_addr`. |
-| Declared IPv4        | Configured | `derp.server.ipv4`, the address Headscale hands to clients that reach the relay directly                                                                                   |
-| Declared IPv6        | Configured | `derp.server.ipv6`, the same for the other address family                                                                                                                  |
-| STUN listen address  | Configured | `derp.server.stun_listen_addr`, the UDP address that answers STUN requests                                                                                                 |
+| Row                    | Chip       | Meaning                                                                                                                                                                  |
+| ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Client connect address | Derived    | The public `host:port` for the relay, derived from Headscale's `server_url`. DERP shares Headscale's HTTPS endpoint, so the port comes from the URL — 443 when it carries none — and never from `listen_addr`. |
+| IPv4                   | Configured | The address Headscale hands to clients that reach the relay directly: `derp.server.ipv4`, whether it was set by hand or written by the address auto-sync                      |
+| IPv6                   | Configured | The same for the other address family                                                                                                                                    |
+| STUN listen address    | Configured | `derp.server.stun_listen_addr`, the UDP address that answers STUN requests                                                                                               |
+
+Both addresses carry a copy button, so the value can be pasted straight into the
+settings card or into Headscale's own file. The card also names the resolver the
+relay lookups used — **System resolver** or **Configured: …** — and prints a
+one-line status from the last check; the detection panel behind that value (every
+candidate, its origin and why it was chosen or skipped) is only in the settings
+card.
 
 ::: warning STUN and IPv6-only clients
 

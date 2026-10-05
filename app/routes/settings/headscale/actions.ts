@@ -19,6 +19,7 @@ import {
   setDerpRegionName,
   writeDerpRegionNames,
 } from "~/server/headscale/derp-region-names";
+import { clearHostEchoCache, parseHostEchoUrl, writeHostEchoSettings } from "~/server/host-echo";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
@@ -543,10 +544,49 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
     }
 
     case "run_derp_sync": {
-      // The settings card's "run now": one explicit check that works even while
-      // the schedule is off, and writes only when an address actually differs.
+      // The settings card's "Run now": detect, write only what actually
+      // changed, then follow the reload switch. Works while the schedule is off.
       const derpSync = context.get(derpSyncContext);
       await derpSync.runNow();
+      return success();
+    }
+
+    case "check_derp_sync": {
+      // The settings card's "Check": the same two detections and the same
+      // comparison, reported on the page and written nowhere.
+      const derpSync = context.get(derpSyncContext);
+      await derpSync.checkNow();
+      return success();
+    }
+
+    case "save_host_echo": {
+      // The external IPv6 echo is configuration for the sync above, so it is
+      // edited here. It lives in Headplane's own data directory and never in
+      // Headscale's configuration, which is why the sync can consume it without
+      // writing anything into the configuration file.
+      const enabled = readBooleanField(formData, "host_echo_enabled");
+      if (enabled === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      const url = parseHostEchoUrl(formData.get("host_echo_url")?.toString() ?? "");
+      if (url === undefined) {
+        return failure("invalidHostEchoUrl");
+      }
+
+      const dataPath = context.get(appConfigContext)?.server.data_path;
+      if (!dataPath) {
+        return failure("hostEchoSaveFailed");
+      }
+
+      const written = await writeHostEchoSettings(dataPath, { enabled, url });
+      if (!written) {
+        return failure("hostEchoSaveFailed");
+      }
+
+      // The setting decides which endpoint is asked, so a cached answer from the
+      // previous one must not survive the save.
+      clearHostEchoCache();
       return success();
     }
 

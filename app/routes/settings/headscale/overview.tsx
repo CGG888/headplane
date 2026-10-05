@@ -39,6 +39,11 @@ import {
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
+import {
+  DEFAULT_HOST_ECHO_URL,
+  FALLBACK_HOST_ECHO_URLS,
+  readHostEchoSettings,
+} from "~/server/host-echo";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
@@ -117,8 +122,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   // The address sync's settings and newest run are read from Headplane's own
   // data directory, so the page can render them even when Headscale's
-  // configuration file is read-only.
+  // configuration file is read-only. The external IPv6 echo, which the sync
+  // consumes, is read from the same place.
   await derpSync.ready();
+  const hostEcho = await readHostEchoSettings(appConfig.server.data_path);
 
   return {
     access: auth.can(principal, Capabilities.configure_iam),
@@ -126,6 +133,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     derpSync: {
       settings: derpSync.settings(),
       last: derpSync.last(),
+      // Plain values only, so the card never imports a module that opens a
+      // socket just to render the endpoint it is configured with.
+      hostEcho: {
+        enabled: hostEcho.enabled,
+        url: hostEcho.url,
+        defaultUrl: DEFAULT_HOST_ECHO_URL,
+        fallbacks: [...FALLBACK_HOST_ECHO_URLS],
+      },
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -330,6 +345,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             settings={derp}
           />
           <DerpSyncSettings
+            echo={derpSync.hostEcho}
             isDisabled={isDisabled}
             last={derpSync.last}
             settings={derpSync.settings}

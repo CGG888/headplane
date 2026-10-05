@@ -63,6 +63,22 @@ export function isChunkLoadErrorMessage(message: string): boolean {
   );
 }
 
+/**
+ * Whether this boot has to stop instead of trying again. A failed attempt that
+ * is still inside the window means the document the boot came from is the stale
+ * shell, so React Router's own `location.reload()` (which cannot be
+ * intercepted) would reload into itself forever. A pure read: the record is
+ * only cleared by the operator's manual reload, through `reset`.
+ */
+export function shouldSkipAutoReloadOnBoot(
+  storage: GuardStorage,
+  now: number = Date.now(),
+  windowMs: number = AUTO_RELOAD_WINDOW_MS,
+  key: string = CHUNK_RELOAD_STORAGE_KEY,
+): boolean {
+  return !shouldAutoReload(readReloadAttempt(storage, key), now, windowMs);
+}
+
 /** Reads the timestamp of the last automatic reload, or `null` when absent. */
 export function readReloadAttempt(
   storage: GuardStorage,
@@ -153,18 +169,71 @@ export function createChunkReloadGuard({
 }
 
 /**
- * The browser wrapper: `null` when the guard must stay out of the way. That
- * covers the server, development and HMR (which reload on purpose), and
- * browsers that refuse `sessionStorage` access.
+ * The guard's storage in a browser, or `null` when the guard must stay out of
+ * the way. That covers the server, development and HMR (which reload on
+ * purpose), and browsers that refuse `sessionStorage` access.
  */
-export function createBrowserChunkReloadGuard(): ChunkReloadGuard | null {
+export function browserGuardStorage(): GuardStorage | null {
   if (typeof window === "undefined" || import.meta.env.DEV) return null;
 
   try {
-    const storage = window.sessionStorage;
-    if (storage == null) return null;
-    return createChunkReloadGuard({ storage });
+    return window.sessionStorage;
   } catch {
     return null;
   }
+}
+
+/** The browser wrapper around `createChunkReloadGuard`. */
+export function createBrowserChunkReloadGuard(): ChunkReloadGuard | null {
+  const storage = browserGuardStorage();
+  return storage === null ? null : createChunkReloadGuard({ storage });
+}
+
+/**
+ * Reports the first failed chunk of this document to `onFailure`: a hashed
+ * resource that did not load (a capture-phase error on a `<script>` or a
+ * `<link rel="modulepreload">`) or a dynamic `import()` that rejected with no
+ * handler. Later failures of the same boot are ignored, and a browser that
+ * already knows it is offline is ignored too, because being offline fails
+ * everything. Returns the function that removes the listeners again.
+ *
+ * The component wrapper calls this once React has mounted; `entry.client` calls
+ * it before hydration so a route chunk that fails while the router boots is
+ * still recorded.
+ */
+export function watchChunkFailures(onFailure: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+
+  let handled = false;
+  const fail = () => {
+    if (handled) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    handled = true;
+    onFailure();
+  };
+
+  const onResourceError = (event: Event) => {
+    const target = event.target;
+    const url =
+      target instanceof HTMLScriptElement
+        ? target.src
+        : target instanceof HTMLLinkElement
+          ? target.href
+          : null;
+
+    if (isChunkAssetUrl(url)) fail();
+  };
+
+  const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+    const reason: unknown = event.reason;
+    const message = reason instanceof Error ? reason.message : String(reason);
+    if (isChunkLoadErrorMessage(message)) fail();
+  };
+
+  window.addEventListener("error", onResourceError, true);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
+  return () => {
+    window.removeEventListener("error", onResourceError, true);
+    window.removeEventListener("unhandledrejection", onUnhandledRejection);
+  };
 }

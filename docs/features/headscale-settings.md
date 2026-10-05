@@ -257,6 +257,8 @@ Two details worth knowing:
 - `derp.server.ipv4` / `ipv6` are optional but recommended — Headscale's own
   configuration suggests your server's public addresses for connection
   stability, especially with exit nodes. Clearing a field removes the key again.
+  [Address auto-sync](#address-auto-sync) can keep both current for you, and a
+  value set by hand is overwritten as soon as a run detects a different one.
 
 ### Making your own relay the default
 
@@ -305,15 +307,58 @@ configuration, and one more from Headscale's documentation: the embedded server
 cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
 documented limitation rather than a misconfiguration.
 
+### Address auto-sync
+
+Everything that configures the relay addresses lives in one card,
+**Settings → Headscale → DERP → auto-sync**: the schedule, which families it may
+write, the **auto-reload** switch, the **external IPv6 echo** switch and its URL,
+and the detection panel below the form. The
+[Overview](/features/overview#relay-addresses-and-stun) relay card is
+read-only and configures nothing: it shows the resulting IPv4 and IPv6 values
+with a copy button, the STUN row, the resolver the lookups used and a one-line
+last-check status, and links back to this card.
+
+The card has two buttons, and they share one detection pass:
+
+| Button      | What it does                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Check**   | Runs both detections and the comparison, then writes nothing at all. It is the safe way to see what a run would do.                                                                      |
+| **Run now** | Runs the same checks and writes only what changed — per family, just the key whose address differs. Headplane snapshots the configuration first and records an audit entry for the write. |
+
+Neither button waits for the next scheduled run: both detect and report
+immediately.
+
+**The detected value is authoritative.** When a detected address differs from
+`derp.server.ipv4` or `derp.server.ipv6`, **Run now** — and a scheduled run —
+writes the detected value; it does not ask, and it does not treat what is in the
+file as a preference. A family whose address already matches is left untouched,
+and a detection that fails leaves the configured value exactly as it was. Setting
+either key by hand is still supported: do it when you want an address the
+detection cannot produce, and expect the next run that detects a different value
+to overwrite it.
+
+Headscale only shows clients a new address after a reload, so **the auto-reload
+switch defaults to on** and every run that wrote something triggers the configured
+reload/restart integration. Know what that costs: **a reload briefly interrupts
+every connected client**. A run that changes nothing never reloads, and turning
+auto-reload off leaves the new value in the file with the reload left to you.
+
+A run that fails — nothing usable detected for a family, a write failure, or a
+reload failure — raises an alert through
+[Alert Notifications](/features/notifications), so a sync that stops working is
+noticed without anyone watching the card. A run that finds nothing to change
+never alerts.
+
 ### Where the relay addresses come from
 
-The Overview card and the DERP tab show one address per family, and the two
-families are not derived the same way:
+The auto-sync derives one address per family, and the two families are not
+detected the same way. The detection panel in the settings card lists every
+candidate it found, where each one came from, and why it was chosen or skipped.
 
-| Family   | When the key is set | Otherwise                                                                                                                                                |
-| -------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **IPv4** | `derp.server.ipv4`  | The **A record** of the `server_url` hostname. A machine behind NAT cannot know its own public address, so the DNS answer is the right one to advertise. |
-| **IPv6** | `derp.server.ipv6`  | The **host machine's own global unicast IPv6 address**, cross-checked against the domain's AAAA; the DNS answer is only a clearly-labelled fallback.      |
+| Family   | Detected from                                                                                                                                                                                                                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.               |
+| **IPv6** | The **host machine's own global unicast address**: the interface list, plus `/proc/net/if_inet6` for the temporary/privacy flag and `/sys/class/net/.../device` to tell a real NIC from a bridge. A stable address beats one that rotates, and the address the domain's AAAA names wins when it matches. |
 
 IPv6 is deliberately different. There is no NAT for it: the machine itself holds
 the public address, and under `network_mode: host` the container shares the host's
@@ -323,28 +368,39 @@ the record was written, or a different machine entirely — advertising the wron
 one makes clients fail intermittently rather than cleanly, which is exactly the
 kind of fault that is hard to attribute afterwards.
 
+**The optional external IPv6 echo is the authority when a router forwards or
+translates IPv6.** Off by default, because it makes Headplane contact a third
+party, the switch in the settings card asks a public endpoint which address the
+internet actually sees, over IPv6 only. It answers what no local probe can:
+whether the answer matches a local interface, or is an address no interface on
+this machine holds because NAT66 or a forwarding router rewrites it.
+
 Each address carries the label of the source it came from: **`derp.server`** when
-the key is set, **host** when it is the machine's own address, and
-**DNS-unverified** when the domain's AAAA is all Headplane has to go on. When that
-AAAA does not match the host's address the card raises an amber warning, and a
-copy button copies the host address to your clipboard ready to paste into
-`derp.server.ipv6`.
+the key holds a value, **host** when it is the machine's own address, **Internet
+(echo)** when the echo answered, and **DNS-unverified** when the domain's AAAA is
+all Headplane has to go on. When the AAAA does not match the host's address the
+card raises an amber warning, and a copy button copies the address to use.
 
 Two states are named rather than papered over:
 
 - **The machine has no public IPv6.** There is no host address to show, so either
   declare one in `derp.server.ipv6` or fix the domain's DNS; the card says so
-  instead of inventing an address.
-- **The container does not share the host network namespace.** Headplane cannot
-  see the host's own addresses at all, so the DNS answer stays **DNS-unverified**
-  rather than being promoted to a host address.
+  instead of inventing an address. When the only address the machine does hold is
+  a temporary privacy address that rotates, the settings card says that too — the
+  temporary-address hint is not repeated on the Overview.
+- **No real, device-backed NIC carries a global address.** That — not the
+  presence of `docker0`, `br-*` or `veth*` — is what decides whether the detected
+  addresses can be treated as the host's. A host that runs Docker always has those
+  interfaces, so seeing them is **not** evidence that a container has its own
+  network namespace. The candidates are still listed with the reason, and the DNS
+  answer stays **DNS-unverified** rather than being promoted to a host address.
 
 ### Is the relay actually reachable over IPv6 (or IPv4)?
 
 `derp.server.ipv4` and `derp.server.ipv6` are what Headscale **advertises** to
-clients; they are not proof that the names clients use reach those addresses. The
-DERP tab therefore resolves the host in `server_url` (A and AAAA, cached for five
-minutes) and compares the two:
+clients; they are not proof that the names clients use reach those addresses.
+**Check** and **Run now** therefore resolve the host in `server_url` (A and AAAA,
+cached for five minutes) and compare the two:
 
 | Declared vs resolved                                              | Verdict                                                                                                                                         |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -355,10 +411,11 @@ minutes) and compares the two:
 | The embedded server is disabled                                   | **Nothing to check** — the relay is not served from this configuration.                                                                         |
 | The lookup timed out, the resolver failed, or `server_url` is bad | **Cannot check** — reported as such rather than as a broken address, so a DNS hiccup never looks like a misconfiguration.                       |
 
-The same comparison appears on the **Overview** dashboard and on each machine's
-DERP card, right under the addresses the hostname resolves to now, and
-**Settings → System** lists it as the two checks _Embedded relay IPv4_ and
-_Embedded relay IPv6_.
+The **Overview** relay card reduces this to a single line — the last-check status
+— and links to the settings card, which is where the detection panel and the
+comparison are read in full. Each machine's DERP card still shows the comparison
+under the addresses the hostname resolves to now, and **Settings → System** lists
+it as the two checks _Embedded relay IPv4_ and _Embedded relay IPv6_.
 
 A host resolver can legitimately answer with no AAAA for a name that does have one,
 so "no record" is a property of the resolver in front of you, not proof about the

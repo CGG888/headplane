@@ -9,6 +9,11 @@
 // translation *keys* that the page resolves in the caller's locale.
 
 import type { TranslationKey } from "~/i18n";
+import {
+  computeDerpMapChecks,
+  type DerpMapCheckId,
+  type DerpMapCheckInput,
+} from "~/routes/settings/headscale/derp-map-checks";
 import { deriveDerpPublicEndpoint } from "~/routes/settings/headscale/derp-settings";
 import {
   compareRelayAddress,
@@ -18,6 +23,12 @@ import {
 
 import type { DiagnosticLink, DiagnosticStatus } from "./diagnostics";
 
+/**
+ * Every row of the configuration list. The DERP map checks keep the ids their
+ * own engine produces (`exists`, `readable`, …) because they are the same
+ * checks the DERP card renders; a configuration can list several map files, so
+ * a row's path lives in `vars`.
+ */
 export type ConfigCheckId =
   | "configOidcKeys"
   | "configTrustedProxies"
@@ -28,7 +39,8 @@ export type ConfigCheckId =
   | "configOidc"
   | "configNoiseKey"
   | "configDerpIpv4Resolvable"
-  | "configDerpIpv6Resolvable";
+  | "configDerpIpv6Resolvable"
+  | DerpMapCheckId;
 
 /** The same row shape as `Diagnostic`, rendered by the same list component. */
 export interface ConfigCheck {
@@ -72,6 +84,21 @@ const DNS_LINK: DiagnosticLink = {
   labelKey: "settings.system.configChecks.dns.review",
 };
 
+/**
+ * The titles of the DERP map checks. Every one of them names the inspected path
+ * because a configuration may list several map files, and the failure summary
+ * at the top of the page lists titles on their own.
+ */
+const DERP_MAP_TITLES: Record<DerpMapCheckId, TranslationKey> = {
+  exists: "settings.system.configChecks.derpMap.exists.title",
+  readable: "settings.system.configChecks.derpMap.readable.title",
+  writable: "settings.system.configChecks.derpMap.writable.title",
+  size: "settings.system.configChecks.derpMap.size.title",
+  parses: "settings.system.configChecks.derpMap.parses.title",
+  schema: "settings.system.configChecks.derpMap.schema.title",
+  unique: "settings.system.configChecks.derpMap.unique.title",
+};
+
 const TITLES: Record<ConfigCheckId, TranslationKey> = {
   configOidcKeys: "settings.system.configChecks.oidcKeys.title",
   configTrustedProxies: "settings.system.configChecks.trustedProxies.title",
@@ -83,6 +110,7 @@ const TITLES: Record<ConfigCheckId, TranslationKey> = {
   configNoiseKey: "settings.system.configChecks.noise.title",
   configDerpIpv4Resolvable: "settings.system.configChecks.derpIpv4.title",
   configDerpIpv6Resolvable: "settings.system.configChecks.derpIpv6.title",
+  ...DERP_MAP_TITLES,
 };
 
 /**
@@ -128,6 +156,12 @@ export interface ConfigChecksInput {
    * the relay checks report as "cannot check" instead of as a mismatch.
    */
   relayResolution?: RelayResolution;
+  /**
+   * Headscale's `derp.paths` as the loader inspected them, one entry per
+   * configured map file. Omitted when no path is configured, in which case the
+   * list gains nothing.
+   */
+  derpMaps?: readonly DerpMapCheckInput[];
 }
 
 /**
@@ -153,6 +187,7 @@ export function computeConfigChecks({
   config,
   probes,
   relayResolution,
+  derpMaps,
 }: ConfigChecksInput): ConfigCheck[] {
   // A missing or unparseable file leaves nothing to check. The page already
   // reports that through the `configAccess` diagnostic, so degrading to an
@@ -180,7 +215,7 @@ export function computeConfigChecks({
   // healthy server, so anything an unverifiable path contributed to is replaced
   // with "cannot check this". Verdicts that do not read such a path (a passing
   // check, the OIDC rules, the trusted-proxy rules) are left alone.
-  return checks.map((entry) => {
+  const inspected = checks.map((entry) => {
     if (entry.status === "pass") {
       return entry;
     }
@@ -188,6 +223,29 @@ export function computeConfigChecks({
     const invisible = firstUnavailable(...(PROBES_FOR_CHECK[entry.id]?.(probes) ?? []));
     return invisible ? unavailableCheck(entry.id, invisible.path) : entry;
   });
+
+  // Appended, so every existing check keeps its position and id. An empty
+  // `derp.paths` contributes nothing at all.
+  return [...inspected, ...derpMapChecks(derpMaps ?? [])];
+}
+
+/**
+ * The system list's view of the per-path DERP map checks. The loader already
+ * ran the same engine the DERP card uses, so the ids, statuses, and bodies are
+ * handed through unchanged; only the title belongs to this list, and the path
+ * is merged into the vars so a row (and the failure summary) always names the
+ * file it is about.
+ */
+function derpMapChecks(inputs: readonly DerpMapCheckInput[]): ConfigCheck[] {
+  return inputs.flatMap((input) =>
+    computeDerpMapChecks(input).map((entry) => ({
+      id: entry.id,
+      status: entry.status,
+      titleKey: DERP_MAP_TITLES[entry.id],
+      bodyKey: entry.bodyKey,
+      vars: { path: input.path, ...entry.vars },
+    })),
+  );
 }
 
 /**
@@ -232,6 +290,15 @@ export function configProbeTargets(config: unknown): ConfigProbeTargets {
   }
 
   return targets;
+}
+
+/**
+ * The `derp.paths` entries the DERP map checks have to inspect, in the order
+ * Headscale's configuration lists them. Pure, so the loader can skip the
+ * filesystem work entirely when no map file is configured.
+ */
+export function configDerpMapPaths(config: unknown): string[] {
+  return readList(readObject(readObject(config)?.derp)?.paths);
 }
 
 /**

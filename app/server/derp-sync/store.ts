@@ -15,9 +15,13 @@ import log from "~/utils/log";
 
 import { normalizeDerpSyncSettings } from "./settings";
 import type {
+  DerpSyncCandidate,
+  DerpSyncCandidateReason,
   DerpSyncChange,
   DerpSyncDocument,
+  DerpSyncFailureReason,
   DerpSyncFamily,
+  DerpSyncMode,
   DerpSyncOutcome,
   DerpSyncReload,
   DerpSyncRun,
@@ -46,6 +50,21 @@ const FAMILIES: readonly DerpSyncFamily[] = ["ipv4", "ipv6"];
 const SOURCES: readonly DerpSyncSource[] = ["dns", "host", "literal", "echo"];
 const OUTCOMES: readonly DerpSyncOutcome[] = ["changed", "unchanged", "skipped", "failed"];
 const RELOADS: readonly DerpSyncReload[] = ["not-needed", "manual", "triggered", "failed"];
+const MODES: readonly DerpSyncMode[] = ["check", "run"];
+const FAILURES: readonly DerpSyncFailureReason[] = [
+  "detection-unusable",
+  "not-writable",
+  "reload-failed",
+  "unexpected",
+];
+const CANDIDATE_REASONS: readonly DerpSyncCandidateReason[] = [
+  "selected",
+  "ranked-lower",
+  "temporary",
+  "not-public",
+  "echo-wins",
+  "excluded",
+];
 const SKIP_REASONS: readonly DerpSyncSkipReason[] = [
   "family-disabled",
   "host-missing",
@@ -109,6 +128,37 @@ function parseSkip(value: unknown): DerpSyncSkip | undefined {
   };
 }
 
+function parseCandidate(value: unknown): DerpSyncCandidate | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const address = readText(source.address);
+  if (
+    !isOneOf(FAMILIES, source.family) ||
+    !isOneOf(SOURCES, source.source) ||
+    !isOneOf(CANDIDATE_REASONS, source.reason) ||
+    address === undefined
+  ) {
+    return undefined;
+  }
+
+  const interfaceName = readText(source.interfaceName);
+  const detail = readText(source.detail);
+
+  return {
+    family: source.family,
+    address,
+    source: source.source,
+    chosen: source.chosen === true,
+    reason: source.reason,
+    ...(source.temporary === true ? { temporary: true } : {}),
+    ...(interfaceName === undefined ? {} : { interfaceName }),
+    ...(detail === undefined ? {} : { detail }),
+  };
+}
+
 function parseRun(value: unknown): DerpSyncRun | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -139,8 +189,12 @@ function parseRun(value: unknown): DerpSyncRun | undefined {
 
   return {
     at,
+    // A document written before the two buttons existed recorded a run, so an
+    // unknown mode reads as the writing one.
+    mode: isOneOf(MODES, source.mode) ? source.mode : "run",
     outcome: isOneOf(OUTCOMES, source.outcome) ? source.outcome : "failed",
     detected,
+    candidates: list(source.candidates, parseCandidate),
     changes: list(source.changes, parseChange),
     skipped: list(source.skipped, parseSkip),
     unchanged: Array.isArray(source.unchanged)
@@ -148,6 +202,7 @@ function parseRun(value: unknown): DerpSyncRun | undefined {
       : [],
     ...(snapshotId === undefined ? {} : { snapshotId }),
     reload: isOneOf(RELOADS, source.reload) ? source.reload : "manual",
+    ...(isOneOf(FAILURES, source.failure) ? { failure: source.failure } : {}),
     ...(error === undefined ? {} : { error }),
   };
 }

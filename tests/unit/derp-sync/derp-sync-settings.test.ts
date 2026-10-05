@@ -77,10 +77,12 @@ describe("family selection", () => {
 });
 
 describe("settings normalization", () => {
-  test("defaults to off, twice a day, both families and no reload", () => {
+  test("defaults to off, twice a day, both families and reload on", () => {
     expect(normalizeDerpSyncSettings(undefined)).toEqual(DEFAULT_DERP_SYNC_SETTINGS);
     expect(DEFAULT_DERP_SYNC_SETTINGS.enabled).toBe(false);
-    expect(DEFAULT_DERP_SYNC_SETTINGS.autoReload).toBe(false);
+    // A written address only reaches clients after a reload, so the default is
+    // on and the switch exists to turn it off.
+    expect(DEFAULT_DERP_SYNC_SETTINGS.autoReload).toBe(true);
     expect(normalizeDerpSyncSettings("[1,2]")).toEqual(DEFAULT_DERP_SYNC_SETTINGS);
   });
 
@@ -93,6 +95,15 @@ describe("settings normalization", () => {
         autoReload: true,
       }),
     ).toEqual({ enabled: true, intervalHours: 24, families: "ipv6", autoReload: true });
+  });
+
+  test("only an explicit false turns the automatic reload off", () => {
+    expect(normalizeDerpSyncSettings({ autoReload: false }).autoReload).toBe(false);
+    expect(normalizeDerpSyncSettings({}).autoReload).toBe(true);
+    // A hand-edited document that says something else falls back to the default
+    // rather than to "off".
+    expect(normalizeDerpSyncSettings({ autoReload: "no" }).autoReload).toBe(true);
+    expect(normalizeDerpSyncSettings({ autoReload: 1 }).autoReload).toBe(true);
   });
 
   test("falls back per field instead of rejecting the document", () => {

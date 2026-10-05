@@ -7,6 +7,7 @@ import {
   CircleX,
   Database,
   FileCheck,
+  FileCode2,
   FileText,
   Globe,
   HeartPulse,
@@ -146,6 +147,14 @@ const CONFIG_CHECK_GROUPS: readonly CheckGroup<ConfigCheckId>[] = [
     icon: Radio,
     ids: ["configDerpIpv4Resolvable", "configDerpIpv6Resolvable"],
   },
+  {
+    id: "derpMaps",
+    titleKey: "settings.system.groups.derpMaps",
+    icon: FileCode2,
+    // The ids and statuses come from the DERP card's own engine; a configured
+    // configuration can produce one row of each per map file.
+    ids: ["exists", "readable", "writable", "size", "parses", "schema", "unique"],
+  },
   { id: "dns", titleKey: "settings.system.groups.dns", icon: Globe, ids: ["configDnsRecords"] },
 ];
 
@@ -198,7 +207,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const [latest, latestHeadplane, configChecks, metrics] = await Promise.all([
     headscaleReleaseChecker.latest(),
     headplaneReleaseChecker.latest(),
-    loadConfigChecks(configPath),
+    // The DERP map files are part of the configuration an operator works
+    // through here, so the system page asks for the per-path checks the DERP
+    // card computes. Other readers of `loadConfigChecks` (the dashboard, the
+    // alert notifier) deliberately do not.
+    loadConfigChecks(configPath, { includeDerpMaps: true }),
     loadMetrics(configPath, appConfig?.headscale.url),
   ]);
 
@@ -308,7 +321,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             >
               <ul className="flex list-disc flex-col gap-1 pl-5">
                 {failed.map((check) => (
-                  <li key={check.id}>{t(check.titleKey)}</li>
+                  <li key={checkKey(check)}>{t(check.titleKey, check.vars)}</li>
                 ))}
               </ul>
             </Notice>
@@ -501,6 +514,15 @@ type CheckRow = Pick<Diagnostic, "status" | "titleKey" | "bodyKey" | "vars" | "l
   id: string;
 };
 
+/**
+ * React key for a check row. The DERP map checks reuse one id per verdict across
+ * every configured `derp.paths` entry, so the path is what tells those rows
+ * apart.
+ */
+function checkKey(check: Pick<CheckRow, "id" | "vars">): string {
+  return check.vars?.path === undefined ? check.id : `${check.id}:${check.vars.path}`;
+}
+
 type Translate = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 interface CheckCounts {
@@ -603,11 +625,11 @@ function CheckList({ checks }: { checks: readonly CheckRow[] }) {
       {checks.map((diagnostic) => (
         <li
           className="rounded-lg border border-mist-200 p-4 dark:border-mist-700"
-          key={diagnostic.id}
+          key={checkKey(diagnostic)}
         >
           <div className="flex items-center gap-2">
             <StatusIcon status={diagnostic.status} />
-            <span className="font-medium">{t(diagnostic.titleKey)}</span>
+            <span className="font-medium">{t(diagnostic.titleKey, diagnostic.vars)}</span>
             <span className={cn("text-xs", STATUS_TEXT[diagnostic.status])}>
               {t(STATUS_KEYS[diagnostic.status])}
             </span>
