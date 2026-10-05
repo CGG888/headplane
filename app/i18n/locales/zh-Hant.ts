@@ -163,6 +163,18 @@ const zhHant = {
       relayReasonHostMissing: "server_url 未指定主機",
       relayReasonInvalidHost: "該主機名稱不是可用的 DNS 名稱",
       relayReasonUnavailable: "未解析",
+      relaySourceHost: "主機",
+      relaySourceDnsUnverified: "DNS 未驗證",
+      ipv6NoneBody: "這臺機器沒有公網 IPv6 位址。請在 derp.server.ipv6 中宣告一個，或修正網域的 DNS。",
+      ipv6Alternates: "這臺機器上的其他位址：{addresses}",
+      ipv6TemporaryNote:
+        "這臺機器唯一的 IPv6 位址是臨時（隱私）位址，會輪換。請在 derp.server.ipv6 中宣告一個穩定位址。",
+      ipv6MismatchTitle: "網域指向別處",
+      ipv6MismatchBody:
+        "網域的 AAAA 記錄是 {dns}，但這臺機器持有 {host}。該記錄可能指向另一臺機器，或是臨時的隱私位址——請改用主機位址。",
+      ipv6HostCopy: "複製主機位址",
+      ipv6UnverifiedNote:
+        "Headplane 在這裡讀不到主機自身的位址：容器沒有與主機共用網路命名空間（請使用 network_mode: host）。這裡顯示的是網域的 DNS 答案，未經驗證。",
       stun: "STUN 監聽位址",
       ipv6StunTitle: "STUN 僅監聽 IPv4",
       ipv6StunBody:
@@ -181,6 +193,8 @@ const zhHant = {
       mapsRemoteUnavailable: "至少有一個 DERP 映射網址無法讀取，其區域在此缺少。",
       mapsResolveTruncated: "這裡只解析前 {count} 個節點主機名稱。",
       mapsRegionSummary: "{count} 個節點 · {source}",
+      mapsRegionNodes: "{count} 個節點",
+      mapsMoreRegions: "還有 {count} 個區域",
       mapsRegionNoNodes: "該區域沒有列出節點。",
       mapsSourceManual: "手動名稱",
       mapsSourceLocal: "本機檔案",

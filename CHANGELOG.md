@@ -1,5 +1,15 @@
 # Next
 
+# 0.22.2 (October 6, 2026)
+
+## Fixes
+
+- **The relay's IPv6 address now comes from the host, not from DNS.** A domain's AAAA can be a temporary privacy address, a prefix that rotates, or a different machine entirely, so advertising it makes clients fail intermittently. The address block now prefers `derp.server.ipv6` when you declare it, then the **host machine's own global unicast IPv6** (the container sees the host's interfaces under `network_mode: host`), and only then the DNS answer, clearly labelled as unverified. Link-local, ULA, loopback and IPv4-mapped addresses are ignored, an address that matches the DNS answer is preferred for consistency, a mismatch raises an amber note with a copy button for pasting the right address into `derp.server.ipv6`, and if the machine has no public IPv6 the page says so instead of guessing. IPv4 is unchanged — behind NAT only the configuration or DNS can know the public address.
+
+## Changes
+
+- The "Local DERP nodes" box lists its regions while collapsed — `#id · code · name · N nodes · source` (capped, with a "+N more" line) — instead of only a count, keeping the same card geometry as its siblings.
+- Documentation: a new "Where the relay addresses come from" passage (and the Chinese equivalent in the fnOS guide) explains the per-family rule, the three source labels, the mismatch warning and the no-public-IPv6 case.
 # 0.22.1 (October 6, 2026)
 
 ## Fixes

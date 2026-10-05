@@ -5,7 +5,9 @@ import {
   Bot,
   Cable,
   Camera,
+  Check,
   CircleAlert,
+  Copy,
   Globe,
   HeartPulse,
   LayoutDashboard,
@@ -17,9 +19,10 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { data } from "react-router";
 
+import Button from "~/components/button";
 import Code from "~/components/code";
 import { ErrorBanner } from "~/components/error-banner";
 import Link from "~/components/link";
@@ -59,6 +62,11 @@ import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { loadDerpRegionInventory } from "~/server/headscale/derp-region-sources";
 import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import {
+  loadHostIpv6Addresses,
+  selectRelayIpv6,
+  type RelayIpv6Selection,
+} from "~/server/host-addresses";
+import {
   buildRelayView,
   loadSharedRelayResolution,
   type RelayAddressFamily,
@@ -68,11 +76,14 @@ import {
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
 import cn from "~/utils/cn";
+import { copyToClipboard } from "~/utils/copy";
+import toast from "~/utils/toast";
 
 import type { Route } from "./+types/overview";
 import {
   type CheckStatus,
   type CheckTally,
+  capDerpRegionLines,
   countNodeStatus,
   declaredDerpAddresses,
   type DeclaredDerpAddress,
@@ -396,8 +407,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // breaks the dashboard because a name did not resolve. Region names come from
   // the same chain the machine page uses, so the two cards cannot word a region
   // differently: the manual mapping first, then the configured DERP maps.
+  //
+  // IPv6 is the exception: it has no NAT, so the address lives on the machine
+  // itself and only the host's own interfaces can name it. That probe is only
+  // worth its file reads while `derp.server.ipv6` is unset, which is also the
+  // only case where the card derives one.
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
-  const [relayResolution, regionNames, mapInventory] = await Promise.all([
+  const resolveHostIpv6 = (derp.server.ipv6 ?? "").trim().length === 0;
+  const [relayResolution, regionNames, mapInventory, hostAddresses] = await Promise.all([
     loadSharedRelayResolution(relayEndpoint?.host),
     readDerpRegionNames(appConfig.server.data_path),
     loadDerpRegionInventory({
@@ -407,8 +424,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       updateFrequency: derp.updateFrequency,
       baseDir: configPath ? dirname(configPath) : undefined,
     }),
+    resolveHostIpv6 ? loadHostIpv6Addresses() : Promise.resolve(undefined),
   ]);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
+  // A literal endpoint is its own address, and an unusable `server_url` has no
+  // hostname to compare against: both keep the row exactly as it read before.
+  const relayIpv6 =
+    resolveHostIpv6 && relayView.host !== undefined && relayResolution?.kind !== "literal"
+      ? selectRelayIpv6({
+          candidates: hostAddresses?.candidates,
+          namespace: hostAddresses?.namespace,
+          dns: relayResolution?.ipv6,
+          reason: relayResolution?.reason,
+        })
+      : undefined;
 
   // Every hostname the configured maps list, resolved through the shared relay
   // cache the address block above already uses: one batch, at most
@@ -482,6 +511,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         // lines are flattened to plain values here, because the card must not
         // import a module that reaches Node-only code (see `./relay-verdicts`).
         lines: relayAddressLines(derp.server, relayResolution),
+        // The IPv6 row reads its own selection instead: the machine's own
+        // global unicast address, cross-checked against the domain's AAAA, or
+        // the DNS answer labelled unverified. `undefined` means `derp.server`
+        // declared an address (or the endpoint is a literal), which is the one
+        // case the line above already words.
+        ipv6: relayIpv6,
         // Which resolver produced this answer, and whether this viewer may ask
         // for a fresh one; the card shows both under the addresses.
         resolution: relayResolution,
@@ -604,6 +639,68 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ? relayReason(line.reason ?? "unavailable")
       : t(RELAY_VERDICT_KEYS[line.verdict], { address: "" });
 
+  // The IPv6 half of the address block, derived by the loader from the machine's
+  // own interfaces. It is absent when `derp.server.ipv6` is declared or the
+  // endpoint is a literal address, which is exactly when the line above already
+  // words the row.
+  const relayIpv6 = derp.relay.ipv6;
+  const ipv6LegacyLine = derp.relay.lines.find((line) => line.family === "ipv6");
+
+  /** Where a derived IPv6 address came from, as the chip next to the label. */
+  const ipv6SourceChip = (selection: RelayIpv6Selection) => {
+    if (selection.source === "declared") {
+      return relayDeclaredMarker;
+    }
+
+    if (selection.source === "host") {
+      return { tone: "neutral" as const, label: t("overview.derp.relaySourceHost") };
+    }
+
+    if (selection.source === "dns") {
+      return { tone: "neutral" as const, label: t("overview.derp.relaySourceDnsUnverified") };
+    }
+
+    return undefined;
+  };
+
+  /**
+   * The one line under the IPv6 row, strongest reason first. A declared address
+   * keeps the verdict note the row printed before; a derived one says why it is
+   * what it is: a namespace Headplane could not see beats a machine without an
+   * address, which beats the address's own stability, which beats the alternates.
+   */
+  const ipv6Note = (selection: RelayIpv6Selection) => {
+    if (selection.source === "declared") {
+      return ipv6LegacyLine === undefined
+        ? undefined
+        : relayVerdictNote(ipv6LegacyLine, derp.relay.host);
+    }
+
+    if (selection.namespace !== "host") {
+      return t("overview.derp.ipv6UnverifiedNote");
+    }
+
+    if (selection.state === "no-host-address" && selection.addresses.length > 0) {
+      return t("overview.derp.ipv6NoneBody");
+    }
+
+    if (selection.temporary) {
+      return t("overview.derp.ipv6TemporaryNote");
+    }
+
+    if (selection.alternates.length > 0) {
+      return t("overview.derp.ipv6Alternates", { addresses: selection.alternates.join(", ") });
+    }
+
+    return undefined;
+  };
+
+  /** The sentence a derived IPv6 row with nothing to print reads as. */
+  const ipv6StateText = (selection: RelayIpv6Selection) =>
+    selection.state === "no-host-address"
+      ? t("overview.derp.ipv6NoneBody")
+      : relayReason(selection.state ?? "unavailable");
+
   // The configured maps as the box lists them; the labels go through the same
   // chain the region row above uses, so both cards word a region identically.
   const mapRegions = derpRegionSummaries({
@@ -614,6 +711,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     unknown: t("machines.detail.derp.unknown"),
   });
   const mapNodeCount = mapRegions.reduce((total, region) => total + region.nodeCount, 0);
+  // What the collapsed box lists: the first few regions by name, then a count.
+  const mapRegionLines = capDerpRegionLines(mapRegions);
   const hasMapSources = derp.pathCount > 0 || derp.urlCount > 0;
 
   /** Where a region's name came from: the operator, or the first map that has it. */
@@ -794,26 +893,51 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 label={t("overview.derp.relayClientAddress")}
                 {...textOrReason(derp.relay.endpoint, t("overview.derp.publicUnavailable"))}
               />
-              {derp.relay.lines.map((line) => (
-                <Fact
-                  key={line.family}
-                  label={relayFamilyLabel(line.family)}
-                  note={relayVerdictNote(line, derp.relay.host)}
-                  source={line.source === "declared" ? relayDeclaredMarker : undefined}
-                >
-                  {line.addresses.length > 0 ? (
-                    <span className="flex flex-col gap-0.5 sm:items-end">
-                      {line.addresses.map((address) => (
-                        <Code key={address}>{address}</Code>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-mist-500 dark:text-mist-400">
-                      {relayLineText(line)}
-                    </span>
-                  )}
-                </Fact>
-              ))}
+              {derp.relay.lines.map((line) => {
+                const selection = line.family === "ipv6" ? relayIpv6 : undefined;
+                return (
+                  <Fact
+                    key={line.family}
+                    label={relayFamilyLabel(line.family)}
+                    note={
+                      selection === undefined
+                        ? relayVerdictNote(line, derp.relay.host)
+                        : ipv6Note(selection)
+                    }
+                    source={
+                      selection === undefined
+                        ? line.source === "declared"
+                          ? relayDeclaredMarker
+                          : undefined
+                        : ipv6SourceChip(selection)
+                    }
+                  >
+                    {selection !== undefined ? (
+                      selection.addresses.length > 0 ? (
+                        <span className="flex flex-col gap-0.5 sm:items-end">
+                          {selection.addresses.map((address) => (
+                            <Code key={address}>{address}</Code>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-mist-500 dark:text-mist-400">
+                          {ipv6StateText(selection)}
+                        </span>
+                      )
+                    ) : line.addresses.length > 0 ? (
+                      <span className="flex flex-col gap-0.5 sm:items-end">
+                        {line.addresses.map((address) => (
+                          <Code key={address}>{address}</Code>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-mist-500 dark:text-mist-400">
+                        {relayLineText(line)}
+                      </span>
+                    )}
+                  </Fact>
+                );
+              })}
               {derp.stunListenAddr ? (
                 <Fact code label={t("overview.derp.stun")} text={derp.stunListenAddr} />
               ) : undefined}
@@ -824,6 +948,22 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               resolution={derp.relay.resolution}
               suggestsConfigured={derp.relay.suggestsConfigured}
             />
+
+            {relayIpv6?.mismatch && relayIpv6.copy !== undefined ? (
+              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <span className="font-medium">{t("overview.derp.ipv6MismatchTitle")}</span>
+                  <span>
+                    {t("overview.derp.ipv6MismatchBody", {
+                      dns: relayIpv6.dns.join(", "),
+                      host: relayIpv6.copy,
+                    })}
+                  </span>
+                  <CopyAddress address={relayIpv6.copy} />
+                </div>
+              </div>
+            ) : undefined}
 
             {derp.ipv6StunWarning ? (
               <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
@@ -863,10 +1003,33 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             ) : (
               <SettingsCollapsible
                 description={t("overview.derp.mapsDetailBody")}
-                summary={t("overview.derp.mapsSummary", {
-                  regions: mapRegions.length,
-                  nodes: mapNodeCount,
-                })}
+                summary={
+                  // The collapsed row names its regions instead of only counting
+                  // them, so a reader does not have to expand the box to learn
+                  // what is inside. It caps the list, because the box keeps the
+                  // geometry of its siblings and must not grow without bound.
+                  <span className="flex flex-col gap-0.5">
+                    {mapRegionLines.lines.map((region) => (
+                      <span
+                        className="flex flex-wrap items-center gap-1.5"
+                        key={region.regionId}
+                      >
+                        <span className="truncate" title={region.label}>
+                          {region.label}
+                        </span>
+                        <span className="whitespace-nowrap">
+                          {t("overview.derp.mapsRegionNodes", { count: region.nodeCount })}
+                        </span>
+                        <SettingsStatus tone="neutral">{mapSourceLabel(region)}</SettingsStatus>
+                      </span>
+                    ))}
+                    {mapRegionLines.hidden > 0 ? (
+                      <span className="text-mist-500 dark:text-mist-400">
+                        {t("overview.derp.mapsMoreRegions", { count: mapRegionLines.hidden })}
+                      </span>
+                    ) : undefined}
+                  </span>
+                }
                 title={t("overview.derp.mapsDetailTitle")}
               >
                 <SettingsCollapsibleGroup>
@@ -1452,6 +1615,34 @@ function DerpMapAddress({
       ))}
       {resolved.length === 0 ? missing : undefined}
     </span>
+  );
+}
+
+/**
+ * The copy affordance under the IPv6 warning. One click puts the machine's own
+ * address on the clipboard, ready to paste into `derp.server.ipv6`; a copy the
+ * browser refuses is reported as a toast, never as an error page.
+ */
+function CopyAddress({ address }: { address: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = async () => {
+    if (!(await copyToClipboard(address))) {
+      toast(t("common.copyFailed"));
+      return;
+    }
+
+    toast(t("common.copied"));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1000);
+  };
+
+  return (
+    <Button className="self-start" onClick={onCopy} type="button">
+      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+      {t("overview.derp.ipv6HostCopy")}
+    </Button>
   );
 }
 

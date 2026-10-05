@@ -162,6 +162,18 @@ const zhHans = {
       relayReasonHostMissing: "server_url 未指定主机",
       relayReasonInvalidHost: "该主机名不是可用的 DNS 名称",
       relayReasonUnavailable: "未解析",
+      relaySourceHost: "宿主机",
+      relaySourceDnsUnverified: "DNS 未验证",
+      ipv6NoneBody: "这台机器没有公网 IPv6 地址。请在 derp.server.ipv6 中声明一个，或修正域名的 DNS。",
+      ipv6Alternates: "这台机器上的其他地址：{addresses}",
+      ipv6TemporaryNote:
+        "这台机器唯一的 IPv6 地址是临时（隐私）地址，会轮换。请在 derp.server.ipv6 中声明一个稳定地址。",
+      ipv6MismatchTitle: "域名指向别处",
+      ipv6MismatchBody:
+        "域名的 AAAA 记录是 {dns}，但这台机器持有 {host}。该记录可能指向另一台机器，或是临时的隐私地址——请改用宿主机地址。",
+      ipv6HostCopy: "复制宿主机地址",
+      ipv6UnverifiedNote:
+        "Headplane 在这里读不到宿主机自身的地址：容器没有与宿主机共用网络命名空间（请使用 network_mode: host）。这里显示的是域名的 DNS 答案，未经验证。",
       stun: "STUN 监听地址",
       ipv6StunTitle: "STUN 仅监听 IPv4",
       ipv6StunBody:
@@ -180,6 +192,8 @@ const zhHans = {
       mapsRemoteUnavailable: "至少有一个 DERP 映射网址无法读取，其区域在此缺失。",
       mapsResolveTruncated: "这里只解析前 {count} 个节点主机名。",
       mapsRegionSummary: "{count} 个节点 · {source}",
+      mapsRegionNodes: "{count} 个节点",
+      mapsMoreRegions: "还有 {count} 个区域",
       mapsRegionNoNodes: "该区域没有列出节点。",
       mapsSourceManual: "手动名称",
       mapsSourceLocal: "本地文件",

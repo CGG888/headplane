@@ -182,6 +182,27 @@ derp:
 - `derp.urls: []` 之后自建中继是**唯一**中继：它不可达时客户端之间无法通过 DERP 互联，
   建议先用一台客户端 `tailscale debug derp-map` 确认区域已出现再清空公开地图。
 
+::: tip 中继地址：IPv4 看 DNS，IPv6 要看**宿主机自己**
+`derp.server.ipv4` / `ipv6` 是 Headscale 公布给客户端的地址，两个地址族的取法不一样
+（留空时由 Headplane 推导，DERP 页与「概览」页都会标出这个地址的来源）：
+
+- **IPv4**：留空时取 `server_url` 主机名的 **A 记录** —— 在 NAT 后面的机器本来也看不到自己的
+  公网地址，DNS 的答案就是对的。
+- **IPv6**：留空时优先取**宿主机自己的全局单播 IPv6 地址**（`network_mode: host` 下容器与
+  宿主机共用网络命名空间，所以读得到），再与域名的 AAAA 对照；只有对照不上时才把 DNS 的答案
+  作为**兜底**显示，并标为「未验证」。IPv6 没有 NAT，公网地址就在机器自己身上；而域名上的
+  AAAA 可能是临时隐私地址、换过前缀的旧记录，甚至是另一台机器 —— 公布错了客户端会时通时断。
+
+先用 `ip -6 addr show scope global` 看一眼宿主机有没有公网 IPv6：
+
+- **有**：自建中继的 IPv6 就该是它；域名 AAAA 与它不一致时 DERP 页会给出黄色警告，卡片上的
+  复制按钮可以把这个地址直接粘进 `derp.server.ipv6`。
+- **没有**：不要指望解析出地址 —— 要么在 `derp.server.ipv6` 里自己声明一个，要么修 DNS；
+  容器**没有**共用宿主机网络命名空间时，页面只能把 DNS 的答案标成「未验证」，不会当成宿主机地址。
+
+完整判定规则见英文文档 [Where the relay addresses come from](/features/headscale-settings#where-the-relay-addresses-come-from)。
+:::
+
 ### 可选：在线编辑本地 DERP 地图（`derp.paths`）
 
 除了内嵌服务器，Headscale 还能把磁盘上的 DERP 地图文件合并进它下发给客户端的地图。
@@ -744,8 +765,10 @@ IPv6 地址（`fd7a:…`）照常可用，机器之间仍能用 IPv6 互访。
 
 **二、中继卡片里 IPv6 一栏解析不出地址**
 
-这说明 `server_url` 里的主机名**没有 AAAA 记录**，客户端完全无法通过 IPv6 连接自建
-中继 —— 不是「慢」，而是根本用不了。先确认：
+IPv6 一栏优先显示**宿主机自己的全局地址**（见第四节自建内嵌 DERP 中继里的提示），所以这一栏为空，通常说明
+宿主机没有公网 IPv6（`ip -6 addr show scope global` 没有输出），**并且** `server_url` 里的
+主机名也没有 AAAA 记录 —— 两者都没有，客户端完全无法通过 IPv6 连接自建中继，不是「慢」，
+而是根本用不了。先确认：
 
 ```bash
 dig +short AAAA headscale.example.com            # 本机解析器：无输出 = 它认为没有 AAAA
@@ -761,8 +784,9 @@ Headscale：可以改宿主机／路由器的 DNS，也可以直接在 Headplane
 确认之后再二选一：
 
 - **要 IPv6**：给该主机名补一条 AAAA 记录（或用上面的办法让本机解析器能查到它），指向
-  运行 Headscale／中继的那台机器（也就是 Lucky 回源的地址）；同时确认 `listen_addr` 与
-  `derp.server.stun_listen_addr` 是双栈（例如 `listen_addr: "::"`、
+  运行 Headscale／中继的那台机器（也就是 Lucky 回源的地址）；这条记录要与**宿主机自己的
+  全局 IPv6 地址**一致（不一致时 DERP 页会给出黄色警告），只是给别处的地址打掩护没有意义；
+  同时确认 `listen_addr` 与 `derp.server.stun_listen_addr` 是双栈（例如 `listen_addr: "::"`、
   `stun_listen_addr: "[::]:3478"`），否则即使解析到了地址，中继与 STUN 仍然只监听
   IPv4。
 - **只跑 IPv4**：接受 IPv4-only，并清空 `derp.server.ipv6`，这个提示就不会再出现。

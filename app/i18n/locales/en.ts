@@ -169,6 +169,19 @@ const en = {
       relayReasonHostMissing: "server_url names no host",
       relayReasonInvalidHost: "the hostname is not a usable DNS name",
       relayReasonUnavailable: "not resolved",
+      relaySourceHost: "Host",
+      relaySourceDnsUnverified: "DNS-unverified",
+      ipv6NoneBody:
+        "This machine has no public IPv6 address. Declare one in derp.server.ipv6, or fix the domain's DNS.",
+      ipv6Alternates: "Other addresses on this machine: {addresses}",
+      ipv6TemporaryNote:
+        "The only IPv6 address this machine holds is temporary (a privacy address) and rotates. Declare a stable one in derp.server.ipv6.",
+      ipv6MismatchTitle: "The domain points elsewhere",
+      ipv6MismatchBody:
+        "The domain's AAAA answer is {dns}, but this machine holds {host}. The record may point at another machine, or be a temporary privacy address — publish the host address instead.",
+      ipv6HostCopy: "Copy host address",
+      ipv6UnverifiedNote:
+        "Headplane cannot see the host's own addresses here: this container does not demonstrably share the host's network namespace (use network_mode: host). What is shown is the domain's DNS answer, unverified.",
       stun: "STUN listen address",
       ipv6StunTitle: "STUN listens on IPv4 only",
       ipv6StunBody:
@@ -188,6 +201,8 @@ const en = {
         "At least one DERP map URL could not be read, so its regions are missing here.",
       mapsResolveTruncated: "Only the first {count} node hostnames are resolved here.",
       mapsRegionSummary: "{count} nodes · {source}",
+      mapsRegionNodes: "{count} nodes",
+      mapsMoreRegions: "+{count} more",
       mapsRegionNoNodes: "This region lists no nodes.",
       mapsSourceManual: "Manual name",
       mapsSourceLocal: "Local file",

@@ -305,6 +305,40 @@ configuration, and one more from Headscale's documentation: the embedded server
 cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
 documented limitation rather than a misconfiguration.
 
+### Where the relay addresses come from
+
+The Overview card and the DERP tab show one address per family, and the two
+families are not derived the same way:
+
+| Family   | When the key is set | Otherwise                                                                                                                                                |
+| -------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IPv4** | `derp.server.ipv4`  | The **A record** of the `server_url` hostname. A machine behind NAT cannot know its own public address, so the DNS answer is the right one to advertise. |
+| **IPv6** | `derp.server.ipv6`  | The **host machine's own global unicast IPv6 address**, cross-checked against the domain's AAAA; the DNS answer is only a clearly-labelled fallback.      |
+
+IPv6 is deliberately different. There is no NAT for it: the machine itself holds
+the public address, and under `network_mode: host` the container shares the host's
+network namespace, so Headplane can read that address directly instead of trusting
+a name. A domain's AAAA can be a temporary privacy address, a prefix rotated since
+the record was written, or a different machine entirely — advertising the wrong
+one makes clients fail intermittently rather than cleanly, which is exactly the
+kind of fault that is hard to attribute afterwards.
+
+Each address carries the label of the source it came from: **`derp.server`** when
+the key is set, **host** when it is the machine's own address, and
+**DNS-unverified** when the domain's AAAA is all Headplane has to go on. When that
+AAAA does not match the host's address the card raises an amber warning, and a
+copy button copies the host address to your clipboard ready to paste into
+`derp.server.ipv6`.
+
+Two states are named rather than papered over:
+
+- **The machine has no public IPv6.** There is no host address to show, so either
+  declare one in `derp.server.ipv6` or fix the domain's DNS; the card says so
+  instead of inventing an address.
+- **The container does not share the host network namespace.** Headplane cannot
+  see the host's own addresses at all, so the DNS answer stays **DNS-unverified**
+  rather than being promoted to a host address.
+
 ### Is the relay actually reachable over IPv6 (or IPv4)?
 
 `derp.server.ipv4` and `derp.server.ipv6` are what Headscale **advertises** to

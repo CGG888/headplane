@@ -537,6 +537,36 @@ export function derpRegionSummaries(input: DerpRegionSummaryInput): DerpRegionSu
   return summaries;
 }
 
+/**
+ * Most regions the collapsed "Local DERP nodes" box lists before it summarises
+ * the rest. The box now names its regions while it is closed, so the cap is what
+ * keeps a map with dozens of regions from turning one card into a wall.
+ */
+export const DERP_MAP_REGION_LINE_LIMIT = 6;
+
+/** The regions the collapsed box lists, and how many it left out. */
+export interface DerpRegionLines {
+  lines: DerpRegionSummary[];
+  hidden: number;
+}
+
+/**
+ * The first `limit` regions for the collapsed box, plus a count of the rest so
+ * the card can end with one "+N more" line instead of growing without bound.
+ * The order the summaries arrived in is kept, because that is the order the
+ * configured maps listed them in.
+ */
+export function capDerpRegionLines(
+  regions: readonly DerpRegionSummary[],
+  limit = DERP_MAP_REGION_LINE_LIMIT,
+): DerpRegionLines {
+  const capped = Math.max(0, Math.trunc(limit));
+  return {
+    lines: regions.slice(0, capped),
+    hidden: Math.max(0, regions.length - capped),
+  };
+}
+
 // MARK: Headscale configuration
 
 /**
