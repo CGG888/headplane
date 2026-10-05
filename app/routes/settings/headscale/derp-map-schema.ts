@@ -220,6 +220,69 @@ export function isDerpMap(source: string): boolean {
   return validateDerpMap(source).length === 0;
 }
 
+/**
+ * One region as a DERP map describes it, reduced to what naming a region needs.
+ * `code` and `name` are empty strings when the document does not carry them.
+ */
+export interface DerpMapRegionEntry {
+  regionId: number;
+  code: string;
+  name: string;
+}
+
+/**
+ * Reads the regions out of a DERP map document (YAML or JSON — YAML is a
+ * superset), reusing the same scalar rules as {@link validateDerpMap}.
+ *
+ * This never reports problems: it is the read-only naming path, so anything the
+ * document does not state is simply absent. A syntax error, a root that is not a
+ * mapping, a `regions` value that is not a mapping and a region without a usable
+ * `regionid` all contribute no entry, while a duplicate id keeps its first
+ * occurrence so a repeated block cannot shadow the one Headscale reads first.
+ * Two regions that share a `regioncode` are kept apart here because regions are
+ * keyed by id everywhere else.
+ */
+export function readDerpMapRegions(source: string): DerpMapRegionEntry[] {
+  const document = parseDocument(source);
+  if (document.errors.length > 0) {
+    return [];
+  }
+
+  const root = document.contents;
+  if (!isMap(root)) {
+    return [];
+  }
+
+  const regions = root.get("regions", true);
+  if (!isMap(regions)) {
+    return [];
+  }
+
+  const entries: DerpMapRegionEntry[] = [];
+  const seenIds = new Set<number>();
+
+  for (const pair of regions.items) {
+    const region = pair.value;
+    if (!isMap(region)) {
+      continue;
+    }
+
+    const id = integerValue(region.get("regionid", true));
+    if (id === undefined || id < 1 || seenIds.has(id)) {
+      continue;
+    }
+
+    seenIds.add(id);
+    entries.push({
+      regionId: id,
+      code: textValue(region.get("regioncode", true)) ?? "",
+      name: textValue(region.get("regionname", true)) ?? "",
+    });
+  }
+
+  return entries;
+}
+
 function validateNode(
   node: unknown,
   regionId: number | undefined,

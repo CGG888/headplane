@@ -18,8 +18,9 @@ nothing is buried in one long scroll and nothing is hidden behind a panel.
 - Headscale's configuration file must be mounted **read-write** into Headplane
   and `headscale.config_path` must point at it. Without it Headplane can neither
   show nor save these values (see [Network Management](/install/docker#network-management)).
-- To edit the local DERP map files (`derp.paths`) from the DERP tab, the
-  directory holding them must be mounted **read-write** too; see
+- To edit the local DERP map files (`derp.paths`) from the DERP tab, the entries
+  have to be paths **on the Headscale host**, and the directory holding them has
+  to be mounted into the container **read-write at that same absolute path**; see
   [Editing local DERP map files](#editing-local-derp-map-files).
 - Headscale reads most of this at startup, so changes only take effect after the
   Headscale process restarts. With the process integration enabled Headplane asks
@@ -113,7 +114,7 @@ edits how that map is used:
 | Setting                                              | What it does                                                                                                                                                                                                                                                    |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                  |
-| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry can also be viewed and edited right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                                                               |
+| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry is a path **on the Headscale host**, and the DERP tab can view and edit it right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                |
 | `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
 | `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
 
@@ -136,24 +137,81 @@ codes unique. A path this container cannot see at all is reported as **cannot
 check**, exactly like the rest of the configuration checks, because a missing bind
 mount is not a broken map.
 
+::: danger The path is on the Headscale host, not inside the container
+`derp.paths` is read by **Headscale itself**. When Headscale runs as a host
+process next to a containerised Headplane — the usual NAS setup — every entry has
+to be a path that exists **on that host**. Headplane only sees the same file if
+that directory is mounted into its container at the **identical absolute path**,
+which is also why the DERP tab asks for a path on the Headscale host when you add
+one. A container-only path such as `/etc/headscale/...` looks fine in the UI,
+but Headscale cannot open it, and it refuses to start:
+
+```
+Error: headscale ran into an error and had to shut down:
+getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or directory
+```
+
+Mount the host directory **read-write, at the same absolute path it has on the
+host**, and list that host path in `derp.paths`:
+
+```yaml
+# Headscale's config.yaml — the path as the host sees it
+derp:
+  paths:
+    - /vol1/@appdata/headscale/derp-maps/home.yaml
+```
+
+```yaml
+# Headplane's compose — host directory : the same absolute path in the container
+volumes:
+  - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
+```
+
+Read-only is not enough for editing: **View** still works, while every save reports
+that the container cannot write the path. Headscale itself has to be able to read
+these files too, because it loads them when it starts.
+
+If this already happened, the recovery is to comment the `paths:` entry out (or
+restore the configuration snapshot Headplane took before the write) and start
+Headscale again — then redo the three steps in the right order: create the
+directory and file **on the host**, mount it into the container at the same path,
+and only then point `derp.paths` at the host path.
+:::
+
 Nothing is written unless the path is **already listed in `derp.paths`**: the
 request may only name one of those entries, the path has to be absolute, and a
 `..` segment is refused. Files larger than **256 KiB** are neither loaded into the
 editor nor written.
 
-::: warning The map directory has to be mounted read-write
-Editing writes through the mount the container was given, so the directory holding
-the maps has to be shared **read-write**. Share only that directory rather than the
-whole Headscale data directory:
+#### Converting a region from Tailscale's DERP map
 
-```yaml
-volumes:
-  - "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"
-```
+A local file uses the same field names as Tailscale's own DERP map JSON, in YAML
+and lower case. The JSON map's top-level `Regions` object becomes the YAML
+`regions:` mapping keyed by region id, and the fields are renamed:
 
-With a read-only mount **View** still works while every save reports that the
-container cannot write the path. Headscale itself has to be able to read these
-files too, because it loads them when it starts.
+| Tailscale JSON | Local YAML   | Notes                                                                       |
+| -------------- | ------------ | --------------------------------------------------------------------------- |
+| `RegionID`     | `regionid`   | The region's number; it must match the map key and be unique across maps.   |
+| `RegionCode`   | `regioncode` | The short code clients show, for example `ams`.                             |
+| `RegionName`   | `regionname` | The name clients display for the region.                                    |
+| `Nodes`        | `nodes`      | A YAML list, so every node starts with a `-`.                               |
+| `Name`         | `name`       | The node's name, unique inside its region.                                  |
+| `HostName`     | `hostname`   | What clients connect to; it needs an A or AAAA record pointing at the node. |
+| `IPv4`         | `ipv4`       | Optional, a bare address.                                                   |
+| `IPv6`         | `ipv6`       | Optional, a bare address.                                                   |
+
+`Latitude`, `Longitude` and `CanPort80` are wire-format fields: the JSON map
+carries them, while the local YAML leaves them out and Headscale does not read
+them from it. `derpport` defaults to **443** and `stunport` to **3478** when a node
+omits them, so the minimum a node needs is `name`, `regionid` and `hostname`
+(`stunport: 0` means the node answers no STUN, and `stunonly: true` marks a node
+that helps clients discover their NAT mapping but never relays traffic).
+
+::: tip The official regions already arrive through `derp.urls`
+Tailscale's own regions come from Headscale's built-in map and from `derp.urls`, so
+you do **not** have to copy them into a local file. Writing one locally means
+maintaining it yourself: the addresses in your file are the ones clients will use,
+and nothing updates them when Tailscale moves one of its relays.
 :::
 
 #### What the editor checks

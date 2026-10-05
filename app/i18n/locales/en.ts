@@ -134,7 +134,6 @@ const en = {
       publicTitle: "Relay Addresses & STUN",
       publicBody: "The address clients dial for the relay, and the IPv4/IPv6 addresses behind it.",
       region: "Region",
-      regionValue: "#{id} · {code} · {name}",
       relaySource: "Relay sources",
       relaySourceNote: "Based on derp.server.enabled and derp.urls.",
       relaySourceEmbeddedOnly: "Embedded server only",
@@ -174,6 +173,30 @@ const en = {
       ipv6StunTitle: "STUN listens on IPv4 only",
       ipv6StunBody:
         "derp.server.ipv6 is set to {ipv6}, but STUN listens on {stun}. Go binds an IPv4 address such as 0.0.0.0 as IPv4 only, so a client without an IPv4 stack cannot reach STUN. Use a dual-stack or IPv6 listen address such as [::]:3478.",
+      mapsTitle: "Local DERP nodes",
+      mapsBody: "The relay regions the configured DERP maps describe, and where each came from.",
+      mapsSummary: "{regions} regions · {nodes} nodes",
+      mapsDetailTitle: "Regions in the configured maps",
+      mapsDetailBody: "One block per region; open one to see the nodes it relays.",
+      mapsNoMaps: "No DERP map files or URLs are configured, so no region is described here.",
+      mapsEmpty: "The configured DERP maps describe no regions.",
+      mapsFileUnreadable:
+        "Headplane cannot read {path}: the map directory needs to be mounted read-write at the same absolute path inside the container.",
+      mapsFileInvalid: "{path} is not a DERP map Headplane can read.",
+      mapsFileEmpty: "{path} describes no regions.",
+      mapsRemoteUnavailable:
+        "At least one DERP map URL could not be read, so its regions are missing here.",
+      mapsResolveTruncated: "Only the first {count} node hostnames are resolved here.",
+      mapsRegionSummary: "{count} nodes · {source}",
+      mapsRegionNoNodes: "This region lists no nodes.",
+      mapsSourceManual: "Manual name",
+      mapsSourceLocal: "Local file",
+      mapsSourceRemote: "Map URL",
+      mapsStun: "STUN",
+      mapsStunNone: "not offered",
+      mapsStunOnly: "STUN only",
+      mapsDefault: "default",
+      mapsDeclared: "map",
     },
     service: {
       title: "Headscale Server",
@@ -402,9 +425,8 @@ const en = {
         "Reported by the machine itself: whether it obtained a port mapping from the router with NAT-PMP.",
       derp: {
         title: "DERP Relays",
-        body: "Where clients reach the relay, and which DERP relay this machine uses. Live relay data comes from the Headplane Agent.",
+        body: "The relay address, the embedded DERP region, and the relays this machine uses — per-machine data comes from the Headplane Agent.",
         relayAddressTitle: "Relay clients reach",
-        relayClientAddress: "Client connect address",
         relayIpv4: "IPv4",
         relayIpv6: "IPv6",
         relayDeclaredMarker: "derp.server",
@@ -438,7 +460,7 @@ const en = {
         latency: "Latency by region",
         latencyMore: "{count} more regions were measured; only the fastest are shown.",
         idsOnly:
-          "Headplane cannot read the DERP map from Headscale, so regions without a local name are shown by ID.",
+          "Regions that neither the configured DERP maps nor a manual name describe are shown by ID.",
         embeddedMarker: "embedded DERP",
         embeddedEnabled: "Headscale's embedded DERP server is enabled and serves region {region}.",
         embeddedDisabled:

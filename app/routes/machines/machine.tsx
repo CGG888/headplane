@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 import {
   Activity,
   CalendarClock,
@@ -29,6 +31,7 @@ import {
   requestApiContext,
 } from "~/server/context";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
+import { loadDerpRegionSources } from "~/server/headscale/derp-region-sources";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { computeNodeTimeline, uptimePercent, type NodeTimeline } from "~/server/history/timeline";
 import type { NodeHistoryDocument } from "~/server/history/types";
@@ -112,7 +115,23 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   // page — it only leaves the card saying why.
   const derp = headscaleConfig.getDERPSettings();
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
-  const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
+  // Region names come from a chain the loader resolves once: the operator's
+  // manual mapping, the local `derp.paths` maps and the remote `derp.urls` maps.
+  // The card only ever receives the plain result, and a map that cannot be read
+  // or fetched simply leaves that region as a bare id.
+  const [relayResolution, regionNames, regionSources] = await Promise.all([
+    loadSharedRelayResolution(relayEndpoint?.host),
+    readDerpRegionNames(appConfig.server.data_path),
+    loadDerpRegionSources({
+      paths: derp.paths,
+      urls: derp.urls,
+      autoUpdateEnabled: derp.autoUpdateEnabled,
+      updateFrequency: derp.updateFrequency,
+      baseDir: appConfig.headscale.config_path
+        ? dirname(appConfig.headscale.config_path)
+        : undefined,
+    }),
+  ]);
   // The address lines join the declared addresses with the lookup, so each
   // family reads as one line instead of a declared-versus-resolved pair. The
   // card receives the finished lines: it must never import a module that
@@ -137,9 +156,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     // the card only offers the button to a viewer who may actually use it.
     canRefreshRelayDns: auth.can(principal, Capabilities.configure_iam),
     derp,
-    // Manual names for the regions Headscale cannot name itself; a missing or
-    // corrupt file simply resolves to no mapping.
-    derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
+    // Region labels the DERP card resolves: the manual names Headplane stores in
+    // its data directory, plus what the configured DERP maps describe. A missing
+    // or corrupt source simply resolves to fewer known names.
+    derpRegions: { manual: regionNames, ...regionSources },
     relay,
     relayResolution,
     relayLines: relayAddressLines(derp.server, relayResolution),
@@ -178,7 +198,7 @@ export default function Page({
     availability,
     canRefreshRelayDns,
     derp,
-    derpRegionNames,
+    derpRegions,
     relay,
     relayResolution,
     relayLines,
@@ -518,7 +538,7 @@ export default function Page({
         <DerpInfo
           agentEnabled={agentEnabled}
           canRefresh={canRefreshRelayDns}
-          regionNames={derpRegionNames}
+          regions={derpRegions}
           relay={relay}
           relayLines={relayLines}
           relayResolution={relayResolution}

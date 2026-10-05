@@ -9,6 +9,12 @@
  */
 
 import {
+  resolveDerpRegionLabel,
+  type DerpRegionInfo,
+  type DerpRegionMap,
+} from "~/routes/machines/derp-info";
+import { DERP_DEFAULT_PORT } from "~/routes/settings/headscale/derp-map-limits";
+import {
   deriveDerpPublicEndpoint,
   formatDerpPublicEndpoint,
 } from "~/routes/settings/headscale/derp-settings";
@@ -289,6 +295,246 @@ export function countNodesHomedInRegion(
   }
 
   return count;
+}
+
+// MARK: DERP map regions
+
+/**
+ * `stunport` defaults to 3478 when a node omits it; `0` is the format's way of
+ * saying that this node does not answer STUN at all.
+ */
+export const DERP_DEFAULT_STUN_PORT = 3478;
+
+/**
+ * Most node hostnames one render resolves. A public DERP map lists dozens of
+ * nodes and every lookup is a DNS query, so the box resolves a bounded prefix
+ * of them and says how many it left out; the shared relay cache makes every
+ * later render free.
+ */
+export const DERP_NODE_RESOLVE_LIMIT = 24;
+
+/** One node as a configured DERP map declares it. */
+export interface DerpMapNodeInput {
+  name: string;
+  hostname: string;
+  /** `derpport` as declared; unset means the format's default (443). */
+  derpPort?: number;
+  /** `stunport` as declared; `0` means this node does not answer STUN. */
+  stunPort?: number;
+  stunOnly: boolean;
+  ipv4?: string;
+  ipv6?: string;
+}
+
+/** One region as a configured DERP map declares it, with its source. */
+export interface DerpMapRegionInput {
+  regionId: number;
+  code?: string;
+  name?: string;
+  /** The first configured map that describes this region. */
+  origin: { kind: "local" | "remote"; source: string };
+  nodes: readonly DerpMapNodeInput[];
+}
+
+/** What one node hostname resolved to, as the shared relay cache reports it. */
+export interface DerpNodeResolution {
+  /** `literal` when the hostname is already an address, so nothing was looked up. */
+  kind?: "literal" | "hostname";
+  host?: string;
+  ipv4: string[];
+  ipv6: string[];
+  reason?: RelayReason;
+}
+
+/** One port as the map declares it: the value, and whether it is the default. */
+export interface DerpPortValue {
+  port: number;
+  /** True when the map omitted the port, so the card prints the default. */
+  defaulted: boolean;
+}
+
+/** The STUN port of a node, absent when that node does not answer STUN. */
+export interface DerpStunPortValue {
+  port?: number;
+  defaulted: boolean;
+}
+
+/** The DERP port clients dial for a node. */
+export function derpNodeDerpPort(node: { derpPort?: number }): DerpPortValue {
+  return node.derpPort === undefined
+    ? { port: DERP_DEFAULT_PORT, defaulted: true }
+    : { port: node.derpPort, defaulted: false };
+}
+
+/** The STUN port a node answers on, or no port when it does not offer STUN. */
+export function derpNodeStunPort(node: { stunPort?: number }): DerpStunPortValue {
+  if (node.stunPort === undefined) {
+    return { port: DERP_DEFAULT_STUN_PORT, defaulted: true };
+  }
+
+  return node.stunPort === 0 ? { defaulted: false } : { port: node.stunPort, defaulted: false };
+}
+
+/**
+ * The A/AAAA answer for one node hostname, per family, with the resolver's own
+ * reason for a family it could not fill. A hostname that is already an address
+ * is its own answer; a name nobody looked up reads "not resolved", exactly as
+ * an empty family under the address block does.
+ */
+export function derpNodeResolvedAddresses(
+  hostname: string,
+  resolutions: Readonly<Record<string, DerpNodeResolution | undefined>> | undefined,
+): RelayAddressDisplay {
+  const resolution = resolutions?.[hostname.trim().toLowerCase()];
+  if (resolution === undefined) {
+    return relayAddressDisplay(undefined, undefined);
+  }
+
+  if (resolution.kind === "literal") {
+    const literal = (resolution.host ?? hostname).trim().replace(/^\[|\]$/g, "");
+    return relayAddressDisplay(
+      [
+        { family: "ipv4", addresses: parseIpv4(literal) === undefined ? [] : [literal] },
+        { family: "ipv6", addresses: parseIpv6(literal) === undefined ? [] : [literal] },
+      ],
+      undefined,
+    );
+  }
+
+  return relayAddressDisplay(
+    [
+      { family: "ipv4", addresses: [...resolution.ipv4] },
+      { family: "ipv6", addresses: [...resolution.ipv6] },
+    ],
+    resolution.reason,
+  );
+}
+
+/** One node of the box, from the map's declaration and the shared lookup. */
+export interface DerpNodeSummary {
+  name: string;
+  /** `hostname:derpport`, the address a client dials for this node. */
+  endpoint: string;
+  /** True when the map omitted `derpport`, so the endpoint prints the default. */
+  portDefaulted: boolean;
+  /** `hostname:stunport`, or undefined when the node does not answer STUN. */
+  stunEndpoint?: string;
+  /** True when the map omitted `stunport`, so the port shown is the default. */
+  stunPortDefaulted: boolean;
+  stunOnly: boolean;
+  /** The address the map itself declares for this node, when it declares one. */
+  ipv4?: string;
+  ipv6?: string;
+  /** The A/AAAA answer for the node's hostname. */
+  resolved: RelayAddressDisplay;
+}
+
+/** One node as the box prints it. */
+export function derpNodeSummary(
+  node: DerpMapNodeInput,
+  resolutions?: Readonly<Record<string, DerpNodeResolution | undefined>>,
+): DerpNodeSummary {
+  const derp = derpNodeDerpPort(node);
+  const stun = derpNodeStunPort(node);
+
+  return {
+    name: node.name,
+    endpoint: `${node.hostname}:${derp.port}`,
+    portDefaulted: derp.defaulted,
+    ...(stun.port === undefined ? {} : { stunEndpoint: `${node.hostname}:${stun.port}` }),
+    stunPortDefaulted: stun.defaulted,
+    stunOnly: node.stunOnly,
+    ...(node.ipv4 === undefined ? {} : { ipv4: node.ipv4 }),
+    ...(node.ipv6 === undefined ? {} : { ipv6: node.ipv6 }),
+    resolved: derpNodeResolvedAddresses(node.hostname, resolutions),
+  };
+}
+
+/** One region of the box, with the map it came from and its nodes. */
+export interface DerpRegionSummary {
+  regionId: number;
+  /** `#901 · ams · Amsterdam`, from the shared region-label chain. */
+  label: string;
+  /** Where the displayed name came from: the manual mapping, or a map itself. */
+  nameSource: "manual" | "map";
+  /** The configured map that contributes this region; the first one wins. */
+  map: { kind: "local" | "remote"; source: string };
+  nodeCount: number;
+  nodes: DerpNodeSummary[];
+}
+
+export interface DerpRegionSummaryInput {
+  /** Every region the configured maps describe, in configuration order. */
+  regions: readonly DerpMapRegionInput[];
+  /** The operator's manual region-id to name mapping. */
+  manual?: Readonly<Record<string, string>>;
+  /** Headscale's own embedded region, which names itself. */
+  embedded?: DerpRegionInfo;
+  /** The shared relay cache's answer per hostname, lowercased. */
+  resolutions?: Readonly<Record<string, DerpNodeResolution | undefined>>;
+  /** The localized text a region no source names reads as. */
+  unknown: string;
+}
+
+/**
+ * The configured maps as the box lists them. Regions keep the order they were
+ * read in, each label comes from {@link resolveDerpRegionLabel} — the same chain
+ * the region row above uses, so the two cards cannot word a region differently —
+ * and each chip names the first map that described the region, which is the map
+ * whose name the label shows.
+ */
+export function derpRegionSummaries(input: DerpRegionSummaryInput): DerpRegionSummary[] {
+  const local: DerpRegionMap = {};
+  const remote: DerpRegionMap = {};
+  const preferred = new Map<string, DerpMapRegionInput>();
+
+  for (const region of input.regions) {
+    const id = String(region.regionId);
+    const target = region.origin.kind === "local" ? local : remote;
+    if (target[id] === undefined) {
+      target[id] = { regionId: region.regionId, code: region.code, name: region.name };
+    }
+
+    // The label chain prefers a local file over a remote map, so the chip has to
+    // as well, or it would credit a map whose name the label did not use.
+    const current = preferred.get(id);
+    if (
+      current === undefined ||
+      (current.origin.kind === "remote" && region.origin.kind === "local")
+    ) {
+      preferred.set(id, region);
+    }
+  }
+
+  const summaries: DerpRegionSummary[] = [];
+  const seen = new Set<string>();
+
+  for (const region of input.regions) {
+    const id = String(region.regionId);
+    if (seen.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    const source = preferred.get(id) ?? region;
+    const manual = input.manual?.[id]?.trim();
+    const { label } = resolveDerpRegionLabel(
+      region.regionId,
+      { manual: input.manual, local, remote, embedded: input.embedded },
+      input.unknown,
+    );
+
+    summaries.push({
+      regionId: region.regionId,
+      label,
+      nameSource: manual === undefined || manual.length === 0 ? "map" : "manual",
+      map: { kind: source.origin.kind, source: source.origin.source },
+      nodeCount: source.nodes.length,
+      nodes: source.nodes.map((node) => derpNodeSummary(node, input.resolutions)),
+    });
+  }
+
+  return summaries;
 }
 
 // MARK: Headscale configuration

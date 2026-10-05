@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 import {
   Activity,
   Bot,
@@ -7,6 +9,7 @@ import {
   Globe,
   HeartPulse,
   LayoutDashboard,
+  MapPinned,
   Network,
   Radar,
   Server,
@@ -20,11 +23,18 @@ import { data } from "react-router";
 import Code from "~/components/code";
 import { ErrorBanner } from "~/components/error-banner";
 import Link from "~/components/link";
-import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/components/settings-nav";
+import {
+  SettingsCollapsible,
+  SettingsCollapsibleGroup,
+  SettingsPage,
+  SettingsStatus,
+  type SettingsStatusTone,
+} from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
 import RelayResolver from "~/routes/machines/components/relay-resolver";
+import { configuredDerpRegion, resolveDerpRegionLabel } from "~/routes/machines/derp-info";
 import {
   relayAddressLines,
   relayResolutionBlamesSystemResolver,
@@ -45,12 +55,15 @@ import {
 import type { HeadscaleClient } from "~/server/headscale/api";
 import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
 import { formatServerVersion } from "~/server/headscale/api/server-version";
+import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
+import { loadDerpRegionInventory } from "~/server/headscale/derp-region-sources";
 import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import {
   buildRelayView,
   loadSharedRelayResolution,
   type RelayAddressFamily,
   type RelayAddressVerdict,
+  type RelayResolution,
 } from "~/server/relay-dns";
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
@@ -63,6 +76,10 @@ import {
   countNodeStatus,
   declaredDerpAddresses,
   type DeclaredDerpAddress,
+  DERP_NODE_RESOLVE_LIMIT,
+  type DerpNodeSummary,
+  derpRegionSummaries,
+  type DerpRegionSummary,
   formatByteSize,
   hasIpv6StunWarning,
   readExtraRecordsPath,
@@ -376,10 +393,44 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   // The relay's real addresses come from DNS, not from the configuration. The
   // lookup is cached for minutes and fail-soft, so a relay card never delays or
-  // breaks the dashboard because a name did not resolve.
+  // breaks the dashboard because a name did not resolve. Region names come from
+  // the same chain the machine page uses, so the two cards cannot word a region
+  // differently: the manual mapping first, then the configured DERP maps.
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
-  const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
+  const [relayResolution, regionNames, mapInventory] = await Promise.all([
+    loadSharedRelayResolution(relayEndpoint?.host),
+    readDerpRegionNames(appConfig.server.data_path),
+    loadDerpRegionInventory({
+      paths: derp.paths,
+      urls: derp.urls,
+      autoUpdateEnabled: derp.autoUpdateEnabled,
+      updateFrequency: derp.updateFrequency,
+      baseDir: configPath ? dirname(configPath) : undefined,
+    }),
+  ]);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
+
+  // Every hostname the configured maps list, resolved through the shared relay
+  // cache the address block above already uses: one batch, at most
+  // DERP_NODE_RESOLVE_LIMIT distinct names, so a map with dozens of nodes cannot
+  // turn one render into dozens of DNS queries. A name that fails, or one the
+  // limit left out, simply has no resolved address — the same "not resolved"
+  // line an empty family under the address block reads as.
+  const nodeHostnames = [
+    ...new Set(
+      mapInventory.regions
+        .flatMap((region) => region.nodes.map((node) => node.hostname.trim().toLowerCase()))
+        .filter((hostname) => hostname.length > 0),
+    ),
+  ];
+  const resolvedHostnames = nodeHostnames.slice(0, DERP_NODE_RESOLVE_LIMIT);
+  const nodeResolutions: Record<string, RelayResolution | undefined> = Object.fromEntries(
+    await Promise.all(
+      resolvedHostnames.map(
+        async (hostname) => [hostname, await loadSharedRelayResolution(hostname)] as const,
+      ),
+    ),
+  );
 
   return {
     versions: {
@@ -397,9 +448,25 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     },
     derp: {
       enabled: derp.server.enabled,
-      regionId: derp.server.regionId,
-      regionCode: derp.server.regionCode,
-      regionName: derp.server.regionName,
+      // The region `derp.server` configures, plus every source that can name a
+      // region; the card runs them through the shared label helper, so this row
+      // reads exactly like a region on the machine page.
+      region: configuredDerpRegion(derp.server),
+      regions: {
+        manual: regionNames,
+        local: mapInventory.local,
+        remote: mapInventory.remote,
+      },
+      // What the configured maps actually describe, so an operator can read a
+      // local map file without opening the settings page. Plain values only:
+      // the card formats them and never imports a module that reads a file.
+      maps: {
+        regions: mapInventory.regions,
+        files: mapInventory.files,
+        remoteUnavailable: mapInventory.remoteUnavailable,
+        resolutions: nodeResolutions,
+        unresolved: nodeHostnames.length - resolvedHostnames.length,
+      },
       relaySource: classifyDerpRelaySource({
         serverEnabled: derp.server.enabled,
         urls: derp.urls,
@@ -537,6 +604,40 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ? relayReason(line.reason ?? "unavailable")
       : t(RELAY_VERDICT_KEYS[line.verdict], { address: "" });
 
+  // The configured maps as the box lists them; the labels go through the same
+  // chain the region row above uses, so both cards word a region identically.
+  const mapRegions = derpRegionSummaries({
+    regions: derp.maps.regions,
+    manual: derp.regions.manual,
+    embedded: derp.region,
+    resolutions: derp.maps.resolutions,
+    unknown: t("machines.detail.derp.unknown"),
+  });
+  const mapNodeCount = mapRegions.reduce((total, region) => total + region.nodeCount, 0);
+  const hasMapSources = derp.pathCount > 0 || derp.urlCount > 0;
+
+  /** Where a region's name came from: the operator, or the first map that has it. */
+  const mapSourceLabel = (region: DerpRegionSummary) =>
+    region.nameSource === "manual"
+      ? t("overview.derp.mapsSourceManual")
+      : t(
+          region.map.kind === "local"
+            ? "overview.derp.mapsSourceLocal"
+            : "overview.derp.mapsSourceRemote",
+        );
+
+  /** Why a configured map file contributed nothing, in one short sentence. */
+  const mapFileNotice = (state: "ok" | "unreadable" | "invalid" | "empty", path: string) => {
+    switch (state) {
+      case "unreadable":
+        return t("overview.derp.mapsFileUnreadable", { path });
+      case "invalid":
+        return t("overview.derp.mapsFileInvalid", { path });
+      default:
+        return t("overview.derp.mapsFileEmpty", { path });
+    }
+  };
+
   return (
     <SettingsPage
       className="md:max-w-5xl"
@@ -642,11 +743,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               <Fact
                 code
                 label={t("overview.derp.region")}
-                text={t("overview.derp.regionValue", {
-                  id: derp.regionId,
-                  code: derp.regionCode,
-                  name: derp.regionName,
-                })}
+                text={
+                  resolveDerpRegionLabel(
+                    derp.region?.regionId,
+                    { ...derp.regions, embedded: derp.region },
+                    t("machines.detail.derp.unknown"),
+                  ).label
+                }
               />
               <Fact
                 label={t("overview.derp.relaySource")}
@@ -735,6 +838,84 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   </span>
                 </div>
               </div>
+            ) : undefined}
+          </Card>
+
+          <Card
+            description={t("overview.derp.mapsBody")}
+            icon={MapPinned}
+            status={{
+              tone: "neutral",
+              label:
+                mapRegions.length > 0
+                  ? t("overview.derp.mapsSummary", {
+                      regions: mapRegions.length,
+                      nodes: mapNodeCount,
+                    })
+                  : t("overview.derp.none"),
+            }}
+            title={t("overview.derp.mapsTitle")}
+          >
+            {mapRegions.length === 0 ? (
+              <p className="text-sm text-mist-600 dark:text-mist-400">
+                {hasMapSources ? t("overview.derp.mapsEmpty") : t("overview.derp.mapsNoMaps")}
+              </p>
+            ) : (
+              <SettingsCollapsible
+                description={t("overview.derp.mapsDetailBody")}
+                summary={t("overview.derp.mapsSummary", {
+                  regions: mapRegions.length,
+                  nodes: mapNodeCount,
+                })}
+                title={t("overview.derp.mapsDetailTitle")}
+              >
+                <SettingsCollapsibleGroup>
+                  {mapRegions.map((region) => (
+                    <SettingsCollapsible
+                      description={t("overview.derp.mapsRegionSummary", {
+                        count: region.nodeCount,
+                        source: region.map.source,
+                      })}
+                      key={region.regionId}
+                      nested
+                      status={{ tone: "neutral", label: mapSourceLabel(region) }}
+                      title={region.label}
+                    >
+                      {region.nodes.length === 0 ? (
+                        <p className="text-sm text-mist-600 dark:text-mist-400">
+                          {t("overview.derp.mapsRegionNoNodes")}
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-3">
+                          {region.nodes.map((node) => (
+                            <DerpMapNode key={`${node.name}:${node.endpoint}`} node={node} />
+                          ))}
+                        </ul>
+                      )}
+                    </SettingsCollapsible>
+                  ))}
+                </SettingsCollapsibleGroup>
+              </SettingsCollapsible>
+            )}
+
+            {derp.maps.files
+              .filter((file) => file.state !== "ok")
+              .map((file) => (
+                <p className="text-xs text-mist-500 dark:text-mist-400" key={file.path}>
+                  {mapFileNotice(file.state, file.path)}
+                </p>
+              ))}
+
+            {derp.maps.remoteUnavailable ? (
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("overview.derp.mapsRemoteUnavailable")}
+              </p>
+            ) : undefined}
+
+            {derp.maps.unresolved > 0 ? (
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("overview.derp.mapsResolveTruncated", { count: derp.maps.unresolved })}
+              </p>
             ) : undefined}
           </Card>
         </Section>
@@ -1167,6 +1348,111 @@ function TallyFact({ label, tally, reason }: TallyFactProps) {
 
 function declaredAddress(declared: DeclaredDerpAddress[], family: "ipv4" | "ipv6") {
   return declared.find((entry) => entry.family === family)?.value;
+}
+
+/**
+ * One node of a configured DERP map: the endpoint a client dials, the STUN port
+ * the map puts on it, and the addresses it declares next to the ones DNS
+ * returns for the same hostname.
+ */
+function DerpMapNode({ node }: { node: DerpNodeSummary }) {
+  const { t } = useI18n();
+
+  return (
+    <li className="flex flex-col gap-2 rounded-lg border border-mist-100 p-3 dark:border-mist-800">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-medium text-mist-900 dark:text-mist-50">{node.name}</span>
+          {node.stunOnly ? (
+            <SettingsStatus tone="neutral">{t("overview.derp.mapsStunOnly")}</SettingsStatus>
+          ) : undefined}
+        </span>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Code>{node.endpoint}</Code>
+          {node.portDefaulted ? (
+            <span className="text-xs text-mist-500 dark:text-mist-400">
+              {t("overview.derp.mapsDefault")}
+            </span>
+          ) : undefined}
+        </span>
+      </div>
+
+      <Facts>
+        <Fact label={t("overview.derp.mapsStun")}>
+          {node.stunEndpoint === undefined ? (
+            <span className="text-xs text-mist-500 dark:text-mist-400">
+              {t("overview.derp.mapsStunNone")}
+            </span>
+          ) : (
+            <span className="flex flex-wrap items-center justify-end gap-1.5">
+              <Code>{node.stunEndpoint}</Code>
+              {node.stunPortDefaulted ? (
+                <span className="text-xs text-mist-500 dark:text-mist-400">
+                  {t("overview.derp.mapsDefault")}
+                </span>
+              ) : undefined}
+            </span>
+          )}
+        </Fact>
+        <Fact label={t("overview.derp.relayIpv4")}>
+          <DerpMapAddress
+            declared={node.ipv4}
+            display={node.resolved.ipv4}
+            reason={node.resolved.ipv4Reason}
+          />
+        </Fact>
+        <Fact label={t("overview.derp.relayIpv6")}>
+          <DerpMapAddress
+            declared={node.ipv6}
+            display={node.resolved.ipv6}
+            reason={node.resolved.ipv6Reason}
+          />
+        </Fact>
+      </Facts>
+    </li>
+  );
+}
+
+/**
+ * One address family of a node: what the map declares, marked as such, then
+ * every record the shared lookup returned. With neither, the resolver's own
+ * reason stands where the addresses would be — never an empty row.
+ */
+function DerpMapAddress({
+  declared,
+  display,
+  reason,
+}: {
+  declared?: string;
+  display?: string;
+  reason?: RelayReason;
+}) {
+  const { t } = useI18n();
+  const resolved = (display ?? "").split("\n").filter((address) => address.length > 0);
+  const missing = (
+    <span className="text-xs text-mist-500 dark:text-mist-400">
+      {t(RELAY_REASON_KEYS[reason ?? "unavailable"])}
+    </span>
+  );
+
+  if (declared === undefined && resolved.length === 0) {
+    return missing;
+  }
+
+  return (
+    <span className="flex flex-col gap-0.5 sm:items-end">
+      {declared === undefined ? undefined : (
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Code>{declared}</Code>
+          <SettingsStatus tone="neutral">{t("overview.derp.mapsDeclared")}</SettingsStatus>
+        </span>
+      )}
+      {resolved.map((address) => (
+        <Code key={address}>{address}</Code>
+      ))}
+      {resolved.length === 0 ? missing : undefined}
+    </span>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

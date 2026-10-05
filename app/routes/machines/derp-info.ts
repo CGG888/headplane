@@ -1,14 +1,16 @@
 /**
  * Relay information for a single machine, built from the Headplane Agent's host
  * info plus Headscale's embedded DERP configuration. Pure helpers so the
- * machine page and its tests share one implementation.
+ * machine page, the Overview card and their tests share one implementation.
  *
- * Region names can only come from the embedded server's own `derp.server`
- * settings. Headscale hands its merged DERP map to Tailscale clients over the
- * control protocol, and its only `/derp` route (Headscale 0.29.2,
- * `hscontrol/app.go`) is mounted when the embedded server is enabled and speaks
- * the DERP protocol instead of returning the map, so external regions stay as
- * bare ids.
+ * Headscale hands its merged DERP map to Tailscale clients over the control
+ * protocol, and its only `/derp` route (Headscale 0.29.2, `hscontrol/app.go`)
+ * is mounted when the embedded server is enabled and speaks the DERP protocol
+ * instead of returning the map, so a region name has to come from somewhere
+ * else. The loader resolves it from the operator's manual mapping, the map
+ * files listed in `derp.paths` and the maps fetched from `derp.urls`; this
+ * module only holds the pure part — the precedence chain — so the browser
+ * receives plain values and never imports a server module.
  */
 
 import type { HostInfo } from "~/types";
@@ -26,9 +28,31 @@ export interface DerpEmbeddedServer {
 
 /**
  * Region id (decimal string) to an operator-supplied name, as stored in
- * Headplane's data directory. Resolved after the embedded server's own name.
+ * Headplane's data directory. The most deliberate source, so it wins over
+ * everything else.
  */
 export type DerpRegionNames = Record<string, string>;
+
+/** Regions a DERP map describes, keyed by their decimal region id. */
+export type DerpRegionMap = Record<string, DerpRegionInfo>;
+
+/**
+ * Every source a region name can come from, in precedence order: the manual
+ * mapping, the local map files, the remote maps, then Headscale's own embedded
+ * region. A region none of them describes stays `#id`.
+ */
+export interface DerpRegionLabelSources {
+  manual?: DerpRegionNames;
+  /** Regions from the files listed in `derp.paths`. */
+  local?: DerpRegionMap;
+  /** Regions from the maps fetched from `derp.urls`. */
+  remote?: DerpRegionMap;
+  /** Headscale's `derp.server` region, when the embedded server is enabled. */
+  embedded?: DerpRegionInfo;
+}
+
+/** The sources a loader resolves; the embedded region travels with `server`. */
+export type DerpRegionNameData = Omit<DerpRegionLabelSources, "embedded">;
 
 export interface DerpRegionInfo {
   regionId: number;
@@ -64,7 +88,7 @@ export interface DerpInfoView {
   home: DerpRegionLabel;
   preferred: DerpRegionLabel;
   latencies: DerpLatencyRows;
-  /** True when at least one shown region has no local name and stays an id. */
+  /** True when no source names at least one shown region, so it stays an id. */
   hasIdOnlyRegions: boolean;
 }
 
@@ -72,7 +96,19 @@ export interface DerpInfoView {
 export function embeddedDerpRegion(
   server: DerpEmbeddedServer | undefined,
 ): DerpRegionInfo | undefined {
-  if (!server?.enabled) {
+  return server?.enabled ? configuredDerpRegion(server) : undefined;
+}
+
+/**
+ * The region `derp.server` configures, whether or not the embedded server is
+ * switched on. The Overview card shows the configured region itself, so it uses
+ * this; the machine card uses {@link embeddedDerpRegion}, because a disabled
+ * server publishes nothing to relay through.
+ */
+export function configuredDerpRegion(
+  server: DerpEmbeddedServer | undefined,
+): DerpRegionInfo | undefined {
+  if (server === undefined) {
     return undefined;
   }
 
@@ -91,24 +127,84 @@ function mappedRegionName(names: DerpRegionNames | undefined, region: number): s
   return name ? name : undefined;
 }
 
-/** True when a region has no name from either the embedded config or the map. */
-function isUnresolvedRegion(
-  region: number | undefined,
-  embedded: DerpRegionInfo | undefined,
-  names: DerpRegionNames | undefined,
-): boolean {
-  return (
-    region !== undefined &&
-    region !== embedded?.regionId &&
-    mappedRegionName(names, region) === undefined
-  );
+/** One map's entry for a region, or undefined when it describes nothing usable. */
+function mappedRegionInfo(
+  map: DerpRegionMap | undefined,
+  region: number,
+): DerpRegionInfo | undefined {
+  const entry = map?.[String(region)];
+  if (!entry) {
+    return undefined;
+  }
+
+  const code = entry.code?.trim();
+  const name = entry.name?.trim();
+  return code || name
+    ? { regionId: region, code: code || undefined, name: name || undefined }
+    : undefined;
 }
 
 /**
- * Labels a region id, falling back to the caller's localized "unknown" text.
- * Precedence: the embedded server's configured code/name, then the operator's
- * manual mapping, then the bare id. The embedded region shows its code and its
- * full name only when the name adds something the code does not already say.
+ * `#901 · ams · Amsterdam`, dropping a part that repeats one already printed, so
+ * a region whose name is its code never reads twice.
+ */
+function formatRegionLabel(region: number, info: DerpRegionInfo): string {
+  const parts = [`#${region}`];
+  if (info.code) {
+    parts.push(info.code);
+  }
+
+  if (info.name && info.name !== info.code) {
+    parts.push(info.name);
+  }
+
+  return parts.join(" · ");
+}
+
+/**
+ * Labels a region from every source Headplane has, in precedence order: the
+ * operator's manual mapping, the local `derp.paths` maps, the remote
+ * `derp.urls` maps, then Headscale's own embedded region. A region no source
+ * describes keeps its bare `#id`, and an id the agent never reported (or
+ * reported as a non-numeric key) reads as the caller's localized `unknown`.
+ *
+ * `isEmbedded` marks the region Headscale runs itself, whichever source named
+ * it, so the card can still say which relay is the embedded one.
+ */
+export function resolveDerpRegionLabel(
+  region: number | undefined,
+  sources: DerpRegionLabelSources,
+  unknown: string,
+): DerpRegionLabel {
+  if (region === undefined || !Number.isFinite(region)) {
+    return { label: unknown, isEmbedded: false };
+  }
+
+  const embedded = sources.embedded?.regionId === region ? sources.embedded : undefined;
+  const isEmbedded = embedded !== undefined;
+
+  const manual = mappedRegionName(sources.manual, region);
+  if (manual !== undefined) {
+    return { label: `#${region} · ${manual}`, isEmbedded };
+  }
+
+  for (const map of [sources.local, sources.remote]) {
+    const info = mappedRegionInfo(map, region);
+    if (info !== undefined) {
+      return { label: formatRegionLabel(region, info), isEmbedded };
+    }
+  }
+
+  if (embedded !== undefined) {
+    return { label: formatRegionLabel(region, embedded), isEmbedded: true };
+  }
+
+  return { label: `#${region}`, isEmbedded: false };
+}
+
+/**
+ * {@link resolveDerpRegionLabel} for callers that already hold the embedded
+ * region and the manual mapping, e.g. the DERP settings status list.
  */
 export function regionLabel(
   region: number | undefined,
@@ -116,29 +212,21 @@ export function regionLabel(
   unknown: string,
   names?: DerpRegionNames,
 ): DerpRegionLabel {
-  if (region === undefined || !Number.isFinite(region)) {
-    return { label: unknown, isEmbedded: false };
+  return resolveDerpRegionLabel(region, { embedded, manual: names }, unknown);
+}
+
+/** True when no source has anything to say about a region but its id. */
+function isUnresolvedRegion(region: number | undefined, sources: DerpRegionLabelSources): boolean {
+  if (region === undefined) {
+    return false;
   }
 
-  if (embedded !== undefined && embedded.regionId === region) {
-    const parts = [`#${region}`];
-    if (embedded.code) {
-      parts.push(embedded.code);
-    }
-
-    if (embedded.name && embedded.name !== embedded.code) {
-      parts.push(embedded.name);
-    }
-
-    return { label: parts.join(" · "), isEmbedded: true };
-  }
-
-  const mapped = mappedRegionName(names, region);
-  if (mapped !== undefined) {
-    return { label: `#${region} · ${mapped}`, isEmbedded: false };
-  }
-
-  return { label: `#${region}`, isEmbedded: false };
+  return (
+    mappedRegionName(sources.manual, region) === undefined &&
+    mappedRegionInfo(sources.local, region) === undefined &&
+    mappedRegionInfo(sources.remote, region) === undefined &&
+    sources.embedded?.regionId !== region
+  );
 }
 
 /** Region ids reach the page as JSON object keys, so parse those defensively. */
@@ -187,27 +275,31 @@ export function formatDerpLatency(seconds: number): string {
   return `${Math.round(seconds * 1000)}ms`;
 }
 
-/** Everything the machine page renders about this machine's relays. */
+/**
+ * Everything the machine page renders about this machine's relays. `regions`
+ * carries the loader-resolved map sources; the embedded region is read from
+ * `server` so both come from the same precedence chain.
+ */
 export function buildDerpInfo(
   info: HostInfo | undefined,
   server: DerpEmbeddedServer | undefined,
   unknown: string,
-  names?: DerpRegionNames,
+  regions: DerpRegionNameData = {},
 ): DerpInfoView {
-  const embedded = embeddedDerpRegion(server);
+  const sources: DerpRegionLabelSources = { ...regions, embedded: embeddedDerpRegion(server) };
   const home = readRegionId(info?.HomeDERP);
   const preferred = readRegionId(info?.NetInfo?.PreferredDERP);
   const latencies = sortDerpLatencies(info?.NetInfo?.DERPLatency);
 
   return {
     hasRelayData: home !== undefined || preferred !== undefined || latencies.length > 0,
-    home: regionLabel(home, embedded, unknown, names),
-    preferred: regionLabel(preferred, embedded, unknown, names),
+    home: resolveDerpRegionLabel(home, sources, unknown),
+    preferred: resolveDerpRegionLabel(preferred, sources, unknown),
     latencies: capDerpLatencies(latencies),
     hasIdOnlyRegions:
-      isUnresolvedRegion(home, embedded, names) ||
-      isUnresolvedRegion(preferred, embedded, names) ||
-      latencies.some((entry) => isUnresolvedRegion(entry.regionId, embedded, names)),
+      isUnresolvedRegion(home, sources) ||
+      isUnresolvedRegion(preferred, sources) ||
+      latencies.some((entry) => isUnresolvedRegion(entry.regionId, sources)),
   };
 }
 

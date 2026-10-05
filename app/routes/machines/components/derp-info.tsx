@@ -17,10 +17,11 @@ import {
   buildDerpInfo,
   embeddedDerpRegion,
   formatDerpLatency,
-  regionLabel,
+  resolveDerpRegionLabel,
   type DerpEmbeddedServer,
   type DerpRegionLabel,
-  type DerpRegionNames,
+  type DerpRegionLabelSources,
+  type DerpRegionNameData,
 } from "../derp-info";
 import { type RelayAddressLine, type RelayFamilyReason } from "../relay-verdicts";
 import MachineAttribute from "./attribute";
@@ -32,8 +33,8 @@ interface DerpInfoProps {
   agentEnabled: boolean;
   /** Whether this viewer may re-resolve the relay hostname; see the relay DNS settings. */
   canRefresh: boolean;
-  /** Manual region id -> name mapping from Headplane's data directory. */
-  regionNames: DerpRegionNames;
+  /** Region names the loader resolved: the manual mapping and the configured maps. */
+  regions: DerpRegionNameData;
   /** Headscale's embedded DERP configuration, when it could be read. */
   server: DerpEmbeddedServer | undefined;
   /** The agent's host info for this machine, when it reported any. */
@@ -121,20 +122,10 @@ function RelayVerdict({ line, host }: { line: RelayAddressLine; host?: string })
   );
 }
 
-/** One line of a relay block: a muted label over the address clients dial. */
-function RelayLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-xs text-mist-500 dark:text-mist-400">{label}</span>
-      <span className="font-mono text-xs break-all text-mist-900 dark:text-mist-50">{value}</span>
-    </div>
-  );
-}
-
 export default function DerpInfo({
   agentEnabled,
   canRefresh,
-  regionNames,
+  regions,
   server,
   stats,
   relay,
@@ -145,12 +136,13 @@ export default function DerpInfo({
   const { t } = useI18n();
   const unknown = t("machines.detail.derp.unknown");
   const embedded = embeddedDerpRegion(server);
-  const view = buildDerpInfo(stats, server, unknown, regionNames);
+  const sources: DerpRegionLabelSources = { ...regions, embedded };
+  const view = buildDerpInfo(stats, server, unknown, regions);
 
   const latency = view.latencies.rows
     .map(
       (row) =>
-        `${regionLabel(row.regionId, embedded, unknown, regionNames).label} · ${formatDerpLatency(row.seconds)}`,
+        `${resolveDerpRegionLabel(row.regionId, sources, unknown).label} · ${formatDerpLatency(row.seconds)}`,
     )
     .join("\n");
 
@@ -169,7 +161,7 @@ export default function DerpInfo({
     <p className="text-sm text-mist-600 dark:text-mist-400">
       {server?.enabled ? (
         t("machines.detail.derp.embeddedEnabled", {
-          region: regionLabel(server.regionId, embedded, unknown, regionNames).label,
+          region: resolveDerpRegionLabel(server.regionId, sources, unknown).label,
         })
       ) : (
         <>
@@ -194,10 +186,9 @@ export default function DerpInfo({
         </span>
         {relay ? (
           <div className="flex flex-col gap-1.5">
-            <RelayLine
-              label={t("machines.detail.derp.relayClientAddress")}
-              value={relay.endpoint}
-            />
+            <span className="font-mono text-xs break-all text-mist-900 dark:text-mist-50">
+              {relay.endpoint}
+            </span>
             <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-2">
               {relayLines.map((line) => (
                 <div className="flex flex-col gap-0.5" key={line.family}>

@@ -4,6 +4,7 @@ import { computeDerpMapChecks } from "~/routes/settings/headscale/derp-map-check
 import {
   isDerpMap,
   MAX_DERP_MAP_ISSUES,
+  readDerpMapRegions,
   validateDerpMap,
   type DerpMapIssueCode,
 } from "~/routes/settings/headscale/derp-map-schema";
@@ -365,5 +366,83 @@ describe("computeDerpMapChecks", () => {
     const checks = computeDerpMapChecks({ ...base, exists: false, writable: true });
     expect(checks.find((check) => check.id === "exists")?.status).toBe("warning");
     expect(checks.find((check) => check.id === "writable")?.status).toBe("pass");
+  });
+});
+
+describe("readDerpMapRegions", () => {
+  test("reads the region ids, codes and names a map states", () => {
+    expect(readDerpMapRegions(VALID_TWO_REGIONS)).toEqual([
+      { regionId: 901, code: "ams", name: "Amsterdam" },
+      { regionId: 902, code: "fra", name: "Frankfurt" },
+    ]);
+  });
+
+  test("reads a JSON DERP map as well as YAML", () => {
+    const json = JSON.stringify({
+      regions: { 903: { regionid: 903, regioncode: "sfo", regionname: "San Francisco" } },
+    });
+
+    expect(readDerpMapRegions(json)).toEqual([
+      { regionId: 903, code: "sfo", name: "San Francisco" },
+    ]);
+  });
+
+  test("keeps two regions that share a code apart", () => {
+    const shared = `regions:
+  901:
+    regionid: 901
+    regioncode: ams
+    regionname: "Amsterdam"
+    nodes: []
+  902:
+    regionid: 902
+    regioncode: ams
+    regionname: "Amsterdam Two"
+    nodes: []
+`;
+
+    expect(readDerpMapRegions(shared).map((region) => region.regionId)).toEqual([901, 902]);
+  });
+
+  test("keeps the first entry of a duplicated region id", () => {
+    const duplicated = `regions:
+  901:
+    regionid: 901
+    regioncode: ams
+    regionname: "Amsterdam"
+    nodes: []
+  902:
+    regionid: 901
+    regioncode: fra
+    regionname: "Frankfurt"
+    nodes: []
+`;
+
+    expect(readDerpMapRegions(duplicated)).toEqual([
+      { regionId: 901, code: "ams", name: "Amsterdam" },
+    ]);
+  });
+
+  test("reports nothing instead of throwing on a document that is not a map", () => {
+    for (const source of [
+      "regions: [1, 2]",
+      "regions:\n  901:\n    regioncode: ams",
+      "{ unclosed",
+      "",
+      "regions:\n  901:\n    regionid: 0\n    regioncode: ams",
+    ]) {
+      expect(readDerpMapRegions(source), source).toEqual([]);
+    }
+  });
+
+  test("leaves a missing code or name blank instead of failing", () => {
+    const sparse = `regions:
+  901:
+    regionid: 901
+    regionname: "Amsterdam"
+    nodes: []
+`;
+
+    expect(readDerpMapRegions(sparse)).toEqual([{ regionId: 901, code: "", name: "Amsterdam" }]);
   });
 });

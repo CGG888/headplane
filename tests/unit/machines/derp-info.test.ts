@@ -8,8 +8,11 @@ import {
   formatDerpLatency,
   parseDerpRegionId,
   regionLabel,
+  resolveDerpRegionLabel,
   sortDerpLatencies,
   type DerpEmbeddedServer,
+  type DerpRegionInfo,
+  type DerpRegionMap,
 } from "~/routes/machines/derp-info";
 
 const EMBEDDED: DerpEmbeddedServer = {
@@ -148,9 +151,10 @@ describe("region labels", () => {
       label: "#901 · Amsterdam",
       isEmbedded: false,
     });
-    // The embedded region's own configuration wins over a manual entry.
+    // A manual entry is the operator's own decision, so it also wins for the
+    // embedded region; the marker still says which region is embedded.
     expect(regionLabel(999, embedded, "Unknown", { "999": "Manual" })).toEqual({
-      label: "#999 · headscale · Headscale Embedded DERP",
+      label: "#999 · Manual",
       isEmbedded: true,
     });
   });
@@ -189,7 +193,7 @@ describe("machine relay view", () => {
       { HomeDERP: 901, NetInfo: { PreferredDERP: 1 } },
       EMBEDDED,
       "Unknown",
-      { "901": "Amsterdam" },
+      { manual: { "901": "Amsterdam" } },
     );
 
     expect(view.home).toEqual({ label: "#901 · Amsterdam", isEmbedded: false });
@@ -197,7 +201,7 @@ describe("machine relay view", () => {
     expect(view.hasIdOnlyRegions).toBe(true);
 
     const fullyMapped = buildDerpInfo({ HomeDERP: 901 }, EMBEDDED, "Unknown", {
-      "901": "Amsterdam",
+      manual: { "901": "Amsterdam" },
     });
     expect(fullyMapped.hasIdOnlyRegions).toBe(false);
   });
@@ -231,5 +235,121 @@ describe("machine relay view", () => {
 
     expect(view.home).toEqual({ label: "#999", isEmbedded: false });
     expect(view.hasIdOnlyRegions).toBe(true);
+  });
+
+  test("prefers a map name over the bare id and drops the id-only note", () => {
+    const view = buildDerpInfo(
+      { HomeDERP: 901, NetInfo: { PreferredDERP: 901, DERPLatency: { "901": 0.02 } } },
+      { ...EMBEDDED, enabled: false },
+      "Unknown",
+      { local: { "901": { regionId: 901, code: "ams", name: "Amsterdam" } } },
+    );
+
+    expect(view.home).toEqual({ label: "#901 · ams · Amsterdam", isEmbedded: false });
+    expect(view.hasIdOnlyRegions).toBe(false);
+  });
+});
+
+describe("region label precedence", () => {
+  const embedded = embeddedDerpRegion(EMBEDDED);
+
+  /** Two regions sharing a code, which is a validation error but still readable. */
+  const local: DerpRegionMap = {
+    "901": { regionId: 901, code: "ams", name: "Amsterdam" },
+    "902": { regionId: 902, code: "ams", name: "Amsterdam Two" },
+  };
+
+  const remote: DerpRegionMap = {
+    "901": { regionId: 901, code: "remote", name: "Remote Amsterdam" },
+    "903": { regionId: 903, code: "sfo", name: "San Francisco" },
+  };
+
+  test("the manual mapping wins over every automatic source", () => {
+    const sources = {
+      manual: { "901": "Named By Hand", "999": "Manual Embedded" },
+      local,
+      remote,
+      embedded,
+    };
+
+    expect(resolveDerpRegionLabel(901, sources, "Unknown")).toEqual({
+      label: "#901 · Named By Hand",
+      isEmbedded: false,
+    });
+    expect(resolveDerpRegionLabel(999, sources, "Unknown")).toEqual({
+      label: "#999 · Manual Embedded",
+      isEmbedded: true,
+    });
+  });
+
+  test("a local map file wins over a remote map", () => {
+    expect(resolveDerpRegionLabel(901, { local, remote, embedded }, "Unknown")).toEqual({
+      label: "#901 · ams · Amsterdam",
+      isEmbedded: false,
+    });
+  });
+
+  test("a remote map names what the local files do not", () => {
+    expect(resolveDerpRegionLabel(903, { local, remote, embedded }, "Unknown")).toEqual({
+      label: "#903 · sfo · San Francisco",
+      isEmbedded: false,
+    });
+  });
+
+  test("a local map also wins over the embedded region's own configuration", () => {
+    expect(
+      resolveDerpRegionLabel(
+        999,
+        { local: { "999": { regionId: 999, code: "eu" } }, embedded },
+        "Unknown",
+      ),
+    ).toEqual({ label: "#999 · eu", isEmbedded: true });
+    // Without another source the embedded region keeps its configured name.
+    expect(resolveDerpRegionLabel(999, { embedded }, "Unknown")).toEqual({
+      label: "#999 · headscale · Headscale Embedded DERP",
+      isEmbedded: true,
+    });
+  });
+
+  test("an unknown region stays the bare id, and no id stays unknown", () => {
+    expect(resolveDerpRegionLabel(42, { local, remote, embedded }, "Unknown")).toEqual({
+      label: "#42",
+      isEmbedded: false,
+    });
+    expect(resolveDerpRegionLabel(999, { local, remote }, "Unknown")).toEqual({
+      label: "#999",
+      isEmbedded: false,
+    });
+    expect(resolveDerpRegionLabel(undefined, { local, remote, embedded }, "Unknown")).toEqual({
+      label: "Unknown",
+      isEmbedded: false,
+    });
+  });
+
+  test("two regions that share a code stay two labelled regions", () => {
+    const sources = { local, embedded };
+
+    expect(resolveDerpRegionLabel(901, sources, "Unknown").label).toBe("#901 · ams · Amsterdam");
+    expect(resolveDerpRegionLabel(902, sources, "Unknown").label).toBe(
+      "#902 · ams · Amsterdam Two",
+    );
+    // Naming one of them by hand leaves the other on its map name.
+    expect(
+      resolveDerpRegionLabel(901, { ...sources, manual: { "901": "Hand" } }, "Unknown").label,
+    ).toBe("#901 · Hand");
+    expect(
+      resolveDerpRegionLabel(902, { ...sources, manual: { "901": "Hand" } }, "Unknown").label,
+    ).toBe("#902 · ams · Amsterdam Two");
+  });
+
+  test("formats the code and the name without repeating either", () => {
+    const label = (info: DerpRegionInfo) =>
+      resolveDerpRegionLabel(901, { local: { "901": info } }, "Unknown").label;
+
+    expect(label({ regionId: 901, code: "ams", name: "Amsterdam" })).toBe("#901 · ams · Amsterdam");
+    expect(label({ regionId: 901, code: "ams", name: "ams" })).toBe("#901 · ams");
+    expect(label({ regionId: 901, code: "ams" })).toBe("#901 · ams");
+    expect(label({ regionId: 901, name: "Amsterdam" })).toBe("#901 · Amsterdam");
+    expect(label({ regionId: 901, code: "  ", name: "  " })).toBe("#901");
   });
 });
