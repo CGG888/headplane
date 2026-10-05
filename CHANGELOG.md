@@ -1,3 +1,9 @@
+# 0.21.4 (October 5, 2026)
+
+## Fixes
+
+- **Live updates are now opt-in, with a switch.** They previously reloaded whatever page you had open every few seconds: Headscale restamps each node's `last_seen` whenever a node checks in, so an idle tailnet looked changed on almost every poll and every open page revalidated continuously. Change detection now compares a stable projection that drops the self-updating fields and sorts collections, so only something a person can see — a node going offline, a rename, a tag, an expiry, an address — counts as a change, and bursts are coalesced into one update per twenty seconds. The background alert and node-history loops read the snapshot without waking the stream. Turn live updates on from the user menu; the choice is remembered.
+- A revalidation is also skipped while a field has focus, so typing or choosing an option is never interrupted.
 # 0.21.3 (October 5, 2026)
 
 ## Fixes
