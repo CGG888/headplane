@@ -24,6 +24,7 @@ import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/compone
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
+import RelayResolver from "~/routes/machines/components/relay-resolver";
 import {
   agentsContext,
   appConfigContext,
@@ -425,6 +426,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         // Declared versus resolved, so the card says whether what derp.server
         // advertises is what clients would actually reach.
         verdicts: relayView.address?.comparisons,
+        // Which resolver produced this answer, and whether this viewer may ask
+        // for a fresh one; the card shows both under the resolved addresses.
+        resolution: relayResolution,
+        canRefresh: auth.can(principal, Capabilities.configure_iam),
       },
       declared: declaredDerpAddresses(derp.server),
       stunListenAddr: derp.server.stunListenAddr,
@@ -763,6 +768,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               />
             </FactGroup>
 
+            <RelayResolver canRefresh={derp.relay.canRefresh} resolution={derp.relay.resolution} />
+
             <FactGroup
               title={t("overview.status.configured")}
               note={t("overview.derp.declaredNote")}
@@ -1064,10 +1071,9 @@ interface CardProps {
 }
 
 /**
- * A read-only card in the dashboard grid. It keeps the settings card geometry
- * (radius, border, padding, icon tile) but never links anywhere, so it gets no
- * hover state: only the one line that points at the system status page is a
- * navigation target.
+ * A card in the dashboard grid. It keeps the settings card geometry (radius,
+ * border, padding, icon tile) but has no hover state of its own: only the links
+ * and controls that point at another page are navigation targets.
  */
 function Card({ icon: Icon, title, description, status, children }: CardProps) {
   return (

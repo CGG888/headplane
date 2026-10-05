@@ -21,6 +21,7 @@ import { useI18n } from "~/i18n/provider";
 import {
   agentsContext,
   appConfigContext,
+  authContext,
   headscaleConfigContext,
   headscaleContext,
   headscaleLiveStoreContext,
@@ -32,6 +33,7 @@ import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { computeNodeTimeline, uptimePercent, type NodeTimeline } from "~/server/history/timeline";
 import type { NodeHistoryDocument } from "~/server/history/types";
 import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
+import { Capabilities } from "~/server/web/roles";
 import { getOSInfo, getTSVersion } from "~/utils/host-info";
 import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~/utils/node-info";
 import { getUserDisplayName } from "~/utils/user";
@@ -53,6 +55,7 @@ import { machineAction } from "./machine-actions";
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
   const appConfig = context.get(appConfigContext);
+  const auth = context.get(authContext);
   const getRequestApi = context.get(requestApiContext);
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
@@ -67,6 +70,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw data(null, { status: 204 });
   }
 
+  const principal = await auth.require(request);
   const magic = headscaleConfig.getMagicDNSBaseDomain();
 
   const { api } = await getRequestApi(request);
@@ -121,6 +125,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     // Unlike `agent`, this stays true while the agent feature is on but no
     // agent has synced yet, so the page can tell "no agent" from "no data".
     agentEnabled: agents !== undefined,
+    // Whether this viewer may re-resolve the relay hostname from the DERP card.
+    // The relay DNS list is Headplane state behind the settings permission, so
+    // the card only offers the button to a viewer who may actually use it.
+    canRefreshRelayDns: auth.can(principal, Capabilities.configure_iam),
     derp,
     // Manual names for the regions Headscale cannot name itself; a missing or
     // corrupt file simply resolves to no mapping.
@@ -151,6 +159,7 @@ export default function Page({
     agent,
     agentEnabled,
     availability,
+    canRefreshRelayDns,
     derp,
     derpRegionNames,
     relay,
@@ -489,6 +498,7 @@ export default function Page({
 
         <DerpInfo
           agentEnabled={agentEnabled}
+          canRefresh={canRefreshRelayDns}
           declared={derp.server}
           regionNames={derpRegionNames}
           relay={relay}

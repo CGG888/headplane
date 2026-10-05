@@ -1735,6 +1735,7 @@ const zhHans = {
         relayDnsLookupBody:
           "这就是中继卡片针对 server_url 主机名显示的解析结果。没有记录的答案会缓存五分钟，请用「重新解析」立即重查，不必等缓存过期或重启 Headplane。",
         relayDnsReResolve: "重新解析",
+        relayDnsReResolving: "正在重新解析…",
         relayDnsResolverSystem: "系统解析器",
         relayDnsResolverConfigured: "已指定：{servers}",
         relayDnsIpv4Label: "解析到的 IPv4",
@@ -1742,6 +1743,7 @@ const zhHans = {
         relayDnsHostMissing: "server_url 没有可用的中继主机名，暂时无法解析。",
         relayDnsSystemHint:
           "宿主机的解析器没有返回任何地址。请在上方添加一台 DNS 服务器并点「重新解析」，确认该域名是否真的有记录：宿主机的解析器即使有记录也可能返回空，因为它会过滤或不转发这类查询。",
+        relayDnsSettingsLink: "编辑中继 DNS 设置",
       },
       errors: {
         invalidAction: "请求无效，请刷新页面后重试。",

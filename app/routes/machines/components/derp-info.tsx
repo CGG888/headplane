@@ -28,10 +28,13 @@ import {
 } from "../derp-info";
 import MachineAttribute from "./attribute";
 import MachineCard from "./machine-card";
+import RelayResolver from "./relay-resolver";
 
 interface DerpInfoProps {
   /** Whether the Headplane Agent feature is enabled at all. */
   agentEnabled: boolean;
+  /** Whether this viewer may re-resolve the relay hostname; see the relay DNS settings. */
+  canRefresh: boolean;
   /** `derp.server`'s declared addresses, so each row can say whether it matches. */
   declared: RelayDeclaredAddresses | undefined;
   /** Manual region id -> name mapping from Headplane's data directory. */
@@ -134,6 +137,7 @@ function RelayLine({ label, value }: { label: string; value: string }) {
 
 export default function DerpInfo({
   agentEnabled,
+  canRefresh,
   declared,
   regionNames,
   server,
@@ -237,6 +241,7 @@ export default function DerpInfo({
                 </div>
               ))}
             </div>
+            <RelayResolver canRefresh={canRefresh} className="mt-1" resolution={relayResolution} />
           </div>
         ) : (
           <p className="text-sm text-mist-500 dark:text-mist-400">

@@ -1846,6 +1846,7 @@ const en = {
         relayDnsLookupBody:
           "This is the answer the relay cards show for server_url's hostname. An answer with no records is cached for five minutes, so re-resolve instead of waiting it out or restarting Headplane.",
         relayDnsReResolve: "Re-resolve now",
+        relayDnsReResolving: "Re-resolving…",
         relayDnsResolverSystem: "System resolver",
         relayDnsResolverConfigured: "Configured: {servers}",
         relayDnsIpv4Label: "Resolved IPv4",
@@ -1854,6 +1855,7 @@ const en = {
           "server_url names no usable relay host, so there is nothing to resolve right now.",
         relayDnsSystemHint:
           "The host's resolver returned no address. Add a DNS server above and re-resolve to check whether the name really has a record: a host resolver can answer with nothing even when it does, because it filters or does not forward the query.",
+        relayDnsSettingsLink: "Edit relay DNS settings",
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",

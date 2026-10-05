@@ -1737,6 +1737,7 @@ const zhHant = {
         relayDnsLookupBody:
           "這就是中繼卡片針對 server_url 主機名稱顯示的解析結果。沒有記錄的答案會快取五分鐘，請用「重新解析」立即重查，不必等快取過期或重新啟動 Headplane。",
         relayDnsReResolve: "重新解析",
+        relayDnsReResolving: "正在重新解析…",
         relayDnsResolverSystem: "系統解析器",
         relayDnsResolverConfigured: "已指定：{servers}",
         relayDnsIpv4Label: "解析到的 IPv4",
@@ -1744,6 +1745,7 @@ const zhHant = {
         relayDnsHostMissing: "server_url 沒有可用的中繼主機名稱，目前無法解析。",
         relayDnsSystemHint:
           "主機的解析器沒有傳回任何位址。請在上方新增一台 DNS 伺服器並點「重新解析」，確認該名稱是否真的有記錄：主機的解析器即使有記錄也可能傳回空結果，因為它會過濾或不轉送這類查詢。",
+        relayDnsSettingsLink: "編輯中繼 DNS 設定",
       },
       errors: {
         invalidAction: "要求無效，請重新整理頁面後重試。",
