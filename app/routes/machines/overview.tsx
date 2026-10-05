@@ -1,7 +1,9 @@
-import { ChevronDown, ChevronUp, Info, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Info, SearchX, ServerOff, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, useSearchParams } from "react-router";
 
+import Button from "~/components/button";
 import Code from "~/components/code";
 import Input from "~/components/input";
 import Link from "~/components/link";
@@ -118,6 +120,105 @@ const ROUTE_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
     n.customRouting.subnetWaitingRoutes.length > 0,
 };
 
+/**
+ * Every header cell shares one divider so the sticky row keeps its border. The
+ * background has to live on the cell itself: the row group scrolls away from a
+ * stuck cell. `z-0` keeps row menus (ported to the body) painted above it.
+ */
+const HEADER_CELL =
+  "sticky top-0 z-0 border-b border-mist-200 bg-white pb-2 text-left text-xs font-bold uppercase dark:border-mist-800 dark:bg-mist-900";
+
+interface SortHeaderProps {
+  field: SortField;
+  label: string;
+  sortLabel: string;
+  sortField: SortField;
+  sortDirection: "asc" | "desc";
+  onSort: (field: SortField) => void;
+  className?: string;
+  children?: ReactNode;
+}
+
+/** A column header that toggles the existing sort state. */
+function SortHeader({
+  field,
+  label,
+  sortLabel,
+  sortField,
+  sortDirection,
+  onSort,
+  className,
+  children,
+}: SortHeaderProps) {
+  const isActive = sortField === field;
+
+  return (
+    <th
+      aria-sort={isActive ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+      className={cn(HEADER_CELL, className)}
+      scope="col"
+    >
+      <div className="flex items-center gap-x-1">
+        <button
+          aria-label={sortLabel}
+          className={cn(
+            "flex cursor-pointer items-center gap-x-1",
+            "hover:text-mist-900 dark:hover:text-mist-100",
+          )}
+          onClick={() => onSort(field)}
+          type="button"
+        >
+          {label}
+          {isActive ? (
+            sortDirection === "asc" ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )
+          ) : undefined}
+        </button>
+        {children}
+      </div>
+    </th>
+  );
+}
+
+/** Shown in place of the table when nothing can be listed. */
+function MachineEmptyState({ isFiltered, onReset }: { isFiltered: boolean; onReset: () => void }) {
+  const { t } = useI18n();
+  const Icon = isFiltered ? SearchX : ServerOff;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center",
+        "border-mist-200 bg-mist-50/50",
+        "dark:border-mist-800 dark:bg-mist-950/30",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-full",
+          "bg-mist-100 text-mist-500 dark:bg-mist-800 dark:text-mist-400",
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="flex max-w-md flex-col gap-1">
+        <p className="font-medium">
+          {isFiltered ? t("machines.list.empty") : t("machines.list.emptyNone")}
+        </p>
+        <p className="text-sm text-mist-600 dark:text-mist-400">
+          {isFiltered ? t("machines.list.emptyFilteredBody") : t("machines.list.emptyNoneBody")}
+        </p>
+      </div>
+      {isFiltered ? (
+        <Button onClick={onReset}>{t("machines.filters.clearFilters")}</Button>
+      ) : undefined}
+    </div>
+  );
+}
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -128,6 +229,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const searchQuery = searchParams.get("q") ?? "";
   const { filterUser, filterTag, filterStatus, filterRoute, hasActiveFilters } =
     useMachineFilterParams();
+
+  const hasAgent = loaderData.agent !== undefined;
 
   const setSearchQuery = (value: string) => {
     setSearchParams((prev) => {
@@ -146,6 +249,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       return next;
     });
   };
+
+  const resetSearchAndFilters = useCallback(() => {
+    setSearchParams(new URLSearchParams());
+  }, [setSearchParams]);
 
   const filteredAndSortedNodes = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -286,10 +393,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col">
-          <h1 className="mb-2 text-2xl font-medium">{t("machines.list.title")}</h1>
-          <p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("machines.list.title")}</h1>
+          <p className="text-sm text-mist-600 dark:text-mist-400">
             {t("machines.list.subtitle")}{" "}
             <Link external styled to="https://tailscale.com/kb/1372/manage-devices">
               {t("common.learnMore")}
@@ -303,8 +410,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           users={loaderData.users}
         />
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative w-64">
+
+      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="relative w-full sm:w-64">
           <Input
             label={t("machines.list.searchLabel")}
             labelHidden
@@ -330,8 +438,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             </button>
           )}
         </div>
-        <MachineFilters users={loaderData.users} populatedNodes={loaderData.populatedNodes} />
-        <span className="ml-auto text-sm whitespace-nowrap text-mist-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <MachineFilters users={loaderData.users} populatedNodes={loaderData.populatedNodes} />
+        </div>
+        <span className="text-sm whitespace-nowrap text-mist-500 lg:ml-auto">
           {searchQuery || hasActiveFilters
             ? t("machines.list.showing", {
                 count: filteredAndSortedNodes.length,
@@ -340,6 +450,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             : t("machines.list.total", { count: loaderData.populatedNodes.length })}
         </span>
       </div>
+
       {loaderData.writable && selectedNodes.length > 0 ? (
         <BulkActions
           existingTags={loaderData.existingTags}
@@ -350,11 +461,19 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           users={loaderData.users}
         />
       ) : undefined}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-160 table-auto rounded-lg">
-          <thead className="text-mist-600 dark:text-mist-300">
-            <tr className="px-0.5 text-left">
-              <th className="w-8 pb-2">
+
+      {filteredAndSortedNodes.length === 0 ? (
+        <MachineEmptyState
+          isFiltered={Boolean(searchQuery) || hasActiveFilters}
+          onReset={resetSearchAndFilters}
+        />
+      ) : (
+        // No scroll container: the sticky header has to stick to the page, so
+        // every column truncates instead of forcing the table wider.
+        <table className="w-full table-fixed border-separate border-spacing-0 text-left">
+          <thead>
+            <tr>
+              <th className={cn(HEADER_CELL, "w-10 pl-2")} scope="col">
                 <SelectCheckbox
                   aria-label={t("machines.bulk.selectAll")}
                   checked={
@@ -368,191 +487,99 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   onChange={toggleAllVisible}
                 />
               </th>
-              <th
-                aria-sort={
-                  sortField === "name"
-                    ? sortDirection === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
-                className="pb-2 text-xs font-bold uppercase"
-              >
-                <button
-                  aria-label={t("machines.list.sortByName")}
-                  className={cn(
-                    "flex items-center gap-x-1 cursor-pointer",
-                    "hover:text-mist-900 dark:hover:text-mist-100",
-                  )}
-                  onClick={() => handleSort("name")}
-                  type="button"
-                >
-                  {t("machines.list.columnName")}
-                  {sortField === "name" &&
-                    (sortDirection === "asc" ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    ))}
-                </button>
+              <SortHeader
+                field="name"
+                label={t("machines.list.columnName")}
+                onSort={handleSort}
+                sortDirection={sortDirection}
+                sortField={sortField}
+                sortLabel={t("machines.list.sortByName")}
+              />
+              <th className={cn(HEADER_CELL, "hidden w-36 md:table-cell")} scope="col">
+                {t("machines.common.ownerLabel")}
               </th>
-              <th
-                aria-sort={
-                  sortField === "ip"
-                    ? sortDirection === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
-                className="w-1/4 pb-2"
+              <SortHeader
+                className="hidden w-40 lg:table-cell"
+                field="ip"
+                label={t("machines.list.columnAddresses")}
+                onSort={handleSort}
+                sortDirection={sortDirection}
+                sortField={sortField}
+                sortLabel={t("machines.list.sortByIp")}
               >
-                <div className="flex items-center gap-x-1">
-                  <button
-                    aria-label={t("machines.list.sortByIp")}
-                    className={cn(
-                      "flex items-center gap-x-1 cursor-pointer uppercase text-xs font-bold",
-                      "hover:text-mist-900 dark:hover:text-mist-100",
-                    )}
-                    onClick={() => handleSort("ip")}
-                    type="button"
+                {loaderData.magic ? (
+                  <Tooltip
+                    content={
+                      <span className="font-normal">
+                        {tr("machines.list.magicDnsTooltip", {
+                          code: (
+                            <Code>
+                              [name].
+                              {loaderData.magic}
+                            </Code>
+                          ),
+                        })}
+                      </span>
+                    }
                   >
-                    {t("machines.list.columnAddresses")}
-                    {sortField === "ip" &&
-                      (sortDirection === "asc" ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      ))}
-                  </button>
-                  {loaderData.magic ? (
-                    <Tooltip
-                      content={
-                        <span className="font-normal">
-                          {tr("machines.list.magicDnsTooltip", {
-                            code: (
-                              <Code>
-                                [name].
-                                {loaderData.magic}
-                              </Code>
-                            ),
-                          })}
-                        </span>
-                      }
-                    >
-                      <Info className="h-4 w-4" />
-                    </Tooltip>
-                  ) : undefined}
-                </div>
-              </th>
+                    <Info className="h-4 w-4" />
+                  </Tooltip>
+                ) : undefined}
+              </SortHeader>
               {/* We only want to show the version column if there are agents */}
-              {loaderData.agent !== undefined ? (
-                <th
-                  aria-sort={
-                    sortField === "version"
-                      ? sortDirection === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                  className="pb-2 text-xs font-bold uppercase"
-                >
-                  <button
-                    aria-label={t("machines.list.sortByVersion")}
-                    className={cn(
-                      "flex items-center gap-x-1 cursor-pointer",
-                      "hover:text-mist-900 dark:hover:text-mist-100",
-                    )}
-                    onClick={() => handleSort("version")}
-                    type="button"
-                  >
-                    {t("machines.list.columnVersion")}
-                    {sortField === "version" &&
-                      (sortDirection === "asc" ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      ))}
-                  </button>
-                </th>
+              {hasAgent ? (
+                <SortHeader
+                  className="hidden w-24 xl:table-cell"
+                  field="version"
+                  label={t("machines.list.columnVersion")}
+                  onSort={handleSort}
+                  sortDirection={sortDirection}
+                  sortField={sortField}
+                  sortLabel={t("machines.list.sortByVersion")}
+                />
               ) : undefined}
-              <th
-                aria-sort={
-                  sortField === "lastSeen"
-                    ? sortDirection === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
-                className="pb-2 text-xs font-bold uppercase"
-              >
-                <button
-                  aria-label={t("machines.list.sortByLastSeen")}
-                  className={cn(
-                    "flex items-center gap-x-1 cursor-pointer",
-                    "hover:text-mist-900 dark:hover:text-mist-100",
-                  )}
-                  onClick={() => handleSort("lastSeen")}
-                  type="button"
-                >
-                  {t("machines.list.columnLastSeen")}
-                  {sortField === "lastSeen" &&
-                    (sortDirection === "asc" ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    ))}
-                </button>
+              <th className={cn(HEADER_CELL, "w-28 whitespace-nowrap")} scope="col">
+                {t("machines.filters.status")}
               </th>
-              <th className="w-12 pb-2">
+              <SortHeader
+                className="hidden w-40 sm:table-cell"
+                field="lastSeen"
+                label={t("machines.list.columnLastSeen")}
+                onSort={handleSort}
+                sortDirection={sortDirection}
+                sortField={sortField}
+                sortLabel={t("machines.list.sortByLastSeen")}
+              />
+              <th className={cn(HEADER_CELL, "w-12 pr-1")} scope="col">
                 <span className="sr-only">{t("machines.list.actions")}</span>
               </th>
             </tr>
           </thead>
-          <tbody
-            className={cn(
-              "divide-y divide-mist-100 dark:divide-mist-800 align-top",
-              "border-t border-mist-100 dark:border-mist-800",
-            )}
-          >
-            {filteredAndSortedNodes.length === 0 ? (
-              <tr>
-                <td
-                  className="py-8 text-center text-mist-500"
-                  colSpan={loaderData.agent !== undefined ? 7 : 6}
-                >
-                  {t("machines.list.empty")}
-                </td>
-              </tr>
-            ) : (
-              filteredAndSortedNodes.map((node) => (
-                <MachineRow
-                  existingTags={loaderData.existingTags}
-                  policyTags={loaderData.policyTags}
-                  isAgent={
-                    loaderData.agent !== undefined
-                      ? node.nodeKey === loaderData.agent.nodeKey
-                      : undefined
-                  }
-                  isDisabled={
-                    loaderData.writable
-                      ? false // If the user has write permissions, they can edit all machines
-                      : node.user?.id !== loaderData.headscaleUserId
-                  }
-                  isSelected={selectedIds.has(node.id)}
-                  isSelectionDisabled={!loaderData.writable}
-                  key={node.id}
-                  magic={loaderData.magic}
-                  node={node}
-                  onSelectChange={(selected) => toggleSelection(node.id, selected)}
-                  users={loaderData.users}
-                  supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
-                  supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}
-                />
-              ))
-            )}
+          <tbody>
+            {filteredAndSortedNodes.map((node) => (
+              <MachineRow
+                existingTags={loaderData.existingTags}
+                policyTags={loaderData.policyTags}
+                isAgent={hasAgent ? node.nodeKey === loaderData.agent?.nodeKey : undefined}
+                isDisabled={
+                  loaderData.writable
+                    ? false // If the user has write permissions, they can edit all machines
+                    : node.user?.id !== loaderData.headscaleUserId
+                }
+                isSelected={selectedIds.has(node.id)}
+                isSelectionDisabled={!loaderData.writable}
+                key={node.id}
+                magic={loaderData.magic}
+                node={node}
+                onSelectChange={(selected) => toggleSelection(node.id, selected)}
+                users={loaderData.users}
+                supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
+                supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}
+              />
+            ))}
           </tbody>
         </table>
-      </div>
+      )}
     </>
   );
 }

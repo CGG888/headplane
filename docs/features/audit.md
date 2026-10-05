@@ -1,6 +1,6 @@
 ---
 title: Audit Log
-description: See who changed what in Headplane, and when.
+description: See who changed what in Headplane, when, and export it.
 outline: [2, 3]
 ---
 
@@ -38,7 +38,25 @@ the history to survive recreating the container.
 
 The page requires the `configure_iam` capability — the same permission that lets
 someone change these settings in the first place. Entries are newest first with
-filters by actor and action.
+filters by actor, action and time range.
+
+## Exporting
+
+**Export CSV** and **Export JSON** sit next to the filters and download the
+selection the page is showing: the actor, action and time range filters are
+applied, and the page number is not — an export always starts at the newest
+entry, not at the page you happen to be on. The link is
+`/settings/audit/export?format=csv` (or `json`), and the route keeps the same
+`configure_iam` capability gate as the page itself.
+
+| Format | Details                                                                                                                                                                                                  |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV    | RFC 4180: a field containing a quote, a comma or a line break is quoted, and quotes inside it are doubled. The header row is translated into your language; the body keeps the recorded values verbatim. |
+| JSON   | An array of records with `id`, `at` (ISO 8601), `actor`, `actorType`, `action`, `result`, `target` and `detail`.                                                                                         |
+
+The file is named `headplane-audit-YYYYMMDD-HHMMSS.csv` (or `.json`), with the
+timestamp in UTC so repeated downloads stay distinct, and is sent with
+`Cache-Control: no-store`.
 
 ::: warning What it does not cover
 Only changes made **through Headplane** are recorded. Edits made with
@@ -48,4 +66,9 @@ Headplane and are invisible here.
 An audit write is also best-effort: if it fails, the change itself still happens
 and the failure is logged server-side, because losing a log line must not block
 an operator.
+
+An export is bounded as well: it stops at the newest 5,000 matching operations.
+Once a filtered selection reaches that size the filters card says so, and a
+download that was cut short carries `X-Audit-Export-Truncated: true` and
+`X-Audit-Export-Total` so whatever consumes the file can tell.
 :::

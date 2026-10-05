@@ -1,6 +1,6 @@
 ---
 title: Headscale Settings
-description: Edit Headscale's OIDC configuration, trusted proxies and policy mode from Headplane.
+description: Edit Headscale's OIDC configuration, trusted proxies, policy mode, node lifetime and DERP settings from Headplane.
 outline: [2, 3]
 ---
 
@@ -21,26 +21,35 @@ nothing is buried in one long scroll and nothing is hidden behind a panel.
 - Headscale reads most of this at startup, so changes only take effect after the
   Headscale process restarts. With the process integration enabled Headplane asks
   it to reload or restart for you.
-  :::
+
+:::
 
 ## OIDC
 
 The full single sign-on block:
 
-| Field                             | Notes                                                                                                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `issuer`                          | The provider's discovery URL. **Headscale treats an empty issuer as "OIDC disabled".**                                                                                                                                         |
-| `client_id`                       | Client registered at the provider.                                                                                                                                                                                             |
-| `client_secret`                   | Write-only here: Headplane shows whether a secret is set, never its value. Leave the field untouched to keep the current one. Setting `client_secret_path` instead of an inline secret is respected and shown as "configured". |
-| `scope`                           | Defaults to `openid`, `profile`, `email`.                                                                                                                                                                                      |
-| `email_verified_required`         | Default `true`. Turn it off only for providers that never send `email_verified`.                                                                                                                                               |
-| `use_expiry_from_token`           | Default `false`. When enabled, OIDC logins use the provider's token expiry and `node.expiry` is ignored for those nodes.                                                                                                       |
-| `only_start_if_oidc_is_available` | Default `true`; when off, Headscale starts even if the provider is unreachable.                                                                                                                                                |
-| `pkce`                            | `enabled` (default `false`) and `method` (`plain` or `S256`, default `S256`).                                                                                                                                                  |
+| Field                             | Notes                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuer`                          | The provider's discovery URL. **Headscale treats an empty issuer as "OIDC disabled".**                                                                                                                                                                                                                                        |
+| `client_id`                       | Client registered at the provider.                                                                                                                                                                                                                                                                                            |
+| `client_secret`                   | Write-only here: Headplane shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                                 |
+| `client_secret_path`              | Read the secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave the field empty to remove the key.                                                                                    |
+| `scope`                           | Defaults to `openid`, `profile`, `email`.                                                                                                                                                                                                                                                                                     |
+| `email_verified_required`         | Default `true`. Turn it off only for providers that never send `email_verified`.                                                                                                                                                                                                                                              |
+| `use_expiry_from_token`           | Default `false`. When enabled, OIDC logins use the provider's token expiry and `node.expiry` is ignored for those nodes.                                                                                                                                                                                                      |
+| `only_start_if_oidc_is_available` | Default `true`; when off, Headscale starts even if the provider is unreachable.                                                                                                                                                                                                                                               |
+| `pkce`                            | `enabled` (default `false`) and `method` (`plain` or `S256`, default `S256`).                                                                                                                                                                                                                                                 |
+| `extra_params`                    | Extra parameters sent to the provider's authorization endpoint, for example `domain_hint`, `prompt` or `acr_values`. Edited as key/value rows below the form: both halves are required, keys are trimmed and may not contain whitespace, and duplicate keys are rejected. Saving an empty list removes the key from the file. |
 
 The **allowed domains / users / groups** lists have their own page under
 [Settings → Restrictions](/features/sso#login-restrictions), because they are
 changed far more often than the rest of the block.
+
+::: warning Inline secret and secret file together
+Headscale's own example configuration calls `oidc.client_secret` and
+`oidc.client_secret_path` mutually exclusive. When both are present in the file
+the page says so, but the save itself is not blocked — keep only one of the two.
+:::
 
 ::: danger Removed in Headscale 0.29
 `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are no
@@ -62,7 +71,9 @@ configuration error, and trusting every peer would defeat the point.
 
 ## Node lifetime, logs and switches
 
-The same page also edits the settings that usually mean editing the file by hand:
+The same page also edits the settings that usually mean editing the file by hand.
+The tab groups them into collapsible cards — node lifecycle, health checks,
+logging and features — so every save button stays with the fields it writes:
 
 | Setting                             | What it does                                                                                                                  |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -78,6 +89,17 @@ The same page also edits the settings that usually mean editing the file by hand
 Values shown are Headscale's own defaults when a key is absent, so the page
 describes what your server is actually doing rather than only what the file
 happens to say.
+
+### HA subnet-router health checks
+
+When several nodes advertise the same prefix — an HA subnet router — Headscale
+pings each one and marks it unhealthy once a probe times out. The card edits both
+knobs, with Headscale's own rules enforced before anything is written:
+
+| Setting                         | Rules                                                                                                                                                            |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node.routes.ha.probe_interval` | How often each router is probed. `0` disables probing; any other value must be at least `2s`. Default `10s`.                                                     |
+| `node.routes.ha.probe_timeout`  | How long a probe waits for an answer before the router counts as unhealthy. At least `1s`, and shorter than the interval while probing is enabled. Default `5s`. |
 
 ## DERP
 
@@ -207,3 +229,24 @@ Switching modes **does not copy the policy**:
   until then the database policy is empty, which means _allow all_.
 - `database` → `file`: write the current policy to a file and point
   `policy.path` at it before restarting, otherwise the policy is empty.
+
+## Configuration overview
+
+The **Overview** tab is the other half of the page: the values Headplane reads
+but deliberately never writes, marked **Display only**. A wrong database path or
+IP range could lock you out of the server, and the rest are operational or
+secret file paths that belong in the file on the host. Looking one up no longer
+means opening that file yourself.
+
+| Block        | Shown                                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Network      | `server_url`, `listen_addr`, `prefixes.v4`, `prefixes.v6` and the allocation strategy (`sequential` when the key is absent).                 |
+| Database     | `database.type` (`sqlite` when the key is absent), `database.sqlite.path` and whether the SQLite write-ahead log is on (`true` when absent). |
+| Listeners    | `metrics_listen_addr`, `grpc_listen_addr`, `grpc_allow_insecure`, `unix_socket`, `unix_socket_permission` and `noise.private_key_path`.      |
+| TLS and ACME | The Let's Encrypt hostname, the ACME email, and the certificate and certificate-key paths.                                                   |
+| Tuning       | Whether a `tuning` block is set at all (any key in it counts), not the individual performance knobs.                                         |
+
+Anything the file does not set is shown as `—` instead of a guessed value, apart
+from the three Headscale defaults named above — the allocation strategy, the
+database type and the write-ahead log — which are shown as Headscale resolves
+them.

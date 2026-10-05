@@ -29,6 +29,7 @@ export default [
   // All the main logged-in routes
   layout("layout/app.tsx", [
     index("routes/home.tsx"),
+    route("/overview", "routes/overview.tsx"),
     ...prefix("/machines", [
       index("routes/machines/overview.tsx"),
       route("/:id", "routes/machines/machine.tsx"),

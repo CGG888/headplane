@@ -2,6 +2,7 @@ import {
   Check,
   CircleQuestionMark,
   CircleUser,
+  Gauge,
   Globe,
   Lock,
   Monitor,
@@ -44,6 +45,7 @@ export interface HeaderProps {
 }
 
 const tabs = [
+  { to: "/overview", icon: Gauge, labelKey: "header.tabs.overview", key: "ui" },
   { to: "/machines", icon: Server, labelKey: "header.tabs.machines", key: "machines" },
   { to: "/users", icon: Users, labelKey: "header.tabs.users", key: "users" },
   { to: "/acls", icon: Lock, labelKey: "header.tabs.policy", key: "policy" },

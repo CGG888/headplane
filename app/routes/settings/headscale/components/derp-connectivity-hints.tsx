@@ -15,6 +15,7 @@ export default function DerpConnectivityHints() {
       <ul className="mt-1 list-disc pl-5 text-sm opacity-80">
         <li>{t("settings.headscale.derp.connectivityHttps")}</li>
         <li>{t("settings.headscale.derp.connectivityStun")}</li>
+        <li>{t("settings.headscale.derp.connectivityIpv6")}</li>
         <li>{t("settings.headscale.derp.connectivityCaptivePortal")}</li>
       </ul>
       <Text className="mt-2 text-sm opacity-70">

@@ -532,7 +532,7 @@ export default function DerpSettings({
             label={t("settings.headscale.derp.stunListenAddrLabel")}
             name="derp_server_stun_listen_addr"
             onChange={setStunListenAddr}
-            placeholder="0.0.0.0:3478"
+            placeholder="0.0.0.0:3478 / [::]:3478"
             value={stunListenAddr}
           />
           <Input

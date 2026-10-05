@@ -1,5 +1,5 @@
-import Attribute from "~/components/attribute";
-import Card from "~/components/card";
+import { Radio } from "lucide-react";
+
 import Link from "~/components/link";
 import { useI18n } from "~/i18n/provider";
 import type { HostInfo } from "~/types";
@@ -13,6 +13,8 @@ import {
   type DerpRegionLabel,
   type DerpRegionNames,
 } from "../derp-info";
+import MachineAttribute from "./attribute";
+import MachineCard from "./machine-card";
 
 interface DerpInfoProps {
   /** Whether the Headplane Agent feature is enabled at all. */
@@ -43,63 +45,71 @@ export default function DerpInfo({ agentEnabled, regionNames, server, stats }: D
     )
     .join("\n");
 
+  const embeddedNote = (
+    <p className="text-sm text-mist-600 dark:text-mist-400">
+      {server?.enabled ? (
+        t("machines.detail.derp.embeddedEnabled", {
+          region: regionLabel(server.regionId, embedded, unknown, regionNames).label,
+        })
+      ) : (
+        <>
+          {t("machines.detail.derp.embeddedDisabled")}{" "}
+          <Link className="font-medium" to="/settings/headscale">
+            {t("machines.detail.derp.embeddedSettingsLink")}
+          </Link>
+        </>
+      )}
+    </p>
+  );
+
   return (
-    <section>
-      <h2 className="mt-8 text-xl font-medium">{t("machines.detail.derp.title")}</h2>
-      <p className="mb-4">{t("machines.detail.derp.body")}</p>
+    <MachineCard
+      description={t("machines.detail.derp.body")}
+      icon={Radio}
+      title={t("machines.detail.derp.title")}
+    >
       {!agentEnabled ? (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           {t("machines.detail.derp.agentRequired")}
         </p>
       ) : !view.hasRelayData ? (
-        <p className="py-2 text-sm opacity-70">{t("machines.detail.derp.empty")}</p>
+        <p className="text-sm text-mist-500 dark:text-mist-400">
+          {t("machines.detail.derp.empty")}
+        </p>
       ) : (
-        <Card
-          className="grid w-full max-w-full grid-cols-1 gap-y-2 sm:gap-x-12 lg:grid-cols-2"
-          variant="flat"
-        >
-          <div className="flex flex-col gap-1">
-            <Attribute
+        <>
+          <dl className="flex flex-col">
+            <MachineAttribute
               name={t("machines.detail.derp.homeRegion")}
               value={markedLabel(view.home, t("machines.detail.derp.embeddedMarker"))}
             />
-            <Attribute
+            <MachineAttribute
               name={t("machines.detail.derp.preferredRegion")}
               value={markedLabel(view.preferred, t("machines.detail.derp.embeddedMarker"))}
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Attribute
+            <MachineAttribute
+              isCode
               name={t("machines.detail.derp.latency")}
               value={
                 view.latencies.rows.length === 0 ? t("machines.detail.derp.noLatency") : latency
               }
             />
-            {view.latencies.hidden > 0 ? (
-              <p className="text-sm opacity-70">
-                {t("machines.detail.derp.latencyMore", { count: view.latencies.hidden })}
-              </p>
-            ) : undefined}
-            {view.hasIdOnlyRegions ? (
-              <p className="text-sm opacity-70">{t("machines.detail.derp.idsOnly")}</p>
-            ) : undefined}
-          </div>
-        </Card>
+          </dl>
+          {view.latencies.hidden > 0 ? (
+            <p className="mt-1 text-sm text-mist-500 dark:text-mist-400">
+              {t("machines.detail.derp.latencyMore", { count: view.latencies.hidden })}
+            </p>
+          ) : undefined}
+          {view.hasIdOnlyRegions ? (
+            <p className="mt-1 text-sm text-mist-500 dark:text-mist-400">
+              {t("machines.detail.derp.idsOnly")}
+            </p>
+          ) : undefined}
+        </>
       )}
-      <p className="mt-2 text-sm text-mist-600 dark:text-mist-300">
-        {server?.enabled ? (
-          t("machines.detail.derp.embeddedEnabled", {
-            region: regionLabel(server.regionId, embedded, unknown, regionNames).label,
-          })
-        ) : (
-          <>
-            {t("machines.detail.derp.embeddedDisabled")}{" "}
-            <Link className="font-medium" to="/settings/headscale">
-              {t("machines.detail.derp.embeddedSettingsLink")}
-            </Link>
-          </>
-        )}
-      </p>
-    </section>
+      <div className="mt-2 border-t border-mist-100 pt-2.5 dark:border-mist-800">
+        {embeddedNote}
+      </div>
+    </MachineCard>
   );
 }

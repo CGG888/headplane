@@ -192,7 +192,7 @@ export default function DerpEmbeddedPreset({
           label={t("settings.headscale.derp.stunListenAddrLabel")}
           name="preset_stun_listen_addr"
           onChange={setStunListenAddr}
-          placeholder="0.0.0.0:3478"
+          placeholder="0.0.0.0:3478 / [::]:3478"
           required
           value={stunListenAddr}
         />
