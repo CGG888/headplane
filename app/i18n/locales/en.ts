@@ -52,6 +52,11 @@ const en = {
       dark: "Dark",
     },
     apiKey: "API Key",
+    liveUpdates: {
+      label: "Live updates",
+      on: "On",
+      off: "Off",
+    },
     logout: "Logout",
   },
   footer: {
@@ -319,6 +324,16 @@ const en = {
       emptyNone: "No machines yet",
       emptyNoneBody: "Register a device with a pre-auth key and it will show up here.",
       emptyFilteredBody: "Adjust the search or filters to see more machines.",
+      refresh: {
+        label: "Auto-refresh",
+        enable: "Turn on auto-refresh",
+        disable: "Turn off auto-refresh",
+        now: "Refresh now",
+        updatedNow: "Updated just now",
+        updatedSecondsAgo: "Updated {count}s ago",
+        updatedMinutesAgo: "Updated {count}m ago",
+        updatedHoursAgo: "Updated {count}h ago",
+      },
     },
     detail: {
       allMachines: "All Machines",
@@ -1809,6 +1824,36 @@ const en = {
           "Clears derp.urls in the same save, so clients are handed only the relay you run here.",
         presetClearMapWarning:
           "Without the public map, your embedded server becomes the only relay: if it is down or unreachable, clients cannot reach each other over DERP. Make sure clients can reach it on TCP 443 (DERP over HTTPS) and UDP 3478 (STUN).",
+        relayDnsTitle: "Relay DNS resolver",
+        relayDnsBody:
+          "Headplane resolves the relay hostname itself so the relay cards can show the addresses clients would reach. A host resolver that filters AAAA records can make an IPv6 address look missing, so relay lookups can use DNS servers of your own instead. Leaving the list empty follows the host's resolver, exactly as before; whatever is set here is used for relay lookups only.",
+        relayDnsSummary: {
+          one: "{count} DNS server",
+          other: "{count} DNS servers",
+        },
+        relayDnsEmpty:
+          "No DNS servers are configured, so relay lookups follow the host's resolver.",
+        relayDnsLoading: "Loading the relay DNS settings…",
+        relayDnsServerLabel: "DNS server",
+        relayDnsServerDescription:
+          "An IPv4 or IPv6 literal with an optional port, for example 1.1.1.1 or [2606:4700:4700::1111]:53. Lookups try them in the order listed, up to {count}.",
+        relayDnsServerPlaceholder: "1.1.1.1",
+        relayDnsAddServer: "Add DNS server",
+        relayDnsRemoveServer: "Remove",
+        relayDnsStorageNote:
+          "Stored in Headplane's own data directory (relay-dns-servers.json), not in Headscale's config.",
+        relayDnsLookupTitle: "Relay lookup",
+        relayDnsLookupBody:
+          "This is the answer the relay cards show for server_url's hostname. An answer with no records is cached for five minutes, so re-resolve instead of waiting it out or restarting Headplane.",
+        relayDnsReResolve: "Re-resolve now",
+        relayDnsResolverSystem: "System resolver",
+        relayDnsResolverConfigured: "Configured: {servers}",
+        relayDnsIpv4Label: "Resolved IPv4",
+        relayDnsIpv6Label: "Resolved IPv6",
+        relayDnsHostMissing:
+          "server_url names no usable relay host, so there is nothing to resolve right now.",
+        relayDnsSystemHint:
+          "The host's resolver returned no address. Add a DNS server above and re-resolve to check whether the name really has a record: a host resolver can answer with nothing even when it does, because it filters or does not forward the query.",
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
@@ -1862,6 +1907,14 @@ const en = {
           "Enter a duration of at least 2s, for example 10s, or 0 to disable HA probing.",
         invalidHaProbeTimeout: "Enter a duration of at least 1s, for example 5s.",
         invalidHaProbeCombination: "The probe timeout must be shorter than the probe interval.",
+        invalidRelayDnsServer:
+          "Enter a DNS server as an IPv4 or IPv6 literal with an optional port, for example 1.1.1.1 or [2606:4700:4700::1111]:53.",
+        duplicateRelayDnsServer: "This DNS server is already in the list.",
+        relayDnsServerLimit:
+          "The list holds at most {count} DNS servers. Remove one before adding another.",
+        relayDnsServerNotFound: "This DNS server is not in the list.",
+        relayDnsWriteFailed:
+          "Headplane could not write the relay DNS servers. Check that its data directory is writable and try again.",
       },
     },
     agent: {

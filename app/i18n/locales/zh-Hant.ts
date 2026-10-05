@@ -49,6 +49,11 @@ const zhHant = {
       dark: "深色",
     },
     apiKey: "API 金鑰",
+    liveUpdates: {
+      label: "即時更新",
+      on: "已開啟",
+      off: "已關閉",
+    },
     logout: "登出",
   },
   footer: {
@@ -310,6 +315,16 @@ const zhHant = {
       emptyNone: "還沒有機器",
       emptyNoneBody: "使用預先授權金鑰註冊裝置後，裝置會顯示在這裡。",
       emptyFilteredBody: "調整搜尋或篩選條件以查看更多機器。",
+      refresh: {
+        label: "自動重新整理",
+        enable: "開啟自動重新整理",
+        disable: "關閉自動重新整理",
+        now: "立即重新整理",
+        updatedNow: "剛剛更新",
+        updatedSecondsAgo: "{count} 秒前更新",
+        updatedMinutesAgo: "{count} 分鐘前更新",
+        updatedHoursAgo: "{count} 小時前更新",
+      },
     },
     detail: {
       allMachines: "所有機器",
@@ -1701,6 +1716,34 @@ const zhHant = {
           "在同一次儲存中清空 derp.urls，用戶端只會取得你在這裡執行的中繼。",
         presetClearMapWarning:
           "移除公開地圖後，內嵌伺服器會成為唯一的中繼：一旦它無法連線，用戶端之間就無法透過 DERP 互通。請確認用戶端能存取它的 TCP 443（DERP over HTTPS）與 UDP 3478（STUN）。",
+        relayDnsTitle: "中繼 DNS 解析伺服器",
+        relayDnsBody:
+          "Headplane 會自行解析中繼主機名稱，中繼卡片才能顯示用戶端實際連到的位址。主機的解析器可能過濾 AAAA 記錄，讓原本存在的 IPv6 位址看起來不存在，因此可以在這裡指定自己的 DNS 伺服器。留空即跟隨主機的解析器，與先前完全一致；這裡設定的伺服器只用於中繼解析。",
+        relayDnsSummary: {
+          one: "{count} 台 DNS 伺服器",
+          other: "{count} 台 DNS 伺服器",
+        },
+        relayDnsEmpty: "未設定 DNS 伺服器，中繼解析跟隨主機的解析器。",
+        relayDnsLoading: "正在讀取中繼 DNS 設定…",
+        relayDnsServerLabel: "DNS 伺服器",
+        relayDnsServerDescription:
+          "IPv4 或 IPv6 字面位址，連接埠可省略，例如 1.1.1.1 或 [2606:4700:4700::1111]:53。解析會依清單順序嘗試，最多 {count} 台。",
+        relayDnsServerPlaceholder: "1.1.1.1",
+        relayDnsAddServer: "新增 DNS 伺服器",
+        relayDnsRemoveServer: "刪除",
+        relayDnsStorageNote:
+          "儲存在 Headplane 自己的資料目錄（relay-dns-servers.json），不會寫入 Headscale 設定。",
+        relayDnsLookupTitle: "中繼解析",
+        relayDnsLookupBody:
+          "這就是中繼卡片針對 server_url 主機名稱顯示的解析結果。沒有記錄的答案會快取五分鐘，請用「重新解析」立即重查，不必等快取過期或重新啟動 Headplane。",
+        relayDnsReResolve: "重新解析",
+        relayDnsResolverSystem: "系統解析器",
+        relayDnsResolverConfigured: "已指定：{servers}",
+        relayDnsIpv4Label: "解析到的 IPv4",
+        relayDnsIpv6Label: "解析到的 IPv6",
+        relayDnsHostMissing: "server_url 沒有可用的中繼主機名稱，目前無法解析。",
+        relayDnsSystemHint:
+          "主機的解析器沒有傳回任何位址。請在上方新增一台 DNS 伺服器並點「重新解析」，確認該名稱是否真的有記錄：主機的解析器即使有記錄也可能傳回空結果，因為它會過濾或不轉送這類查詢。",
       },
       errors: {
         invalidAction: "要求無效，請重新整理頁面後重試。",
@@ -1750,6 +1793,13 @@ const zhHant = {
         invalidHaProbeInterval: "請輸入不小於 2s 的時長（例如 10s），或填 0 停用 HA 探測。",
         invalidHaProbeTimeout: "請輸入不小於 1s 的時長，例如 5s。",
         invalidHaProbeCombination: "探測逾時必須小於探測間隔。",
+        invalidRelayDnsServer:
+          "請填寫 IPv4 或 IPv6 字面位址，連接埠可省略，例如 1.1.1.1 或 [2606:4700:4700::1111]:53。",
+        duplicateRelayDnsServer: "此 DNS 伺服器已在清單中。",
+        relayDnsServerLimit: "清單最多保存 {count} 台 DNS 伺服器，請先刪除一台再新增。",
+        relayDnsServerNotFound: "此 DNS 伺服器不在清單中。",
+        relayDnsWriteFailed:
+          "Headplane 無法寫入中繼 DNS 伺服器。請檢查其資料目錄是否可寫入後重試。",
       },
     },
     agent: {

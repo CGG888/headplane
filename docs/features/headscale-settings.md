@@ -202,10 +202,35 @@ _Embedded relay IPv6_.
 A host resolver can legitimately answer with no AAAA for a name that does have one,
 so "no record" is a property of the resolver in front of you, not proof about the
 zone. Compare `dig @1.1.1.1 +short AAAA <host>` with `dig +short AAAA <host>`: if
-the public resolver answers and the local one does not, the fix is to point that
-host's DNS at a resolver that returns AAAA rather than to change Headscale. Both
-positive and negative answers are cached for five minutes, so restart Headplane to
-clear the cache immediately after a DNS change.
+the public resolver answers and the local one does not, the name does have a record
+and the host's resolver is hiding it. The relay cards state which resolver produced
+the answer they show — **System resolver** or **Configured: …** — so an empty row
+never leaves you guessing which DNS server was asked.
+
+### Choosing the resolver for relay lookups
+
+Below the embedded-server block, **Relay DNS resolver** lists the DNS servers
+Headplane may use for relay lookups instead of the host's own:
+
+- **Empty (the default)** — lookups follow the host's resolver, exactly as
+  Headplane has always done. Nothing changes until you add a server.
+- **One or more servers** — every relay lookup goes through them, in the order
+  listed, up to five. IPv4 and IPv6 literals are accepted, each with an optional
+  port (`1.1.1.1`, `[2606:4700:4700::1111]:53`).
+
+The list is Headplane state: it is stored in Headplane's own data directory
+(`relay-dns-servers.json`) and never written into Headscale's configuration, so it
+also works when the configuration file is mounted read-only. It affects relay
+lookups only; everything else Headplane resolves keeps using the host's resolver.
+
+A configured resolver is never silently bypassed: when those servers fail, the
+card reports the failure rather than falling back to the host's resolver, because a
+lookup you pointed somewhere is a lookup you want the truth about.
+
+**Re-resolve now** clears the cache and runs the lookup again. Positive and
+negative answers are cached for five minutes, so a name that had no AAAA before you
+changed your DNS keeps reporting "no records" until that cache expires — the button
+is how you check immediately, without restarting Headplane.
 
 ::: tip The other "IPv6: No" is not about the relay
 A machine's **Client Connectivity → IPv6** value is that machine's own

@@ -16,6 +16,8 @@ import { createLiveStore, nodesResource, usersResource } from "./headscale/live-
 import { createNodeHistoryService } from "./history/service.server";
 import { type AgentManager, createAgentManager } from "./hp-agent";
 import { createOidcService, type OidcService } from "./oidc/provider";
+import { configureSharedRelayDns } from "./relay-dns";
+import { readRelayDnsServers } from "./relay-dns-store";
 import { resolveTargetPath } from "./snapshots/paths";
 import { createSnapshotService } from "./snapshots/service.server";
 import type { SnapshotTarget } from "./snapshots/types";
@@ -82,6 +84,12 @@ export async function createAppContext(config: HeadplaneConfig) {
   });
 
   const oidc = buildOidc(config, headscaleApiKey);
+
+  // Relay lookups follow the host's resolver unless the DERP settings name DNS
+  // servers of their own. That list lives in Headplane's data directory, so the
+  // process-wide resolver is pointed at the file here, once, instead of every
+  // caller having to know where it is.
+  configureSharedRelayDns(() => readRelayDnsServers(config.server.data_path));
 
   const hsLive = createLiveStore([nodesResource, usersResource]);
   const hs = await loadHeadscaleConfig(

@@ -167,8 +167,9 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
 
       try {
         // The live store already polls nodes for the UI; reusing it keeps the
-        // notifier from adding a second, parallel node poll.
-        const snapshot = await options.hsLive.get(nodesResource, client);
+        // notifier from adding a second, parallel node poll. `read` is the
+        // non-notifying path: this timer must never wake the SSE stream.
+        const snapshot = await options.hsLive.read(nodesResource, client);
         nodes = snapshot.data.map((node) => ({
           id: node.id,
           name: node.givenName || node.name || node.id,

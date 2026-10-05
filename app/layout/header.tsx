@@ -7,6 +7,7 @@ import {
   Lock,
   Monitor,
   Moon,
+  RefreshCw,
   Server,
   Settings,
   Sun,
@@ -24,6 +25,7 @@ import logoDark from "~/logo/dark.svg";
 import logoLight from "~/logo/light.svg";
 import cn from "~/utils/cn";
 import type { ColorScheme } from "~/utils/color-scheme";
+import { useLiveData } from "~/utils/live-data";
 
 export interface HeaderProps {
   user: {
@@ -71,6 +73,7 @@ const colorSchemes = [
 export default function Header({ user, access, configAvailable }: HeaderProps) {
   const submit = useSubmit();
   const { t } = useI18n();
+  const { liveUpdates, setLiveUpdates } = useLiveData();
   const showTabs = access.ui;
   const rootRoute = useRoute("root");
   const currentColorScheme: ColorScheme = rootRoute?.loaderData?.colorScheme ?? "system";
@@ -197,6 +200,26 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
               ))}
               <MenuSeparator />
               <LanguageMenuItems />
+              <MenuSeparator />
+              <MenuItem onClick={() => setLiveUpdates(!liveUpdates)}>
+                <div className="flex w-full items-center gap-x-2">
+                  <RefreshCw
+                    className={cn("size-4", liveUpdates ? "text-indigo-500" : "text-mist-400")}
+                  />
+                  <span className="flex-1">{t("header.liveUpdates.label")}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-xs font-medium",
+                      liveUpdates
+                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                        : "bg-mist-300/60 text-mist-600 dark:bg-mist-800 dark:text-mist-300",
+                    )}
+                  >
+                    {liveUpdates ? t("header.liveUpdates.on") : t("header.liveUpdates.off")}
+                  </span>
+                  {liveUpdates && <Check className="size-4" />}
+                </div>
+              </MenuItem>
               <MenuSeparator />
               <MenuItem
                 variant="danger"

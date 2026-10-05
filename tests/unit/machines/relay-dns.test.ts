@@ -125,6 +125,8 @@ describe("relay DNS resolution", () => {
       kind: "hostname",
       ipv4: ["198.51.100.7"],
       ipv6: ["2001:db8::7"],
+      // No DNS servers are configured, so the host's resolver did the work.
+      resolver: "system",
     });
     expect(result.reason).toBeUndefined();
     expect(stub.log.map((call) => call.hostname)).toEqual(["derp.example.com", "derp.example.com"]);

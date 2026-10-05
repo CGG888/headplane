@@ -26,6 +26,7 @@ import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../
 import DerpConnectivityHints from "./derp-connectivity-hints";
 import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedded-preset";
 import DerpPublicEndpoint from "./derp-public-endpoint";
+import RelayDnsResolver from "./relay-dns-resolver";
 
 interface DerpSettingsProps {
   isDisabled: boolean;
@@ -591,6 +592,9 @@ export default function DerpSettings({
           />
         </serverFetcher.Form>
       </SettingsCollapsible>
+
+      {/* The lookup behind the relay cards, and the DNS servers it may use. */}
+      <RelayDnsResolver />
     </SettingsCollapsibleGroup>
   );
 }

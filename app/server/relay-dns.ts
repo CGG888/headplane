@@ -11,10 +11,18 @@
  * under a short deadline, and turns NXDOMAIN, a missing record, a timeout and a
  * resolver error into a result carrying a reason. A bracketed IPv6 literal is
  * returned as-is because there is nothing to look up.
+ *
+ * A host resolver that filters AAAA records answers "no IPv6" for a name that
+ * has one, so the operator can point these lookups at their own DNS servers
+ * (Headplane state, stored under `data_path`). The list defaults to empty, which
+ * keeps the system resolver in charge, and every result says which resolver
+ * produced it; a configured resolver that fails is reported as failed instead of
+ * quietly falling back to the system one.
  */
 
-import { resolve4, resolve6 } from "node:dns/promises";
+import { Resolver, resolve4, resolve6 } from "node:dns/promises";
 
+import { normalizeRelayDnsServers } from "~/routes/settings/headscale/relay-dns-servers";
 import log from "~/utils/log";
 
 /** How long a resolved hostname stays in the cache before it is looked up again. */
@@ -27,6 +35,9 @@ export const RELAY_DNS_TIMEOUT_MS = 2_000;
 export const RELAY_DNS_MAX_ADDRESSES = 8;
 
 export type RelayAddressFamily = "ipv4" | "ipv6";
+
+/** Which resolver answered: the host's own, or Headplane's configured servers. */
+export type RelayResolverKind = "system" | "configured";
 
 /** Why a family has no address, or no answer at all. Rendered as a reason. */
 export type RelayResolutionReason =
@@ -55,12 +66,36 @@ export interface RelayResolution {
   ipv6: string[];
   reason?: RelayResolutionReason;
   detail?: RelayResolutionDetail;
+  /**
+   * Which resolver produced this answer. Absent for a literal, because nothing
+   * was looked up; always present for a hostname, including one that failed, so
+   * a card can never blame the wrong resolver.
+   */
+  resolver?: RelayResolverKind;
+  /** The configured servers that were dialled, in order; empty for the system resolver. */
+  servers?: string[];
+}
+
+/** One family's lookup, bound to the resolver that will run it. */
+export type RelayLookup = (hostname: string, signal: AbortSignal) => Promise<string[]>;
+
+/** The resolver one lookup runs against, and the servers it dials. */
+export interface RelayQueryTarget {
+  resolver: RelayResolverKind;
+  /** Empty for the system resolver. */
+  servers: string[];
+  resolve4: RelayLookup;
+  resolve6: RelayLookup;
 }
 
 /** Every dependency of the resolver, so tests can supply their own. */
 export interface RelayResolverDeps {
-  resolve4: (hostname: string, signal: AbortSignal) => Promise<string[]>;
-  resolve6: (hostname: string, signal: AbortSignal) => Promise<string[]>;
+  resolve4: RelayLookup;
+  resolve6: RelayLookup;
+  /** Reads the configured servers; an empty list means the system resolver. */
+  getServers: () => Promise<string[]>;
+  /** Binds the lookups to the configured servers, or to the system resolver. */
+  createTarget: (servers: string[]) => RelayQueryTarget;
   cacheTtlMs: number;
   timeoutMs: number;
   now: () => number;
@@ -75,8 +110,15 @@ export interface RelayResolverOptions {
   setTimer?: (handler: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
   /** Injected DNS entry points; default to `node:dns/promises`. */
-  resolve4?: (hostname: string, signal: AbortSignal) => Promise<string[]>;
-  resolve6?: (hostname: string, signal: AbortSignal) => Promise<string[]>;
+  resolve4?: RelayLookup;
+  resolve6?: RelayLookup;
+  /** Injected query-target factory, so tests can see which servers were dialled. */
+  createTarget?: (servers: string[]) => RelayQueryTarget;
+  /**
+   * The configured DNS servers, or a reader for them. Empty, missing or
+   * unusable entries fall back to the system resolver.
+   */
+  servers?: readonly string[] | (() => Promise<string[]> | readonly string[]);
 }
 
 export interface RelayResolver {
@@ -168,7 +210,7 @@ interface FamilyAnswer {
 
 async function resolveFamily(
   deps: RelayResolverDeps,
-  lookup: (hostname: string, signal: AbortSignal) => Promise<string[]>,
+  lookup: RelayLookup,
   hostname: string,
 ): Promise<FamilyAnswer> {
   const controller = new AbortController();
@@ -212,15 +254,71 @@ function reasonFromDetail(detail: RelayResolutionDetail): RelayResolutionReason 
 }
 
 /**
- * Builds a resolver with its own in-memory cache. The cache is keyed by
- * hostname, holds successful and empty answers for a few minutes, and coalesces
- * lookups that arrive at the same time so one page render asks DNS twice at
- * most — once per family, not once per card.
+ * The lookups `node:dns/promises` offers, wrapped so both paths ask for the same
+ * thing: plain addresses, never TTL records. The deadline cannot cancel a query
+ * (the promises API has no `signal` option), so an aborted lookup is settled by
+ * the caller's timer instead.
+ */
+function plainAddresses(lookup: typeof resolve4): RelayLookup {
+  return async (hostname) => (await lookup(hostname, { ttl: false })) as string[];
+}
+
+/**
+ * The target one lookup runs against: the configured servers when there are any,
+ * otherwise the host's own resolver. A configured resolver is used on its own —
+ * a failure is reported as a failure instead of being hidden behind a second
+ * lookup the operator did not ask for.
+ */
+export function createRelayQueryTarget(
+  servers: string[],
+  fallback: { resolve4: RelayLookup; resolve6: RelayLookup } = {
+    resolve4: plainAddresses(resolve4),
+    resolve6: plainAddresses(resolve6),
+  },
+): RelayQueryTarget {
+  if (servers.length === 0) {
+    return {
+      resolver: "system",
+      servers: [],
+      resolve4: fallback.resolve4,
+      resolve6: fallback.resolve6,
+    };
+  }
+
+  const resolver = new Resolver();
+  resolver.setServers([...servers]);
+
+  return {
+    resolver: "configured",
+    servers: [...servers],
+    resolve4: (hostname) => resolver.resolve4(hostname, { ttl: false }) as Promise<string[]>,
+    resolve6: (hostname) => resolver.resolve6(hostname, { ttl: false }) as Promise<string[]>,
+  };
+}
+
+/**
+ * Builds a resolver with its own in-memory cache. The cache is keyed by hostname
+ * and by the resolver that answered, holds successful and empty answers for a
+ * few minutes, and coalesces lookups that arrive at the same time so one page
+ * render asks DNS twice at most — once per family, not once per card.
  */
 export function createRelayResolver(options: RelayResolverOptions = {}): RelayResolver {
+  const systemResolve4 = options.resolve4 ?? plainAddresses(resolve4);
+  const systemResolve6 = options.resolve6 ?? plainAddresses(resolve6);
+  const serversOption = options.servers;
+
   const deps: RelayResolverDeps = {
-    resolve4: options.resolve4 ?? resolve4,
-    resolve6: options.resolve6 ?? resolve6,
+    resolve4: systemResolve4,
+    resolve6: systemResolve6,
+    getServers: async () => {
+      const values =
+        typeof serversOption === "function" ? await serversOption() : (serversOption ?? []);
+      return normalizeRelayDnsServers(values);
+    },
+    createTarget:
+      options.createTarget ??
+      ((servers) =>
+        createRelayQueryTarget(servers, { resolve4: systemResolve4, resolve6: systemResolve6 })),
     cacheTtlMs: options.cacheTtlMs ?? RELAY_DNS_CACHE_TTL_MS,
     timeoutMs: options.timeoutMs ?? RELAY_DNS_TIMEOUT_MS,
     now: options.now ?? Date.now,
@@ -237,10 +335,28 @@ export function createRelayResolver(options: RelayResolverOptions = {}): RelayRe
   const cache = new Map<string, { expiresAt: number; value: RelayResolution }>();
   const inFlight = new Map<string, Promise<RelayResolution>>();
 
-  async function lookup(host: string): Promise<RelayResolution> {
+  /** The configured servers, or none when the setting cannot be read at all. */
+  async function readServers(): Promise<string[]> {
+    try {
+      return await deps.getServers();
+    } catch (error) {
+      log.warn("server", "Unable to read the relay DNS servers: %s", String(error));
+      return [];
+    }
+  }
+
+  /**
+   * One cache key per hostname *and* resolver, so changing the setting can never
+   * serve an answer another resolver produced.
+   */
+  function cacheKey(hostname: string, target: RelayQueryTarget): string {
+    return `${hostname}\n${target.resolver}\n${target.servers.join(",")}`;
+  }
+
+  async function lookup(host: string, target: RelayQueryTarget): Promise<RelayResolution> {
     const [ipv4, ipv6] = await Promise.all([
-      resolveFamily(deps, deps.resolve4, host),
-      resolveFamily(deps, deps.resolve6, host),
+      resolveFamily(deps, target.resolve4, host),
+      resolveFamily(deps, target.resolve6, host),
     ]);
 
     const resolution: RelayResolution = {
@@ -248,12 +364,15 @@ export function createRelayResolver(options: RelayResolverOptions = {}): RelayRe
       kind: "hostname",
       ipv4: ipv4.addresses,
       ipv6: ipv6.addresses,
+      resolver: target.resolver,
+      ...(target.servers.length === 0 ? {} : { servers: target.servers }),
     };
 
+    const key = cacheKey(host, target);
     if (ipv4.addresses.length > 0 || ipv6.addresses.length > 0) {
       // At least one family answered: a partial answer is still an answer, so
       // the card shows it without a reason and only the missing family is empty.
-      cache.set(host, { expiresAt: deps.now() + deps.cacheTtlMs, value: resolution });
+      cache.set(key, { expiresAt: deps.now() + deps.cacheTtlMs, value: resolution });
       return resolution;
     }
 
@@ -269,7 +388,7 @@ export function createRelayResolver(options: RelayResolverOptions = {}): RelayRe
     if (!detail.timedOut && !detail.failed) {
       // A name with no records today can gain some, but the negative answer is
       // cached for the same short window so a broken name cannot be hammered.
-      cache.set(host, { expiresAt: deps.now() + deps.cacheTtlMs, value: resolution });
+      cache.set(key, { expiresAt: deps.now() + deps.cacheTtlMs, value: resolution });
     }
 
     return resolution;
@@ -291,30 +410,36 @@ export function createRelayResolver(options: RelayResolverOptions = {}): RelayRe
       }
 
       const hostname = classified.host;
-      const cached = cache.get(hostname);
+      const target = deps.createTarget(await readServers());
+      const key = cacheKey(hostname, target);
+
+      const cached = cache.get(key);
       if (cached !== undefined && cached.expiresAt > deps.now()) {
         log.debug("server", `Relay DNS cache hit for ${hostname}`);
         return cached.value;
       }
 
       if (cached !== undefined) {
-        cache.delete(hostname);
+        cache.delete(key);
       }
 
-      const pending = inFlight.get(hostname);
+      const pending = inFlight.get(key);
       if (pending !== undefined) {
         log.debug("server", `Relay DNS lookup already running for ${hostname}, reusing it`);
         return pending;
       }
 
-      log.debug("server", `Resolving relay endpoint ${hostname} (A and AAAA)`);
-      const started = lookup(hostname);
-      inFlight.set(hostname, started);
+      log.debug(
+        "server",
+        `Resolving relay endpoint ${hostname} (A and AAAA, ${target.resolver} resolver)`,
+      );
+      const started = lookup(hostname, target);
+      inFlight.set(key, started);
       try {
         return await started;
       } finally {
-        if (inFlight.get(hostname) === started) {
-          inFlight.delete(hostname);
+        if (inFlight.get(key) === started) {
+          inFlight.delete(key);
         }
       }
     },
@@ -516,6 +641,23 @@ export function relayVerdictIsNoteworthy(comparison: RelayAddressComparison): bo
   return comparison.verdict !== "matches" && comparison.verdict !== "no-records";
 }
 
+/**
+ * Whether an empty family is worth blaming on the resolver: the lookup used the
+ * host's own resolver and came back with nothing, so the name may still have a
+ * record that only a configured resolver would return. It is the one case where
+ * "no IPv6" is not yet an answer about the name itself.
+ */
+export function relayResolutionSuggestsConfiguredResolver(
+  resolution: RelayResolution | undefined,
+  family: RelayAddressFamily,
+): boolean {
+  if (resolution?.resolver !== "system") {
+    return false;
+  }
+
+  return resolution[family].length === 0;
+}
+
 // MARK: View
 
 export interface RelayHostView {
@@ -626,8 +768,52 @@ export async function loadRelayResolution(
   }
 }
 
+/**
+ * Clears the resolver's cache and looks the host up again. An operator who has
+ * just changed the DNS servers uses this instead of waiting out the cache window
+ * — including the negative one a name without records leaves behind.
+ */
+export async function reResolveRelayHost(
+  resolver: RelayResolver,
+  host: string | undefined,
+): Promise<RelayResolution | undefined> {
+  resolver.clearCache();
+  return loadRelayResolution(resolver, host);
+}
+
+/**
+ * Reads the configured DNS servers, wired to Headplane's data directory by
+ * {@link configureSharedRelayDns}. Until then the shared resolver follows the
+ * system resolver, which is also what an empty list means.
+ */
+let sharedReadServers: (() => Promise<string[]>) | undefined;
+
 /** One process-wide cache, so both DERP cards share the same lookups. */
-const sharedResolver = createRelayResolver();
+const sharedResolver = createRelayResolver({
+  servers: () => (sharedReadServers === undefined ? [] : sharedReadServers()),
+});
+
+/**
+ * Points the shared resolver at the file that holds the configured DNS servers.
+ * Called once per process from the app context; the resolver re-reads the file
+ * per lookup, so a save applies without a restart.
+ */
+export function configureSharedRelayDns(readServers: () => Promise<string[]>): void {
+  sharedReadServers = readServers;
+  sharedResolver.clearCache();
+}
+
+/** Drops every cached answer, so the next lookup asks again. */
+export function clearSharedRelayDnsCache(): void {
+  sharedResolver.clearCache();
+}
+
+/** Clears the shared cache and looks the host up again; the re-resolve action. */
+export function reResolveSharedRelayHost(
+  host: string | undefined,
+): Promise<RelayResolution | undefined> {
+  return reResolveRelayHost(sharedResolver, host);
+}
 
 /**
  * Resolves the relay host of one page load against the shared cache. Never

@@ -27,7 +27,9 @@ function fakeHeadscale(health: boolean | (() => Promise<boolean>)): Headscale {
 function fakeLiveStore(load: () => Promise<unknown>): { store: LiveStore; calls: () => number } {
   let calls = 0;
   const store = {
-    get: async () => {
+    // The sampler reads through the non-notifying path, so the fake exposes the
+    // same method the service uses.
+    read: async () => {
       calls += 1;
       return { data: await load(), version: "1", fetchedAt: BASE };
     },

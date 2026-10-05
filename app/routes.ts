@@ -50,6 +50,9 @@ export default [
       route("/restrictions", "routes/settings/restrictions/overview.tsx"),
       route("/agent", "routes/settings/agent.tsx"),
       route("/headscale", "routes/settings/headscale/overview.tsx"),
+      // The relay DNS servers are Headplane state, not Headscale config, so the
+      // DERP settings card reads and writes them through their own route.
+      route("/headscale/relay-dns", "routes/settings/headscale/relay-dns.ts"),
       route("/system", "routes/settings/system/overview.tsx"),
       route("/audit", "routes/settings/audit/overview.tsx"),
       route("/snapshots", "routes/settings/snapshots/overview.tsx"),
