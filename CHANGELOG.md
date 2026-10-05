@@ -1,5 +1,9 @@
 # Next
 
+## Fixes
+
+- **Clicking a filter, a search box or a row no longer re-runs the page's data.** Writing the query string (filters, search, clearing them) made React Router revalidate the route's loader by default, even though the machines list never read the query string — so every click re-fetched the policy, the nodes and the users and re-rendered the whole table, which felt like the page refreshing itself. The machines list and machine detail now declare a `shouldRevalidate` that keeps view-only changes silent and still revalidates for real navigations and mutations.
+- The access-control page had the same problem in a different place: its **"Check policy"** button submits the parse-only check, and that submission revalidated the ACL loader even though nothing was stored. It is now exempt, while saving a policy still revalidates.
 # 0.21.5 (October 5, 2026)
 
 ## Changes

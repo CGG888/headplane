@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Info, SearchX, ServerOff, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { data, useSearchParams } from "react-router";
+import { data, useSearchParams, type ShouldRevalidateFunction } from "react-router";
 
 import Button from "~/components/button";
 import Code from "~/components/code";
@@ -38,6 +38,7 @@ import SelectCheckbox from "./components/select-checkbox";
 import NewMachine from "./dialogs/new";
 import { useMachineFilterParams } from "./hooks/use-machine-filter-params";
 import { machineAction } from "./machine-actions";
+import { shouldRevalidateMachines } from "./should-revalidate";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
@@ -104,6 +105,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export const action = machineAction;
+
+/**
+ * Filtering, sorting and searching write the query string but are applied in the
+ * browser, so a search-param-only navigation must not re-run this loader. See
+ * `./should-revalidate.ts`.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = shouldRevalidateMachines;
 
 type SortField = "name" | "ip" | "version" | "lastSeen";
 

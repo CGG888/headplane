@@ -11,7 +11,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { data } from "react-router";
+import { data, type ShouldRevalidateFunction } from "react-router";
 
 import Button from "~/components/button";
 import Chip from "~/components/chip";
@@ -51,6 +51,7 @@ import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
 import { machineAction } from "./machine-actions";
+import { shouldRevalidateMachines } from "./should-revalidate";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
@@ -149,6 +150,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 export const action = machineAction;
+
+/**
+ * A machine's detail page is keyed by `params.id`, never by the query string, so
+ * a search-param-only navigation must not re-run this loader. See
+ * `./should-revalidate.ts`; the relay "Re-resolve" fetcher is a submission and
+ * still revalidates.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = shouldRevalidateMachines;
 
 export default function Page({
   loaderData: {

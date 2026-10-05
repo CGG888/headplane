@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { isRouteErrorResponse, useFetcher, useRevalidator } from "react-router";
+import {
+  isRouteErrorResponse,
+  useFetcher,
+  useRevalidator,
+  type ShouldRevalidateFunction,
+} from "react-router";
 
 import Button from "~/components/button";
 import Card from "~/components/card";
@@ -40,6 +45,7 @@ import RulesEditor from "./components/rules-editor";
 import TagsGroupsEditor from "./components/tags-groups-editor";
 import TailnetPolicyEditor from "./components/tailnet-policy-editor";
 import { ACL_ERROR_KEYS } from "./error-keys";
+import { POLICY_CHECK_ACTION_ID, shouldRevalidateAcls } from "./should-revalidate";
 
 const LazyEditor = lazy(() =>
   import("./components/cm.client").then((m) => ({ default: m.Editor })),
@@ -50,6 +56,12 @@ const LazyDiffer = lazy(() =>
 
 export const loader = aclLoader;
 export const action = aclAction;
+
+/**
+ * The parse-only "Check" request stores nothing, so it must not re-run this
+ * loader. See `./should-revalidate.ts`.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = shouldRevalidateAcls;
 
 export default function Page({
   loaderData: { access, writable, policy, users, tagUsage },
@@ -306,7 +318,7 @@ export default function Page({
           // Ask Headscale to parse the policy without storing it, so a bad
           // policy can be fixed before Save ever touches the stored one.
           const formData = new FormData();
-          formData.append("action_id", "check_policy");
+          formData.append("action_id", POLICY_CHECK_ACTION_ID);
           formData.append("policy", codePolicy);
           setCheckedPolicy(codePolicy);
           checkFetcher.submit(formData, { method: "PATCH" });

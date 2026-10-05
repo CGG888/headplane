@@ -7,6 +7,7 @@ import { Capabilities } from "~/server/web/roles";
 import log from "~/utils/log";
 
 import type { Route } from "./+types/overview";
+import { POLICY_CHECK_ACTION_ID } from "./should-revalidate";
 
 /** Machine-readable failure codes the ACL editor knows how to localize. */
 export type AclActionErrorCode = "policyRejected";
@@ -124,7 +125,7 @@ export async function aclAction({ request, context }: Route.ActionArgs) {
 
   // The explicit validate request: report whatever Headscale says about the
   // policy without touching the stored one.
-  if (formData.get("action_id")?.toString() === "check_policy") {
+  if (formData.get("action_id")?.toString() === POLICY_CHECK_ACTION_ID) {
     const outcome = await runPolicyCheck(api.policy, policyData);
     if (outcome.kind === "rejected") {
       return data<AclActionData>(
