@@ -2419,6 +2419,12 @@ const zhHant = {
       viewIam: "你沒有檢視 IAM 設定的權限。",
       modifyIam: "你沒有修改 IAM 設定的權限。",
     },
+    staleShell: {
+      title: "頁面版本已過期",
+      body: "此頁面開啟期間 Headplane 已更新，瀏覽器仍在使用舊版頁面，因此無法載入它所需的檔案。重新載入即可取得目前版本。",
+      hint: "如果反覆出現此提示，請使用強制重新整理（Windows/Linux 為 Ctrl+Shift+R，macOS 為 Cmd+Shift+R）略過反向代理快取。",
+      reload: "重新載入",
+    },
   },
   notFound: {
     title: "找不到頁面",

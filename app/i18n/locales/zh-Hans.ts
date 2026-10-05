@@ -2415,6 +2415,12 @@ const zhHans = {
       viewIam: "你没有查看 IAM 设置的权限。",
       modifyIam: "你没有修改 IAM 设置的权限。",
     },
+    staleShell: {
+      title: "页面版本已过期",
+      body: "此页面打开期间 Headplane 已更新，浏览器仍在使用旧版页面，因此无法加载它所需的文件。重新加载即可获取当前版本。",
+      hint: "如果反复出现此提示，请使用硬刷新（Windows/Linux 为 Ctrl+Shift+R，macOS 为 Cmd+Shift+R）绕过反向代理缓存。",
+      reload: "重新加载",
+    },
   },
   notFound: {
     title: "页面不存在",

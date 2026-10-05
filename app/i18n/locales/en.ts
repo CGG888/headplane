@@ -2572,6 +2572,12 @@ const en = {
       viewIam: "You do not have permission to view IAM settings.",
       modifyIam: "You do not have permission to modify IAM settings.",
     },
+    staleShell: {
+      title: "Page is out of date",
+      body: "Headplane was updated while this page was open, so the browser is still using an older version of the page and cannot load the files it asks for. Reloading fetches the current version.",
+      hint: "If this page keeps coming back, do a hard refresh (Ctrl+Shift+R, or Cmd+Shift+R on macOS) to bypass your reverse proxy cache.",
+      reload: "Reload page",
+    },
   },
   notFound: {
     title: "Page Not Found",

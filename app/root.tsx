@@ -15,6 +15,7 @@ import ToastProvider from "~/utils/toast-provider";
 
 import type { Route } from "./+types/root";
 import { ErrorBanner } from "./components/error-banner";
+import StaleShellGuard from "./components/stale-shell-guard";
 
 import "@fontsource-variable/inter/opsz.css";
 import "./tailwind.css";
@@ -67,7 +68,7 @@ export function Layout({ children }: { readonly children: React.ReactNode }) {
             <link href={`${__PREFIX__}/favicon.ico`} rel="icon" />
           </head>
           <body className="w-full overflow-x-hidden overscroll-none dark:bg-mist-900 dark:text-mist-50">
-            {children}
+            <StaleShellGuard>{children}</StaleShellGuard>
             <ToastProvider />
             <ScrollRestoration />
             <Scripts />

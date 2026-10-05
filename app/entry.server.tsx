@@ -36,6 +36,14 @@ export default function handleRequest(
 
           responseHeaders.set("Content-Type", "text/html");
 
+          // The document shell embeds hashed asset URLs. A reverse proxy that
+          // caches it keeps handing out chunk names the current build no
+          // longer has, so React Router reloads into the same stale document
+          // forever (see `app/utils/chunk-reload-guard.ts`). Hashed assets are
+          // not affected — the static handler serves those with their own
+          // long-lived immutable caching.
+          responseHeaders.set("Cache-Control", "no-store");
+
           resolve(
             new Response(stream, {
               headers: responseHeaders,
