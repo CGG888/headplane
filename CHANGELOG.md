@@ -1,9 +1,14 @@
 # Next
 
+# 0.21.9 (October 5, 2026)
+
 ## Changes
 
 - **The relay address block is shorter and smarter.** It now shows one client connect address (host and port together) with a single IPv4 line and a single IPv6 line, and each family shows the address configured in `derp.server` when you have set one, otherwise the address that was actually resolved for the relay hostname. The explanatory captions, the separate resolved-values section and the rows that only said "not configured" are gone; the verdicts, the resolver pill, the re-resolve button and the relay usage from the agent stay.
 - **The machines list got a visual pass.** The name is the clear primary line with the hostname and ID quieter underneath, tags are uniform chips, IPv4 and IPv6 use fixed leading and tabular numerals so the block no longer jitters, and every column shares one row rhythm without unexpected wrapping. Row dividers are lighter, hovering or focusing a row is obvious and keyboard-visible, the checkbox keeps its own focus ring without stealing the row click, the filter controls are all one height matching the search field with a clear active state and an explicit Clear filters button, and the row's SSH shortcut floats instead of stretching the row.
+
+---
+
 # 0.21.8 (October 5, 2026)
 
 ## Fixes
