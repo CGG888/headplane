@@ -69,6 +69,44 @@ export function createLiveStore(resources: ResourceDefinition<unknown>[]): LiveS
   let storedApiClient: HeadscaleClient | undefined;
   let versionCounter = 0;
 
+  /**
+   * Fields that move on their own between polls. Headscale refreshes these for
+   * every node on every poll, so comparing them made "unchanged" data look
+   * changed and fired a `changed` event at every open page every few seconds —
+   * which revalidated the whole UI and made it unusable. They are ignored for
+   * change detection only; the stored snapshot keeps the real payload.
+   */
+  const VOLATILE_KEYS = new Set([
+    "last_seen",
+    "lastSeen",
+    "last_updated",
+    "lastUpdated",
+    "updated_at",
+    "updatedAt",
+    "fetchedAt",
+  ]);
+
+  function stableProjection(value: unknown, depth = 0): unknown {
+    if (depth > 8 || value === null || typeof value !== "object") {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => stableProjection(entry, depth + 1));
+    }
+
+    const projected: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (VOLATILE_KEYS.has(key)) {
+        continue;
+      }
+
+      projected[key] = stableProjection(entry, depth + 1);
+    }
+
+    return projected;
+  }
+
   function notifyListeners(resourceKey: string, version: string) {
     for (const listener of listeners) {
       listener(resourceKey, version);
@@ -80,7 +118,7 @@ export function createLiveStore(resources: ResourceDefinition<unknown>[]): LiveS
     apiClient: HeadscaleClient,
   ): Promise<void> {
     const data = await resource.fetch(apiClient);
-    const json = JSON.stringify(data);
+    const json = JSON.stringify(stableProjection(data));
     const previousJson = serializedCache.get(resource.key);
 
     if (previousJson === json) {

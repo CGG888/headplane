@@ -1,5 +1,9 @@
-# Next
+# 0.21.3 (October 5, 2026)
 
+## Fixes
+
+- **Fixed: pages reloaded themselves constantly.** The live store compared the raw node payload between polls, and Headscale refreshes fields such as `last_seen` on every poll — so "unchanged" data looked changed, a change event was sent to every open page every few seconds, and the interface revalidated out from under you. Change detection now compares a stable projection that ignores the fields which move on their own, so a reload only happens when something a person can see actually changes. The stored snapshot still holds the full payload.
+- The page also refuses to revalidate while you are typing in a field or choosing from a dropdown, so a background update can no longer drop your focus or your input.
 # 0.21.2 (October 5, 2026)
 
 ## Changes

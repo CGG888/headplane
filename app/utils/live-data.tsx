@@ -33,6 +33,16 @@ export function LiveDataProvider({ children }: LiveDataProps) {
   const backoffRef = useRef(1000);
 
   const revalidateIfIdle = useCallback(() => {
+    // Never reload the page out from under someone who is typing or choosing
+    // something: a revalidation would drop their focus and undo their input.
+    const active = typeof document === "undefined" ? null : document.activeElement;
+    if (
+      active &&
+      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")
+    ) {
+      return;
+    }
+
     if (revalidatorRef.current.state === "idle") {
       revalidatorRef.current.revalidate();
     }
