@@ -91,7 +91,7 @@ const en = {
       enabled: "Enabled",
       disabled: "Disabled",
       configured: "Configured",
-      derived: "Derived",
+      derived: "From config and agent reports",
       reachable: "Reachable",
       unreachable: "Unreachable",
       healthy: "Healthy",
@@ -136,7 +136,7 @@ const en = {
       region: "Region",
       regionValue: "#{id} · {code} · {name}",
       relaySource: "Relay sources",
-      relaySourceNote: "Derived from derp.server.enabled and derp.urls.",
+      relaySourceNote: "Based on derp.server.enabled and derp.urls.",
       relaySourceEmbeddedOnly: "Embedded server only",
       relaySourceEmbeddedAndMap: "Embedded server and DERP map",
       relaySourceMapOnly: "DERP map only",
@@ -301,6 +301,7 @@ const en = {
       sortByIp: "Sort by IP address",
       sortByVersion: "Sort by version",
       sortByLastSeen: "Sort by last seen",
+      sort: "Sort",
       magicDnsTooltip:
         "Since MagicDNS is enabled, you can access devices based on their name and also at {code}",
       actions: "Actions",
@@ -604,6 +605,12 @@ const en = {
         "This machine is expired and will not be able to connect to the network. Re-authenticate with Tailscale on the machine to re-enable it.",
       noExpiryTooltip:
         "This machine has key expiry disabled and will never need to re-authenticate.",
+      expiringSoon: {
+        one: "Expires in {count} day",
+        other: "Expires in {count} days",
+      },
+      expiringSoonTooltip:
+        "This machine’s key expires soon. Re-authenticate or disable key expiry before then to keep it connected.",
       tailscaleSsh: "Tailscale SSH",
       tailscaleSshTooltip:
         "This machine advertises Tailscale SSH, which allows you to authenticate SSH credentials using your Tailscale account and via the Headplane web UI.",
@@ -1790,7 +1797,7 @@ const en = {
         publicPortTitle: "Public relay port",
         publicPortValue: "Clients reach this relay at {endpoint}.",
         publicPortUnknown:
-          "server_url is missing or cannot be parsed, so the public relay port cannot be derived.",
+          "server_url is missing or cannot be parsed, so the public relay port cannot be determined.",
         publicPortNote:
           "Tailscale's documentation recommends 443, because clients assume that port in some situations. Any other port works as long as server_url names it.",
         proxyTitle: "Behind a reverse proxy",

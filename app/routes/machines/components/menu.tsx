@@ -20,7 +20,10 @@ interface MenuProps {
   node: PopulatedNode;
   users: User[];
   magic?: string;
+  /** The settings-style button used on the machine detail page. */
   isFullButton?: boolean;
+  /** The compact, always-visible pair of buttons used by the mobile cards. */
+  isCard?: boolean;
   isDisabled?: boolean;
   existingTags?: string[];
   policyTags?: string[];
@@ -35,6 +38,7 @@ export default function MachineMenu({
   magic,
   users,
   isFullButton,
+  isCard,
   isDisabled,
   existingTags,
   policyTags,
@@ -46,6 +50,16 @@ export default function MachineMenu({
   const [modal, setModal] = useState<Modal>(null);
   const supportsTailscaleSSH = node.hostInfo?.sshHostKeys && node.hostInfo?.sshHostKeys.length > 0;
 
+  // JS is needed here so the SSH session opens in a window: an `href` can only
+  // open a new tab.
+  const openSsh = () => {
+    window.open(
+      `${__PREFIX__}/ssh/${node.givenName}`,
+      "_blank",
+      "noopener,noreferrer,width=800,height=600",
+    );
+  };
+
   return (
     <div
       className={cn(
@@ -53,6 +67,7 @@ export default function MachineMenu({
         // In the list the cell is narrow, so the quick actions anchor to it
         // instead of padding themselves out of the column.
         isFullButton ? "px-4" : "relative px-0",
+        isCard && "relative gap-x-1 px-0",
       )}
     >
       {modal === "remove" && (
@@ -114,22 +129,20 @@ export default function MachineMenu({
 
       {supportsTailscaleSSH ? (
         isFullButton ? (
-          <Button
-            className="flex items-center gap-x-2"
-            onClick={() => {
-              // We need to use JS to open the SSH URL
-              // in a new WINDOW since href can only
-              // do a new TAB.
-              window.open(
-                `${__PREFIX__}/ssh/${node.givenName}`,
-                "_blank",
-                "noopener,noreferrer,width=800,height=600",
-              );
-            }}
-            variant="heavy"
-          >
+          <Button className="flex items-center gap-x-2" onClick={openSsh} variant="heavy">
             <SquareTerminal className="h-5" />
             <p>{t("machines.menu.ssh")}</p>
+          </Button>
+        ) : isCard ? (
+          // A card is a touch surface: there is no hover to reveal a floating
+          // button with, so the SSH action sits next to the kebab as a real one.
+          <Button
+            aria-label={t("machines.menu.ssh")}
+            className="rounded-full px-2 py-1.5"
+            onClick={openSsh}
+            title={t("machines.menu.ssh")}
+          >
+            <SquareTerminal className="h-4 w-4" />
           </Button>
         ) : (
           // The list row is too narrow to hold this button in flow: floating it
@@ -146,13 +159,7 @@ export default function MachineMenu({
               "focus-visible:pointer-events-auto focus-visible:opacity-100",
             )}
             variant="light"
-            onClick={() => {
-              window.open(
-                `${__PREFIX__}/ssh/${node.givenName}`,
-                "_blank",
-                "noopener,noreferrer,width=800,height=600",
-              );
-            }}
+            onClick={openSsh}
           >
             {t("machines.menu.ssh")}
           </Button>
@@ -160,11 +167,25 @@ export default function MachineMenu({
       ) : undefined}
       <Menu disabled={isDisabled}>
         <MenuTrigger
-          className={
+          className={cn(
             isFullButton
               ? "gap-x-2 rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50"
-              : "w-10 rounded-full bg-transparent p-1 text-mist-500 transition-colors hover:bg-mist-100 hover:text-mist-700 dark:text-mist-400 dark:hover:bg-mist-800 dark:hover:text-mist-200"
-          }
+              : "w-10 rounded-full bg-transparent p-1 text-mist-500 transition-colors hover:bg-mist-100 hover:text-mist-700 dark:text-mist-400 dark:hover:bg-mist-800 dark:hover:text-mist-200",
+            isCard &&
+              "w-9 border border-mist-200 bg-white p-1.5 hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50",
+            // Row mode only: the kebab stays out of the way until its row is
+            // hovered or focused, and it keeps its box so nothing shifts. A
+            // coarse pointer never hovers, so it always sees the button.
+            !isFullButton &&
+              !isCard &&
+              cn(
+                "pointer-events-none opacity-0",
+                "group-hover:pointer-events-auto group-hover:opacity-100",
+                "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                "focus-visible:pointer-events-auto focus-visible:opacity-100",
+                "pointer-coarse:pointer-events-auto pointer-coarse:opacity-100",
+              ),
+          )}
         >
           {isFullButton ? (
             <>

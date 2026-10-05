@@ -88,7 +88,7 @@ const zhHant = {
       enabled: "已啟用",
       disabled: "未啟用",
       configured: "已設定",
-      derived: "推導值",
+      derived: "來自設定與 Agent 回報",
       reachable: "可連線",
       unreachable: "無法連線",
       healthy: "健康",
@@ -133,7 +133,7 @@ const zhHant = {
       region: "區域",
       regionValue: "#{id} · {code} · {name}",
       relaySource: "中繼來源",
-      relaySourceNote: "由 derp.server.enabled 與 derp.urls 推導。",
+      relaySourceNote: "依據 derp.server.enabled 與 derp.urls 判斷。",
       relaySourceEmbeddedOnly: "僅內嵌伺服器",
       relaySourceEmbeddedAndMap: "內嵌伺服器與 DERP 對應表",
       relaySourceMapOnly: "僅 DERP 對應表",
@@ -295,6 +295,7 @@ const zhHant = {
       sortByIp: "依 IP 位址排序",
       sortByVersion: "依版本排序",
       sortByLastSeen: "依最後上線時間排序",
+      sort: "排序",
       magicDnsTooltip: "由於已啟用 MagicDNS，你可以透過裝置名稱存取，也可以使用 {code}",
       actions: "操作",
       empty: "沒有符合目前篩選條件的機器",
@@ -572,6 +573,11 @@ const zhHant = {
       expiredTooltip:
         "此機器已過期，將無法連線至網路。請在該機器上使用 Tailscale 重新驗證以重新啟用。",
       noExpiryTooltip: "此機器已停用金鑰到期，無需再次驗證。",
+      expiringSoon: {
+        one: "還有 {count} 天到期",
+        other: "還有 {count} 天到期",
+      },
+      expiringSoonTooltip: "此機器的金鑰即將到期。請在此之前重新驗證或停用金鑰到期，以保持連線。",
       tailscaleSsh: "Tailscale SSH",
       tailscaleSshTooltip:
         "此機器發佈了 Tailscale SSH，可以使用你的 Tailscale 帳號以及 Headplane 網頁介面進行 SSH 驗證。",
@@ -1685,7 +1691,7 @@ const zhHant = {
         relaySourceNone: "尚未設定任何 DERP 地圖來源",
         publicPortTitle: "公開中繼連接埠",
         publicPortValue: "用戶端透過 {endpoint} 存取這個中繼。",
-        publicPortUnknown: "未設定 server_url，或無法解析它，因此無法推算公開中繼連接埠。",
+        publicPortUnknown: "未設定 server_url，或無法解析它，因此無法確定公開中繼連接埠。",
         publicPortNote:
           "Tailscale 官方文件建議使用 443，因為用戶端在某些情況下會直接假定該連接埠；只要 server_url 明確寫出連接埠，其他連接埠同樣可用。",
         proxyTitle: "置於反向代理之後",

@@ -14,6 +14,15 @@ import BulkTags from "../dialogs/bulk-tags";
 
 type BulkModal = "tags" | "expire" | "move" | "remove" | null;
 
+/**
+ * The grouped actions read as one segmented control: no borders of their own,
+ * only a hover fill, sitting together on a shared neutral track.
+ */
+const GROUPED_BUTTON = cn(
+  "border-transparent bg-transparent px-2.5 py-1.5 shadow-none",
+  "hover:bg-white dark:border-transparent dark:bg-transparent dark:hover:bg-mist-700/60",
+);
+
 interface BulkActionsProps {
   nodes: PopulatedNode[];
   users: User[];
@@ -48,41 +57,53 @@ export default function BulkActions({
 
   return (
     <>
+      {/* A deliberate action surface: elevated, sticky, with the count as its
+          anchor and the three reversible actions grouped as one control. It is
+          left without a z-index on purpose — portalled menus must stay above. */}
       <div
         aria-label={t("machines.bulk.actionsLabel")}
         className={cn(
-          "mb-3 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl border px-3 py-2",
-          "border-indigo-200/80 bg-indigo-50/70 shadow-surface",
-          "dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:shadow-none",
+          "sticky top-2 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-3 py-2.5",
+          "border border-indigo-200/90 bg-white shadow-overlay ring-1 ring-indigo-500/10",
+          "dark:border-indigo-500/30 dark:bg-mist-900 dark:shadow-none dark:ring-0",
         )}
         role="toolbar"
       >
         {/* The count is the bar's anchor: it says what the buttons act on. */}
-        <span className="flex items-center gap-x-2 pr-1 text-sm font-medium">
+        <span className="flex items-center gap-x-2.5">
           <span
             className={cn(
-              "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums",
+              "flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 tabular-nums",
               "bg-indigo-600 text-xs font-semibold text-white",
               "dark:bg-indigo-500",
             )}
           >
             {nodes.length}
           </span>
-          <span className="whitespace-nowrap">
+          <span className="text-sm font-medium whitespace-nowrap">
             {t("machines.bulk.selected", { count: nodes.length })}
           </span>
         </span>
-        <span aria-hidden="true" className="h-5 w-px bg-indigo-200 dark:bg-indigo-500/30" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => setModal("tags")}>
+        <span
+          aria-hidden="true"
+          className="hidden h-6 w-px bg-mist-200 sm:block dark:bg-mist-700"
+        />
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-0.5 rounded-lg p-1",
+            "bg-mist-100/80 dark:bg-mist-800/60",
+          )}
+        >
+          <Button className={GROUPED_BUTTON} onClick={() => setModal("tags")}>
             <Tags className="h-4 w-4 shrink-0" />
             {t("machines.bulk.setTags")}
           </Button>
-          <Button onClick={() => setModal("expire")}>
+          <Button className={GROUPED_BUTTON} onClick={() => setModal("expire")}>
             <CalendarClock className="h-4 w-4 shrink-0" />
             {t("machines.bulk.setExpiry")}
           </Button>
           <Button
+            className={GROUPED_BUTTON}
             disabled={!supportsNodeOwnerChange}
             onClick={() => setModal("move")}
             title={supportsNodeOwnerChange ? undefined : t("machines.bulk.errors.ownerUnsupported")}

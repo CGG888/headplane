@@ -1,4 +1,13 @@
-import { ChevronDown, ChevronUp, Info, SearchX, ServerOff, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
+  Info,
+  SearchX,
+  ServerOff,
+  X,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, useSearchParams, type ShouldRevalidateFunction } from "react-router";
@@ -7,6 +16,7 @@ import Button from "~/components/button";
 import Code from "~/components/code";
 import Input from "~/components/input";
 import Link from "~/components/link";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/components/menu";
 import PageError from "~/components/page-error";
 import Tooltip from "~/components/tooltip";
 import { useI18n } from "~/i18n/provider";
@@ -33,6 +43,7 @@ import {
 import type { Route } from "./+types/overview";
 import BulkActions from "./components/bulk-actions";
 import { MachineFilters } from "./components/machine-filters";
+import MachineListCard from "./components/machine-list-card";
 import MachineRow from "./components/machine-row";
 import SelectCheckbox from "./components/select-checkbox";
 import NewMachine from "./dialogs/new";
@@ -129,12 +140,27 @@ const ROUTE_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
 };
 
 /**
- * Every header cell shares one divider so the sticky row keeps its border. The
- * background has to live on the cell itself: the row group scrolls away from a
- * stuck cell. `z-0` keeps row menus (ported to the body) painted above it.
+ * Every header cell carries the band's background through `bg-inherit` and one
+ * shared divider, so the header row can stick inside the scrolling list without
+ * flashing a seam. The background has to come from the row: `border-separate`
+ * lets the header box scroll away from its cells.
+ *
+ * `z-20` outranks the pinned identity cells (`z-10`) so rows slide *under* the
+ * stuck header. Both are contained by the list surface's `isolate`, which keeps
+ * portalled menus above the whole table.
  */
-const HEADER_CELL =
-  "sticky top-0 z-0 border-b border-mist-200 bg-white pb-2 text-left text-xs font-bold uppercase text-mist-500 dark:border-mist-800 dark:bg-mist-900 dark:text-mist-400";
+const HEADER_CELL = cn(
+  "sticky top-0 z-20 border-b border-mist-200 bg-inherit py-2 text-left",
+  "text-[0.6875rem] font-semibold tracking-wide uppercase text-mist-500",
+  "dark:border-mist-800 dark:text-mist-400",
+);
+
+/**
+ * The one control style the mobile toolbar and the filter row share, so both
+ * read as the same kind of object.
+ */
+const CONTROL =
+  "inline-flex items-center gap-x-1.5 rounded-md border px-3 py-2 text-sm leading-5 font-medium";
 
 interface SortHeaderProps {
   field: SortField;
@@ -143,6 +169,7 @@ interface SortHeaderProps {
   sortField: SortField;
   sortDirection: "asc" | "desc";
   onSort: (field: SortField) => void;
+  align?: "left" | "center" | "right";
   className?: string;
   children?: ReactNode;
 }
@@ -155,6 +182,7 @@ function SortHeader({
   sortField,
   sortDirection,
   onSort,
+  align = "left",
   className,
   children,
 }: SortHeaderProps) {
@@ -166,13 +194,23 @@ function SortHeader({
       className={cn(HEADER_CELL, className)}
       scope="col"
     >
-      <div className="flex items-center gap-x-1">
+      <div
+        className={cn(
+          "flex items-center gap-x-1",
+          align === "center" && "justify-center",
+          align === "right" && "justify-end",
+        )}
+      >
         <button
           aria-label={sortLabel}
           className={cn(
-            "flex cursor-pointer items-center gap-x-1",
+            "group/sort -mx-1 flex cursor-pointer items-center gap-x-1 rounded-md px-1 py-0.5",
+            "transition-colors duration-100",
+            // Hovering a sortable column shows the direction control it would
+            // use; the active column keeps it, in indigo, at all times.
+            "hover:bg-mist-200/70 dark:hover:bg-mist-800/80",
             isActive
-              ? "text-mist-900 dark:text-mist-100"
+              ? "text-indigo-600 dark:text-indigo-400"
               : "hover:text-mist-900 dark:hover:text-mist-100",
           )}
           onClick={() => onSort(field)}
@@ -185,7 +223,15 @@ function SortHeader({
             ) : (
               <ChevronDown className="h-3 w-3 stroke-[2.5]" />
             )
-          ) : undefined}
+          ) : (
+            <ChevronsUpDown
+              className={cn(
+                "h-3 w-3 opacity-0 transition-opacity",
+                "group-hover/sort:opacity-60 group-focus-visible/sort:opacity-60",
+                "hover:opacity-60",
+              )}
+            />
+          )}
         </button>
         {children}
       </div>
@@ -409,6 +455,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
    */
   const hasRows = filteredAndSortedNodes.length > 0;
 
+  // The table's headers are the sort control on desktop; the card list needs
+  // its own, built from the same state so both stay in sync.
+  const sortColumns: Array<{ field: SortField; label: string }> = [
+    { field: "name", label: t("machines.list.columnName") },
+    { field: "ip", label: t("machines.list.columnAddresses") },
+    ...(hasAgent ? [{ field: "version" as const, label: t("machines.list.columnVersion") }] : []),
+    { field: "lastSeen", label: t("machines.list.columnLastSeen") },
+  ];
+
+  const allVisibleSelected =
+    selectedNodes.length > 0 && selectedNodes.length === filteredAndSortedNodes.length;
+  const someVisibleSelected =
+    selectedNodes.length > 0 && selectedNodes.length < filteredAndSortedNodes.length;
+
   return (
     <>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -483,98 +543,67 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : undefined}
 
       {hasRows ? (
-        // No scroll container: the sticky header has to stick to the page, so
-        // every column truncates instead of forcing the table wider.
-        <table className="w-full table-fixed border-separate border-spacing-0 text-left">
-          <thead>
-            <tr>
-              <th className={cn(HEADER_CELL, "w-10 pl-2")} scope="col">
-                <SelectCheckbox
-                  aria-label={t("machines.bulk.selectAll")}
-                  checked={
-                    selectedNodes.length > 0 &&
-                    selectedNodes.length === filteredAndSortedNodes.length
-                  }
-                  disabled={!loaderData.writable || filteredAndSortedNodes.length === 0}
-                  indeterminate={
-                    selectedNodes.length > 0 && selectedNodes.length < filteredAndSortedNodes.length
-                  }
-                  onChange={toggleAllVisible}
-                />
-              </th>
-              <SortHeader
-                field="name"
-                label={t("machines.list.columnName")}
-                onSort={handleSort}
-                sortDirection={sortDirection}
-                sortField={sortField}
-                sortLabel={t("machines.list.sortByName")}
+        <>
+          {/* Below `md` a table can only fit by hiding the columns that explain
+              the machine, so every machine becomes a card instead. */}
+          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:hidden">
+            <label className="flex min-w-0 items-center gap-x-2 text-xs font-medium text-mist-600 dark:text-mist-400">
+              <SelectCheckbox
+                aria-label={t("machines.bulk.selectAll")}
+                checked={allVisibleSelected}
+                disabled={!loaderData.writable || filteredAndSortedNodes.length === 0}
+                indeterminate={someVisibleSelected}
+                onChange={toggleAllVisible}
               />
-              <th className={cn(HEADER_CELL, "hidden w-36 md:table-cell")} scope="col">
-                {t("machines.common.ownerLabel")}
-              </th>
-              <SortHeader
-                className="hidden w-40 lg:table-cell"
-                field="ip"
-                label={t("machines.list.columnAddresses")}
-                onSort={handleSort}
-                sortDirection={sortDirection}
-                sortField={sortField}
-                sortLabel={t("machines.list.sortByIp")}
-              >
-                {loaderData.magic ? (
-                  <Tooltip
-                    content={
-                      <span className="font-normal">
-                        {tr("machines.list.magicDnsTooltip", {
-                          code: (
-                            <Code>
-                              [name].
-                              {loaderData.magic}
-                            </Code>
-                          ),
-                        })}
+              <span className="hidden truncate sm:inline">{t("machines.bulk.selectAll")}</span>
+            </label>
+            <div className="flex items-center gap-x-2">
+              <span className="text-xs font-medium text-mist-500 dark:text-mist-400">
+                {t("machines.list.sort")}
+              </span>
+              <Menu>
+                <MenuTrigger
+                  className={cn(
+                    CONTROL,
+                    "px-2.5 py-1.5",
+                    "border-mist-200 bg-white text-mist-700",
+                    "hover:border-mist-300 hover:bg-mist-50",
+                    "dark:border-mist-800 dark:bg-mist-900 dark:text-mist-300",
+                    "dark:hover:border-mist-700 dark:hover:bg-mist-800/60",
+                  )}
+                >
+                  <span className="truncate">
+                    {sortColumns.find((column) => column.field === sortField)?.label}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-mist-400 dark:text-mist-500" />
+                </MenuTrigger>
+                <MenuContent align="end">
+                  {sortColumns.map((column) => (
+                    <MenuItem key={column.field} onClick={() => handleSort(column.field)}>
+                      <span className="flex w-full items-center justify-between gap-x-4">
+                        <span
+                          className={cn(
+                            column.field === sortField &&
+                              "font-medium text-indigo-600 dark:text-indigo-400",
+                          )}
+                        >
+                          {column.label}
+                        </span>
+                        {column.field === sortField ? (
+                          <Check className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                        ) : undefined}
                       </span>
-                    }
-                  >
-                    <Info className="h-4 w-4" />
-                  </Tooltip>
-                ) : undefined}
-              </SortHeader>
-              {/* We only want to show the version column if there are agents */}
-              {hasAgent ? (
-                <SortHeader
-                  className="hidden w-24 xl:table-cell"
-                  field="version"
-                  label={t("machines.list.columnVersion")}
-                  onSort={handleSort}
-                  sortDirection={sortDirection}
-                  sortField={sortField}
-                  sortLabel={t("machines.list.sortByVersion")}
-                />
-              ) : undefined}
-              <th className={cn(HEADER_CELL, "w-28 whitespace-nowrap")} scope="col">
-                {t("machines.filters.status")}
-              </th>
-              <SortHeader
-                className="hidden w-40 sm:table-cell"
-                field="lastSeen"
-                label={t("machines.list.columnLastSeen")}
-                onSort={handleSort}
-                sortDirection={sortDirection}
-                sortField={sortField}
-                sortLabel={t("machines.list.sortByLastSeen")}
-              />
-              <th className={cn(HEADER_CELL, "w-12 pr-1")} scope="col">
-                <span className="sr-only">{t("machines.list.actions")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2.5 md:hidden">
             {filteredAndSortedNodes.map((node) => (
-              <MachineRow
+              <MachineListCard
                 existingTags={loaderData.existingTags}
-                policyTags={loaderData.policyTags}
                 isAgent={hasAgent ? node.nodeKey === loaderData.agent?.nodeKey : undefined}
                 isDisabled={
                   loaderData.writable
@@ -587,13 +616,133 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 magic={loaderData.magic}
                 node={node}
                 onSelectChange={(selected) => toggleSelection(node.id, selected)}
-                users={loaderData.users}
-                supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
+                policyTags={loaderData.policyTags}
                 supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}
+                supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
+                users={loaderData.users}
               />
             ))}
-          </tbody>
-        </table>
+          </div>
+
+          {/* `md` and up keeps the dense table, inside one rounded surface that
+              scrolls on its own: the header sticks to the top of that surface
+              and the identity columns stay pinned to its left edge, so a narrow
+              window never loses the machine it is looking at. */}
+          <div
+            className={cn(
+              "isolate hidden max-h-[70vh] overflow-auto rounded-xl border md:block",
+              "border-mist-200 bg-white shadow-surface",
+              "dark:border-mist-800 dark:bg-mist-900 dark:shadow-none",
+            )}
+          >
+            <table className="w-full table-fixed border-separate border-spacing-0 text-left">
+              <thead>
+                <tr className="bg-mist-50 dark:bg-mist-950">
+                  <th className={cn(HEADER_CELL, "sticky left-0 z-20 w-10 pl-2")} scope="col">
+                    <SelectCheckbox
+                      aria-label={t("machines.bulk.selectAll")}
+                      checked={allVisibleSelected}
+                      disabled={!loaderData.writable || filteredAndSortedNodes.length === 0}
+                      indeterminate={someVisibleSelected}
+                      onChange={toggleAllVisible}
+                    />
+                  </th>
+                  <SortHeader
+                    className="sticky left-10 z-20 w-64"
+                    field="name"
+                    label={t("machines.list.columnName")}
+                    onSort={handleSort}
+                    sortDirection={sortDirection}
+                    sortField={sortField}
+                    sortLabel={t("machines.list.sortByName")}
+                  />
+                  <th className={cn(HEADER_CELL, "w-32")} scope="col">
+                    {t("machines.common.ownerLabel")}
+                  </th>
+                  <SortHeader
+                    className="hidden w-52 md:table-cell"
+                    field="ip"
+                    label={t("machines.list.columnAddresses")}
+                    onSort={handleSort}
+                    sortDirection={sortDirection}
+                    sortField={sortField}
+                    sortLabel={t("machines.list.sortByIp")}
+                  >
+                    {loaderData.magic ? (
+                      <Tooltip
+                        content={
+                          <span className="font-normal">
+                            {tr("machines.list.magicDnsTooltip", {
+                              code: (
+                                <Code>
+                                  [name].
+                                  {loaderData.magic}
+                                </Code>
+                              ),
+                            })}
+                          </span>
+                        }
+                      >
+                        <Info className="h-4 w-4" />
+                      </Tooltip>
+                    ) : undefined}
+                  </SortHeader>
+                  {/* We only want to show the version column if there are agents */}
+                  {hasAgent ? (
+                    <SortHeader
+                      align="center"
+                      className="hidden w-24 xl:table-cell"
+                      field="version"
+                      label={t("machines.list.columnVersion")}
+                      onSort={handleSort}
+                      sortDirection={sortDirection}
+                      sortField={sortField}
+                      sortLabel={t("machines.list.sortByVersion")}
+                    />
+                  ) : undefined}
+                  <th className={cn(HEADER_CELL, "w-28 whitespace-nowrap")} scope="col">
+                    {t("machines.filters.status")}
+                  </th>
+                  <SortHeader
+                    className="w-36"
+                    field="lastSeen"
+                    label={t("machines.list.columnLastSeen")}
+                    onSort={handleSort}
+                    sortDirection={sortDirection}
+                    sortField={sortField}
+                    sortLabel={t("machines.list.sortByLastSeen")}
+                  />
+                  <th className={cn(HEADER_CELL, "w-12 pr-2 text-right")} scope="col">
+                    <span className="sr-only">{t("machines.list.actions")}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAndSortedNodes.map((node) => (
+                  <MachineRow
+                    existingTags={loaderData.existingTags}
+                    policyTags={loaderData.policyTags}
+                    isAgent={hasAgent ? node.nodeKey === loaderData.agent?.nodeKey : undefined}
+                    isDisabled={
+                      loaderData.writable
+                        ? false // If the user has write permissions, they can edit all machines
+                        : node.user?.id !== loaderData.headscaleUserId
+                    }
+                    isSelected={selectedIds.has(node.id)}
+                    isSelectionDisabled={!loaderData.writable}
+                    key={node.id}
+                    magic={loaderData.magic}
+                    node={node}
+                    onSelectChange={(selected) => toggleSelection(node.id, selected)}
+                    users={loaderData.users}
+                    supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
+                    supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <MachineEmptyState
           isFiltered={Boolean(searchQuery) || hasActiveFilters}

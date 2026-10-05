@@ -1,9 +1,4 @@
-import { ChevronDown, Copy } from "lucide-react";
-import { useMemo } from "react";
-
-import Chip from "~/components/chip";
 import Link from "~/components/link";
-import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/components/menu";
 import { ExitNodeTag } from "~/components/tags/ExitNode";
 import { ExpiryTag } from "~/components/tags/Expiry";
 import { HeadplaneAgentTag } from "~/components/tags/HeadplaneAgent";
@@ -12,18 +7,19 @@ import { TailscaleSSHTag } from "~/components/tags/TailscaleSSH";
 import { useI18n } from "~/i18n/provider";
 import type { User } from "~/types";
 import cn from "~/utils/cn";
-import { copyToClipboard } from "~/utils/copy";
 import * as hinfo from "~/utils/host-info";
 import { isNoExpiry, type PopulatedNode } from "~/utils/node-info";
 import { formatTimeDelta } from "~/utils/time";
-import toast from "~/utils/toast";
 import { getUserDisplayName } from "~/utils/user";
 
+import CopyValue from "./copy-value";
 import MachineStatus from "./machine-status";
+import { AclTags } from "./machine-tags";
 import MenuOptions from "./menu";
+import OSTile from "./os-tile";
 import SelectCheckbox from "./select-checkbox";
 
-interface Props {
+export interface MachineRowProps {
   node: PopulatedNode;
   users: User[];
   isAgent?: boolean;
@@ -43,10 +39,27 @@ interface Props {
  * One hairline per cell is what makes the row rule continuous, so it stays
  * low-contrast instead of reading as a box around every cell.
  */
-const CELL = "border-b border-mist-100 py-3 align-middle dark:border-mist-800/80";
+const CELL = "border-b border-mist-100 py-2.5 align-middle dark:border-mist-800/80";
 
-/** A cell that must not wrap: it truncates (or is short by construction). */
-const CELL_TRUNCATE = "min-w-0 truncate";
+/**
+ * The two identity columns stay pinned while the rest of the table scrolls.
+ * `bg-inherit` is what makes that work: the row owns one opaque background per
+ * state (and inherits its hover tint), so a pinned cell can never let the cells
+ * sliding underneath show through it.
+ */
+const STICKY_CELL = "sticky z-10 bg-inherit";
+
+/** A key this close to expiry is worth flagging before it strands a machine. */
+const EXPIRING_SOON_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** True while a machine has a real key expiry inside the warning window. */
+export function expiresSoon(node: PopulatedNode) {
+  if (node.expired || isNoExpiry(node.expiry)) {
+    return false;
+  }
+
+  return new Date(node.expiry!).getTime() - Date.now() <= EXPIRING_SOON_MS;
+}
 
 export default function MachineRow({
   node,
@@ -61,41 +74,49 @@ export default function MachineRow({
   isSelected,
   isSelectionDisabled,
   onSelectChange,
-}: Props) {
+}: MachineRowProps) {
   const { t, locale } = useI18n();
-  const uiTags = useMemo(() => uiTagsForNode(node, isAgent), [node, isAgent]);
+  const uiTags = uiTagsForNode(node, isAgent);
 
-  const ipOptions = useMemo(() => {
-    if (magic) {
-      return [...node.ipAddresses, `${node.givenName}.${magic}`];
-    }
-
-    return node.ipAddresses;
-  }, [magic, node.ipAddresses]);
-
-  const ipv4 = node.ipAddresses.find((ip) => !ip.includes(":")) ?? "—";
-  const ipv6 = node.ipAddresses.find((ip) => ip.includes(":")) ?? "—";
+  const ipv4 = node.ipAddresses.find((ip) => !ip.includes(":")) ?? undefined;
+  const ipv6 = node.ipAddresses.find((ip) => ip.includes(":")) ?? undefined;
+  const magicDns = magic ? `${node.givenName}.${magic}` : undefined;
   const isConnected = node.online && !node.expired;
   const lastSeen = new Date(node.lastSeen);
   const owner = node.user
     ? getUserDisplayName(node.user, t("machines.common.tagOwned"))
     : t("machines.common.tagOwned");
   const tags = node.tags ?? [];
+  const hasChips = uiTags.length > 0 || tags.length > 0;
 
   return (
     <tr
       className={cn(
-        "group align-middle transition-colors duration-100",
-        // Keyboard focus on the row's link lifts the whole row, while a pointer
-        // hover uses the quieter neutral wash.
-        "has-[a:focus-visible]:bg-mist-50 dark:has-[a:focus-visible]:bg-mist-900/60",
+        "group transition-colors duration-100",
+        // One opaque wash per state so the pinned identity column can inherit
+        // it exactly: hover lifts the row, selection tints it indigo.
         isSelected
-          ? "bg-indigo-50/60 dark:bg-indigo-500/5"
-          : "hover:bg-mist-50/80 dark:hover:bg-mist-900/40",
+          ? "bg-indigo-50 dark:bg-[color-mix(in_oklab,var(--color-indigo-500)_14%,var(--color-mist-900))]"
+          : cn(
+              "bg-white hover:bg-mist-50 dark:bg-mist-900 dark:hover:bg-mist-800",
+              // Keyboard focus on the row's link lifts the whole row too.
+              "has-[a:focus-visible]:bg-mist-50 dark:has-[a:focus-visible]:bg-mist-800",
+            ),
       )}
     >
       {onSelectChange !== undefined ? (
-        <td className={cn(CELL, "w-10 pl-2")}>
+        <td className={cn(CELL, STICKY_CELL, "left-0 w-10 pl-2")}>
+          {/* The accent rail is the row's hover/selection tell: a hint of
+              indigo on hover, a solid bar once the row is selected. */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-y-0 left-0 w-[3px] transition-colors duration-100",
+              isSelected
+                ? "bg-indigo-500"
+                : "bg-transparent group-hover:bg-indigo-300/70 dark:group-hover:bg-indigo-500/40",
+            )}
+          />
           <SelectCheckbox
             aria-label={t("machines.bulk.selectRow", { name: node.givenName })}
             checked={isSelected ?? false}
@@ -105,117 +126,91 @@ export default function MachineRow({
         </td>
       ) : undefined}
 
-      {/* Primary column: the name carries the identity, everything else in it is
-          secondary and truncates instead of widening the row. */}
-      <td className={cn(CELL, "min-w-0 pr-3")}>
+      {/* Primary column: the device tile plus the name carry the identity, and
+          everything else in it truncates instead of widening the row. */}
+      <td
+        className={cn(
+          CELL,
+          STICKY_CELL,
+          "left-10 min-w-0 pr-3",
+          "shadow-[inset_-1px_0_0_0_var(--color-mist-100)] dark:shadow-[inset_-1px_0_0_0_var(--color-mist-800)]",
+        )}
+      >
         <Link
           className={cn(
-            "group/link flex min-w-0 flex-col gap-1 rounded-md",
+            "group/link flex min-w-0 items-start gap-x-2.5 rounded-md",
             "outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-1",
             "dark:focus-visible:ring-indigo-400/40 dark:focus-visible:ring-offset-mist-900",
           )}
           to={`/machines/${node.id}`}
         >
-          <span
-            className={cn(
-              "truncate text-sm leading-5 font-semibold text-mist-900",
-              "transition-colors group-hover/link:text-indigo-600",
-              "dark:text-mist-50 dark:group-hover/link:text-indigo-400",
-            )}
-            title={node.givenName}
-          >
-            {node.givenName}
-          </span>
-          <span className="flex min-w-0 items-center gap-x-1.5 text-xs leading-4 text-mist-500 dark:text-mist-400">
-            <span className="min-w-0 truncate" title={node.name}>
-              {node.name || t("machines.common.unknown")}
+          <OSTile node={node} />
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span
+              className={cn(
+                "truncate text-sm leading-5 font-semibold text-mist-900",
+                "transition-colors group-hover/link:text-indigo-600",
+                "dark:text-mist-50 dark:group-hover/link:text-indigo-400",
+              )}
+              title={node.givenName}
+            >
+              {node.givenName}
             </span>
-            <span aria-hidden="true" className="shrink-0 text-mist-300 dark:text-mist-600">
-              ·
+            <span className="flex min-w-0 items-center gap-x-1.5 text-xs leading-4 text-mist-500 dark:text-mist-400">
+              <span className="min-w-0 truncate" title={node.name}>
+                {node.name || t("machines.common.unknown")}
+              </span>
+              <span aria-hidden="true" className="shrink-0 text-mist-300 dark:text-mist-600">
+                ·
+              </span>
+              <span className="shrink-0 font-mono tabular-nums">#{node.id}</span>
             </span>
-            <span className="shrink-0 font-mono tabular-nums">#{node.id}</span>
+            {hasChips ? (
+              <span className="flex min-w-0 flex-wrap items-center gap-1">
+                {mapTagsToComponents(node, uiTags)}
+                <AclTags tags={tags} />
+              </span>
+            ) : undefined}
           </span>
-          {/* Below `md` the owner moves here so it is never lost with the column. */}
-          <span
-            className="truncate text-xs leading-4 text-mist-500 md:hidden dark:text-mist-400"
-            title={owner}
-          >
-            {owner}
-          </span>
-          {tags.length > 0 || uiTags.length > 0 ? (
-            <span className="mt-0.5 flex flex-wrap items-center gap-1">
-              {mapTagsToComponents(node, uiTags)}
-              {tags.map((tag) => (
-                <Chip key={tag} text={tag} />
-              ))}
-            </span>
-          ) : undefined}
         </Link>
       </td>
 
-      <td className={cn(CELL, "hidden max-w-40 pr-3 md:table-cell")}>
-        <span
-          className={cn(CELL_TRUNCATE, "block text-sm text-mist-600 dark:text-mist-400")}
-          title={owner}
-        >
+      <td className={cn(CELL, "pr-3")}>
+        <span className="block truncate text-sm text-mist-600 dark:text-mist-400" title={owner}>
           {owner}
         </span>
       </td>
 
-      <td className={cn(CELL, "hidden pr-3 lg:table-cell")}>
-        <div className="flex items-center gap-x-1">
-          {/* Two fixed line-heights keep the IPv4/IPv6 block from jittering as
-              rows with only one address scroll past. */}
-          <div className="flex min-w-0 flex-col leading-4">
-            <span
-              className="truncate font-mono text-xs text-mist-700 tabular-nums dark:text-mist-200"
-              title={ipv4}
-            >
-              {ipv4}
-            </span>
-            <span
-              className="truncate font-mono text-xs text-mist-500 tabular-nums dark:text-mist-400"
-              title={ipv6}
-            >
-              {ipv6}
-            </span>
-          </div>
-          <Menu>
-            <MenuTrigger
-              className={cn(
-                "shrink-0 rounded-full p-1 text-mist-500 transition-colors",
-                "hover:bg-mist-100 hover:text-mist-700",
-                "dark:text-mist-400 dark:hover:bg-mist-800 dark:hover:text-mist-200",
-              )}
-            >
-              <ChevronDown className="h-4 w-4" />
-            </MenuTrigger>
-            <MenuContent align="end">
-              {ipOptions.map((ip) => (
-                <MenuItem
-                  key={ip}
-                  onClick={async () => {
-                    const isCopied = await copyToClipboard(ip);
-                    toast(isCopied ? t("machines.row.copiedIp") : t("machines.row.copyFailed"));
-                  }}
-                >
-                  <div className="flex w-full items-center justify-between gap-x-6 font-mono text-xs">
-                    {ip}
-                    <Copy className="h-3 w-3" />
-                  </div>
-                </MenuItem>
-              ))}
-            </MenuContent>
-          </Menu>
+      <td className={cn(CELL, "hidden pr-3 md:table-cell")}>
+        {/* Every address copies itself. The rows are fixed height so a machine
+            with one address does not make its neighbours jump. */}
+        <div className="flex min-w-0 flex-col">
+          {ipv4 ? (
+            <CopyValue value={ipv4} />
+          ) : (
+            <span className="py-0.5 text-xs leading-4 text-mist-400 dark:text-mist-500">—</span>
+          )}
+          {ipv6 ? (
+            <CopyValue muted value={ipv6} />
+          ) : (
+            <span className="py-0.5 text-xs leading-4 text-mist-400 dark:text-mist-500">—</span>
+          )}
+          {magicDns ? (
+            <CopyValue
+              copiedMessage={t("common.copiedName", { name: magicDns })}
+              muted
+              value={magicDns}
+            />
+          ) : undefined}
         </div>
       </td>
 
       {/* We pass undefined when agents are not enabled */}
       {isAgent !== undefined ? (
-        <td className={cn(CELL, "hidden pr-3 xl:table-cell")}>
+        <td className={cn(CELL, "hidden pr-3 text-center xl:table-cell")}>
           {node.hostInfo !== undefined ? (
             <div className="flex min-w-0 flex-col leading-4">
-              <span className="truncate text-sm text-mist-700 dark:text-mist-200">
+              <span className="truncate text-sm text-mist-700 tabular-nums dark:text-mist-200">
                 {hinfo.getTSVersion(node.hostInfo)}
               </span>
               <span
@@ -233,11 +228,11 @@ export default function MachineRow({
         </td>
       ) : undefined}
 
-      <td className={cn(CELL, "whitespace-nowrap pr-3")}>
+      <td className={cn(CELL, "pr-3")}>
         <MachineStatus node={node} />
       </td>
 
-      <td className={cn(CELL, "hidden pr-3 sm:table-cell")}>
+      <td className={cn(CELL, "pr-3")}>
         <div className="flex flex-col leading-4" title={lastSeen.toLocaleString(locale)}>
           <span
             className="truncate text-sm text-mist-700 dark:text-mist-300"
@@ -247,7 +242,7 @@ export default function MachineRow({
           </span>
           {!isConnected ? (
             <span
-              className="truncate text-xs text-mist-500 dark:text-mist-400"
+              className="truncate text-xs text-mist-500 tabular-nums dark:text-mist-400"
               suppressHydrationWarning
             >
               {formatTimeDelta(lastSeen)}
@@ -276,10 +271,10 @@ export function uiTagsForNode(node: PopulatedNode, isAgent?: boolean) {
   const uiTags: string[] = [];
   if (node.expired) {
     uiTags.push("expired");
-  }
-
-  if (!node.expired && isNoExpiry(node.expiry)) {
+  } else if (isNoExpiry(node.expiry)) {
     uiTags.push("no-expiry");
+  } else if (expiresSoon(node)) {
+    uiTags.push("expiring-soon");
   }
 
   if (node.customRouting.exitRoutes.length > 0) {
@@ -323,6 +318,10 @@ export function mapTagsToComponents(node: PopulatedNode, uiTags: string[]) {
       case "expired":
       case "no-expiry": {
         return <ExpiryTag expiry={node.expiry ?? undefined} key={tag} variant={tag} />;
+      }
+
+      case "expiring-soon": {
+        return <ExpiryTag expiry={node.expiry ?? undefined} key={tag} variant="expiring" />;
       }
 
       case "tailscale-ssh": {
