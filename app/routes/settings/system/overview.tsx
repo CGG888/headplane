@@ -1,4 +1,5 @@
 import {
+  Activity,
   Boxes,
   Cable,
   CheckCircle,
@@ -69,7 +70,10 @@ import {
   type OidcStatus,
 } from "./diagnostics";
 import { SYSTEM_ERROR_KEYS, type SystemResult } from "./error-keys";
-import { headscaleReleaseChecker } from "./release-check";
+import MetricsPanel from "./metrics-panel";
+import { loadMetrics } from "./metrics-probe";
+import { headplaneReleaseChecker, headscaleReleaseChecker } from "./release-check";
+import { selfUpdateNotice } from "./self-update";
 
 const STATUS_KEYS: Record<DiagnosticStatus, TranslationKey> = {
   pass: "settings.system.checkStatusPass",
@@ -178,23 +182,34 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   const serverVersion = headscale.version;
-  const latest = await headscaleReleaseChecker.latest();
+  const configPath = appConfig?.headscale.config_path;
+
+  // A web version of `headscale configtest`, read straight from the file on
+  // disk, the metrics endpoint Headscale's own configuration points at, and the
+  // two cached release lookups. All four degrade to "nothing to report" instead
+  // of blocking the status page, so they run together rather than in series.
+  const [latest, latestHeadplane, configChecks, metrics] = await Promise.all([
+    headscaleReleaseChecker.latest(),
+    headplaneReleaseChecker.latest(),
+    loadConfigChecks(configPath),
+    loadMetrics(configPath, appConfig?.headscale.url),
+  ]);
+
   const updateAvailable = latest !== undefined && isNewerVersion(serverVersion, latest);
+  // The self-update notice compares Headplane's own release against the version
+  // this build reports as `__VERSION__`; a custom build is never nagged.
+  const selfUpdate = selfUpdateNotice(__VERSION__, latestHeadplane);
 
   const behindProxy = isBehindProxy(request.headers);
   const trustedProxyCount = trustedProxies.length;
   const integrationName = integration?.name;
-
-  // A web version of `headscale configtest`, read straight from the file on
-  // disk. It degrades to an empty list when the file cannot be read, so it
-  // never blocks the status page.
-  const configChecks = await loadConfigChecks(appConfig?.headscale.config_path);
 
   return {
     reachable,
     version: formatServerVersion(serverVersion),
     updateAvailable,
     latestVersion: updateAvailable && latest ? formatServerVersion(latest) : undefined,
+    selfUpdate,
     canProcess: auth.can(principal, Capabilities.configure_iam),
     integration: integration
       ? { name: integration.name, action: integrationAction(integration.name) }
@@ -224,6 +239,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       integrationName,
     }),
     configChecks,
+    metrics,
   };
 }
 
@@ -290,6 +306,23 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               </ul>
             </Notice>
           ) : undefined}
+
+          {loaderData.selfUpdate ? (
+            <Notice
+              icon={<Package className="text-indigo-500" />}
+              title={t("settings.system.selfUpdate.title")}
+            >
+              {tr("settings.system.selfUpdate.body", {
+                current: loaderData.selfUpdate.current,
+                latest: loaderData.selfUpdate.latest,
+                link: (
+                  <Link external styled to={loaderData.selfUpdate.url}>
+                    {t("settings.system.selfUpdate.link")}
+                  </Link>
+                ),
+              })}
+            </Notice>
+          ) : undefined}
         </>
       }
       title={t("settings.system.title")}
@@ -307,6 +340,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={FileCheck} value="configuration">
             {t("settings.system.configChecks.title")}
+          </SettingsTab>
+          <SettingsTab className="shrink-0" icon={Activity} value="metrics">
+            {t("settings.system.metrics.title")}
           </SettingsTab>
         </SettingsTabList>
 
@@ -441,6 +477,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               {t("settings.system.configChecks.unavailable")}
             </p>
           )}
+        </SettingsPanel>
+
+        <SettingsPanel value="metrics">
+          <p className="text-sm text-mist-600 dark:text-mist-400">
+            {t("settings.system.metrics.body")}
+          </p>
+          <MetricsPanel metrics={loaderData.metrics} />
         </SettingsPanel>
       </SettingsTabs>
     </SettingsPage>

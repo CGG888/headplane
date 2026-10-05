@@ -1108,6 +1108,39 @@ const en = {
             "The Noise private key at {path} does not exist yet, but neither does the database, so Headscale generates it on first start.",
         },
       },
+      selfUpdate: {
+        title: "Headplane update available",
+        body: "Headplane {latest} is available. This instance reports {current}, the version baked in at build time (__VERSION__), so a custom build that reports its own version is never nagged. {link}",
+        link: "View the release",
+      },
+      metrics: {
+        title: "Metrics",
+        body: "Read directly from Headscale's metrics listener. Nothing on this page is written back to Headscale.",
+        addressLabel: "Metrics address",
+        disabled:
+          "Headscale's configuration does not set metrics_listen_addr, so its metrics listener is disabled. Set the address and restart Headscale to see metrics here.",
+        invalid:
+          "Headplane cannot parse the metrics_listen_addr value “{value}”. Use host:port, for example 127.0.0.1:9090.",
+        unknown:
+          "Headplane could not read Headscale's configuration file, so it cannot tell where the metrics listener is.",
+        unreachableTitle: "Metrics listener unreachable",
+        unreachable:
+          "Headplane could not read {url}. The metrics listener must be reachable from Headplane itself; Headscale listens on {address}.",
+        groups: {
+          nodes: "Nodes",
+          users: "Users",
+          relay: "DERP and relays",
+          policy: "Policy",
+          process: "Process",
+        },
+        goroutinesLabel: "Goroutines",
+        uptimeLabel: "Uptime",
+        uptimeValue: "{days}d {hours}h {minutes}m",
+        seriesLabel: "{count} series",
+        rawTitle: "Raw metrics",
+        rawDescription: "The exposition text exactly as Headplane received it.",
+        rawTruncated: "Showing the first {chars} characters.",
+      },
       tabsLabel: "System status sections",
       groups: {
         connection: "Connection",
@@ -1234,6 +1267,63 @@ const en = {
       trustedProxiesSummary: "Configured ranges: {count}",
       policySummary: "Mode: {mode}",
       advancedSummary: "Node expiry {expiry} · log level {level}",
+      advancedHaTitle: "HA subnet router health checks",
+      advancedHaBody:
+        "How Headscale probes HA subnet routers. When several nodes advertise the same prefix, Headscale pings each one on this interval and marks it unhealthy once a probe times out. Changes take effect after Headscale is restarted.",
+      haProbeIntervalLabel: "Probe interval",
+      haProbeIntervalDescription:
+        "How often HA subnet routers are probed, for example 10s. Must be at least 2s, or 0 to disable probing. Headscale's default is 10s.",
+      haProbeTimeoutLabel: "Probe timeout",
+      haProbeTimeoutDescription:
+        "How long a probe waits for an answer before the router counts as unhealthy, for example 5s. Must be at least 1s and shorter than the interval. Headscale's default is 5s.",
+      saveHaSettings: "Save health check settings",
+      extraParamsTitle: "Extra authorization parameters",
+      extraParamsBody:
+        "Key/value pairs sent to the identity provider's authorization endpoint, for example domain_hint, prompt, or acr_values. Saving an empty list removes oidc.extra_params from the file.",
+      extraParamsEmpty: "No extra authorization parameters are configured.",
+      extraParamsKeyLabel: "Parameter",
+      extraParamsKeyPlaceholder: "domain_hint",
+      extraParamsValueLabel: "Value",
+      extraParamsValuePlaceholder: "example.com",
+      addExtraParam: "Add parameter",
+      removeExtraParam: "Remove",
+      saveExtraParams: "Save extra parameters",
+      clientSecretPathLabel: "Client secret file path",
+      clientSecretPathDescription:
+        "Read the client secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave it empty to remove oidc.client_secret_path.",
+      clientSecretConflictTitle: "Two client secrets are configured",
+      clientSecretConflictBody:
+        "Both oidc.client_secret and oidc.client_secret_path are set. Headscale's own configuration comments call them mutually exclusive, so keep only one of the two.",
+      overviewTab: "Overview",
+      overviewTitle: "Configuration overview",
+      overviewBody:
+        "These values are read from Headscale's configuration file and are display-only. Headplane never writes them: a wrong database path or IP range can lock you out of the server, and the rest are operational or secret file paths.",
+      overviewDisplayOnly: "Display only",
+      overviewUnset: "—",
+      overviewNetworkTitle: "Network",
+      overviewServerUrlLabel: "Server URL",
+      overviewListenAddrLabel: "Listen address",
+      overviewPrefixV4Label: "IPv4 prefix",
+      overviewPrefixV6Label: "IPv6 prefix",
+      overviewPrefixAllocationLabel: "IP allocation",
+      overviewDatabaseTitle: "Database",
+      overviewDatabaseTypeLabel: "Type",
+      overviewSqlitePathLabel: "SQLite path",
+      overviewSqliteWalLabel: "Write-ahead log",
+      overviewServicesTitle: "Listeners",
+      overviewMetricsAddrLabel: "Metrics address",
+      overviewGrpcAddrLabel: "gRPC address",
+      overviewGrpcInsecureLabel: "gRPC plaintext",
+      overviewUnixSocketLabel: "Unix socket",
+      overviewUnixSocketPermissionLabel: "Socket permission",
+      overviewNoiseKeyLabel: "Noise key path",
+      overviewTlsTitle: "TLS and ACME",
+      overviewTlsHostnameLabel: "Let's Encrypt hostname",
+      overviewAcmeEmailLabel: "ACME email",
+      overviewTlsCertPathLabel: "Certificate path",
+      overviewTlsKeyPathLabel: "Certificate key path",
+      overviewTuningTitle: "Tuning",
+      overviewTuningLabel: "tuning block",
       derp: {
         title: "DERP",
         body: "Where Headscale gets the relay map it hands to clients, how often that map is refreshed, and whether Headscale runs the embedded DERP server itself. Relay usage per machine is listed below.",
@@ -1417,6 +1507,13 @@ const en = {
           "Headplane could not write the region name mapping. Check that its data directory is writable and try again.",
         derpPathsRequired:
           "Headscale requires at least one DERP map path when the embedded server is enabled and its region is not added automatically.",
+        invalidOidcExtraParams:
+          "Each extra parameter needs a name without spaces and a value. Remove the empty row or fill it in.",
+        duplicateOidcExtraParam: "The same parameter name is used twice. Keep one row per name.",
+        invalidHaProbeInterval:
+          "Enter a duration of at least 2s, for example 10s, or 0 to disable HA probing.",
+        invalidHaProbeTimeout: "Enter a duration of at least 1s, for example 5s.",
+        invalidHaProbeCombination: "The probe timeout must be shorter than the probe interval.",
       },
     },
     agent: {
@@ -1662,6 +1759,19 @@ const en = {
       detailTarget: "Target",
       detailNote: "Detail",
       detailMissing: "Not recorded",
+      exportCsv: "Export CSV",
+      exportJson: "Export JSON",
+      exportLimitNotice:
+        "Exports include at most the newest {count} operations, so narrow the filters to capture everything.",
+      exportColumns: {
+        time: "Time",
+        actor: "Actor",
+        actorType: "Actor type",
+        action: "Action",
+        result: "Result",
+        target: "Target",
+        detail: "Detail",
+      },
     },
     snapshots: {
       summaryFiles: "Files: {files}",

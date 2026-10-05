@@ -14,6 +14,10 @@ import log from "~/utils/log";
 
 export const RELEASES_URL = "https://api.github.com/repos/juanfont/headscale/releases/latest";
 
+/** Headplane's own releases, looked up exactly the same way. */
+export const HEADPLANE_RELEASES_URL =
+  "https://api.github.com/repos/CGG888/headplane/releases/latest";
+
 /** Long enough for a healthy connection, short enough to never stall a page. */
 export const REQUEST_TIMEOUT_MS = 3_000;
 
@@ -25,6 +29,8 @@ export const FAILURE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export interface ReleaseCheckerOptions {
   url?: string;
+  /** Names the lookup in the debug log when two checkers run side by side. */
+  label?: string;
   timeoutMs?: number;
   successTtlMs?: number;
   failureTtlMs?: number;
@@ -33,12 +39,13 @@ export interface ReleaseCheckerOptions {
 }
 
 export interface ReleaseChecker {
-  /** The newest Headscale release, or `undefined` when it cannot be determined. */
+  /** The newest release of the watched repository, or `undefined` on failure. */
   latest(): Promise<ServerVersion | undefined>;
 }
 
 export function createReleaseChecker(options: ReleaseCheckerOptions = {}): ReleaseChecker {
   const url = options.url ?? RELEASES_URL;
+  const label = options.label ?? "Headscale";
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const successTtlMs = options.successTtlMs ?? SUCCESS_CACHE_TTL_MS;
   const failureTtlMs = options.failureTtlMs ?? FAILURE_CACHE_TTL_MS;
@@ -59,26 +66,26 @@ export function createReleaseChecker(options: ReleaseCheckerOptions = {}): Relea
       });
 
       if (!response.ok) {
-        log.debug("server", "Headscale release check returned HTTP %d", response.status);
+        log.debug("server", "%s release check returned HTTP %d", label, response.status);
         return undefined;
       }
 
       const body: unknown = await response.json();
       const tag = readTagName(body);
       if (!tag) {
-        log.debug("server", "Headscale release check returned no tag name");
+        log.debug("server", "%s release check returned no tag name", label);
         return undefined;
       }
 
       const version = parseServerVersion(tag);
       if (version.unknown) {
-        log.debug("server", "Headscale release check returned an unusable tag: %s", tag);
+        log.debug("server", "%s release check returned an unusable tag: %s", label, tag);
         return undefined;
       }
 
       return version;
     } catch (error) {
-      log.debug("server", "Headscale release check failed: %s", String(error));
+      log.debug("server", "%s release check failed: %s", label, String(error));
       return undefined;
     }
   }
@@ -124,3 +131,13 @@ function readTagName(body: unknown): string | undefined {
  * no I/O; the first `latest()` call is what talks to GitHub.
  */
 export const headscaleReleaseChecker = createReleaseChecker();
+
+/**
+ * The same lookup pointed at Headplane's own repository. Its result feeds the
+ * self-update notice, which compares it against the version baked into this
+ * build as `__VERSION__`.
+ */
+export const headplaneReleaseChecker = createReleaseChecker({
+  url: HEADPLANE_RELEASES_URL,
+  label: "Headplane",
+});

@@ -133,6 +133,15 @@ export interface OIDCSettingsView {
   // The secret itself is never returned to the browser; the page only needs to
   // know whether one is configured.
   hasClientSecret: boolean;
+  // Whether an inline `client_secret` is stored. Headscale's own
+  // config-example.yaml calls this key and `client_secret_path` mutually
+  // exclusive, so the page warns when both are present without blocking it.
+  hasInlineClientSecret: boolean;
+  // The file Headscale reads the secret from, or an empty string when unset.
+  clientSecretPath: string;
+  // Extra key/value pairs sent to the identity provider's authorization
+  // endpoint, kept as a plain string map so the page can edit it as rows.
+  extraParams: Record<string, string>;
   scope: string[];
   emailVerifiedRequired: boolean;
   useExpiryFromToken: boolean;
@@ -168,6 +177,10 @@ export interface AdvancedSettingsView {
   autoUpdateEnabled: boolean;
   logtailEnabled: boolean;
   disableCheckUpdates: boolean;
+  // HA subnet-router health probing (Headscale 0.29). Both are Headscale
+  // duration strings; `probe_interval: 0` disables probing entirely.
+  haProbeInterval: string;
+  haProbeTimeout: string;
 }
 
 /**
@@ -211,6 +224,35 @@ export interface DERPSettingsView {
   server: DERPEmbeddedServerView;
 }
 
+/**
+ * Settings Headplane deliberately never writes, surfaced read-only so looking
+ * one up does not mean opening Headscale's config file on the host. Strings
+ * stay empty when the key is absent (the page renders those as `—`); the few
+ * booleans Headscale defaults to `true` keep that default so the page cannot
+ * show the opposite of what Headscale actually runs.
+ */
+export interface ServerOverviewView {
+  serverUrl: string;
+  listenAddr: string;
+  prefixesV4: string;
+  prefixesV6: string;
+  prefixAllocation: string;
+  databaseType: string;
+  sqlitePath: string;
+  sqliteWriteAheadLog: boolean;
+  metricsListenAddr: string;
+  grpcListenAddr: string;
+  grpcAllowInsecure: boolean;
+  unixSocket: string;
+  unixSocketPermission: string;
+  noisePrivateKeyPath: string;
+  tlsLetsencryptHostname: string;
+  acmeEmail: string;
+  tlsCertPath: string;
+  tlsKeyPath: string;
+  tuningConfigured: boolean;
+}
+
 interface HeadscaleConfigState {
   document?: Document;
   config: unknown;
@@ -231,6 +273,7 @@ interface HeadscaleConfig {
   getTailnetSettings: () => TailnetSettingsView;
   getAdvancedSettings: () => AdvancedSettingsView;
   getDERPSettings: () => DERPSettingsView;
+  getServerOverview: () => ServerOverviewView;
   dnsRecords: () => DNSRecord[];
   patch: (patches: PatchConfig[]) => Promise<void>;
   addDNS: (record: DNSRecord) => Promise<boolean | void>;
@@ -263,6 +306,7 @@ function createHeadscaleConfig(
     getTailnetSettings: () => getTailnetSettings(state),
     getAdvancedSettings: () => getAdvancedSettings(state),
     getDERPSettings: () => getDERPSettings(state),
+    getServerOverview: () => getServerOverview(state),
     dnsRecords: () => dnsRecords(state),
     patch: (patches) => patchHeadscaleConfig(state, patches),
     addDNS: (record) => addDNS(state, record),
@@ -325,11 +369,15 @@ function getOIDCSettings(config: HeadscaleConfigState): OIDCSettingsView | undef
 
   const pkce = readObject(oidc.pkce);
   const scope = readStringList(oidc.scope);
+  const inlineClientSecret = readString(oidc.client_secret);
+  const clientSecretPath = readString(oidc.client_secret_path);
   return {
     issuer: readString(oidc.issuer),
     clientId: readString(oidc.client_id),
-    hasClientSecret:
-      readString(oidc.client_secret).length > 0 || readString(oidc.client_secret_path).length > 0,
+    hasClientSecret: inlineClientSecret.length > 0 || clientSecretPath.length > 0,
+    hasInlineClientSecret: inlineClientSecret.length > 0,
+    clientSecretPath,
+    extraParams: readStringRecord(oidc.extra_params),
     // Headscale defaults these to the OIDC standard scopes.
     scope: scope.length > 0 ? scope : ["openid", "profile", "email"],
     emailVerifiedRequired: readBoolean(oidc.email_verified_required, true),
@@ -372,6 +420,10 @@ const ADVANCED_SETTINGS_DEFAULTS = {
   autoUpdateEnabled: false,
   logtailEnabled: false,
   disableCheckUpdates: false,
+  // Headscale's config-example.yaml documents 10s + 5s as the defaults for the
+  // HA subnet-router probing ("worst-case detection time ... 15s default").
+  haProbeInterval: "10s",
+  haProbeTimeout: "5s",
 };
 
 // Advanced Headscale settings that live outside `dns`, `oidc` and `policy`.
@@ -385,6 +437,8 @@ function getAdvancedSettings(config: HeadscaleConfigState): AdvancedSettingsView
   const taildrop = readObject(root.taildrop) ?? {};
   const autoUpdate = readObject(root.auto_update) ?? {};
   const logtail = readObject(root.logtail) ?? {};
+  const routes = readObject(node.routes) ?? {};
+  const ha = readObject(routes.ha) ?? {};
 
   return {
     nodeExpiry: readString(node.expiry, ADVANCED_SETTINGS_DEFAULTS.nodeExpiry),
@@ -412,6 +466,10 @@ function getAdvancedSettings(config: HeadscaleConfigState): AdvancedSettingsView
       root.disable_check_updates,
       ADVANCED_SETTINGS_DEFAULTS.disableCheckUpdates,
     ),
+    // `probe_interval: 0` is a bare YAML number and disables probing, so it has
+    // to be read back as "0" instead of falling back to the textual default.
+    haProbeInterval: readDuration(ha.probe_interval, ADVANCED_SETTINGS_DEFAULTS.haProbeInterval),
+    haProbeTimeout: readDuration(ha.probe_timeout, ADVANCED_SETTINGS_DEFAULTS.haProbeTimeout),
   };
 }
 
@@ -476,6 +534,61 @@ function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
   };
 }
 
+/**
+ * Headscale's own fallbacks for the settings the read-only overview shows.
+ * Only values Headscale resolves itself are listed; everything else stays
+ * empty so the page can render `—` for a key that is not in the file.
+ */
+const SERVER_OVERVIEW_DEFAULTS = {
+  databaseType: "sqlite",
+  sqliteWriteAheadLog: true,
+  // Headscale's config-example.yaml documents sequential as the default
+  // allocation strategy.
+  prefixAllocation: "sequential",
+};
+
+/**
+ * The settings Headplane deliberately does not write, read straight from the
+ * file so operators can look them up without opening it on the host. Every
+ * value is read defensively: a hand-written config with unexpected types must
+ * never break the settings page.
+ */
+function getServerOverview(config: HeadscaleConfigState): ServerOverviewView {
+  const root = readObject(config.config) ?? {};
+  const prefixes = readObject(root.prefixes) ?? {};
+  const database = readObject(root.database) ?? {};
+  const sqlite = readObject(database.sqlite) ?? {};
+  const noise = readObject(root.noise) ?? {};
+  const tuning = readObject(root.tuning);
+
+  return {
+    serverUrl: readString(root.server_url),
+    listenAddr: readString(root.listen_addr),
+    prefixesV4: readString(prefixes.v4),
+    prefixesV6: readString(prefixes.v6),
+    prefixAllocation: readString(prefixes.allocation, SERVER_OVERVIEW_DEFAULTS.prefixAllocation),
+    databaseType: readString(database.type, SERVER_OVERVIEW_DEFAULTS.databaseType),
+    sqlitePath: readString(sqlite.path),
+    sqliteWriteAheadLog: readBoolean(
+      sqlite.write_ahead_log,
+      SERVER_OVERVIEW_DEFAULTS.sqliteWriteAheadLog,
+    ),
+    metricsListenAddr: readString(root.metrics_listen_addr),
+    grpcListenAddr: readString(root.grpc_listen_addr),
+    grpcAllowInsecure: readBoolean(root.grpc_allow_insecure, false),
+    unixSocket: readString(root.unix_socket),
+    unixSocketPermission: readString(root.unix_socket_permission),
+    noisePrivateKeyPath: readString(noise.private_key_path),
+    tlsLetsencryptHostname: readString(root.tls_letsencrypt_hostname),
+    acmeEmail: readString(root.acme_email),
+    tlsCertPath: readString(root.tls_cert_path),
+    tlsKeyPath: readString(root.tls_key_path),
+    // `tuning` carries Headscale's performance knobs. Any key in it counts as
+    // configured; an empty or non-map value does not.
+    tuningConfigured: tuning !== undefined && Object.keys(tuning).length > 0,
+  };
+}
+
 function readObject(value: unknown): Record<string, unknown> | undefined {
   if (value == null || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -503,6 +616,37 @@ function readStringList(value: unknown): string[] {
     return [];
   }
   return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+/**
+ * Durations are normally YAML strings (`10s`), but `probe_interval: 0` is a
+ * bare number that disables probing. Reading it back as the textual default
+ * would silently re-enable probing the next time the form is saved.
+ */
+function readDuration(value: unknown, fallback: string): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return fallback;
+}
+
+/** A string map with non-string entries dropped, e.g. `oidc.extra_params`. */
+function readStringRecord(value: unknown): Record<string, string> {
+  const object = readObject(value);
+  if (!object) {
+    return {};
+  }
+
+  const out: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(object)) {
+    if (typeof entry === "string") {
+      out[key] = entry;
+    }
+  }
+  return out;
 }
 
 function dnsRecords(config: HeadscaleConfigState) {

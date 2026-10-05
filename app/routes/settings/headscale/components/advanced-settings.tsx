@@ -1,5 +1,5 @@
-import { Clock, ScrollText, ToggleRight } from "lucide-react";
-import { useState } from "react";
+import { Activity, Clock, ScrollText, ToggleRight } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -12,11 +12,24 @@ import {
   SettingsField,
 } from "~/components/settings-nav";
 import Switch from "~/components/switch";
+import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import type { AdvancedSettingsView } from "~/server/headscale/config-loader";
 
-import { LOG_FORMATS, LOG_LEVELS } from "../advanced-settings";
+import {
+  LOG_FORMATS,
+  LOG_LEVELS,
+  type HaProbeProblem,
+  validateHaProbeSettings,
+} from "../advanced-settings";
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
+
+/** The problems the shared HA probe validator reports, as localized messages. */
+const HA_PROBE_ERROR_KEYS: Record<HaProbeProblem, TranslationKey> = {
+  invalidInterval: "settings.headscale.errors.invalidHaProbeInterval",
+  invalidTimeout: "settings.headscale.errors.invalidHaProbeTimeout",
+  timeoutNotBelowInterval: "settings.headscale.errors.invalidHaProbeCombination",
+};
 
 interface AdvancedSettingsProps {
   isDisabled: boolean;
@@ -97,11 +110,15 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
   // One fetcher per group keeps each save button, error and confirmation
   // attached to the fields it submitted.
   const nodeFetcher = useFetcher<HeadscaleSettingsResult>();
+  const haFetcher = useFetcher<HeadscaleSettingsResult>();
   const logFetcher = useFetcher<HeadscaleSettingsResult>();
   const featureFetcher = useFetcher<HeadscaleSettingsResult>();
 
   const [nodeExpiry, setNodeExpiry] = useState(settings.nodeExpiry);
   const [inactivityTimeout, setInactivityTimeout] = useState(settings.ephemeralInactivityTimeout);
+  const [haInterval, setHaInterval] = useState(settings.haProbeInterval);
+  const [haTimeout, setHaTimeout] = useState(settings.haProbeTimeout);
+  const [haLocalError, setHaLocalError] = useState<string | undefined>();
   const [logLevel, setLogLevel] = useState(settings.logLevel);
   const [logFormat, setLogFormat] = useState(settings.logFormat);
   // Headscale stores the opt-out, the switch reads as the opt-in.
@@ -111,12 +128,17 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
   const [logtail, setLogtail] = useState(settings.logtailEnabled);
 
   const nodeDisabled = isDisabled || nodeFetcher.state !== "idle";
+  const haDisabled = isDisabled || haFetcher.state !== "idle";
   const logDisabled = isDisabled || logFetcher.state !== "idle";
   const featureDisabled = isDisabled || featureFetcher.state !== "idle";
 
   const nodeError =
     nodeFetcher.data && !nodeFetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[nodeFetcher.data.errorCode])
+      : undefined;
+  const haError =
+    haFetcher.data && !haFetcher.data.success
+      ? t(HEADSCALE_SETTINGS_ERROR_KEYS[haFetcher.data.errorCode])
       : undefined;
   const logError =
     logFetcher.data && !logFetcher.data.success
@@ -136,6 +158,19 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
   }));
   if (logLevel.length > 0 && !LOG_LEVELS.some((level) => level === logLevel)) {
     levelItems.unshift({ value: logLevel, label: logLevel });
+  }
+
+  // Headscale's own probe rules are cheap to check here, so a bad interval or
+  // timeout is reported without a round trip. The action validates again.
+  function onSubmitHa(event: FormEvent<HTMLFormElement>) {
+    const problem = validateHaProbeSettings(haInterval, haTimeout);
+    if (problem) {
+      event.preventDefault();
+      setHaLocalError(t(HA_PROBE_ERROR_KEYS[problem]));
+      return;
+    }
+
+    setHaLocalError(undefined);
   }
 
   return (
@@ -182,6 +217,57 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
               }
             />
           </nodeFetcher.Form>
+        </section>
+      </SettingsCollapsible>
+
+      <SettingsCollapsible
+        description={t("settings.headscale.advancedHaBody")}
+        icon={Activity}
+        status={{ tone: "neutral", label: `${haInterval} / ${haTimeout}` }}
+        title={t("settings.headscale.advancedHaTitle")}
+      >
+        <section className="flex w-full flex-col">
+          <haFetcher.Form className="flex flex-col gap-5" method="post" onSubmit={onSubmitHa}>
+            <input name="action_id" type="hidden" value="save_ha_probe_settings" />
+
+            <Input
+              description={t("settings.headscale.haProbeIntervalDescription")}
+              disabled={haDisabled}
+              label={t("settings.headscale.haProbeIntervalLabel")}
+              name="ha_probe_interval"
+              onChange={(next) => {
+                setHaInterval(next);
+                setHaLocalError(undefined);
+              }}
+              placeholder="10s"
+              required
+              value={haInterval}
+            />
+            <Input
+              description={t("settings.headscale.haProbeTimeoutDescription")}
+              disabled={haDisabled}
+              label={t("settings.headscale.haProbeTimeoutLabel")}
+              name="ha_probe_timeout"
+              onChange={(next) => {
+                setHaTimeout(next);
+                setHaLocalError(undefined);
+              }}
+              placeholder="5s"
+              required
+              value={haTimeout}
+            />
+
+            <GroupError message={haLocalError ?? haError} />
+            <SaveRow
+              disabled={haDisabled}
+              label={t("settings.headscale.saveHaSettings")}
+              savedLabel={
+                haFetcher.state === "idle" && haFetcher.data?.success
+                  ? t("settings.headscale.saved")
+                  : undefined
+              }
+            />
+          </haFetcher.Form>
         </section>
       </SettingsCollapsible>
 

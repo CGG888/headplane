@@ -12,12 +12,16 @@ import { useI18n } from "~/i18n/provider";
 import type { OIDCSettingsView } from "~/server/headscale/config-loader";
 
 import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
+import OidcExtraParams from "./oidc-extra-params";
 
 /** Headscale's own defaults, used until an `oidc:` block exists in the file. */
 const OIDC_DEFAULTS: OIDCSettingsView = {
   issuer: "",
   clientId: "",
   hasClientSecret: false,
+  hasInlineClientSecret: false,
+  clientSecretPath: "",
+  extraParams: {},
   scope: ["openid", "profile", "email"],
   emailVerifiedRequired: true,
   useExpiryFromToken: false,
@@ -102,6 +106,20 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
           name="client_secret"
           type="password"
         />
+        <Input
+          defaultValue={settings.clientSecretPath}
+          description={t("settings.headscale.clientSecretPathDescription")}
+          disabled={disabled}
+          label={t("settings.headscale.clientSecretPathLabel")}
+          name="client_secret_path"
+          placeholder="${CREDENTIALS_DIRECTORY}/oidc_client_secret"
+        />
+        {settings.hasInlineClientSecret && settings.clientSecretPath.length > 0 ? (
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+            <span className="font-medium">{t("settings.headscale.clientSecretConflictTitle")}</span>{" "}
+            {t("settings.headscale.clientSecretConflictBody")}
+          </p>
+        ) : undefined}
         <Input
           defaultValue={settings.scope.join(", ")}
           description={t("settings.headscale.scopeDescription")}
@@ -202,6 +220,8 @@ export default function OidcSettings({ isDisabled, oidc }: OidcSettingsProps) {
           </Button>
         </SettingsActions>
       </fetcher.Form>
+
+      <OidcExtraParams extraParams={settings.extraParams} isDisabled={isDisabled} />
     </section>
   );
 }

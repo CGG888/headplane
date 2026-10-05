@@ -16,6 +16,9 @@ export default [
   // outside the application layout instead of rendering the UI around them.
   route("/settings/snapshots/download", "routes/settings/snapshots/download.ts"),
 
+  // Audit exports are downloads too, so they get the same treatment.
+  route("/settings/audit/export", "routes/settings/audit/export.ts"),
+
   // Authentication Routes
   route("/login", "routes/auth/login/page.tsx"),
   route("/logout", "routes/auth/logout.ts"),

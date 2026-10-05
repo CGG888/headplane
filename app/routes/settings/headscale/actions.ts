@@ -22,6 +22,7 @@ import {
   isLogLevel,
   MIN_EPHEMERAL_INACTIVITY_SECONDS,
   parseGoDurationSeconds,
+  validateHaProbeSettings,
 } from "./advanced-settings";
 import {
   defaultDerpPrivateKeyPath,
@@ -97,7 +98,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("invalidPkceMethod");
       }
 
-      const patches = [
+      const patches: { path: string; value: unknown }[] = [
         { path: "oidc.issuer", value: issuer },
         { path: "oidc.client_id", value: clientId },
         { path: "oidc.scope", value: scope },
@@ -124,7 +125,58 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         patches.push({ path: "oidc.client_secret", value: clientSecret });
       }
 
+      // The path is the safer alternative to an inline secret. Headscale reads
+      // the file itself (and expands environment variables in the path), so
+      // there is nothing to validate here; an empty field removes the key.
+      const clientSecretPath = readField(formData, "client_secret_path");
+      patches.push({
+        path: "oidc.client_secret_path",
+        value: clientSecretPath.length > 0 ? clientSecretPath : null,
+      });
+
       await headscaleConfig.patch(patches);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_oidc_extra_params": {
+      // The editor sends one key and one value field per row. A row that is
+      // empty on both sides is a leftover from "add parameter", not something
+      // the operator meant to save.
+      const keys = formData.getAll("extra_param_key").map((entry) => entry.toString().trim());
+      const values = formData.getAll("extra_param_value").map((entry) => entry.toString().trim());
+      const rowCount = Math.max(keys.length, values.length);
+
+      const extraParams: Record<string, string> = {};
+      for (let index = 0; index < rowCount; index++) {
+        const key = keys[index] ?? "";
+        const value = values[index] ?? "";
+        if (key.length === 0 && value.length === 0) {
+          continue;
+        }
+
+        // Headscale sends these verbatim to the authorization endpoint, so a
+        // nameless or whitespace-ridden key cannot be turned into a query
+        // parameter and an empty value would silently disappear.
+        if (key.length === 0 || value.length === 0 || /\s/.test(key)) {
+          return failure("invalidOidcExtraParams");
+        }
+
+        if (key in extraParams) {
+          return failure("duplicateOidcExtraParam");
+        }
+
+        extraParams[key] = value;
+      }
+
+      // An empty map removes `oidc.extra_params` instead of writing `{}`, which
+      // is what Headscale's own example leaves behind when nothing is set.
+      await headscaleConfig.patch([
+        {
+          path: "oidc.extra_params",
+          value: Object.keys(extraParams).length > 0 ? extraParams : null,
+        },
+      ]);
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -199,6 +251,37 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       await headscaleConfig.patch([
         { path: "node.expiry", value: nodeExpiry },
         { path: "node.ephemeral.inactivity_timeout", value: inactivityTimeout },
+      ]);
+      await integration?.onConfigChange(headscale);
+      return success();
+    }
+
+    case "save_ha_probe_settings": {
+      // HA subnet-router health probing, added in Headscale 0.29. Headscale's
+      // own rules are spelled out in its config-example.yaml; an interval of 0
+      // disables probing, so it is valid and skips the ordering check.
+      const interval = readField(formData, "ha_probe_interval");
+      const timeout = readField(formData, "ha_probe_timeout");
+
+      const problem = validateHaProbeSettings(interval, timeout);
+      switch (problem) {
+        case "invalidInterval": {
+          return failure("invalidHaProbeInterval");
+        }
+        case "invalidTimeout": {
+          return failure("invalidHaProbeTimeout");
+        }
+        case "timeoutNotBelowInterval": {
+          return failure("invalidHaProbeCombination");
+        }
+        default: {
+          break;
+        }
+      }
+
+      await headscaleConfig.patch([
+        { path: "node.routes.ha.probe_interval", value: interval },
+        { path: "node.routes.ha.probe_timeout", value: timeout },
       ]);
       await integration?.onConfigChange(headscale);
       return success();

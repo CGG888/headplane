@@ -39,7 +39,12 @@ export type HeadscaleSettingsErrorCode =
   | "invalidDerpRegionMapName"
   | "derpRegionMapNotFound"
   | "derpRegionMapWriteFailed"
-  | "derpPathsRequired";
+  | "derpPathsRequired"
+  | "invalidOidcExtraParams"
+  | "duplicateOidcExtraParam"
+  | "invalidHaProbeInterval"
+  | "invalidHaProbeTimeout"
+  | "invalidHaProbeCombination";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -76,6 +81,11 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpRegionMapNotFound: "settings.headscale.errors.derpRegionMapNotFound",
   derpRegionMapWriteFailed: "settings.headscale.errors.derpRegionMapWriteFailed",
   derpPathsRequired: "settings.headscale.errors.derpPathsRequired",
+  invalidOidcExtraParams: "settings.headscale.errors.invalidOidcExtraParams",
+  duplicateOidcExtraParam: "settings.headscale.errors.duplicateOidcExtraParam",
+  invalidHaProbeInterval: "settings.headscale.errors.invalidHaProbeInterval",
+  invalidHaProbeTimeout: "settings.headscale.errors.invalidHaProbeTimeout",
+  invalidHaProbeCombination: "settings.headscale.errors.invalidHaProbeCombination",
 };
 
 export interface HeadscaleSettingsSuccess {

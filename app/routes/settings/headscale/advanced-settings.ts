@@ -74,3 +74,40 @@ export function parseGoDurationSeconds(value: string): number | undefined {
 
   return seconds;
 }
+
+/**
+ * HA subnet-router probing (`node.routes.ha`), added in Headscale 0.29. Its
+ * config-example.yaml states the rules below: an interval of 0 disables
+ * probing, otherwise it must be at least 2s, and the timeout must be at least
+ * 1s and shorter than the interval.
+ */
+export const MIN_HA_PROBE_INTERVAL_SECONDS = 2;
+export const MIN_HA_PROBE_TIMEOUT_SECONDS = 1;
+
+export type HaProbeProblem = "invalidInterval" | "invalidTimeout" | "timeoutNotBelowInterval";
+
+export function validateHaProbeSettings(
+  interval: string,
+  timeout: string,
+): HaProbeProblem | undefined {
+  const intervalSeconds = parseGoDurationSeconds(interval);
+  if (
+    intervalSeconds === undefined ||
+    (intervalSeconds !== 0 && intervalSeconds < MIN_HA_PROBE_INTERVAL_SECONDS)
+  ) {
+    return "invalidInterval";
+  }
+
+  const timeoutSeconds = parseGoDurationSeconds(timeout);
+  if (timeoutSeconds === undefined || timeoutSeconds < MIN_HA_PROBE_TIMEOUT_SECONDS) {
+    return "invalidTimeout";
+  }
+
+  // A disabled interval has no window to fit into, so the comparison is only
+  // meaningful while probing is on.
+  if (intervalSeconds !== 0 && timeoutSeconds >= intervalSeconds) {
+    return "timeoutNotBelowInterval";
+  }
+
+  return undefined;
+}

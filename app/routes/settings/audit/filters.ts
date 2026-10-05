@@ -3,6 +3,8 @@
  * windows, page clamping, load-more links) can be unit tested without a router.
  */
 
+import type { AuditExportFormat } from "./export-format";
+
 export const AUDIT_PAGE_SIZE = 25;
 
 export const AUDIT_RANGES = ["1h", "24h", "7d", "30d", "all"] as const;
@@ -68,4 +70,19 @@ export function auditQueryString(filters: Partial<AuditFilters>): string {
 
   const query = params.toString();
   return query.length > 0 ? `?${query}` : "";
+}
+
+/**
+ * Download link for the current selection, so an export always carries the
+ * filters the page is showing. The page cursor is deliberately dropped: an
+ * export covers the whole selection, not one page of it.
+ */
+export function auditExportHref(filters: Partial<AuditFilters>, format: AuditExportFormat): string {
+  const query = auditQueryString({
+    actor: filters.actor,
+    action: filters.action,
+    range: filters.range,
+  });
+
+  return `/settings/audit/export${query ? `${query}&` : "?"}format=${format}`;
 }

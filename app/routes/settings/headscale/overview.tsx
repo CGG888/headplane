@@ -1,4 +1,12 @@
-import { KeyRound, Network, Scale, ShieldCheck, SlidersHorizontal, Tags } from "lucide-react";
+import {
+  KeyRound,
+  Network,
+  Scale,
+  Server,
+  ShieldCheck,
+  SlidersHorizontal,
+  Tags,
+} from "lucide-react";
 import { data } from "react-router";
 
 import Code from "~/components/code";
@@ -9,6 +17,7 @@ import {
   SettingsCollapsible,
   SettingsPage,
   SettingsPanel,
+  SettingsStatus,
   SettingsTab,
   SettingsTabList,
   SettingsTabs,
@@ -35,6 +44,7 @@ import DerpSettings from "./components/derp-settings";
 import DerpStatus from "./components/derp-status";
 import OidcSettings from "./components/oidc-settings";
 import PolicyModeSettings from "./components/policy-mode";
+import ServerOverview from "./components/server-overview";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
 import {
@@ -94,6 +104,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
     derp: headscaleConfig.getDERPSettings(),
+    // Everything below is read-only: Headplane deliberately never writes it.
+    overview: headscaleConfig.getServerOverview(),
     // Manual names for the regions Headscale cannot name itself, plus the
     // documented key location the embedded-server preset prefills.
     derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
@@ -117,6 +129,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     oidc,
     advanced,
     derp,
+    overview,
     derpRegionNames,
     derpPrivateKeyDefault,
     derpRelay,
@@ -197,6 +210,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={Tags} value="derp-regions">
             {t("settings.headscale.derp.regionNamesTitle")}
+          </SettingsTab>
+          <SettingsTab className="shrink-0" icon={Server} value="overview">
+            {t("settings.headscale.overviewTab")}
           </SettingsTab>
         </SettingsTabList>
 
@@ -306,6 +322,21 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           >
             <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
           </SettingsCollapsible>
+        </SettingsPanel>
+
+        <SettingsPanel value="overview">
+          <div className="flex flex-col gap-1">
+            <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              {t("settings.headscale.overviewTitle")}
+              <SettingsStatus tone="neutral">
+                {t("settings.headscale.overviewDisplayOnly")}
+              </SettingsStatus>
+            </p>
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.headscale.overviewBody")}
+            </p>
+          </div>
+          <ServerOverview overview={overview} />
         </SettingsPanel>
       </SettingsTabs>
     </SettingsPage>

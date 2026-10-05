@@ -27,7 +27,7 @@ import {
  * Returns an empty list when there is nothing readable to check.
  */
 export async function loadConfigChecks(path: string | undefined): Promise<ConfigCheck[]> {
-  const config = await readConfig(path);
+  const config = await readHeadscaleConfig(path);
   if (config === undefined) {
     return [];
   }
@@ -58,8 +58,12 @@ export async function loadConfigChecks(path: string | undefined): Promise<Config
   });
 }
 
-/** Reads and parses the file, or `undefined` when that is not possible. */
-async function readConfig(path: string | undefined): Promise<unknown> {
+/**
+ * Reads and parses the file, or `undefined` when that is not possible. Shared
+ * with the metrics probe, which reads the same `metrics_listen_addr` key out of
+ * the same document.
+ */
+export async function readHeadscaleConfig(path: string | undefined): Promise<unknown> {
   if (!path) {
     return undefined;
   }

@@ -5,7 +5,10 @@ import {
   isLogFormat,
   isLogLevel,
   MIN_EPHEMERAL_INACTIVITY_SECONDS,
+  MIN_HA_PROBE_INTERVAL_SECONDS,
+  MIN_HA_PROBE_TIMEOUT_SECONDS,
   parseGoDurationSeconds,
+  validateHaProbeSettings,
 } from "~/routes/settings/headscale/advanced-settings";
 
 describe("Headscale advanced setting validation", () => {
@@ -39,5 +42,22 @@ describe("Headscale advanced setting validation", () => {
     expect(isLogFormat("text")).toBe(true);
     expect(isLogFormat("json")).toBe(true);
     expect(isLogFormat("yaml")).toBe(false);
+  });
+
+  test("enforces Headscale's HA subnet router probe rules", () => {
+    expect(MIN_HA_PROBE_INTERVAL_SECONDS).toBe(2);
+    expect(MIN_HA_PROBE_TIMEOUT_SECONDS).toBe(1);
+
+    expect(validateHaProbeSettings("10s", "5s")).toBeUndefined();
+    expect(validateHaProbeSettings("2s", "1s")).toBeUndefined();
+    // 0 disables probing, so there is no interval left to fit the timeout into.
+    expect(validateHaProbeSettings("0", "5s")).toBeUndefined();
+
+    expect(validateHaProbeSettings("1500ms", "1s")).toBe("invalidInterval");
+    expect(validateHaProbeSettings("soon", "1s")).toBe("invalidInterval");
+    expect(validateHaProbeSettings("10s", "500ms")).toBe("invalidTimeout");
+    expect(validateHaProbeSettings("10s", "soon")).toBe("invalidTimeout");
+    expect(validateHaProbeSettings("10s", "10s")).toBe("timeoutNotBelowInterval");
+    expect(validateHaProbeSettings("10s", "30s")).toBe("timeoutNotBelowInterval");
   });
 });

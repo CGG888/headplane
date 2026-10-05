@@ -20,7 +20,7 @@ import Title from "~/components/title";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
-import { MAX_AUDIT_ENTRIES } from "~/server/audit/constants";
+import { AUDIT_EXPORT_LIMIT, MAX_AUDIT_ENTRIES } from "~/server/audit/constants";
 import type { AuditActorType, AuditEntry } from "~/server/audit/types";
 import { auditContext, authContext } from "~/server/context";
 import { Capabilities } from "~/server/web/roles";
@@ -29,6 +29,7 @@ import type { Route } from "./+types/overview";
 import {
   AUDIT_PAGE_SIZE,
   AUDIT_RANGES,
+  auditExportHref,
   auditQueryString,
   auditRangeSince,
   parseAuditFilters,
@@ -114,7 +115,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       title={t("settings.audit.title")}
     >
       <SettingsCollapsibleGroup>
-        <AuditFiltersSection filters={filters} />
+        <AuditFiltersSection filters={filters} total={total} />
 
         <SettingsCollapsible
           defaultOpen
@@ -154,7 +155,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 }
 
 /** The filters live behind one row so the list of operations stays the page. */
-function AuditFiltersSection({ filters }: { filters: AuditFilters }) {
+function AuditFiltersSection({ filters, total }: { filters: AuditFilters; total: number }) {
   const { t } = useI18n();
 
   const action = filters.action
@@ -182,13 +183,18 @@ function AuditFiltersSection({ filters }: { filters: AuditFilters }) {
       summary={summary}
       title={t("settings.audit.filtersTitle")}
     >
-      <AuditFilterForm filters={filters} />
+      <AuditFilterForm filters={filters} total={total} />
     </SettingsCollapsible>
   );
 }
 
-function AuditFilterForm({ filters }: { filters: AuditFilters }) {
+/** The page's action button style, shared by the submit button and the exports. */
+const ACTION_BUTTON =
+  "w-fit rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50";
+
+function AuditFilterForm({ filters, total }: { filters: AuditFilters; total: number }) {
   const { t } = useI18n();
+  const reachesExportLimit = total >= AUDIT_EXPORT_LIMIT;
 
   return (
     <Form className="flex w-full flex-col gap-3" method="get">
@@ -222,11 +228,19 @@ function AuditFilterForm({ filters }: { filters: AuditFilters }) {
           value={filters.range}
         />
       </div>
+      {reachesExportLimit ? (
+        <p className="text-right text-xs opacity-70">
+          {t("settings.audit.exportLimitNotice", { count: AUDIT_EXPORT_LIMIT })}
+        </p>
+      ) : undefined}
       <SettingsActions>
-        <button
-          className="w-fit rounded-md border border-mist-200 bg-white px-3.5 py-2 text-sm font-medium hover:bg-mist-50 dark:border-mist-700 dark:bg-mist-800/50 dark:hover:bg-mist-700/50"
-          type="submit"
-        >
+        <a className={ACTION_BUTTON} download href={auditExportHref(filters, "csv")}>
+          {t("settings.audit.exportCsv")}
+        </a>
+        <a className={ACTION_BUTTON} download href={auditExportHref(filters, "json")}>
+          {t("settings.audit.exportJson")}
+        </a>
+        <button className={ACTION_BUTTON} type="submit">
           {t("settings.audit.filterApply")}
         </button>
         <Link

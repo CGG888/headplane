@@ -197,6 +197,9 @@ describe("Headscale config loader", () => {
       clientId: "headplane",
       // A secret file counts as "configured"; the value itself is never read.
       hasClientSecret: true,
+      hasInlineClientSecret: false,
+      clientSecretPath: "/run/secrets/oidc",
+      extraParams: {},
       scope: ["openid", "profile", "email"],
       emailVerifiedRequired: true,
       useExpiryFromToken: true,
@@ -303,6 +306,8 @@ describe("Headscale config loader", () => {
       autoUpdateEnabled: false,
       logtailEnabled: false,
       disableCheckUpdates: false,
+      haProbeInterval: "10s",
+      haProbeTimeout: "5s",
     });
   });
 
@@ -339,6 +344,8 @@ describe("Headscale config loader", () => {
       autoUpdateEnabled: true,
       logtailEnabled: true,
       disableCheckUpdates: true,
+      haProbeInterval: "10s",
+      haProbeTimeout: "5s",
     });
   });
 
@@ -368,6 +375,8 @@ describe("Headscale config loader", () => {
       autoUpdateEnabled: false,
       logtailEnabled: false,
       disableCheckUpdates: false,
+      haProbeInterval: "10s",
+      haProbeTimeout: "5s",
     });
   });
 
@@ -616,5 +625,248 @@ describe("Headscale config loader", () => {
     expect(written.derp.server).toEqual({});
     expect(config.getDERPSettings().server.ipv4).toBe("");
     expect(config.getDERPSettings().server.ipv6).toBe("");
+  });
+
+  test("reads the extra authorization parameters and the secret file path", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "oidc:",
+        "  issuer: https://issuer.example.com",
+        "  client_id: headplane",
+        "  client_secret: super-secret",
+        "  client_secret_path: ${CREDENTIALS_DIRECTORY}/oidc_client_secret",
+        "  extra_params:",
+        "    domain_hint: example.com",
+        "    prompt: consent",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    const settings = config.getOIDCSettings();
+
+    expect(settings).toMatchObject({
+      hasClientSecret: true,
+      // The inline secret and the path are both present; the page warns about
+      // exactly this combination instead of blocking the save.
+      hasInlineClientSecret: true,
+      clientSecretPath: "${CREDENTIALS_DIRECTORY}/oidc_client_secret",
+      extraParams: { domain_hint: "example.com", prompt: "consent" },
+    });
+    expect(JSON.stringify(settings)).not.toContain("super-secret");
+  });
+
+  test("drops extra authorization parameters that are not strings", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "oidc:",
+        "  issuer: https://issuer.example.com",
+        "  extra_params:",
+        "    domain_hint: example.com",
+        "    attempts: 3",
+        "    nested:",
+        "      key: value",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getOIDCSettings()?.extraParams).toEqual({ domain_hint: "example.com" });
+  });
+
+  test("patches extra_params as a whole map and removes it with null", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      ["server_url: http://localhost:8080", "oidc:", "  issuer: https://issuer.example.com"].join(
+        "\n",
+      ),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    await config.patch([
+      { path: "oidc.extra_params", value: { domain_hint: "example.com", prompt: "consent" } },
+      { path: "oidc.client_secret_path", value: "${CREDENTIALS_DIRECTORY}/secret" },
+    ]);
+
+    const written = parse(await readFile(path, "utf8"));
+    expect(written.oidc.extra_params).toEqual({
+      domain_hint: "example.com",
+      prompt: "consent",
+    });
+    expect(written.oidc.client_secret_path).toBe("${CREDENTIALS_DIRECTORY}/secret");
+
+    await config.patch([
+      { path: "oidc.extra_params", value: null },
+      { path: "oidc.client_secret_path", value: null },
+    ]);
+
+    const cleared = parse(await readFile(path, "utf8"));
+    expect(cleared.oidc).toEqual({ issuer: "https://issuer.example.com" });
+    expect(config.getOIDCSettings()?.extraParams).toEqual({});
+  });
+
+  test("reads the HA probe durations verbatim, including a bare zero", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "node:",
+        "  routes:",
+        "    ha:",
+        "      probe_interval: 0",
+        "      probe_timeout: 5s",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    // `probe_interval: 0` is a YAML number that disables probing; it must not
+    // be mistaken for an unset key and shown as the 10s default.
+    expect(config.getAdvancedSettings()).toMatchObject({
+      haProbeInterval: "0",
+      haProbeTimeout: "5s",
+    });
+  });
+
+  test("falls back to the HA probe defaults for values with the wrong type", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "node:",
+        "  routes:",
+        "    ha:",
+        "      probe_interval:",
+        "        seconds: 10",
+        "      probe_timeout: [5]",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getAdvancedSettings()).toMatchObject({
+      haProbeInterval: "10s",
+      haProbeTimeout: "5s",
+    });
+  });
+
+  test("exposes the read-only overview from the configuration file", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: https://headscale.example.com",
+        "listen_addr: 0.0.0.0:8080",
+        "metrics_listen_addr: 127.0.0.1:9090",
+        "grpc_listen_addr: 127.0.0.1:50443",
+        "grpc_allow_insecure: true",
+        "unix_socket: /var/run/headscale/headscale.sock",
+        'unix_socket_permission: "0770"',
+        "prefixes:",
+        "  v4: 100.64.0.0/10",
+        "  v6: fd7a:115c:a1e0::/48",
+        "  allocation: random",
+        "database:",
+        "  type: postgres",
+        "  sqlite:",
+        "    path: /var/lib/headscale/db.sqlite",
+        "    write_ahead_log: false",
+        "noise:",
+        "  private_key_path: /var/lib/headscale/noise_private.key",
+        "tls_letsencrypt_hostname: headscale.example.com",
+        "acme_email: ops@example.com",
+        "tls_cert_path: /etc/headscale/tls.crt",
+        "tls_key_path: /etc/headscale/tls.key",
+        "tuning:",
+        "  node_store_batch_size: 100",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getServerOverview()).toEqual({
+      serverUrl: "https://headscale.example.com",
+      listenAddr: "0.0.0.0:8080",
+      prefixesV4: "100.64.0.0/10",
+      prefixesV6: "fd7a:115c:a1e0::/48",
+      prefixAllocation: "random",
+      databaseType: "postgres",
+      sqlitePath: "/var/lib/headscale/db.sqlite",
+      sqliteWriteAheadLog: false,
+      metricsListenAddr: "127.0.0.1:9090",
+      grpcListenAddr: "127.0.0.1:50443",
+      grpcAllowInsecure: true,
+      unixSocket: "/var/run/headscale/headscale.sock",
+      unixSocketPermission: "0770",
+      noisePrivateKeyPath: "/var/lib/headscale/noise_private.key",
+      tlsLetsencryptHostname: "headscale.example.com",
+      acmeEmail: "ops@example.com",
+      tlsCertPath: "/etc/headscale/tls.crt",
+      tlsKeyPath: "/etc/headscale/tls.key",
+      tuningConfigured: true,
+    });
+  });
+
+  test("keeps Headscale's fallbacks when every overview key is missing", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(path, ["dns:", "  magic_dns: false"].join("\n"));
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getServerOverview()).toEqual({
+      serverUrl: "",
+      listenAddr: "",
+      prefixesV4: "",
+      prefixesV6: "",
+      // Headscale allocates sequentially and uses SQLite with WAL when the
+      // corresponding keys are absent, so the page shows those, not blanks.
+      prefixAllocation: "sequential",
+      databaseType: "sqlite",
+      sqlitePath: "",
+      sqliteWriteAheadLog: true,
+      metricsListenAddr: "",
+      grpcListenAddr: "",
+      grpcAllowInsecure: false,
+      unixSocket: "",
+      unixSocketPermission: "",
+      noisePrivateKeyPath: "",
+      tlsLetsencryptHostname: "",
+      acmeEmail: "",
+      tlsCertPath: "",
+      tlsKeyPath: "",
+      tuningConfigured: false,
+    });
+  });
+
+  test("falls back for overview values with the wrong type", async () => {
+    const path = join(dir, "config.yaml");
+    await writeFile(
+      path,
+      [
+        "server_url: http://localhost:8080",
+        "prefixes: 42",
+        "database: not-a-map",
+        "grpc_allow_insecure: yes",
+        "unix_socket_permission: 770",
+        "noise: []",
+        "tuning: not-a-map",
+      ].join("\n"),
+    );
+
+    const config = await loadHeadscaleConfig(path);
+    expect(config.getServerOverview()).toMatchObject({
+      serverUrl: "http://localhost:8080",
+      prefixesV4: "",
+      prefixAllocation: "sequential",
+      databaseType: "sqlite",
+      sqliteWriteAheadLog: true,
+      grpcAllowInsecure: false,
+      unixSocketPermission: "",
+      noisePrivateKeyPath: "",
+      tuningConfigured: false,
+    });
   });
 });
