@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.1 (October 6, 2026)
+
 ## Fixes
 
 - **Relay regions are named, not "unknown".** The per-region latency rows on a machine used to fall back to an unnamed label whenever the operator had not manually mapped the region, so a healthy client showed rows like "unknown · 39ms". A region's name is now resolved through one chain — your manual mapping first, then the local map files listed in `derp.paths`, then the remote maps from `derp.urls` (fetched with a short timeout and cached in-process), then the embedded region, and finally `#id` — and the same helper labels the home region, the preferred region, the latency rows and the Overview, so the wording cannot drift. Failures anywhere in the chain stay quiet, and manual names still win when you want to rename something.
@@ -9,6 +11,9 @@
 - **The Overview shows what the configured maps actually describe.** A new box lists each region from those maps with its code, name, node count and where it came from, and expanding a region shows its nodes — `hostname:derpport`, whether STUN is offered, a `stunonly` marker, the declared addresses, and the addresses the hostname actually resolves to. A path the container cannot read says so, with the same "mount it at the same absolute path" wording the settings card uses.
 - The machine DERP card's description and its "ids only" note were tightened, and the redundant label above the relay endpoint is gone.
 - Documentation: the local DERP map section now states that `derp.paths` is read by Headscale — on fnOS the host process — so an entry must be a **host path** with the directory mounted into the container **at the identical absolute path**, that a container-only path is fatal at the next restart, how to recover from `getting DERPMap: open …: no such file or directory` (remove the entry or roll back the pre-write snapshot, then restart), a JSON→YAML conversion table for pasting a region out of Tailscale's map, and the reminder that the official regions arrive through `derp.urls` and need no local copy.
+
+---
+
 # 0.22.0 (October 5, 2026)
 
 ## Changes
