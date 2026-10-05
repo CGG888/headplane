@@ -26,6 +26,11 @@ import { useI18n } from "~/i18n/provider";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
 import RelayResolver from "~/routes/machines/components/relay-resolver";
 import {
+  relayFamilyVerdicts,
+  relayResolutionBlamesSystemResolver,
+  type RelayFamilyVerdict,
+} from "~/routes/machines/relay-verdicts";
+import {
   agentsContext,
   appConfigContext,
   auditContext,
@@ -45,8 +50,6 @@ import type { AgentManager } from "~/server/hp-agent";
 import {
   buildRelayView,
   loadSharedRelayResolution,
-  relayVerdictIsNoteworthy,
-  type RelayAddressComparison,
   type RelayAddressFamily,
   type RelayAddressVerdict,
 } from "~/server/relay-dns";
@@ -424,12 +427,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         endpointReason: relayView.endpointReason,
         address: relayAddress,
         // Declared versus resolved, so the card says whether what derp.server
-        // advertises is what clients would actually reach.
-        verdicts: relayView.address?.comparisons,
+        // advertises is what clients would actually reach. The verdicts are
+        // flattened to plain values here, because the card must not import a
+        // module that reaches Node-only code (see `./relay-verdicts`).
+        verdicts: relayFamilyVerdicts(relayView.address?.comparisons ?? []),
         // Which resolver produced this answer, and whether this viewer may ask
         // for a fresh one; the card shows both under the resolved addresses.
         resolution: relayResolution,
         canRefresh: auth.can(principal, Capabilities.configure_iam),
+        suggestsConfigured: relayResolutionBlamesSystemResolver(relayResolution),
       },
       declared: declaredDerpAddresses(derp.server),
       stunListenAddr: derp.server.stunListenAddr,
@@ -541,31 +547,26 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const derived = { tone: "neutral" as const, label: t("overview.status.derived") };
   const relayReason = (reason: RelayReason) => t(RELAY_REASON_KEYS[reason]);
   const relayVerdictOf = (family: RelayAddressFamily) =>
-    derp.relay.verdicts?.find((entry) => entry.family === family);
+    derp.relay.verdicts.find((entry) => entry.family === family);
 
   /**
    * What a declared relay address and the resolved records say to each other.
    * A match or a missing record with nothing declared says nothing worth a
    * line: the row already shows what resolved (or why nothing did).
    *
-   * `host` is the resolved hostname, so a hint can quote the exact `dig`
-   * command an operator has to run instead of describing it.
+   * The verdict itself is prepared by the loader, so this never imports the
+   * server relay module. `host` is the resolved hostname, so a hint can quote
+   * the exact `dig` command an operator has to run instead of describing it.
    */
-  const relayVerdictNote = (
-    comparison: RelayAddressComparison | undefined,
-    host: string | undefined,
-  ) => {
-    if (comparison === undefined || !relayVerdictIsNoteworthy(comparison)) {
+  const relayVerdictNote = (entry: RelayFamilyVerdict | undefined, host: string | undefined) => {
+    if (entry?.verdict === undefined) {
       return undefined;
     }
 
-    const note = t(RELAY_VERDICT_KEYS[comparison.verdict], {
-      address: comparison.declared ?? "",
-    });
-    const fix = RELAY_FIX_KEYS[comparison.family][comparison.verdict];
-    return fix === undefined
-      ? note
-      : `${note} · ${t(fix, { host: host ?? "", address: comparison.declared ?? "" })}`;
+    const address = entry.declared ?? "";
+    const note = t(RELAY_VERDICT_KEYS[entry.verdict], { address });
+    const fix = RELAY_FIX_KEYS[entry.family][entry.verdict];
+    return fix === undefined ? note : `${note} · ${t(fix, { host: host ?? "", address })}`;
   };
 
   return (
@@ -768,7 +769,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               />
             </FactGroup>
 
-            <RelayResolver canRefresh={derp.relay.canRefresh} resolution={derp.relay.resolution} />
+            <RelayResolver
+              canRefresh={derp.relay.canRefresh}
+              resolution={derp.relay.resolution}
+              suggestsConfigured={derp.relay.suggestsConfigured}
+            />
 
             <FactGroup
               title={t("overview.status.configured")}

@@ -51,6 +51,7 @@ import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
 import { machineAction } from "./machine-actions";
+import { relayFamilyVerdicts, relayResolutionBlamesSystemResolver } from "./relay-verdicts";
 import { shouldRevalidateMachines } from "./should-revalidate";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -112,7 +113,12 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   const derp = headscaleConfig.getDERPSettings();
   const relayEndpoint = deriveDerpPublicEndpoint(derp.serverUrl);
   const relayResolution = await loadSharedRelayResolution(relayEndpoint?.host);
-  const relay = buildRelayView(relayEndpoint, relayResolution).host;
+  // The declared addresses join the view so each family can say whether what
+  // `derp.server` advertises is what clients would actually reach. The card
+  // receives the finished verdicts: it must never import a module that reaches
+  // Node-only code (see `./relay-verdicts`).
+  const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
+  const relay = relayView.host;
 
   return {
     agent: agentSync
@@ -136,6 +142,8 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     derpRegionNames: await readDerpRegionNames(appConfig.server.data_path),
     relay,
     relayResolution,
+    relayVerdicts: relayFamilyVerdicts(relayView.address?.comparisons ?? []),
+    relaySuggestsConfigured: relayResolutionBlamesSystemResolver(relayResolution),
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
     policyTags: extractTagOwnerTags(policy),
@@ -173,6 +181,8 @@ export default function Page({
     derpRegionNames,
     relay,
     relayResolution,
+    relayVerdicts,
+    relaySuggestsConfigured,
     stats,
     existingTags,
     policyTags,
@@ -508,10 +518,11 @@ export default function Page({
         <DerpInfo
           agentEnabled={agentEnabled}
           canRefresh={canRefreshRelayDns}
-          declared={derp.server}
           regionNames={derpRegionNames}
           relay={relay}
           relayResolution={relayResolution}
+          relaySuggestsConfigured={relaySuggestsConfigured}
+          relayVerdicts={relayVerdicts}
           server={derp.server}
           stats={stats}
         />

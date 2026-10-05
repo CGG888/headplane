@@ -41,8 +41,27 @@ export default function Link(props: LinkProps): JSX.Element {
     );
   }
 
+  // Deliberately no `prefetch`: an internal link never starts a page prefetch
+  // for its target.
+  //
+  // `prefetch="intent"` made a plain hover over any of these links - the
+  // machines list rows included - import the target route's whole module in the
+  // browser and fetch its loaders. Route modules are shared by both
+  // environments, and the browser import evaluates the *unstripped* module: it
+  // reaches Node-only code through the loader imports (`~/utils/log` reads
+  // `process.env` at module scope), which throws `ReferenceError: process is not
+  // defined`. React Router answers a failed route-module import with
+  // `window.location.reload()` ("Error loading route module ..., reloading
+  // page..."), so hovering a machine name reloaded the whole list and wiped the
+  // console error that explained it, once per hover - a failed import is never
+  // cached.
+  //
+  // The relay cards no longer leak that server code into their client graph
+  // (see `routes/machines/relay-verdicts.ts`), but prefetching stays off: it
+  // runs another page's loaders for a hover, and any route module that grows a
+  // Node-only import would turn a hover back into a reload.
   return (
-    <RouterLink to={props.to} prefetch="intent" className={props.className}>
+    <RouterLink to={props.to} className={props.className}>
       {props.children}
     </RouterLink>
   );

@@ -4,12 +4,8 @@ import Link from "~/components/link";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
-  compareRelayAddresses,
-  relayVerdictIsNoteworthy,
-  type RelayAddressComparison,
   type RelayAddressFamily,
   type RelayAddressVerdict,
-  type RelayDeclaredAddresses,
   type RelayHostView,
   type RelayResolution,
   type RelayResolutionReason,
@@ -26,6 +22,7 @@ import {
   type DerpRegionLabel,
   type DerpRegionNames,
 } from "../derp-info";
+import { type RelayFamilyVerdict } from "../relay-verdicts";
 import MachineAttribute from "./attribute";
 import MachineCard from "./machine-card";
 import RelayResolver from "./relay-resolver";
@@ -35,8 +32,6 @@ interface DerpInfoProps {
   agentEnabled: boolean;
   /** Whether this viewer may re-resolve the relay hostname; see the relay DNS settings. */
   canRefresh: boolean;
-  /** `derp.server`'s declared addresses, so each row can say whether it matches. */
-  declared: RelayDeclaredAddresses | undefined;
   /** Manual region id -> name mapping from Headplane's data directory. */
   regionNames: DerpRegionNames;
   /** Headscale's embedded DERP configuration, when it could be read. */
@@ -47,6 +42,10 @@ interface DerpInfoProps {
   relay: RelayHostView | undefined;
   /** The relay hostname's A and AAAA records, when the lookup ran. */
   relayResolution: RelayResolution | undefined;
+  /** Per-family declared-versus-resolved verdicts, prepared by the loader. */
+  relayVerdicts: readonly RelayFamilyVerdict[];
+  /** Whether an empty family is only the host's own resolver speaking. */
+  relaySuggestsConfigured: boolean;
 }
 
 /** `#999 · headscale (embedded DERP)` so the operator sees their own relay. */
@@ -89,28 +88,23 @@ const RELAY_FIX_KEYS: Record<
 };
 
 /**
- * The verdict of one family, or `undefined` when printing it would only repeat
- * the row it belongs to.
- */
-function verdictOf(comparison: RelayAddressComparison): RelayAddressVerdict | undefined {
-  return relayVerdictIsNoteworthy(comparison) ? comparison.verdict : undefined;
-}
-
-/**
  * The declared-versus-resolved verdict under one resolved address row.
  *
- * `host` is the resolved hostname, so a hint can quote the exact `dig` command
- * an operator has to run instead of describing it.
+ * The verdict is prepared by the loader, so the client bundle never imports the
+ * server relay module that decides it. `host` is the resolved hostname, so a
+ * hint can quote the exact `dig` command an operator has to run instead of
+ * describing it.
  */
-function RelayVerdict({ comparison, host }: { comparison: RelayAddressComparison; host?: string }) {
+function RelayVerdict({ entry, host }: { entry: RelayFamilyVerdict | undefined; host?: string }) {
   const { t } = useI18n();
-  const verdict = verdictOf(comparison);
-  if (verdict === undefined) {
+  if (entry?.verdict === undefined) {
     return undefined;
   }
 
-  const fix = RELAY_FIX_KEYS[comparison.family][verdict];
+  const verdict = entry.verdict;
+  const fix = RELAY_FIX_KEYS[entry.family][verdict];
   const needsAttention = verdict === "declared-but-not-resolved" || verdict === "no-records";
+  const address = entry.declared ?? "";
 
   return (
     <span
@@ -119,8 +113,8 @@ function RelayVerdict({ comparison, host }: { comparison: RelayAddressComparison
         needsAttention ? "text-amber-700 dark:text-amber-300" : "text-mist-500 dark:text-mist-400",
       )}
     >
-      {t(RELAY_VERDICT_KEYS[verdict], { address: comparison.declared ?? "" })}
-      {fix ? ` · ${t(fix, { host: host ?? "", address: comparison.declared ?? "" })}` : undefined}
+      {t(RELAY_VERDICT_KEYS[verdict], { address })}
+      {fix ? ` · ${t(fix, { host: host ?? "", address })}` : undefined}
     </span>
   );
 }
@@ -138,12 +132,13 @@ function RelayLine({ label, value }: { label: string; value: string }) {
 export default function DerpInfo({
   agentEnabled,
   canRefresh,
-  declared,
   regionNames,
   server,
   stats,
   relay,
   relayResolution,
+  relayVerdicts,
+  relaySuggestsConfigured,
 }: DerpInfoProps) {
   const { t } = useI18n();
   const unknown = t("machines.detail.derp.unknown");
@@ -166,17 +161,21 @@ export default function DerpInfo({
 
   // One verdict per family: what `derp.server` declares against what the
   // hostname actually resolves to, so an empty row always says why it is empty.
-  const comparisons = compareRelayAddresses(declared, relayResolution);
-  const relayRows: { label: string; addresses: string[]; comparison: RelayAddressComparison }[] = [
+  // The loader prepared them, because the rule lives in a server module.
+  const relayRows: {
+    label: string;
+    addresses: string[];
+    verdict: RelayFamilyVerdict | undefined;
+  }[] = [
     {
       label: t("machines.detail.derp.relayResolvedIpv4"),
       addresses: relayResolution?.ipv4 ?? [],
-      comparison: comparisons[0],
+      verdict: relayVerdicts.find((entry) => entry.family === "ipv4"),
     },
     {
       label: t("machines.detail.derp.relayResolvedIpv6"),
       addresses: relayResolution?.ipv6 ?? [],
-      comparison: comparisons[1],
+      verdict: relayVerdicts.find((entry) => entry.family === "ipv6"),
     },
   ];
 
@@ -237,11 +236,16 @@ export default function DerpInfo({
                       {relayUnavailable}
                     </span>
                   )}
-                  <RelayVerdict comparison={row.comparison} host={relayResolution?.host} />
+                  <RelayVerdict entry={row.verdict} host={relayResolution?.host} />
                 </div>
               ))}
             </div>
-            <RelayResolver canRefresh={canRefresh} className="mt-1" resolution={relayResolution} />
+            <RelayResolver
+              canRefresh={canRefresh}
+              className="mt-1"
+              resolution={relayResolution}
+              suggestsConfigured={relaySuggestsConfigured}
+            />
           </div>
         ) : (
           <p className="text-sm text-mist-500 dark:text-mist-400">

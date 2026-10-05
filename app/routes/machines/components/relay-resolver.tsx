@@ -10,10 +10,7 @@ import type {
   RelayDnsActionResult,
   RelayDnsErrorCode,
 } from "~/routes/settings/headscale/relay-dns-servers";
-import {
-  relayResolutionSuggestsConfiguredResolver,
-  type RelayResolution,
-} from "~/server/relay-dns";
+import type { RelayResolution } from "~/server/relay-dns";
 import cn from "~/utils/cn";
 
 /** Where the configured resolver list lives; see `routes/settings/headscale/relay-dns.ts`. */
@@ -35,6 +32,12 @@ export interface RelayResolverProps {
   resolution: RelayResolution | undefined;
   /** Whether this viewer may ask again; the lookup follows the settings page's permission. */
   canRefresh: boolean;
+  /**
+   * Whether an empty family is only the host's own resolver speaking, so the
+   * hint below the pill is worth showing. Prepared by the loader: the rule lives
+   * in `~/server/relay-dns`, which must stay out of the client bundle.
+   */
+  suggestsConfigured: boolean;
   className?: string;
 }
 
@@ -53,7 +56,12 @@ export interface RelayResolverProps {
  * the pill and the addresses update in place. A rejected request becomes a line
  * under the control, never an error page.
  */
-export default function RelayResolver({ resolution, canRefresh, className }: RelayResolverProps) {
+export default function RelayResolver({
+  resolution,
+  canRefresh,
+  suggestsConfigured,
+  className,
+}: RelayResolverProps) {
   const { t } = useI18n();
   const fetcher = useFetcher<RelayDnsActionResult>();
   const busy = fetcher.state !== "idle";
@@ -61,9 +69,6 @@ export default function RelayResolver({ resolution, canRefresh, className }: Rel
   // A literal endpoint and a lookup that never ran carry no resolver, so the pill
   // is absent rather than blaming a resolver that did not answer.
   const answered = resolution?.resolver !== undefined;
-  const suggestsConfigured =
-    relayResolutionSuggestsConfiguredResolver(resolution, "ipv4") ||
-    relayResolutionSuggestsConfiguredResolver(resolution, "ipv6");
 
   const result = fetcher.data;
   const rejected = result !== undefined && !result.ok ? result : undefined;

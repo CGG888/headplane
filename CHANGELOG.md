@@ -1,5 +1,8 @@
 # Next
 
+## Fixes
+
+- **Fixed the machines page reloading on hover or on a click, introduced in 0.21.2.** The machine detail and the Overview imported the relay lookup — a server module that reaches for Node's DNS and the logger — straight into the browser bundle, so the page's client graph failed to evaluate with `process is not defined`; React Router answers a route module that fails to load by reloading the document, and because every internal link also prefetched its target on hover, merely moving the mouse over a machine name reloaded the page. The relay verdicts are now prepared by the loaders and passed as plain values, only type imports remain on the client, and internal links no longer prefetch on hover. Verified in a browser: hovering makes no request and logs nothing, clicking navigates in-app with no document request.
 # 0.21.7 (October 5, 2026)
 
 ## Fixes
