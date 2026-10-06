@@ -474,7 +474,7 @@ services:
     environment:
       - "TZ=Asia/Shanghai"
       # 监听地址用本机局域网 IP（Lucky 在另一台机器也能访问）；只想本机访问就改 127.0.0.1
-      - "HEADPLANE_SERVER__HOST=192.168.1.10"
+      - "HEADPLANE_SERVER__HOST=192.0.2.10"
       - "HEADPLANE_SERVER__PORT=4100"
 
       # 与上面挂载点一致的容器内路径（DNS/设置入口出现的条件）
@@ -542,10 +542,10 @@ docker compose logs headplane | grep -i 'Found headscale serve'
 docker compose logs headplane | grep -iE 'Agent|Tailnet'
 #    期望：Connecting to Tailnet at http://127.0.0.1:8480 as headplane-agent
 # 5) 本地访问
-curl -I http://192.168.1.10:4100/admin
+curl -I http://192.0.2.10:4100/admin
 ```
 
-浏览器打开 `http://192.168.1.10:4100/admin`，用第三节的 API Key 登录。
+浏览器打开 `http://192.0.2.10:4100/admin`，用第三节的 API Key 登录。
 登录后导航栏应包含：**机器 / 用户 / 访问控制 / DNS / 设置**。
 
 ## 九、Lucky 反向代理要点
@@ -554,8 +554,8 @@ curl -I http://192.168.1.10:4100/admin
 
 | 链路          | 前端                                                          | 后端                       | 关注点                                            |
 | ------------- | ------------------------------------------------------------- | -------------------------- | ------------------------------------------------- |
-| **Headplane** | `https://headplane.example.com`                               | `http://192.168.1.10:4100` | `base_url`、跨站校验、WebSocket（浏览器 SSH）     |
-| **Headscale** | `https://headscale.example.com`（自建 DERP 时通常带 `:8443`） | `http://192.168.1.10:8480` | **原样透传路径**、放行 HTTP Upgrade、关闭响应缓冲 |
+| **Headplane** | `https://headplane.example.com`                               | `http://192.0.2.10:4100` | `base_url`、跨站校验、WebSocket（浏览器 SSH）     |
+| **Headscale** | `https://headscale.example.com`（自建 DERP 时通常带 `:8443`） | `http://192.0.2.10:8480` | **原样透传路径**、放行 HTTP Upgrade、关闭响应缓冲 |
 
 ### 9.1 Headplane 的反代
 
@@ -579,7 +579,7 @@ Access-Control-Allow-Headers: Content-Type, Upgrade, Sec-WebSocket-Protocol
 内嵌 DERP 与 Headscale 的控制服务**共用同一个 HTTPS 端点**，走的是 `/derp` 路径上的**长连接升级**。所以这一步的目标**不是"新增一条 `/derp` 规则"**，而是**别把路径吃掉**：
 
 1. **前端**：`headscale.example.com`，监听你实际对外的端口（如 8443），挂上证书
-2. **后端**：`http://192.168.1.10:8480`
+2. **后端**：`http://192.0.2.10:8480`
    - ⚠️ 只填 `主机:端口`，**不要**在后面补 `/` 或任何路径
 3. **匹配路径 / 子规则**：**留空**，或 `/*`
    - ❌ 不要只填 `/api`、`/ts2021`、`/health` —— 这正是"只转发了 API 和控制路径"的典型症状，`/derp` 会 404
@@ -598,7 +598,7 @@ Headscale 这条反代 = **透明管道**：不改路径、不缓冲、放行长
 HTTP 反向代理**转发不了 UDP**。DERP map 里公告的 STUN 端口是 `udp/3478`，客户端会往 `headscale.example.com:3478/udp` 发包，所以要在 **Lucky 所在机器（或路由器）**上做端口转发：
 
 ```
-udp/3478  →  192.168.1.10:3478/udp        # 指向运行 headscale 的那台 fnOS
+udp/3478  →  192.0.2.10:3478/udp        # 指向运行 headscale 的那台 fnOS
 ```
 
 （若公网入口在路由器上，则：公网 `udp/3478` → fnOS `udp/3478`。）
@@ -923,7 +923,7 @@ docker compose logs headplane | grep -i 'Found headscale serve'
 # 3) Agent 已连上 Tailnet 并完成同步
 docker compose logs headplane | grep -iE 'Agent|Tailnet'
 # 4) Headplane 与 headscale 都活着（Headplane 绑在 compose 里写的监听地址上）
-curl -sI http://192.168.1.10:4100/admin | head -n 1
+curl -sI http://192.0.2.10:4100/admin | head -n 1
 curl -s http://127.0.0.1:8480/health
 ```
 
