@@ -48,7 +48,6 @@ jobs:
 
 
         with:
-
           enablement: true
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
