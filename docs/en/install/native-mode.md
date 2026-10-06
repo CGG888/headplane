@@ -1,6 +1,6 @@
 ---
 title: Native Mode
-description: Install Headplane without Docker.
+description: Install HeadplaneCN without Docker.
 outline: [2, 3]
 ---
 
@@ -11,7 +11,7 @@ If you are looking to deploy with Docker, follow the
 [**Docker**](./docker.md) deployment guide.
 :::
 
-Headplane can be installed and run directly on your host system without the need
+HeadplaneCN can be installed and run directly on your host system without the need
 for Docker. This method is suitable for users who already run Headscale natively
 or prefer to avoid containers.
 
@@ -19,16 +19,16 @@ or prefer to avoid containers.
 
 - A Linux-based operating system (e.g, Ubuntu, Debian, CentOS, Fedora)
 - Go matching the `go` directive in the checked-out release's `go.mod`
-  (only needed to build Headplane)
+  (only needed to build HeadplaneCN)
 - Node.js and [pnpm](https://pnpm.io/) matching the `engines` field in the
   checked-out release's `package.json`. For v0.7.1, use Node.js `>=24.2 <25`
   and pnpm `>=10.4 <11`; `packageManager` pins pnpm to `10.4.0`.
 - Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for Headplane.
+- A [completed configuration file](./index.md#configuration) for HeadplaneCN.
 
-Before building and running Headplane, ensure that the directory defined in
+Before building and running HeadplaneCN, ensure that the directory defined in
 `server.data_path` in your configuration exists and is writable by the user who
-will run Headplane.
+will run HeadplaneCN.
 
 ```bash
 # Adjust as needed and set a custom user if you desire
@@ -36,9 +36,9 @@ sudo mkdir -p /var/lib/headplane
 sudo chown -R $(whoami):$(whoami) /var/lib/headplane
 ```
 
-## Building Headplane
+## Building HeadplaneCN
 
-Clone the Headplane repository, install dependencies, and build the project:
+Clone the HeadplaneCN repository, install dependencies, and build the project:
 
 ```bash
 # You can optionally checkout a specific release tag.
@@ -48,23 +48,23 @@ cd headplaneCN
 ```
 
 The build script installs locked dependencies and builds the web application,
-Browser SSH WASM module, Headplane Agent and healthcheck binary. Go and pnpm
+Browser SSH WASM module, HeadplaneCN Agent and healthcheck binary. Go and pnpm
 are build-time tools; the resulting application runs with Node.js.
 
-## Running Headplane
+## Running HeadplaneCN
 
-Run `node build/server/index.js` from the project directory to start Headplane.
-If pnpm is installed, `pnpm start` runs the same command. Headplane will look
+Run `node build/server/index.js` from the project directory to start HeadplaneCN.
+If pnpm is installed, `pnpm start` runs the same command. HeadplaneCN will look
 for a config file at `/etc/headplane/config.yaml` by default, but you can specify
 a different path by setting the `HEADPLANE_CONFIG_PATH` environment variable.
 
 > Ensure that the `build/` directory exists relative to where the start command
-> is run, otherwise Headplane will not be able to find the frontend assets.
+> is run, otherwise HeadplaneCN will not be able to find the frontend assets.
 
 ### Example systemd Service
 
 Slotting this file into `/etc/systemd/system/headplane.service` will allow
-you to manage Headplane via systemd. Adjust the paths and user as needed,
+you to manage HeadplaneCN via systemd. Adjust the paths and user as needed,
 run `sudo systemctl daemon-reload`, and then enable/start the service.
 
 ```ini
@@ -89,7 +89,7 @@ RestartSec=5s
 WantedBy=multi-user.target
 ```
 
-To access Headplane, navigate to `http://localhost:3000/admin` in your web
+To access HeadplaneCN, navigate to `http://localhost:3000/admin` in your web
 browser (replace `localhost` with your server's IP address or domain name if
 not running locally).
 
@@ -110,12 +110,12 @@ UI or remote SSH from the browser.
 ### Network Management
 
 Network management allows you to configure Tailnet settings such as DNS servers,
-custom A records, the tailnet domain name, and MagicDNS from the Headplane UI.
+custom A records, the tailnet domain name, and MagicDNS from the HeadplaneCN UI.
 
 #### Prerequisites
 
 Network management (and other configurable Headscale features) requires that
-Headplane and Headscale both run on the same machine because Headplane needs
+HeadplaneCN and Headscale both run on the same machine because HeadplaneCN needs
 
 - Access to read and write the Head**scale** configuration file
 - Access to read the `/proc` filesystem on Linux to locate Headscale's process
@@ -123,7 +123,7 @@ Headplane and Headscale both run on the same machine because Headplane needs
 #### Configuration
 
 Enabling network management is as simple as setting a few additional fields in
-your Headplane configuration file:
+your HeadplaneCN configuration file:
 
 | Field                          | Description                                                                                                                    |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -131,27 +131,27 @@ your Headplane configuration file:
 | **`headscale.config_path`**    | Path to your Head**scale** configuration file (e.g., `/etc/headscale/config.yaml`).                                            |
 | `headscale.dns_records_path`   | _Optional_. Refer to the [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml) for details. |
 
-With these settings in place, restart Headplane. You should now see additional
+With these settings in place, restart HeadplaneCN. You should now see additional
 options in the UI navbar such as "DNS" and "Settings" where you can manage your
 Tailnet configuration.
 
 ### Remote Web SSH
 
 Remote Web SSH allows you to open a terminal session to your Tailscale nodes
-directly from the Headplane web interface via
+directly from the HeadplaneCN web interface via
 [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh). This feature
 requires that Tailscale SSH is running on your nodes (done via
 `tailscale up --ssh`).
 
-This feature uses the [Headplane Agent](../features/agent.md) to facilitate the
+This feature uses the [HeadplaneCN Agent](../features/agent.md) to facilitate the
 SSH connections. Refer to the [Agent documentation](../features/agent.md) for
 setup instructions and specifically follow the
 [native mode configuration](../features/agent.md#native-mode-configuration)
-section to point Headplane to the correct agent location.
+section to point HeadplaneCN to the correct agent location.
 
 ### Single Sign-On (SSO)
 
-Single Sign-On (SSO) authentication allows users to log in to Headplane using
+Single Sign-On (SSO) authentication allows users to log in to HeadplaneCN using
 external identity providers such as Google, GitHub, or any provider that
 supports OpenID Connect (OIDC).
 
@@ -160,21 +160,21 @@ for detailed setup instructions.
 
 ## Reverse Proxying
 
-You _should_ run Headplane behind a reverse proxy such as Nginx or Caddy in
+You _should_ run HeadplaneCN behind a reverse proxy such as Nginx or Caddy in
 production. Additionally, putting Headscale beind the reverse proxy allows
 you to access both services via the same domain and TLS certificate.
 
 #### Configuration
 
 ::: tip
-If you are using a [custom path prefix](#custom-path-prefix) for Headplane,
+If you are using a [custom path prefix](#custom-path-prefix) for HeadplaneCN,
 adjust the `/admin` paths in the examples below accordingly.
 :::
 
 Headscale supports integrating with
 [several reverse proxies](https://headscale.net/stable/ref/integration/reverse-proxy/)
-such as Nginx, Caddy, Apache, etc. Deploying Headplane is as simple as adding
-a handler to route any requests to `/admin` to the Headplane service. Refer
+such as Nginx, Caddy, Apache, etc. Deploying HeadplaneCN is as simple as adding
+a handler to route any requests to `/admin` to the HeadplaneCN service. Refer
 to the Nginx example below for a reference configuration. A similar setup via
 Traefik in Docker is available in the [Docker](./docker.md#reverse-proxying)
 installation documentation.
@@ -182,7 +182,7 @@ installation documentation.
 #### Example Nginx Configuration
 
 The following configuration will set up Nginx to proxy all Headscale requests
-on `headscale.example.com` and serve the Headplane UI under the `/admin` path.
+on `headscale.example.com` and serve the HeadplaneCN UI under the `/admin` path.
 This is identical to how Tailscale's own admin console is served.
 
 ```nginx
@@ -232,13 +232,13 @@ server {
 ## Custom Path Prefix
 
 ::: warning
-The only officially supported path prefix for Headplane is `/admin`. Using a
+The only officially supported path prefix for HeadplaneCN is `/admin`. Using a
 custom path prefix may lead to unexpected issues and is not recommended.
 :::
 
-If for whatever reason you do not want to serve Headplane under `/admin`
+If for whatever reason you do not want to serve HeadplaneCN under `/admin`
 (e.g., you want to serve it under `/headplane`), you can set the prefix
-while building Headplane via the `__INTERNAL_PREFIX` environment variable.
+while building HeadplaneCN via the `__INTERNAL_PREFIX` environment variable.
 
 ```bash
 # Example for /headplane prefix
@@ -248,7 +248,7 @@ cd headplaneCN
 __INTERNAL_PREFIX=/headplane ./build.sh
 ```
 
-When running Headplane, all requests will only be served under the specified
+When running HeadplaneCN, all requests will only be served under the specified
 path. Make sure to also adjust your reverse proxy configuration accordingly if
 you are using one. Additionally, if you want to change the path prefix again,
-you will need to rebuild Headplane with the new prefix.
+you will need to rebuild HeadplaneCN with the new prefix.

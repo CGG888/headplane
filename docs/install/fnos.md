@@ -1,20 +1,20 @@
 ---
 title: fnOS（飞牛）
-description: 在飞牛 fnOS 上用第三方应用源安装 headscale，再用 Docker 部署 Headplane。
+description: 在飞牛 fnOS 上用第三方应用源安装 headscale，再用 Docker 部署 HeadplaneCN。
 outline: [2, 3]
 ---
 
 # fnOS（飞牛）部署指南
 
-这份指南按「**headscale 用第三方应用源的 fpk 包原生运行 + Headplane 用 Docker 运行 + Lucky 反向代理**」
-这套部署方式编写，包含两份可直接使用的设置文件（Headplane 的 `config.yaml` 与
+这份指南按「**headscale 用第三方应用源的 fpk 包原生运行 + HeadplaneCN 用 Docker 运行 + Lucky 反向代理**」
+这套部署方式编写，包含两份可直接使用的设置文件（HeadplaneCN 的 `config.yaml` 与
 `docker-compose.yml`），以及全部常见问题的排查方法。
 
 ::: tip 环境对应关系
 
 - Headscale：fnOS 应用中心（**第三方源**）安装的 fpk 包，**原生进程**（不是 Docker 容器）
-- Headplane：Docker 容器，本指南用 host 网络、监听 `4100`
-- 反向代理：Lucky（可以和 Headplane 不在同一台机器上）
+- HeadplaneCN：Docker 容器，本指南用 host 网络、监听 `4100`
+- 反向代理：Lucky（可以和 HeadplaneCN 不在同一台机器上）
   :::
 
 ::: warning 安装 Headscale 必须先添加第三方应用源
@@ -30,7 +30,7 @@ fnOS **官方应用中心不提供 headscale**。请先在「飞牛应用中心 
   官方应用中心没有这个包），版本建议 **0.29.2 或更高**（0.29.0 beta ~ 0.29.1 的浏览器 SSH
   有 WebSocket 回归）
 - 已安装 Docker / Docker Compose（fnOS 自带）
-- Headplane 镜像：`ghcr.io/cgg888/headplanecn`（本仓库），国内可用加速前缀，例如
+- HeadplaneCN 镜像：`ghcr.io/cgg888/headplanecn`（本仓库），国内可用加速前缀，例如
   `v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:latest`
 - 建议版本 **0.16.0 或更高**：设置页已是「分段式 Tab + 展开/折叠卡片」，并包含 DERP 面板、
   操作审计、配置快照与配置检查；**0.8.4 是反代环境的最低要求**（它修复了「保存/切换时报
@@ -43,7 +43,7 @@ fnOS **官方应用中心不提供 headscale**。请先在「飞牛应用中心 
 | ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `/vol1/@appcenter/headscale/` | **程序目录**        | `headscale`（可执行文件/CLI）、`bin/headscale-server`（启动脚本）、`config/config.yaml`（**种子模板**）、`ui/`      |
 | `/vol1/@appdata/headscale/`   | **配置 + 数据目录** | `config.yaml`（**真正生效**）、`db.sqlite`、`noise_private.key`、`headscale.sock`、`headscale.pid`、`headscale.log` |
-| `/vol1/1000/APP/headplane/`   | **Headplane 目录**  | `docker-compose.yml`、`config.yaml`、`data/`（本指南使用这个目录）                                                  |
+| `/vol1/1000/APP/headplane/`   | **HeadplaneCN 目录**  | `docker-compose.yml`、`config.yaml`、`data/`（本指南使用这个目录）                                                  |
 
 **为什么生效的是 `@appdata` 那份？** fnOS 的启动脚本 `@appcenter/headscale/bin/headscale-server`
 的关键逻辑就是「种子模板只在第一次落地，之后永远读 `@appdata`」：
@@ -82,7 +82,7 @@ curl -s http://127.0.0.1:8480/health          # 期望 {"status":"pass"}
 ss -lntp | grep -E '8480|8481|50443'          # 8480 是控制端口，8481 是 metrics
 ```
 
-## 三、生成 Headscale API Key（Headplane 服务端用）
+## 三、生成 Headscale API Key（HeadplaneCN 服务端用）
 
 ```bash
 cd /vol1/@appcenter/headscale
@@ -93,7 +93,7 @@ cd /vol1/@appcenter/headscale
 - 输出形如 `hskey-api-xxxxxxxx...`，**只显示一次**，请立刻记录；
 - `3650d` ≈ 10 年（Headscale 不支持"永不过期"，传 `0` 会得到立即过期的废 key）；
 - 旧 key 泄漏后用 `apikeys list` 查前缀、`apikeys expire --prefix <前缀>` 撤销；
-- 这把 key 要写进 Headplane 的 `headscale.api_key`，是**服务端**凭据：Agent 同步、OIDC 会话、
+- 这把 key 要写进 HeadplaneCN 的 `headscale.api_key`，是**服务端**凭据：Agent 同步、OIDC 会话、
   代理认证都由它发起。它与你在网页登录框里输入的那把是两件事 —— **Agent / OIDC 用的是配置
   文件里的这把**，写错（或只写了列表里看到的前缀）就会 401。
 
@@ -135,17 +135,17 @@ unix_socket_permission: "0770"
 printf '[]\n' > /vol1/@appdata/headscale/extra-records.json
 ```
 
-::: danger 单独使用 `headscale.dns_records_path` 会让 Headplane 退出
-Headplane 只有在 Headscale 配置里存在 `dns.extra_records_path` 时才允许你指定
+::: danger 单独使用 `headscale.dns_records_path` 会让 HeadplaneCN 退出
+HeadplaneCN 只有在 Headscale 配置里存在 `dns.extra_records_path` 时才允许你指定
 `headscale.dns_records_path`。只配了后者、没配前者，启动日志会打印
 `Using separate DNS config file but dns.extra_records_path is not set in Headscale config` 并直接退出。
-两处要么都配，要么只让 Headplane 从 Headscale 配置自动读取。
+两处要么都配，要么只让 HeadplaneCN 从 Headscale 配置自动读取。
 :::
 
 ::: warning 关于 `policy.mode`
 
-- `file`（默认）：ACL 由文件提供，Headscale 的策略 API **只读** → Headplane 保存时报
-  `403 Policy is not writable`（Headplane 0.8.5 起会给出中文说明）
+- `file`（默认）：ACL 由文件提供，Headscale 的策略 API **只读** → HeadplaneCN 保存时报
+  `403 Policy is not writable`（HeadplaneCN 0.8.5 起会给出中文说明）
 - `database`：策略存进 Headscale 数据库，**Web 界面可以编辑** —— 想用网页改 ACL 就必须选它
 - 切换不会影响现有连通性：原文件模式下 `policy.path: ""` 相当于没有策略，数据库初始也是空策略（默认允许全部）
   :::
@@ -169,7 +169,7 @@ derp:
   urls: [] # 只用自建中继，不再加载 Tailscale 的公开 DERP 地图
 ```
 
-要点（与 Headplane 的 DERP 页提示一致）：
+要点（与 HeadplaneCN 的 DERP 页提示一致）：
 
 - `server_url` **必须是 https**：DERP 基于 TLS。
 - **中继端口就是 `server_url` 里的端口**：写 `https://headscale.example.com:8443`，客户端就连 8443；
@@ -229,7 +229,7 @@ derp:
 
 ::: danger `derp.paths` 里必须写**宿主机路径**，容器挂载点要与它**完全相同**
 这份清单是 **Headscale** 读的；fnOS 上的 Headscale 是**宿主机原生进程**（不是容器），
-它只认宿主机上的绝对路径。Headplane 在容器里，只有把**同一个宿主机目录挂到容器内的同一个
+它只认宿主机上的绝对路径。HeadplaneCN 在容器里，只有把**同一个宿主机目录挂到容器内的同一个
 绝对路径**，它才看得到、也才改得动同一个文件：
 
 ```yaml
@@ -245,7 +245,7 @@ volumes:
   - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
 ```
 
-把容器内的挂载点写成 `/etc/headscale/derp-maps` 这类**容器专用路径**时，Headplane 自己仍然
+把容器内的挂载点写成 `/etc/headscale/derp-maps` 这类**容器专用路径**时，HeadplaneCN 自己仍然
 能编辑（它改的是容器里那一份），但**宿主机上的 Headscale 看不到这个路径**，它下次重载或
 重启时会直接退出：
 
@@ -266,7 +266,7 @@ getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or direct
    printf 'regions: {}\n' > /vol1/@appdata/headscale/derp-maps/home.yaml
    ```
 
-   先用一份空的 `regions: {}` 占位即可，稍后可以在 Headplane 里用「用示例创建」覆盖它；
+   先用一份空的 `regions: {}` 占位即可，稍后可以在 HeadplaneCN 里用「用示例创建」覆盖它；
    关键是**文件必须先存在**：`derp.paths` 一旦写进配置，重载或重启时 Headscale 就要能打开它。
 
 2. **把这个目录按原路径读写挂进容器**（第七节 compose 的 `volumes`，容器内路径与宿主机逐字相同）：
@@ -279,7 +279,7 @@ getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or direct
    盖过第七节那份整目录的 `:ro`，对 `derp-maps` 以读写生效；如果保存仍提示无法写入，先确认
    这一行确实加到 `volumes` 里了。挂成只读时「查看」仍可用，但保存会失败。
 
-3. **在 Headplane 里把宿主机路径加进 `derp.paths`**：DERP 卡片的新增路径输入框要填
+3. **在 HeadplaneCN 里把宿主机路径加进 `derp.paths`**：DERP 卡片的新增路径输入框要填
    **Headscale 主机上的绝对路径**（也可以直接编辑 `/vol1/@appdata/headscale/config.yaml`），
    保存后配置里就是上面 ① 的样子。填成容器专用路径，就是上面那个启动失败。
 
@@ -292,7 +292,7 @@ DERP 页会把 `derp.paths` 里的每个路径列出来，并支持**查看 / �
 是否可写、YAML 能否解析、是不是有效的 DERP 地图、区域 ID 与区域代码是否唯一。容器
 **既看不到也写不了**的路径显示为「无法检查」，而不是把保存失败悄悄咽下去。
 
-保存前 Headplane 会在服务端再校验一次：必须是合法的 YAML、必须是一份 `regions` 映射、
+保存前 HeadplaneCN 会在服务端再校验一次：必须是合法的 YAML、必须是一份 `regions` 映射、
 区域必须有 `regionid`/`regioncode`/`regionname`/`nodes`、区域 ID 与代码不能重复、节点必须有
 `name`/`regionid`/`hostname`，端口与地址也要合法。每次写入前都会先留一份快照，可在
 `/settings/snapshots` 里看到并恢复。
@@ -322,14 +322,14 @@ DERP** 里「自动同步」正下方的**官方区域节点筛选**卡片（默
   目标路径不是绝对路径或含 `..`、不可写、生成的地图没通过校验、重载失败等）；失败会通过
   「DERP 地址同步失败」这一通知事件推出去。
 
-::: tip 官方地图是「wire 格式」，Headplane 现在两种写法都认
+::: tip 官方地图是「wire 格式」，HeadplaneCN 现在两种写法都认
 Tailscale 下发的官方地图用大写字段（`Regions`、`RegionID`、`HostName`、`IPv4`…），而
 Headscale 的本地文件用小写（`regions`、`regionid`、`hostname`、`ipv4`）。同一个读取器两种都
 接受并归一化，所以官方区域现在能正确解析出代码和名称；远程抓取有 **10 秒**超时，连接本身
 失败（超时、被拒）会**重试一次**，而返回错误状态码或根本不是 DERP 地图时不重试。
 :::
 
-## 五、准备 Headplane 目录
+## 五、准备 HeadplaneCN 目录
 
 ```bash
 mkdir -p /vol1/1000/APP/headplane/data
@@ -337,7 +337,7 @@ cd /vol1/1000/APP/headplane
 openssl rand -base64 24        # 生成 32 字符 cookie_secret，记下来
 ```
 
-## 六、设置文件 ①：Headplane 的 `config.yaml`
+## 六、设置文件 ①：HeadplaneCN 的 `config.yaml`
 
 路径：`/vol1/1000/APP/headplane/config.yaml`
 
@@ -554,17 +554,17 @@ curl -I http://192.0.2.10:4100/admin
 
 | 链路          | 前端                                                          | 后端                       | 关注点                                            |
 | ------------- | ------------------------------------------------------------- | -------------------------- | ------------------------------------------------- |
-| **Headplane** | `https://headplane.example.com`                               | `http://192.0.2.10:4100` | `base_url`、跨站校验、WebSocket（浏览器 SSH）     |
+| **HeadplaneCN** | `https://headplane.example.com`                               | `http://192.0.2.10:4100` | `base_url`、跨站校验、WebSocket（浏览器 SSH）     |
 | **Headscale** | `https://headscale.example.com`（自建 DERP 时通常带 `:8443`） | `http://192.0.2.10:8480` | **原样透传路径**、放行 HTTP Upgrade、关闭响应缓冲 |
 
-### 9.1 Headplane 的反代
+### 9.1 HeadplaneCN 的反代
 
 | 项目                        | 要求                                                                                      |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
 | **保留原始 Host**           | 建议让后端看到的 `Host` 就是浏览器访问的域名；若 Lucky 改写成内网 IP，就会出现下面问题 1  |
 | **`server.base_url`**       | 必须与浏览器地址完全一致（协议 + 域名 + 端口），否则保存类操作会被判定为跨站              |
 | **WebSocket**（浏览器 SSH） | 转发 `Upgrade: websocket`、`Connection: Upgrade`，`Sec-WebSocket-Protocol` 原样透传       |
-| **CORS**（浏览器 SSH）      | Headplane 与 Headscale 不同源时，Headscale 侧需返回 `Access-Control-Allow-Origin`（见下） |
+| **CORS**（浏览器 SSH）      | HeadplaneCN 与 Headscale 不同源时，Headscale 侧需返回 `Access-Control-Allow-Origin`（见下） |
 
 Headscale 侧（不同源时）需要补充的响应头：
 
@@ -586,7 +586,7 @@ Access-Control-Allow-Headers: Content-Type, Upgrade, Sec-WebSocket-Protocol
 4. **路径替换 / URL 重写 / 前缀重写**：全部**关闭**（一旦重写，`/derp` 会被改写或去掉）
 5. **WebSocket / Upgrade**：有开关就打开；Lucky 一般会自动透传 `Connection: Upgrade`
 6. **超时与缓冲**：读/写超时调大到 **300 秒以上**，并**关闭响应缓冲/压缩改写**（DERP 是长连接，缓冲会把它切断）
-7. **Host 头**：无所谓 —— Headscale 不做来源校验（这点和 Headplane 相反，只有 Headplane 需要 `base_url` 正确）
+7. **Host 头**：无所谓 —— Headscale 不做来源校验（这点和 HeadplaneCN 相反，只有 HeadplaneCN 需要 `base_url` 正确）
 8. 若这条规则还兼着代理别的应用，用**子规则按域名/路径分流**，但必须保证 `/derp` 落在 Headscale 这一支
 
 ::: tip 一句话记法
@@ -662,12 +662,12 @@ tailscale debug derp <你的 region_code>
 | 机器 / 用户管理        | 默认可用                                                                                                            |
 | **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                    |
 | **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 发 SIGHUP 使其重载                        |
-| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 Headplane                                                      |
-| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径** + 把该目录按**相同绝对路径读写**挂给 Headplane（见第四节）；保存后需重载/重启 headscale 才生效 |
+| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 HeadplaneCN                                                      |
+| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径** + 把该目录按**相同绝对路径读写**挂给 HeadplaneCN（见第四节）；保存后需重载/重启 headscale 才生效 |
 | **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它     |
 | **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                             |
-| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **Headplane 用 OIDC 登录**（API Key 登录不支持）                            |
-| VNC / RDP              | ❌ Headplane 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole |
+| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **HeadplaneCN 用 OIDC 登录**（API Key 登录不支持）                            |
+| VNC / RDP              | ❌ HeadplaneCN 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole |
 
 ## 十二、升级、备份与卸载
 
@@ -719,7 +719,7 @@ server:
 
 ### 4. 导航栏里根本没有 DNS / 设置
 
-**原因**：Headplane 读不到 headscale 的配置文件（`readable()` 为 false）。
+**原因**：HeadplaneCN 读不到 headscale 的配置文件（`readable()` 为 false）。
 **排查**：
 
 ```bash
@@ -765,7 +765,7 @@ cd /vol1/@appcenter/headscale
 
 ### 10. 配置检查里显示「无法验证」，或数据库目录提示只读
 
-**原因**：Headplane 只挂了 `config.yaml`，没挂它指向的目录；或者按第七节用了只读挂载。
+**原因**：HeadplaneCN 只挂了 `config.yaml`，没挂它指向的目录；或者按第七节用了只读挂载。
 **解决**：保持 `/vol1/@appdata/headscale:/vol1/@appdata/headscale:ro` 这份只读挂载，
 让检查能看到 `db.sqlite`、`noise_private.key`、策略文件；「无法验证写入权限」只会出现
 在只读挂载下，属正常现象 —— 只有 Headscale 自己报写不进去时才需要处理。
@@ -829,9 +829,9 @@ dig @1.1.1.1 +short AAAA headscale.example.com   # 公共解析器：有输出 =
 
 **两边都要查**。本机解析器可能在名称确有 AAAA 记录时仍返回空结果（不响应 AAAA 查询、
 上游只转发 A、或有 DNS 过滤）。如果公共解析器查得到而本机查不到，问题在 DNS 而不在
-Headscale：可以改宿主机／路由器的 DNS，也可以直接在 Headplane 里设置用于解析的 DNS
+Headscale：可以改宿主机／路由器的 DNS，也可以直接在 HeadplaneCN 里设置用于解析的 DNS
 服务器（留空=跟随宿主）并点「重新解析」，这样不必改宿主的 DNS —— 该项只用于中继解析，
-不影响 Headplane 的其他解析。
+不影响 HeadplaneCN 的其他解析。
 
 确认之后再二选一：
 
@@ -843,9 +843,9 @@ Headscale：可以改宿主机／路由器的 DNS，也可以直接在 Headplane
   IPv4。
 - **只跑 IPv4**：接受 IPv4-only，并清空 `derp.server.ipv6`，这个提示就不会再出现。
 
-Headplane 的解析结果（包括「没有记录」这类否定结果）**会缓存五分钟**：改完 DNS 后如果
+HeadplaneCN 的解析结果（包括「没有记录」这类否定结果）**会缓存五分钟**：改完 DNS 后如果
 中继卡片仍显示没有记录，点中继设置里的「重新解析」即可立刻清掉缓存并重新查询，不必等
-满五分钟，也不必重启 Headplane。`设置 → 系统` 里的「内嵌中继 IPv4 / IPv6」检查项给出
+满五分钟，也不必重启 HeadplaneCN。`设置 → 系统` 里的「内嵌中继 IPv4 / IPv6」检查项给出
 同样的判定，中继卡片上的提示也会写出对应的 `dig` 命令。`derp.server.ipv4` 对应的告警通常
 意味着机器 IP 变过、声明的是旧地址。
 
@@ -879,8 +879,8 @@ Headscale 需要**重载或重启**才会重新读取地图（它是启动时加
 
 **原因**：`derp.paths` 里写的是**容器专用路径**（例如 `/etc/headscale/derp-maps/derp.yaml`），
 或者宿主机上根本没有那个文件。这份清单由**宿主机上的 Headscale 原生进程**读取，容器里
-存在的路径对它没有意义 —— 于是它在重载/重启时加载 DERP 地图失败并退出（Headplane 与
-Headscale 是分开的，Headplane 容器不受影响）：
+存在的路径对它没有意义 —— 于是它在重载/重启时加载 DERP 地图失败并退出（HeadplaneCN 与
+Headscale 是分开的，HeadplaneCN 容器不受影响）：
 
 ```
 Error: headscale ran into an error and had to shut down:
@@ -898,16 +898,16 @@ getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or direct
      #   - /etc/headscale/derp-maps/derp.yaml
    ```
 
-   也可以在 Headplane 的 DERP 卡片里把这条路径「移除」，保存后会写回同一份配置；改完重启
+   也可以在 HeadplaneCN 的 DERP 卡片里把这条路径「移除」，保存后会写回同一份配置；改完重启
    fnOS 应用中心的 headscale。
 
-2. **回滚到写入前的配置快照**：Headplane 每次写 Headscale 配置前都会自动留一份快照，
+2. **回滚到写入前的配置快照**：HeadplaneCN 每次写 Headscale 配置前都会自动留一份快照，
    在 `/settings/snapshots` 里挑写入之前的那份点「恢复」，它会把 `config.yaml`（文件模式下
    还有策略文件）写回去，再重启 headscale 即可。
 
 起来之后按第四节重做一遍，顺序别反：**先在宿主机上建目录和文件 → 按相同绝对路径读写挂进
 容器 → 再把宿主机路径写进 `derp.paths` → 保存后重载/重启**。清单里的路径必须是宿主机上真实
-存在的绝对路径，容器专用路径只能骗过 Headplane 自己。
+存在的绝对路径，容器专用路径只能骗过 HeadplaneCN 自己。
 
 ## 十四、验收清单
 

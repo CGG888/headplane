@@ -1,12 +1,12 @@
 ---
 title: API 密钥
-description: 在 Headplane 界面里创建与吊销 Headscale API 密钥。
+description: 在 HeadplaneCN 界面里创建与吊销 Headscale API 密钥。
 outline: [2, 3]
 ---
 
 # Headscale API 密钥
 
-Headscale 自己的 API 用 **API 密钥**鉴权，就是以 `hskey-api-` 开头的那种。Headplane 需要
+Headscale 自己的 API 用 **API 密钥**鉴权，就是以 `hskey-api-` 开头的那种。HeadplaneCN 需要
 一把才能和 Headscale 通信，你指向这个 API 的其他工具同样需要 —— 所以这些密钥放在
 **设置 → API 密钥** 里，而不是只存在于服务器 shell 中。
 
@@ -14,9 +14,9 @@ Headscale 自己的 API 用 **API 密钥**鉴权，就是以 `hskey-api-` 开头
 
 | 操作       | 结果                                                                                                                                              |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **创建**   | 选择密钥的有效天数。Headplane 向 Headscale 申请一把在该时刻过期的密钥。                                                                            |
+| **创建**   | 选择密钥的有效天数。HeadplaneCN 向 Headscale 申请一把在该时刻过期的密钥。                                                                            |
 | **复制**   | 完整密钥**只会返回一次**。请立刻复制 —— Headscale 只保存前缀，之后再也无法显示。                                                                  |
-| **过期**   | 立即吊销一把密钥。列表里的前缀就够了；Headplane 会先把 `hskey-api-…-***` 这种掩码显示形式还原，再调用 Headscale。                                   |
+| **过期**   | 立即吊销一把密钥。列表里的前缀就够了；HeadplaneCN 会先把 `hskey-api-…-***` 这种掩码显示形式还原，再调用 Headscale。                                   |
 
 列表显示前缀、创建时间、过期时间以及最后一次使用时间。已过期的密钥会单独计数并显示在状态
 筛选旁边，把筛选切到 **有效** 就能隐藏它们；勾选多把密钥再选 **批量过期** 可以一次吊销。
@@ -29,7 +29,7 @@ Headscale 没有删除 API 密钥的功能 —— 它的 API 只提供 `POST /ap
 - **过期就是吊销。** 立即生效：Headscale 记录之后该密钥立刻无法通过鉴权，而且不可撤销。
 - **记录会留下。** 已过期的密钥仍留在列表里便于追溯，页面把它标成过期而不再提供过期操作，
   你依然能看到它的创建时间和最后使用时间。既然没有删除，也就没有需要清理的东西。
-- **轮换**因此是：创建新密钥，写进 `headscale.api_key`，重启 Headplane，再让旧密钥过期。
+- **轮换**因此是：创建新密钥，写进 `headscale.api_key`，重启 HeadplaneCN，再让旧密钥过期。
 
 **预授权密钥**页的规则相同：预授权密钥通过过期来吊销，已使用和已过期的密钥都留在列表里，
 什么都不会被删除。
@@ -45,17 +45,17 @@ Headscale 的 API 密钥没有作用域或角色：任何有效且未过期的�
 
 ## 前置条件
 
-- 当前 Headplane 用户需要 **`configure_iam`** 能力（`owner`、`admin`、`network_admin`
+- 当前 HeadplaneCN 用户需要 **`configure_iam`** 能力（`owner`、`admin`、`network_admin`
   默认拥有）。
-- 创建密钥是用 Headplane 配置里的那把密钥去和 Headscale 通信，因此那把密钥必须仍然有效。
+- 创建密钥是用 HeadplaneCN 配置里的那把密钥去和 Headscale 通信，因此那把密钥必须仍然有效。
 
 ::: tip 有效期是必填的
 Headscale 会照原样存下传给它的 `expiration`，而不带有效期的密钥会以零时间戳创建 ——
-Headscale 会把它当作已经过期。Headplane 始终显式发送有效期，避免这种情况意外发生。
+Headscale 会把它当作已经过期。HeadplaneCN 始终显式发送有效期，避免这种情况意外发生。
 :::
 
 ## 密钥在哪里使用
 
-Headplane 自己配置里的 `headscale.api_key` 是它做一切事情所用的密钥：读取节点和用户、
-写入策略，以及 Headplane Agent 自动创建预授权密钥。轮换意味着更新那个文件并重启
-Headplane。
+HeadplaneCN 自己配置里的 `headscale.api_key` 是它做一切事情所用的密钥：读取节点和用户、
+写入策略，以及 HeadplaneCN Agent 自动创建预授权密钥。轮换意味着更新那个文件并重启
+HeadplaneCN。

@@ -6,7 +6,7 @@ outline: [2, 3]
 
 # Snapshots
 
-Headplane writes to Headscale's `config.yaml` for you — DNS, OIDC, policy mode,
+HeadplaneCN writes to Headscale's `config.yaml` for you — DNS, OIDC, policy mode,
 DERP, logs. **Settings → Snapshots** keeps a copy of the file from before each
 of those writes, so a change you regret is one click away from being undone.
 

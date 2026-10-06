@@ -1,17 +1,17 @@
 ---
 title: 安装
-description: 开始使用 Headplane。
+description: 开始使用 HeadplaneCN。
 outline: [2, 3]
 ---
 
 # 安装
 
-Headplane 可以部署在多种环境里，方便它无缝融入你现有的基础设施。请先准备好配置文件，再选择
+HeadplaneCN 可以部署在多种环境里，方便它无缝融入你现有的基础设施。请先准备好配置文件，再选择
 最适合你的安装方式。
 
 ## 配置
 
-Headplane 需要一份配置文件才能运行。可以使用
+HeadplaneCN 需要一份配置文件才能运行。可以使用
 [示例文件](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)作为起点。其中几个
 重要字段：
 
@@ -26,7 +26,7 @@ Headplane 需要一份配置文件才能运行。可以使用
 
 ## 部署方式
 
-Headplane 有多种部署方式，各有优缺点。请选择最适合你的那一种：
+HeadplaneCN 有多种部署方式，各有优缺点。请选择最适合你的那一种：
 
 ### [Docker](/install/docker)：用 Docker 快速、简单地部署
 
@@ -53,5 +53,5 @@ Headplane 有多种部署方式，各有优缺点。请选择最适合你的那�
 
 ### [fnOS（飞牛）](/install/fnos)：在飞牛 NAS 上部署
 
-- 面向以 fnOS 应用源原生运行 Headscale、再用 Docker 运行 Headplane 的 NAS 部署方式。
+- 面向以 fnOS 应用源原生运行 Headscale、再用 Docker 运行 HeadplaneCN 的 NAS 部署方式。
 - 包含可直接使用的配置文件、反向代理要点与逐条排查方法。

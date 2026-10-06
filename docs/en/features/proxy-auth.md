@@ -1,27 +1,27 @@
 ---
 title: Proxy Authentication
-description: Delegate Headplane authentication to a trusted reverse proxy.
+description: Delegate HeadplaneCN authentication to a trusted reverse proxy.
 outline: [2, 3]
 ---
 
 :::warning
 Proxy authentication is **dangerously powerful**. If misconfigured, it can allow
-anyone to impersonate users and gain access to Headplane.
+anyone to impersonate users and gain access to HeadplaneCN.
 
-It is recommended to use Headplane's built-in SSO integrations over proxy
+It is recommended to use HeadplaneCN's built-in SSO integrations over proxy
 authentication if possible. No guarantees are made about the security of proxy
 authentication.
 :::
 
 # Proxy Authentication
 
-Proxy authentication lets Headplane delegate user authentication to a trusted
-reverse proxy. This is useful when Headplane is already protected by middleware
+Proxy authentication lets HeadplaneCN delegate user authentication to a trusted
+reverse proxy. This is useful when HeadplaneCN is already protected by middleware
 such as nginx basic auth, Authelia, Authentik, or another SSO-aware proxy and
-you do not want users to log in to Headplane separately.
+you do not want users to log in to HeadplaneCN separately.
 
 Proxy authentication is intentionally opt-in and requires `headscale.api_key`.
-When enabled, Headplane trusts identity headers only on requests whose client IP
+When enabled, HeadplaneCN trusts identity headers only on requests whose client IP
 matches `server.proxy_auth.allowed_cidrs`; all Headscale API calls then use the
 configured `headscale.api_key`.
 
@@ -43,27 +43,27 @@ server:
 ```
 
 `user_header` is required for a request to authenticate and defaults to
-`Remote-User`. The value becomes the stable proxy identity in Headplane as
+`Remote-User`. The value becomes the stable proxy identity in HeadplaneCN as
 `proxy:<value>`. `email_header`, `name_header`, and `picture_header` are
 optional profile metadata headers.
 
-The first proxy-authenticated user is created as the Headplane owner, matching
+The first proxy-authenticated user is created as the HeadplaneCN owner, matching
 the normal SSO first-user behavior. Subsequent users are created as members and
 can be reassigned from the Users page.
 
 ## Client IP Checks
 
-If `allowed_cidrs` is omitted, Headplane trusts only localhost. By default, this
-CIDR check uses the socket address connected to Headplane, not
+If `allowed_cidrs` is omitted, HeadplaneCN trusts only localhost. By default, this
+CIDR check uses the socket address connected to HeadplaneCN, not
 `X-Forwarded-For`, `X-Real-IP`, or other forwarded headers. Configure
 `allowed_cidrs` for the direct address range your proxy uses to connect to
-Headplane.
+HeadplaneCN.
 
 ## Forwarded Client IP Headers
 
 If you need to check the original client IP from a proxy header, set `ip_header`
 to `X-Forwarded-For`, `X-Real-IP`, or another header your proxy controls. When
-`ip_header` is set, Headplane only reads that header if the direct socket peer
+`ip_header` is set, HeadplaneCN only reads that header if the direct socket peer
 matches `trusted_proxy_cidrs` (default localhost). The first IP in the header is
 then checked against `allowed_cidrs`:
 
@@ -79,8 +79,8 @@ server:
 ```
 
 ::: warning
-Only enable proxy authentication when Headplane is not directly reachable by
-untrusted clients. Anyone who can connect to Headplane from an allowed CIDR will
+Only enable proxy authentication when HeadplaneCN is not directly reachable by
+untrusted clients. Anyone who can connect to HeadplaneCN from an allowed CIDR will
 be able to spoof the configured identity headers. Only configure `ip_header`
 for headers set or overwritten by your trusted reverse proxy.
 :::

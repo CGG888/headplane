@@ -1,12 +1,12 @@
 ---
 title: 架构
-description: Headplane 服务端代码使用的服务架构模式。
+description: HeadplaneCN 服务端代码使用的服务架构模式。
 outline: [2, 3]
 ---
 
 # 架构
 
-Headplane 的服务端代码在单个 Node.js 进程中，由彼此独立的服务模块组成。每个服务自行管理状态
+HeadplaneCN 的服务端代码在单个 Node.js 进程中，由彼此独立的服务模块组成。每个服务自行管理状态
 和生命周期，不依赖共享的“上帝对象”，也不使用依赖注入框架。
 
 本页记录所有服务端服务都必须遵循的模式。

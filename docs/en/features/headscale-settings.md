@@ -1,13 +1,13 @@
 ---
 title: Headscale Settings
-description: Edit Headscale's OIDC configuration, trusted proxies, policy mode, node lifetime and DERP settings from Headplane.
+description: Edit Headscale's OIDC configuration, trusted proxies, policy mode, node lifetime and DERP settings from HeadplaneCN.
 outline: [2, 3]
 ---
 
 # Headscale Settings
 
 **Settings → Headscale** edits the parts of Headscale's own `config.yaml` that
-Headplane can safely change for you, instead of leaving you to SSH in.
+HeadplaneCN can safely change for you, instead of leaving you to SSH in.
 
 Every settings page uses the same pill tabs as the top navigation — one tab per
 group — and a group with several sub-topics expands and collapses in place, so
@@ -15,15 +15,15 @@ nothing is buried in one long scroll and nothing is hidden behind a panel.
 
 ::: warning Requirements
 
-- Headscale's configuration file must be mounted **read-write** into Headplane
-  and `headscale.config_path` must point at it. Without it Headplane can neither
+- Headscale's configuration file must be mounted **read-write** into HeadplaneCN
+  and `headscale.config_path` must point at it. Without it HeadplaneCN can neither
   show nor save these values (see [Network Management](/en/install/docker#network-management)).
 - To edit the local DERP map files (`derp.paths`) from the DERP tab, the entries
   have to be paths **on the Headscale host**, and the directory holding them has
   to be mounted into the container **read-write at that same absolute path**; see
   [Editing local DERP map files](#editing-local-derp-map-files).
 - Headscale reads most of this at startup, so changes only take effect after the
-  Headscale process restarts. With the process integration enabled Headplane asks
+  Headscale process restarts. With the process integration enabled HeadplaneCN asks
   it to reload or restart for you.
 
 :::
@@ -36,7 +36,7 @@ The full single sign-on block:
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `issuer`                          | The provider's discovery URL. **Headscale treats an empty issuer as "OIDC disabled".**                                                                                                                                                                                                                                        |
 | `client_id`                       | Client registered at the provider.                                                                                                                                                                                                                                                                                            |
-| `client_secret`                   | Write-only here: Headplane shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                                 |
+| `client_secret`                   | Write-only here: HeadplaneCN shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                                 |
 | `client_secret_path`              | Read the secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave the field empty to remove the key.                                                                                    |
 | `scope`                           | Defaults to `openid`, `profile`, `email`.                                                                                                                                                                                                                                                                                     |
 | `email_verified_required`         | Default `true`. Turn it off only for providers that never send `email_verified`.                                                                                                                                                                                                                                              |
@@ -58,7 +58,7 @@ the page says so, but the save itself is not blocked — keep only one of the tw
 ::: danger Removed in Headscale 0.29
 `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are no
 longer supported: Headscale refuses to start when they are present. Node
-lifetime now lives in the top-level `node.expiry`. Headplane warns about these
+lifetime now lives in the top-level `node.expiry`. HeadplaneCN warns about these
 keys instead of silently writing around them.
 :::
 
@@ -70,7 +70,7 @@ those ranges have their `True-Client-IP`, `X-Real-IP` and `X-Forwarded-For`
 headers honoured — for everyone else Headscale deletes those headers, so a
 client cannot spoof its own address in the logs and in node registration.
 
-Headplane rejects `0.0.0.0/0` and `::/0`: Headscale treats them as a
+HeadplaneCN rejects `0.0.0.0/0` and `::/0`: Headscale treats them as a
 configuration error, and trusting every peer would defeat the point.
 
 ## Node lifetime, logs and switches
@@ -131,7 +131,7 @@ tab edits them in place. Every configured path gets its own row:
 | **Roll back**           | Restores the snapshot taken before the last write, and snapshots the content it replaces first.                             |
 | **Create from example** | Loads one of three fully commented templates into the editor; nothing is written until you save.                            |
 
-A row also lists what Headplane found on disk: whether the file exists, is
+A row also lists what HeadplaneCN found on disk: whether the file exists, is
 readable, is writable, parses, is a valid DERP map, and keeps its region ids and
 codes unique. A path this container cannot see at all is reported as **cannot
 check**, exactly like the rest of the configuration checks, because a missing bind
@@ -139,8 +139,8 @@ mount is not a broken map.
 
 ::: danger The path is on the Headscale host, not inside the container
 `derp.paths` is read by **Headscale itself**. When Headscale runs as a host
-process next to a containerised Headplane — the usual NAS setup — every entry has
-to be a path that exists **on that host**. Headplane only sees the same file if
+process next to a containerised HeadplaneCN — the usual NAS setup — every entry has
+to be a path that exists **on that host**. HeadplaneCN only sees the same file if
 that directory is mounted into its container at the **identical absolute path**,
 which is also why the DERP tab asks for a path on the Headscale host when you add
 one. A container-only path such as `/etc/headscale/...` looks fine in the UI,
@@ -172,7 +172,7 @@ that the container cannot write the path. Headscale itself has to be able to rea
 these files too, because it loads them when it starts.
 
 If this already happened, the recovery is to comment the `paths:` entry out (or
-restore the configuration snapshot Headplane took before the write) and start
+restore the configuration snapshot HeadplaneCN took before the write) and start
 Headscale again — then redo the three steps in the right order: create the
 directory and file **on the host**, mount it into the container at the same path,
 and only then point `derp.paths` at the host path.
@@ -200,7 +200,7 @@ and lower case. The JSON map's top-level `Regions` object becomes the YAML
 | `IPv4`         | `ipv4`       | Optional, a bare address.                                                   |
 | `IPv6`         | `ipv6`       | Optional, a bare address.                                                   |
 
-Headplane's readers accept either spelling, so a map it fetches from a URL — the
+HeadplaneCN's readers accept either spelling, so a map it fetches from a URL — the
 official one included — is understood whether it arrives in this wire format or
 in the lower-case shape above.
 
@@ -237,7 +237,7 @@ page words it.
 
 Headscale reads `derp.paths` files **when it starts**, so a saved map is picked up
 after a reload or restart — **Settings → System** has that control when the process
-integration is enabled. Headplane deliberately does not reload Headscale for you
+integration is enabled. HeadplaneCN deliberately does not reload Headscale for you
 here: a reload that does not re-read the map would look like it worked.
 
 The file is snapshotted before **every** write, so it appears on
@@ -306,7 +306,7 @@ A self-hosted region is only used if clients can actually reach it:
 as Headscale, so clients use whatever `server_url` names: `https://host` means
 **443**, `https://host:8443` means **8443**. Both work — Tailscale's own
 documentation just recommends 443, because clients assume that port in some
-situations. The DERP tab states the value Headplane derives from your
+situations. The DERP tab states the value HeadplaneCN derives from your
 configuration, and one more from Headscale's documentation: the embedded server
 cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
 documented limitation rather than a misconfiguration.
@@ -327,7 +327,7 @@ The card has two buttons, and they share one detection pass:
 | Button      | What it does                                                                                                                                                                            |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Check**   | Runs both detections and the comparison, then writes nothing at all. It is the safe way to see what a run would do.                                                                      |
-| **Run now** | Runs the same checks and writes only what changed — per family, just the key whose address differs. Headplane snapshots the configuration first and records an audit entry for the write. |
+| **Run now** | Runs the same checks and writes only what changed — per family, just the key whose address differs. HeadplaneCN snapshots the configuration first and records an audit entry for the write. |
 
 Neither button waits for the next scheduled run: both detect and report
 immediately.
@@ -366,14 +366,14 @@ candidate it found, where each one came from, and why it was chosen or skipped.
 
 IPv6 is deliberately different. There is no NAT for it: the machine itself holds
 the public address, and under `network_mode: host` the container shares the host's
-network namespace, so Headplane can read that address directly instead of trusting
+network namespace, so HeadplaneCN can read that address directly instead of trusting
 a name. A domain's AAAA can be a temporary privacy address, a prefix rotated since
 the record was written, or a different machine entirely — advertising the wrong
 one makes clients fail intermittently rather than cleanly, which is exactly the
 kind of fault that is hard to attribute afterwards.
 
 **The optional external IPv6 echo is the authority when a router forwards or
-translates IPv6.** Off by default, because it makes Headplane contact a third
+translates IPv6.** Off by default, because it makes HeadplaneCN contact a third
 party, the switch in the settings card asks a public endpoint which address the
 internet actually sees, over IPv6 only. It answers what no local probe can:
 whether the answer matches a local interface, or is an address no interface on
@@ -382,7 +382,7 @@ this machine holds because NAT66 or a forwarding router rewrites it.
 Each address carries the label of the source it came from: **`derp.server`** when
 the key holds a value, **host** when it is the machine's own address, **Internet
 (echo)** when the echo answered, and **DNS-unverified** when the domain's AAAA is
-all Headplane has to go on. When the AAAA does not match the host's address the
+all HeadplaneCN has to go on. When the AAAA does not match the host's address the
 card raises an amber warning, and a copy button copies the address to use.
 
 Two states are named rather than papered over:
@@ -432,18 +432,18 @@ never leaves you guessing which DNS server was asked.
 ### Choosing the resolver for relay lookups
 
 Below the embedded-server block, **Relay DNS resolver** lists the DNS servers
-Headplane may use for relay lookups instead of the host's own:
+HeadplaneCN may use for relay lookups instead of the host's own:
 
 - **Empty (the default)** — lookups follow the host's resolver, exactly as
-  Headplane has always done. Nothing changes until you add a server.
+  HeadplaneCN has always done. Nothing changes until you add a server.
 - **One or more servers** — every relay lookup goes through them, in the order
   listed, up to five. IPv4 and IPv6 literals are accepted, each with an optional
   port (`1.1.1.1`, `[2606:4700:4700::1111]:53`).
 
-The list is Headplane state: it is stored in Headplane's own data directory
+The list is HeadplaneCN state: it is stored in HeadplaneCN's own data directory
 (`relay-dns-servers.json`) and never written into Headscale's configuration, so it
 also works when the configuration file is mounted read-only. It affects relay
-lookups only; everything else Headplane resolves keeps using the host's resolver.
+lookups only; everything else HeadplaneCN resolves keeps using the host's resolver.
 
 A configured resolver is never silently bypassed: when those servers fail, the
 card reports the failure rather than falling back to the host's resolver, because a
@@ -452,7 +452,7 @@ lookup you pointed somewhere is a lookup you want the truth about.
 **Re-resolve now** clears the cache and runs the lookup again. Positive and
 negative answers are cached for five minutes, so a name that had no AAAA before you
 changed your DNS keeps reporting "no records" until that cache expires — the button
-is how you check immediately, without restarting Headplane.
+is how you check immediately, without restarting HeadplaneCN.
 
 ::: tip The other "IPv6: No" is not about the relay
 A machine's **Client Connectivity → IPv6** value is that machine's own
@@ -509,10 +509,10 @@ The settings, all written by **Save**:
 
 | Setting             | Default                                                    | Notes                                                                                                                                                                                                             |
 | ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enable the mirror   | off                                                        | Enabling lets Headplane rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                 |
+| Enable the mirror   | off                                                        | Enabling lets HeadplaneCN rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                 |
 | Target file path    | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`  | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                             |
 | Refresh interval    | every 24 hours                                             | 6, 12 or 24 hours.                                                                                                                                                                                                |
-| Reload after writing | on                                                        | When a run actually changed the file, Headplane asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
+| Reload after writing | on                                                        | When a run actually changed the file, HeadplaneCN asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
 
 Its actions:
 
@@ -536,17 +536,17 @@ failed also raises the
 [DERP address sync failed](/en/features/notifications#reported-events) notification;
 a check never does.
 
-Measured latency comes from the Headplane Agent, so a region nothing measured
+Measured latency comes from the HeadplaneCN Agent, so a region nothing measured
 reads **Not measured** and ranks last. Without the agent the card says so and you
 tick regions by hand.
 
 ### Region names
 
-Headscale only hands Headplane the region **ids** a machine reports — its own
+Headscale only hands HeadplaneCN the region **ids** a machine reports — its own
 relay endpoint is not a public DERP map — so an external region shows as `#901`.
 The embedded region gets its name from your configuration automatically, and
 **Settings → Headscale → DERP** has a small editor for naming the others (a
-region id → name mapping kept in Headplane's own data directory, never written
+region id → name mapping kept in HeadplaneCN's own data directory, never written
 into Headscale's configuration). Names then appear on the machine details too.
 
 A name is resolved through one chain, most deliberate source first: the manual
@@ -566,7 +566,7 @@ is cached for a few hours and a failure for a few minutes, so an unreachable URL
 is not dialled on every render.
 
 Below the form, the page lists which relay region each machine is currently
-using, with the latency it measured. That live view needs the Headplane Agent,
+using, with the latency it measured. That live view needs the HeadplaneCN Agent,
 because the Headscale API does not expose client measurements; without the agent
 the section explains that instead of showing nothing.
 
@@ -581,20 +581,20 @@ it — the page warns when it cannot.
 
 | Mode             | Meaning                                                                                                                                                           |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file` (default) | The policy is a HuJSON file that Headscale reads. Its API is **read-only**, so the Access Control editor can only save when Headplane can write that file itself. |
+| `file` (default) | The policy is a HuJSON file that Headscale reads. Its API is **read-only**, so the Access Control editor can only save when HeadplaneCN can write that file itself. |
 | `database`       | The policy lives in Headscale's database and is writable through the API — this is what lets the [Access Control editor](/en/features/acls) save changes.            |
 
 Switching modes **does not copy the policy**:
 
 - `file` → `database`: restart Headscale, then import the file once with
-  `headscale policy set -f <path>` (or save it from the Headplane editor) —
+  `headscale policy set -f <path>` (or save it from the HeadplaneCN editor) —
   until then the database policy is empty, which means _allow all_.
 - `database` → `file`: write the current policy to a file and point
   `policy.path` at it before restarting, otherwise the policy is empty.
 
 ## Configuration overview
 
-The **Overview** tab is the other half of the page: the values Headplane reads
+The **Overview** tab is the other half of the page: the values HeadplaneCN reads
 but deliberately never writes, marked **Display only**. A wrong database path or
 IP range could lock you out of the server, and the rest are operational or
 secret file paths that belong in the file on the host. Looking one up no longer

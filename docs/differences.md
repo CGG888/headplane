@@ -17,7 +17,7 @@ outline: [2, 3]
 
 ### fnOS 与原生 Headscale 集成
 
-覆盖「Headscale 以原生进程跑在 fnOS 上、Headplane 跑在容器里」这种部署：
+覆盖「Headscale 以原生进程跑在 fnOS 上、HeadplaneCN 跑在容器里」这种部署：
 `pid: host` 让 `integration.proc` 找到 `headscale serve` 并给它发信号，而
 Headscale **实际生效**的 `config.yaml` 需要以**读写**方式挂载，DNS 与设置页面
 才会出现。最容易踩的一条是 `derp.paths`：它由**宿主机上的 Headscale** 读取，
@@ -90,7 +90,7 @@ Headscale **实际生效**的 `config.yaml` 需要以**读写**方式挂载，DN
 
 ### 配置快照与操作审计
 
-Headplane 在写入配置前留下快照，改错了可以一键恢复；每次写入都会记账，能看清谁在
+HeadplaneCN 在写入配置前留下快照，改错了可以一键恢复；每次写入都会记账，能看清谁在
 什么时候改了什么。
 
 [配置快照 →](/features/snapshots) · [操作审计 →](/features/audit)

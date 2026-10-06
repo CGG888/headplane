@@ -42,6 +42,6 @@ and the UI reports it instead of silently doing nothing.
 ::: warning Deleting machines
 Deleting a machine removes it from Headscale immediately. Its key is gone, so
 the device needs to re-authenticate (`tailscale up`) before it shows up again.
-When the Headplane Agent is enabled, nodes come back with fresh details on the
+When the HeadplaneCN Agent is enabled, nodes come back with fresh details on the
 next sync.
 :::

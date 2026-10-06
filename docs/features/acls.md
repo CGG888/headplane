@@ -1,11 +1,11 @@
 ---
 title: 访问控制
-description: 在 Headplane 界面里编辑 Headscale 的 ACL 策略、标签与用户组。
+description: 在 HeadplaneCN 界面里编辑 Headscale 的 ACL 策略、标签与用户组。
 ---
 
 # 访问控制
 
-Headscale 把它的访问控制列表（ACL）保存为一份 HuJSON 策略。Headplane 的**访问控制**页
+Headscale 把它的访问控制列表（ACL）保存为一份 HuJSON 策略。HeadplaneCN 的**访问控制**页
 用两种方式暴露这份策略：针对日常最常改动部分的结构化编辑器，以及应对其余内容的原始文件
 编辑器。
 
@@ -20,7 +20,7 @@ policy:
 ```
 
 在 `file` 模式下，策略保存在只有 Headscale 会读取的文件里，因此它的 API 会拒绝写入。
-Headplane 在无法读取 Headscale 配置时不会去猜模式，所以编辑器始终可用，但保存会被拒绝，
+HeadplaneCN 在无法读取 Headscale 配置时不会去猜模式，所以编辑器始终可用，但保存会被拒绝，
 并给出如何切换模式或直接改文件的说明。编辑同时还需要 `write_policy` 能力，`owner`、
 `admin` 和 `network_admin` 角色默认拥有。
 
@@ -80,9 +80,9 @@ Headscale 把 `app` 存成能力映射，因此别处写好的策略可能含有
 ### Tailnet 级选项
 
 `randomizeClientPort` 是策略级选项，让机器为出站连接随机选择源端口。同一页上有对应开关；
-如果你的策略从来没有这个键，Headplane 也不会替你造一个。
+如果你的策略从来没有这个键，HeadplaneCN 也不会替你造一个。
 
-这些段里 Headplane 没有建模的内容 —— `autoApprovers` 里未来新增的键、grant 里不认识的
+这些段里 HeadplaneCN 没有建模的内容 —— `autoApprovers` 里未来新增的键、grant 里不认识的
 字段 —— 在保存策略时都会逐字保留。
 
 ::: warning `postures` 与 `ipSets` 是 Tailscale 的功能
@@ -96,7 +96,7 @@ Headscale 可以在不存储的前提下校验策略，编辑器用的就是这�
 Headscale 自己的解析器，因此写错的规则会以 Headscale 的原话报出来，而不是写进去之后被
 静默忽略。**校验**按钮可以随时做同样的检查，大改之前值得点一次。
 
-如果 Headscale 完全无法执行校验（版本过旧、服务器不可达），Headplane 会像以前一样直接
+如果 Headscale 完全无法执行校验（版本过旧、服务器不可达），HeadplaneCN 会像以前一样直接
 保存，而不是把你拦下来。
 
 ## 直接编辑文件
@@ -108,10 +108,10 @@ Headscale 自己的解析器，因此写错的规则会以 Headscale 的原话�
 在你按下 **保存** 之前，不会有任何内容发给 Headscale。
 
 ::: warning 注释不会被保留
-HuJSON 允许注释和行尾逗号。Headplane 能读它们，但结构化编辑器会重新生成策略文本，注释
+HuJSON 允许注释和行尾逗号。HeadplaneCN 能读它们，但结构化编辑器会重新生成策略文本，注释
 因此丢失。当载入的策略含有注释时，「规则」和「标签与用户组」标签会给出提示 —— 想保留
 注释就用文件编辑器。
 :::
 
-`autoApprovers`、`nodeAttrs` 这类 Headplane 没有建模的顶层键都会被原样保留，所以用可视化
+`autoApprovers`、`nodeAttrs` 这类 HeadplaneCN 没有建模的顶层键都会被原样保留，所以用可视化
 编辑器不会悄悄丢掉策略的一部分。

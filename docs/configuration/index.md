@@ -1,21 +1,21 @@
 ---
 title: 配置
-description: Headplane 配置文件的字段、环境变量覆盖、敏感值与反向代理。
+description: HeadplaneCN 配置文件的字段、环境变量覆盖、敏感值与反向代理。
 outline: [2, 3]
 ---
 
 # 配置
 
-> 早期版本的 Headplane 只使用环境变量，没有配置文件。
+> 早期版本的 HeadplaneCN 只使用环境变量，没有配置文件。
 > 从 0.5 起，你需要手动把配置迁移到新格式。
 
-Headplane 用一份配置文件管理自己的设置
+HeadplaneCN 用一份配置文件管理自己的设置
 （[**config.example.yaml**](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)）。默认情况
-下，Headplane 在 `/etc/headplane/config.yaml` 找这份文件。可以用 **`HEADPLANE_CONFIG_PATH`** 环境
+下，HeadplaneCN 在 `/etc/headplane/config.yaml` 找这份文件。可以用 **`HEADPLANE_CONFIG_PATH`** 环境
 变量把它指向别处。
 
-Headplane 默认还会把数据存放在 `/var/lib/headplane` 目录。这个路径可以在配置文件里按段分别设置，
-但非常重要的是：这个目录必须持久化，并且对 Headplane 可写。
+HeadplaneCN 默认还会把数据存放在 `/var/lib/headplane` 目录。这个路径可以在配置文件里按段分别设置，
+但非常重要的是：这个目录必须持久化，并且对 HeadplaneCN 可写。
 
 ## 环境变量
 
@@ -29,14 +29,14 @@ Headplane 默认还会把数据存放在 `/var/lib/headplane` 目录。这个路
 - `HEADPLANE_SERVER__PORT`：`server.port`
 
 **这个功能默认是关闭的！** 要启用它，请设置环境变量
-**`HEADPLANE_LOAD_ENV_OVERRIDES=true`**。设置它同时会让 Headplane 把相对的 `.env` 文件载入环境。
+**`HEADPLANE_LOAD_ENV_OVERRIDES=true`**。设置它同时会让 HeadplaneCN 把相对的 `.env` 文件载入环境。
 
 > 另外请注意，这只适用于**配置覆盖**，而不是普通环境变量 —— 也就是说你不能用它指定
 > `HEADPLANE_DEBUG_LOG=true` 或 `HEADPLANE_CONFIG_PATH=/etc/headplane/config.yaml` 这类变量。
 
 ## 敏感值
 
-对于密钥、私钥和私有证书这类敏感配置，Headplane 支持「值 / 文件路径」双模式。每个这样的字段，
+对于密钥、私钥和私有证书这类敏感配置，HeadplaneCN 支持「值 / 文件路径」双模式。每个这样的字段，
 你可以选择：
 
 1. 直接在配置文件里写值（例如 `cookie_secret: "your-32-character-long-secret"`）
@@ -57,10 +57,10 @@ Headplane 默认还会把数据存放在 `/var/lib/headplane` 目录。这个路
   `HEADPLANE_OIDC__CLIENT_SECRET_PATH` 指定存有密钥的文件路径。
 
 **关于路径处理的说明：**
-Headplane 用白名单决定哪些 `_path` 字段的内容会作为密钥载入。只有下面明确列出的路径会读取文件
+HeadplaneCN 用白名单决定哪些 `_path` 字段的内容会作为密钥载入。只有下面明确列出的路径会读取文件
 内容并用作配置值。其他带 `_path` 后缀的路径只会做环境变量插值，不会载入内容。
 
-Headplane 中按密钥路径处理的配置项如下：
+HeadplaneCN 中按密钥路径处理的配置项如下：
 
 - **服务器设置（`server.*`）：**
   - `cookie_secret_path`（用于 Web 会话编码）
@@ -80,7 +80,7 @@ Headplane 中按密钥路径处理的配置项如下：
 **非密钥路径的区别：**
 其他以 `_path` 结尾的配置字段按普通路径处理，不会载入内容。例如：
 
-- `headscale.config_path`：Headscale `config.yaml` 文件的可选路径，Headplane 可能会读取它或据此
+- `headscale.config_path`：Headscale `config.yaml` 文件的可选路径，HeadplaneCN 可能会读取它或据此
   校验。
 
 所有路径字段（无论是否为密钥路径）都支持用 `${VAR_NAME}` 语法做环境变量插值。
@@ -93,10 +93,10 @@ Headplane 中按密钥路径处理的配置项如下：
 
 ## 调试
 
-Headplane 用 Pino 输出换行分隔的 JSON 服务端日志。每条记录包含时间戳、级别、组件和消息
+HeadplaneCN 用 Pino 输出换行分隔的 JSON 服务端日志。每条记录包含时间戳、级别、组件和消息
 （`msg`），便于日志聚合工具直接过滤与索引。
 
-要启用调试日志，请设置 **`HEADPLANE_DEBUG_LOG=true`** 环境变量。这会打开 Headplane 的全部调试
+要启用调试日志，请设置 **`HEADPLANE_DEBUG_LOG=true`** 环境变量。这会打开 HeadplaneCN 的全部调试
 日志，可能很快填满日志空间，不推荐在生产环境使用。
 
 ## TLS 与证书
@@ -107,7 +107,7 @@ CA、与 `cookie_secure` 的联动，以及 Docker 健康检查 —— 都在单
 
 ## 反向代理
 
-部署 Web 应用时反向代理非常常见，Headscale 和 Headplane 在这方面非常相似。你可以沿用自己熟悉
+部署 Web 应用时反向代理非常常见，Headscale 和 HeadplaneCN 在这方面非常相似。你可以沿用自己熟悉
 的任意反向代理配置。下面是用 Traefik 的示例：
 
 > 这里的关键是 CORS 中间件，前端与后端通信需要它。如果你用的是别的反向代理，请务必补上必要的

@@ -1,6 +1,6 @@
 ---
 title: Docker
-description: Install Headplane with Docker.
+description: Install HeadplaneCN with Docker.
 outline: [2, 3]
 ---
 
@@ -11,7 +11,7 @@ If you are not looking to deploy with Docker, follow the
 [**Native Mode**](./native-mode.md) deployment guide.
 :::
 
-The recommended way to deploy Headplane is through Docker. This method is quick,
+The recommended way to deploy HeadplaneCN is through Docker. This method is quick,
 easy, and works in most environments. It requires that Headscale is also running
 with Docker.
 
@@ -19,11 +19,11 @@ with Docker.
 
 - Docker and Docker Compose
 - Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for Headplane.
+- A [completed configuration file](./index.md#configuration) for HeadplaneCN.
 
 ## Installation
 
-Running Headplane in with Docker is as simple as applying 1 compose file:
+Running HeadplaneCN in with Docker is as simple as applying 1 compose file:
 
 ```yaml
 services:
@@ -39,12 +39,12 @@ services:
 ```
 
 It's important to mount your configuration file and also provide a persistent
-storage location for Headplane to store its own data. You can also change the
+storage location for HeadplaneCN to store its own data. You can also change the
 port mapping if you want to run it on a different port.
 
 ## Health Checks
 
-The Docker image includes a built-in healthcheck that verifies the Headplane
+The Docker image includes a built-in healthcheck that verifies the HeadplaneCN
 server is running and responding. Docker will automatically monitor the
 container and report its health status. No additional configuration is required.
 
@@ -64,9 +64,9 @@ services:
       retries: 3
 ```
 
-## Accessing Headplane
+## Accessing HeadplaneCN
 
-After starting the container, you can access the Headplane web interface by
+After starting the container, you can access the HeadplaneCN web interface by
 navigating to `http://localhost:3000/admin` in your web browser (replace
 `localhost` with your server's IP address or domain name if not running locally).
 
@@ -87,27 +87,27 @@ UI or remote SSH from the browser.
 ### Network Management
 
 Network management allows you to configure Tailnet settings such as DNS servers,
-custom A records, the tailnet domain name, and MagicDNS from the Headplane UI.
+custom A records, the tailnet domain name, and MagicDNS from the HeadplaneCN UI.
 
 #### Prerequisites
 
 Network management (and other configurable Headscale features) requires that
-Headplane and Headscale both run together in the same Docker machine. This is
-because Headplane needs the following permissions:
+HeadplaneCN and Headscale both run together in the same Docker machine. This is
+because HeadplaneCN needs the following permissions:
 
 - Access to read and write the Head**scale** configuration file through a shared
-  volume used by both Headscale and Headplane.
+  volume used by both Headscale and HeadplaneCN.
 - Access to the Docker socket (usually `/var/run/docker.sock`, you may also use
   a proxy such as [Tecnativa/docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy)).
 
-Headplane negotiates the Docker API version with the daemon at startup. It
+HeadplaneCN negotiates the Docker API version with the daemon at startup. It
 targets API version `1.44` and falls back to whatever the daemon serves, down
 to a floor of `1.24` (Docker Engine 1.12+). This covers all modern Docker
 installations as well as Podman's Docker-compatible socket.
 
 #### Configuration
 
-First you'll need to run both Headscale and Headplane in the same Docker
+First you'll need to run both Headscale and HeadplaneCN in the same Docker
 environment. Here is an example `compose.yaml` file that accomplishes this:
 
 ```yaml
@@ -156,14 +156,14 @@ services:
 ```
 
 ::: info
-With some effort, you can technically run Headscale and Headplane in separate
+With some effort, you can technically run Headscale and HeadplaneCN in separate
 Docker hosts and remotely connect to a Docker daemon. This is an advanced setup
 that is not covered in this documentation. Refer to the
 [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)
 for more details on setting it up.
 :::
 
-You'll also need to enable a few fields in your Headplane configuration file:
+You'll also need to enable a few fields in your HeadplaneCN configuration file:
 
 | Field                            | Description                                                                                                                    |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -171,25 +171,25 @@ You'll also need to enable a few fields in your Headplane configuration file:
 | **`headscale.config_path`**      | Path to your Head**scale** configuration file within the container (e.g., `/etc/headscale/config.yaml`).                       |
 | `headscale.dns_records_path`     | _Optional_. Refer to the [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml) for details. |
 
-With these settings in place, restart Headplane. You should now see additional
+With these settings in place, restart HeadplaneCN. You should now see additional
 options in the UI navbar such as "DNS" and "Settings" where you can manage your
 Tailnet configuration.
 
 ### Remote Web SSH
 
 Remote Web SSH allows you to open a terminal session to your Tailscale nodes
-directly from the Headplane web interface via
+directly from the HeadplaneCN web interface via
 [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh). This feature
 requires that Tailscale SSH is running on your nodes (done via
 `tailscale up --ssh`).
 
-This feature uses the [Headplane Agent](../features/agent.md) to facilitate the
+This feature uses the [HeadplaneCN Agent](../features/agent.md) to facilitate the
 SSH connections. Refer to the [Agent documentation](../features/agent.md) for
 setup instructions.
 
 ### Single Sign-On (SSO)
 
-Single Sign-On (SSO) authentication allows users to log in to Headplane using
+Single Sign-On (SSO) authentication allows users to log in to HeadplaneCN using
 external identity providers such as Google, GitHub, or any provider that
 supports OpenID Connect (OIDC).
 
@@ -198,7 +198,7 @@ for detailed setup instructions.
 
 ## Reverse Proxying
 
-You _should_ run Headplane behind a reverse proxy such as Nginx or Caddy in
+You _should_ run HeadplaneCN behind a reverse proxy such as Nginx or Caddy in
 production. Additionally, putting Headscale beind the reverse proxy allows
 you to access both services via the same domain and TLS certificate.
 
@@ -206,8 +206,8 @@ you to access both services via the same domain and TLS certificate.
 
 Headscale supports integrating with
 [several reverse proxies](https://headscale.net/stable/ref/integration/reverse-proxy/)
-such as Nginx, Caddy, Apache, etc. Deploying Headplane is as simple as adding
-a handler to route any requests to `/admin` to the Headplane service. Refer
+such as Nginx, Caddy, Apache, etc. Deploying HeadplaneCN is as simple as adding
+a handler to route any requests to `/admin` to the HeadplaneCN service. Refer
 to the Traefik example below for a reference configuration. A similar setup via
 Nginx without Docker is available in the
 [Native Mode](./native-mode.md#reverse-proxying) installation documentation.
@@ -215,12 +215,12 @@ Nginx without Docker is available in the
 #### Example Traefik Configuration
 
 The following configuration will set up Traefik to proxy all Headscale requests
-on `headscale.example.com` and serve the Headplane UI under the `/admin` path.
+on `headscale.example.com` and serve the HeadplaneCN UI under the `/admin` path.
 This is identical to how Tailscale's own admin console is served.
 
 Keep in mind this won't work on its own as you'll need to configure Traefik
 and TLS certificates as needed. This is just a snippet to show how to configure
-the routing for Headplane and Headscale.
+the routing for HeadplaneCN and Headscale.
 
 ```yaml
 services:

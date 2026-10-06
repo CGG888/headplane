@@ -19,7 +19,7 @@ outline: [2, 3]
 带短超时并缓存数小时；在离线或受限网络上查询只会没有结果，也不显示任何标记，因此页面从不
 依赖互联网访问。
 
-Headplane 也会对**自己**做同样的比较，对象是 GitHub 上的最新 Headplane 版本，超时与缓存
+HeadplaneCN 也会对**自己**做同样的比较，对象是 GitHub 上的最新 HeadplaneCN 版本，超时与缓存
 相同。只有当本构建上报的版本（构建时写入）严格更旧时，页面顶部才会出现提示并链接到该发布
 版本。查询失败、没有打标签的开发构建，以及已经上报该版本或更新版本的构建都保持沉默，因此
 自定义构建不会一直被上游版本骚扰。
@@ -31,13 +31,13 @@ Headplane 也会对**自己**做同样的比较，对象是 GitHub 上的最新 
 | 检查                     | 为什么重要                                                                                                              |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | Headscale 可达           | `GET /health` —— 这项失败时，页面其余内容都没有意义。                                                                    |
-| API 密钥有效             | Headplane 的 `headscale.api_key` 必须仍然可用；密钥过期会让每个页面都失效。                                              |
-| 版本足够新               | Headplane Agent 与浏览器 SSH 需要 Headscale 0.28+；更新的版本修复了真实缺陷，0.29.2 是推荐基线。                         |
+| API 密钥有效             | HeadplaneCN 的 `headscale.api_key` 必须仍然可用；密钥过期会让每个页面都失效。                                              |
+| 版本足够新               | HeadplaneCN Agent 与浏览器 SSH 需要 Headscale 0.28+；更新的版本修复了真实缺陷，0.29.2 是推荐基线。                         |
 | 策略模式                 | `policy.mode: file` 时访问控制编辑器无法通过 API 保存；`database` 可以。                                                 |
 | 已配置 OIDC              | 浏览器 SSH 要求用户通过 OIDC 登录，因此需要一个可用的 OIDC 段。                                                           |
 | 可信代理                 | 在反向代理后面，只有当代理所在网段列在 `trusted_proxies` 中时，Headscale 才能看到真实客户端地址。                        |
 | Headscale 配置可读       | 只有 `headscale.config_path` 已挂载时，DNS 页和 Headscale 设置页才能读取（或写入）。                                     |
-| 集成已启用               | 没有集成时 Headplane 无法替你重载或重启 Headscale。                                                                       |
+| 集成已启用               | 没有集成时 HeadplaneCN 无法替你重载或重启 Headscale。                                                                       |
 
 ## 配置检查
 
@@ -45,7 +45,7 @@ Headplane 也会对**自己**做同样的比较，对象是 GitHub 上的最新 
 悄悄不生效」的问题：
 
 ::: tip 容器看不到的路径
-Headplane 只能检查它真正能访问到的路径。当它拿到 Headscale 的 `config.yaml`、却没有拿到
+HeadplaneCN 只能检查它真正能访问到的路径。当它拿到 Headscale 的 `config.yaml`、却没有拿到
 该文件指向的目录时，`/vol1/@appdata/headscale/db.sqlite` 这类路径**在容器里**并不存在，
 尽管它在宿主机上完全健康。这类检查会报成**无法验证**（并给出路径和挂载提示），而不是判为
 失败。把该目录以只读方式挂进容器，它们就会变成真正的检查。
@@ -75,10 +75,10 @@ Headplane 只能检查它真正能访问到的路径。当它拿到 Headscale �
 Headscale —— 而且它失败得很温和：拿不到数字时会说明原因，而不是把页面弄坏。
 
 地址来自 Headscale 自己的 `metrics_listen_addr`。缺失或为空表示监听器未开启，标签会照实
-说明；不是 `host:port` 的值会报成无法解析。当 Headplane 完全读不到配置文件时，它会说无法
+说明；不是 `host:port` 的值会报成无法解析。当 HeadplaneCN 完全读不到配置文件时，它会说无法
 判断监听器在哪里，而不是声称监听器被禁用。Headscale 常把监听器绑到 `0.0.0.0` 或 `[::]`，
-这两个地址照原样是连不上的 —— 这种情况下 Headplane 会用你配置的 Headscale URL 的主机名。
-随后它在服务端以短超时抓取 `http://<地址>/metrics`，因此该监听器必须对 Headplane 自己可达，
+这两个地址照原样是连不上的 —— 这种情况下 HeadplaneCN 会用你配置的 Headscale URL 的主机名。
+随后它在服务端以短超时抓取 `http://<地址>/metrics`，因此该监听器必须对 HeadplaneCN 自己可达，
 而不只是对运行 Headscale 的那台机器可达。
 
 成功时标签页显示：
@@ -89,10 +89,10 @@ Headscale —— 而且它失败得很温和：拿不到数字时会说明原因
 | Goroutines                                                          | `go_goroutines`。                                                                                                                              |
 | 节点、用户、DERP 与中继、策略、进程（各一组）                        | 名称匹配该组的指标族，按其上报的样本求和；样本数多于一条时会显示序列数。                                                                        |
 
-其余内容仍在 **原始指标** 下可用，它按 Headplane 收到的原样显示 exposition 文本。
+其余内容仍在 **原始指标** 下可用，它按 HeadplaneCN 收到的原样显示 exposition 文本。
 
 连接被拒、超时、非 200 响应或正文里没有可解析的样本，最终都是同一条警告提示，它会写出
-Headplane 尝试的端点以及推导出的地址 —— 最常见的原因是监听器绑在回环地址上，而 Headplane
+HeadplaneCN 尝试的端点以及推导出的地址 —— 最常见的原因是监听器绑在回环地址上，而 HeadplaneCN
 跑在另一个容器里。
 
 ::: info 面板略去了什么

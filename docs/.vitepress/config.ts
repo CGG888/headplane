@@ -17,7 +17,7 @@ const zhHansSidebar = [
   {
     text: "开始使用",
     items: [
-      { text: "什么是 Headplane？", link: "/introduction" },
+      { text: "什么是 HeadplaneCN？", link: "/introduction" },
       {
         text: "安装",
         link: "/install",
@@ -61,7 +61,7 @@ const zhHansSidebar = [
           { text: "系统状态", link: "/features/system-status" },
           { text: "操作审计", link: "/features/audit" },
           { text: "配置快照", link: "/features/snapshots" },
-          { text: "Headplane Agent", link: "/features/agent" },
+          { text: "HeadplaneCN Agent", link: "/features/agent" },
           { text: "浏览器 SSH", link: "/features/ssh" },
           { text: "多语言", link: "/features/languages" },
         ],
@@ -95,7 +95,7 @@ const enSidebar = [
   {
     text: "Getting Started",
     items: [
-      { text: "What is Headplane?", link: "/en/introduction" },
+      { text: "What is HeadplaneCN?", link: "/en/introduction" },
       {
         text: "Installation",
         link: "/en/install",
@@ -139,7 +139,7 @@ const enSidebar = [
           { text: "System Status", link: "/en/features/system-status" },
           { text: "Audit Log", link: "/en/features/audit" },
           { text: "Snapshots", link: "/en/features/snapshots" },
-          { text: "Headplane Agent", link: "/en/features/agent" },
+          { text: "HeadplaneCN Agent", link: "/en/features/agent" },
           { text: "Browser SSH", link: "/en/features/ssh" },
           { text: "Languages", link: "/en/features/languages" },
         ],

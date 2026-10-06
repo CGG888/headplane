@@ -1,16 +1,16 @@
 # Configuration
 
-> Previous versions of Headplane used environment variables without a configuration file.
+> Previous versions of HeadplaneCN used environment variables without a configuration file.
 > Since 0.5, you will need to manually migrate your configuration to the new format.
 
-Headplane uses a configuration file to manage its settings
-([**config.example.yaml**](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)). By default, Headplane looks
+HeadplaneCN uses a configuration file to manage its settings
+([**config.example.yaml**](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)). By default, HeadplaneCN looks
 for a the file at `/etc/headplane/config.yaml`. This can be changed using the
 **`HEADPLANE_CONFIG_PATH`** environment variable to point to a different location.
 
-Headplane also stores stuff in the `/var/lib/headplane` directory by default.
+HeadplaneCN also stores stuff in the `/var/lib/headplane` directory by default.
 This can be configured on a per-section basis in the configuration file, but
-it is very important this directory is persistent and writable by Headplane.
+it is very important this directory is persistent and writable by HeadplaneCN.
 
 ## Environment Variables
 
@@ -27,7 +27,7 @@ Here are a few more examples:
 
 **This functionality is NOT enabled by default!**
 To enable it, set the environment variable **`HEADPLANE_LOAD_ENV_OVERRIDES=true`**.
-Setting this also tells Headplane to load the relative `.env` file into the environment.
+Setting this also tells HeadplaneCN to load the relative `.env` file into the environment.
 
 > Also note that this is **only** for configuration overrides, not for general
 > environment variables meaning you cannot specify variables such as
@@ -35,7 +35,7 @@ Setting this also tells Headplane to load the relative `.env` file into the envi
 
 ## Sensitive Values
 
-Headplane supports a dual-mode pattern for providing certain sensitive configuration values, such as secrets, keys, and private certificates. For each such field, you can either:
+HeadplaneCN supports a dual-mode pattern for providing certain sensitive configuration values, such as secrets, keys, and private certificates. For each such field, you can either:
 
 1. Set the value directly in the configuration file (e.g., `cookie_secret: "your-32-character-long-secret"`)
 2. Provide a path to a file containing the value using the `_path` suffixed key (e.g., `cookie_secret_path: "/path/to/your/cookie_secret_file"`)
@@ -49,9 +49,9 @@ When using a `_path` option, the content of the specified file will be read and 
 - The same dual-mode pattern works with environment variables. You can set `HEADPLANE_OIDC__CLIENT_SECRET` for a direct value or `HEADPLANE_OIDC__CLIENT_SECRET_PATH` to specify a path to a file containing the secret.
 
 **Note on Path Processing:**
-Headplane uses a whitelist approach to determine which `_path` fields should have their content loaded as secrets. Only the explicitly whitelisted paths below will have their file content read and used as configuration values. All other paths with a `_path` suffix will have environment variables interpolated but will not have their content loaded.
+HeadplaneCN uses a whitelist approach to determine which `_path` fields should have their content loaded as secrets. Only the explicitly whitelisted paths below will have their file content read and used as configuration values. All other paths with a `_path` suffix will have environment variables interpolated but will not have their content loaded.
 
-The following configuration options in Headplane are treated as secret paths:
+The following configuration options in HeadplaneCN are treated as secret paths:
 
 - **Server Settings (`server.*`):**
   - `cookie_secret_path` (for web session encoding)
@@ -71,7 +71,7 @@ The following configuration options in Headplane are treated as secret paths:
 **Distinction for Non-Secret Paths:**
 Other configuration fields that end with `_path` are treated as regular paths and will not have their content loaded. For example:
 
-- `headscale.config_path`: This is an optional path to Headscale's `config.yaml` file, which Headplane might read or use for validation.
+- `headscale.config_path`: This is an optional path to Headscale's `config.yaml` file, which HeadplaneCN might read or use for validation.
 
 All path fields (both secret and non-secret) support environment variable interpolation using the `${VAR_NAME}` syntax.
 
@@ -82,12 +82,12 @@ The path-based secret loading mechanism also works with environment variables. F
 
 ## Debugging
 
-Headplane writes server logs as newline-delimited JSON using Pino. Each entry
+HeadplaneCN writes server logs as newline-delimited JSON using Pino. Each entry
 includes a timestamp, level, component, and message (`msg`) so log aggregation
 tools can filter and index it directly.
 
 To enable debug logging, set the **`HEADPLANE_DEBUG_LOG=true`** environment variable.
-This will enable all debug logs for Headplane, which could fill up log space very quickly.
+This will enable all debug logs for HeadplaneCN, which could fill up log space very quickly.
 This is not recommended in production environments.
 
 ## TLS & Certificates
@@ -100,7 +100,7 @@ own page: [TLS & Certificates](./tls).
 ## Reverse Proxying
 
 Reverse proxying is very common when deploying web applications. Headscale and
-Headplane are very similar in this regard. You can use the same configuration
+HeadplaneCN are very similar in this regard. You can use the same configuration
 of any reverse proxy you are familiar with. Here is an example of how to do it
 using Traefik:
 

@@ -5,14 +5,14 @@ description: 界面语言、支持的语言目录，以及如何添加或更新�
 
 # 多语言
 
-Headplane 的界面自带英语、简体中文和繁体中文三种语言，无需任何配置。
+HeadplaneCN 的界面自带英语、简体中文和繁体中文三种语言，无需任何配置。
 
 ## 切换语言
 
 打开页头右上角的账户菜单，从列表中选择语言。登录页上同一个列表在右上角的地球按钮里。
 
 所选语言保存在 `locale` cookie 中并在服务端生效，因此下一次请求时整个页面（包括错误页）
-都会以该语言渲染。如果还没有选择过语言，Headplane 会使用浏览器的 `Accept-Language`，
+都会以该语言渲染。如果还没有选择过语言，HeadplaneCN 会使用浏览器的 `Accept-Language`，
 并回退到英语。
 
 日期与数字同样遵循所选语言：时间戳会带着当前语言走 `Intl`，因此 `toLocaleString()` 的输出
@@ -36,7 +36,7 @@ Headplane 的界面自带英语、简体中文和繁体中文三种语言，无�
 
 | 术语             | 说明                                                     |
 | ---------------- | -------------------------------------------------------- |
-| Headplane        | 产品名                                                   |
+| HeadplaneCN        | 产品名                                                   |
 | Headscale        | 产品名                                                   |
 | Tailscale        | 产品名                                                   |
 | Tailnet          | Headscale 概念                                           |
@@ -53,7 +53,7 @@ API 状态码）按原样显示，因为它们是取值，不是叙述文字。
 
 ## 有意不翻译的部分
 
-- **Headscale API 错误。** Headscale 服务器返回的消息原样透传；Headplane 无法翻译不属于
+- **Headscale API 错误。** Headscale 服务器返回的消息原样透传；HeadplaneCN 无法翻译不属于
   自己的文本。
 - **服务端日志。** `log.*` 的输出保持英文，方便 grep。
 - **内部校验错误。** 例如 `Missing \`action_id\` in the form data.` 这类消息描述的是 API

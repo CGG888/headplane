@@ -6,16 +6,16 @@ outline: [2, 3]
 
 # 机器管理
 
-**机器**页就是 tailnet 的资产清单：每台已注册的机器一行，另外还有一页把 Headplane 知道的
+**机器**页就是 tailnet 的资产清单：每台已注册的机器一行，另外还有一页把 HeadplaneCN 知道的
 单台机器信息集中起来。
 
 ## 机器列表
 
 | 列       | 显示内容                                                                                     |
 | -------- | -------------------------------------------------------------------------------------------- |
-| 机器名   | Headplane 显示的名字，下方是它的所有者；由标签拥有的机器显示为 `tag:…`                        |
+| 机器名   | HeadplaneCN 显示的名字，下方是它的所有者；由标签拥有的机器显示为 `tag:…`                        |
 | 地址     | 机器在 Tailnet 内的 IPv4 地址，有 IPv6 时一并显示                                             |
-| 版本     | 机器上报的 Tailscale 版本 —— 仅在启用 [Headplane Agent](/features/agent) 时          |
+| 版本     | 机器上报的 Tailscale 版本 —— 仅在启用 [HeadplaneCN Agent](/features/agent) 时          |
 | 状态     | 在线或离线                                                                                   |
 | 最后出现 | 控制服务器最后一次收到该机器消息的时间                                                       |
 
@@ -44,7 +44,7 @@ outline: [2, 3]
 它改派给另一个所有者。卡片和菜单作用的都是当前页面的这台机器，因此这里没有「无需确认」的
 批量路径。
 
-描述机器本身的那几行 —— 操作系统、Tailscale 版本、客户端连通性和中继 —— 来自 Headplane
+描述机器本身的那几行 —— 操作系统、Tailscale 版本、客户端连通性和中继 —— 来自 HeadplaneCN
 Agent，因为 Headscale API 不携带这些信息。没有 Agent 时这些卡片会说明需要它，而不是显示
 空表。
 
@@ -60,10 +60,10 @@ Agent，因为 Headscale API 不携带这些信息。没有 Agent 时这些卡�
 区域名来自设置页描述的同一套解析链 —— 手工区域名映射、`derp.paths` 地图、`derp.urls` 地图，
 最后是 Headscale 的内嵌区域 —— 都不认识的区域直接显示 ID。Agent 按区域**与**地址族记录样本
 （`<regionID>-v4`、`<regionID>-v6`），因此同时用两个地址族测量过的区域只出现一次并显示最快
-的样本。细节见 [Headplane Agent](/features/agent)。
+的样本。细节见 [HeadplaneCN Agent](/features/agent)。
 
 ::: tip 「IPv6: No」说的是那台机器，不是你的中继
 **客户端连通性**里的 IPv6 取值是机器自己的自检：它的网络到底有没有可用的 IPv6。它与
-Headscale 或 DERP 服务器无关，也无法从 Headplane 这边修好。[fnOS 部署指南](/install/fnos)
+Headscale 或 DERP 服务器无关，也无法从 HeadplaneCN 这边修好。[fnOS 部署指南](/install/fnos)
 里有对应这条症状的排查条目。
 :::

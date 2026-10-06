@@ -21,7 +21,7 @@ webhook URL — the settings form refuses to save an enabled channel without one
 
 ## Reported events
 
-Every event fires on a **state change**, never repeatedly. Headplane remembers
+Every event fires on a **state change**, never repeatedly. HeadplaneCN remembers
 what the previous check concluded, so a node that is still offline on the next
 tick is not reported again, and a Headscale that stays down is one alert rather
 than one per interval.
@@ -63,13 +63,13 @@ Two situations are deliberately silent rather than guessed at:
 - **An unreachable Headscale is not a tailnet-wide outage.** While the API cannot
   be reached, the node and API key lists are not fetched at all, and the previous
   conclusions for them are left untouched. Every node is never reported offline
-  just because Headplane cannot ask.
+  just because HeadplaneCN cannot ask.
 - **An unreadable configuration is not a failing one.** When Headscale's
   configuration file is missing, unreadable or unparseable, the configuration
-  checks simply did not run: Headplane logs a warning and raises no alert, and the
+  checks simply did not run: HeadplaneCN logs a warning and raises no alert, and the
   previous check state is kept.
 - **Node and API key events need an API key.** Without `headscale.api_key`
-  Headplane cannot list nodes or keys, so those three events are never detected;
+  HeadplaneCN cannot list nodes or keys, so those three events are never detected;
   reachability, the configuration checks and the DERP sync reports still are.
 
 ## Settings
@@ -79,13 +79,13 @@ Two situations are deliberately silent rather than guessed at:
 | Webhook URL            | empty   | —              | Absolute `http` or `https` URL; required to enable or test.      |
 | Shared secret          | empty   | —              | Optional; sent as the `X-Headplane-Secret` header on every POST. |
 | Reported events        | all seven | —              | At least one must stay selected.                                 |
-| Check interval         | 60 s    | 15–3600        | How often Headplane looks for changes.                           |
+| Check interval         | 60 s    | 15–3600        | How often HeadplaneCN looks for changes.                           |
 | Cooldown               | 300 s   | 30–86400       | Shortest time before the same condition may be reported again.   |
 | API key warning window | 7 days  | 1–90           | How far ahead an expiring API key is worth reporting.            |
 
 Values outside those ranges are rejected with an error instead of being silently
 changed; a hand-edited `alerts.json` is clamped to the same bounds instead.
-Unchecking an event does not stop Headplane tracking that condition — it only
+Unchecking an event does not stop HeadplaneCN tracking that condition — it only
 stops it being sent — so a condition that begins while its event is unchecked is
 not reported when you re-check it.
 
@@ -103,7 +103,7 @@ and outside the translation catalogs, so automation can match on stable text:
 | `summary`   | One line with the target and threshold filled in.                                                                            |
 | `details`   | `{ "target": …, "threshold": … }`; either key is absent when the event has no such value — `{}` for the reachability events. |
 | `timestamp` | ISO 8601 time the change was **observed**, not when the delivery was attempted.                                              |
-| `version`   | The Headplane build that sent it.                                                                                            |
+| `version`   | The HeadplaneCN build that sent it.                                                                                            |
 
 ```json
 {
@@ -136,7 +136,7 @@ because it is kept next to the state rather than in memory.
 
 ## Where the state lives
 
-Everything lives in `alerts.json`, directly inside Headplane's data directory
+Everything lives in `alerts.json`, directly inside HeadplaneCN's data directory
 (`server.data_path`): the settings, the delivery history, and the last-known state
 the detector compares against — whether Headscale was reachable, which nodes were
 offline, which keys were inside the window, which checks were failing, whether the

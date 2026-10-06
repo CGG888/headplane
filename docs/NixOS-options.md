@@ -34,7 +34,7 @@ _Default:_ `pkgs.headplane`
 
 ## settings
 
-_Description:_ Headplane 配置选项。会生成一个 YAML 配置文件。
+_Description:_ HeadplaneCN 配置选项。会生成一个 YAML 配置文件。
 参见：https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml
 
 _Type:_ submodule
@@ -43,7 +43,7 @@ _Default:_ `{ }`
 
 ## settings.headscale
 
-_Description:_ 用于 Headplane 集成的 Headscale 专属设置。
+_Description:_ 用于 HeadplaneCN 集成的 Headscale 专属设置。
 
 _Type:_ submodule
 
@@ -52,7 +52,7 @@ _Default:_ `{ }`
 ## settings.headscale.api_key_path
 
 _Description:_ 包含 Headscale API 密钥的文件的路径。
-OIDC 认证和 Headplane Agent 都需要它。
+OIDC 认证和 HeadplaneCN Agent 都需要它。
 
 _Type:_ null or absolute path
 
@@ -64,7 +64,7 @@ _Example:_ `"config.sops.secrets.headscale_api_key.path"`
 
 _Description:_ Headscale 配置文件的路径。
 这一项是可选的，但**强烈**建议设置，以获得最好的体验。
-如果该文件是只读的，Headplane 会在 Web 界面中显示你的配置项，但无法修改它们。
+如果该文件是只读的，HeadplaneCN 会在 Web 界面中显示你的配置项，但无法修改它们。
 
 _Type:_ null or absolute path
 
@@ -74,7 +74,7 @@ _Example:_ `"/etc/headscale/config.yaml"`
 
 ## settings.headscale.config_strict
 
-_Description:_ 已弃用。Headplane 不再校验完整的 Headscale 配置，该选项没有任何效果。
+_Description:_ 已弃用。HeadplaneCN 不再校验完整的 Headscale 配置，该选项没有任何效果。
 
 _Type:_ boolean
 
@@ -82,9 +82,9 @@ _Default:_ `true`
 
 ## settings.headscale.dns_records_path
 
-_Description:_ 如果你在 Headscale 配置中使用了 `dns.extra_records_path`，Headplane 会自动读取该路径。只有在 Headplane 需要以不同路径访问同一个文件时才设置此项。
-请确保该文件对 Headplane 进程可读且可写。
-使用它之后，Headplane 就不再需要为了修改 DNS 记录而自动重启 Headscale。
+_Description:_ 如果你在 Headscale 配置中使用了 `dns.extra_records_path`，HeadplaneCN 会自动读取该路径。只有在 HeadplaneCN 需要以不同路径访问同一个文件时才设置此项。
+请确保该文件对 HeadplaneCN 进程可读且可写。
+使用它之后，HeadplaneCN 就不再需要为了修改 DNS 记录而自动重启 Headscale。
 
 _Type:_ null or absolute path
 
@@ -127,7 +127,7 @@ _Example:_ `"https://headscale.example.com"`
 
 ## settings.integration
 
-_Description:_ Headplane 与 Headscale 交互的集成配置。
+_Description:_ HeadplaneCN 与 Headscale 交互的集成配置。
 
 _Type:_ submodule
 
@@ -135,7 +135,7 @@ _Default:_ `{ }`
 
 ## settings.integration.agent
 
-_Description:_ Headplane Agent 的 Agent 配置。
+_Description:_ HeadplaneCN Agent 的 Agent 配置。
 
 _Type:_ submodule
 
@@ -152,7 +152,7 @@ _Default:_ `180000`
 
 ## settings.integration.agent.enabled
 
-_Description:_ Headplane Agent 会定期从你的 Tailnet 同步节点信息（版本、操作系统等）。
+_Description:_ HeadplaneCN Agent 会定期从你的 Tailnet 同步节点信息（版本、操作系统等）。
 它使用 headscale.api_key 自动生成临时预授权密钥，因此无需手动配置密钥。
 需要 Headscale 0.28 或更新版本。
 
@@ -162,7 +162,7 @@ _Default:_ `false`
 
 ## settings.integration.agent.executable_path
 
-_Description:_ Headplane Agent 可执行文件的路径。
+_Description:_ HeadplaneCN Agent 可执行文件的路径。
 如果使用 NixOS 模块提供的软件包，默认值就是正确的。
 
 _Type:_ absolute path
@@ -187,7 +187,7 @@ _Default:_ `pkgs.headplane-agent`
 
 ## settings.integration.agent.tailscale_netns
 
-_Description:_ 在专用的 Headplane Agent 进程中使用 Tailscale 的套接字级路由环路处理。
+_Description:_ 在专用的 HeadplaneCN Agent 进程中使用 Tailscale 的套接字级路由环路处理。
 除非它的回退逻辑把 Agent 与 Headscale 的连接固定到了错误的网卡上，否则请保持启用。
 只有在确认容器网络命名空间中的普通操作系统路由能正确到达 Headscale 之后，才应设为 false。
 
@@ -199,7 +199,7 @@ _Default:_ `true`
 
 _Description:_ 除非你在运行自定义部署，否则不要修改这一项。
 work_dir 表示 Agent 存放数据的位置，以便能够自动重新通过 Tailnet 认证。
-它必须对运行 Headplane 进程的用户可写。
+它必须对运行 HeadplaneCN 进程的用户可写。
 
 _Type:_ absolute path
 
@@ -216,8 +216,8 @@ _Default:_ `{ }`
 ## settings.integration.proc.enabled
 
 _Description:_ 启用 “Native” 集成，适用于 Headscale 和
-Headplane 都运行在容器之外的情况。它不需要额外配置，
-但你需要确保 Headplane 进程能够终止 Headscale 进程。
+HeadplaneCN 都运行在容器之外的情况。它不需要额外配置，
+但你需要确保 HeadplaneCN 进程能够终止 Headscale 进程。
 
 _Type:_ boolean
 
@@ -291,7 +291,7 @@ _Example:_ `"https://provider.example.com/issuer-url"`
 
 ## settings.oidc.redirect_uri
 
-_Description:_ 这里应填写你的 Headplane 实例可公开访问的 URL，
+_Description:_ 这里应填写你的 HeadplaneCN 实例可公开访问的 URL，
 并带上 /admin/oidc/callback。
 
 _Type:_ string
@@ -302,7 +302,7 @@ _Example:_ `"https://headscale.example.com/admin/oidc/callback"`
 
 ## settings.oidc.role_claim
 
-_Description:_ 可选的 OIDC 声明，包含要分配给新创建用户的 Headplane 角色。
+_Description:_ 可选的 OIDC 声明，包含要分配给新创建用户的 HeadplaneCN 角色。
 有效的角色声明优先于 default_role。
 
 _Type:_ null or string
@@ -321,7 +321,7 @@ _Default:_ `"client_secret_post"`
 
 ## settings.server
 
-_Description:_ Headplane Web 应用的服务器配置。
+_Description:_ HeadplaneCN Web 应用的服务器配置。
 
 _Type:_ submodule
 
@@ -350,7 +350,7 @@ _Default:_ `true`
 
 ## settings.server.data_path
 
-_Description:_ 持久化 Headplane 专属数据的路径。
+_Description:_ 持久化 HeadplaneCN 专属数据的路径。
 今后所有数据都存放在该目录中，包括内部数据库和任何缓存相关文件。
 0.6.1 之前的数据格式会自动迁移。
 
@@ -388,8 +388,8 @@ _Default:_ `{ }`
 
 ## settings.server.proxy_auth.allowed_cidrs
 
-_Description:_ 允许绕过 Headplane 登录流程的直接客户端 CIDR 范围。
-这里应填写你的可信反向代理连接 Headplane 时使用的地址。
+_Description:_ 允许绕过 HeadplaneCN 登录流程的直接客户端 CIDR 范围。
+这里应填写你的可信反向代理连接 HeadplaneCN 时使用的地址。
 需要 headscale.api_key_path。
 
 _Type:_ list of string

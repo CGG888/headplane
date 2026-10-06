@@ -18,7 +18,7 @@ const qr = (file) => `${site.value.base}sponsor/${file}`;
 <!-- 收款码图片放在 docs/public/sponsor/ 目录，对应
      /sponsor/wechat.png 与 /sponsor/alipay.png。 -->
 
-Headplane 是自由开源软件，以后也一直是。如果这个分支帮你省了时间，欢迎用微信或支付宝
+HeadplaneCN 是自由开源软件，以后也一直是。如果这个分支帮你省了时间，欢迎用微信或支付宝
 请作者喝杯咖啡——扫你常用的那个就行。
 
 ## 微信
@@ -30,7 +30,7 @@ Headplane 是自由开源软件，以后也一直是。如果这个分支帮你�
 <img :src="qr('alipay.png')" alt="支付宝收款码" width="240">
 
 **赞助完全自愿，也不会改变软件的任何行为。** 无论是否赞助，功能对所有用户都一样：
-没有任何功能需要赞助才能使用，技术支持也不因赞助而分先后，Headplane 的行为更不取决于
+没有任何功能需要赞助才能使用，技术支持也不因赞助而分先后，HeadplaneCN 的行为更不取决于
 有没有人赞助。
 
 谢谢，这份心意是实实在在的。

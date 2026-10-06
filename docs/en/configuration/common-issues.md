@@ -5,12 +5,12 @@ description: Common issues and their solutions
 
 # Common Issues and Their Solutions
 
-This document outlines some common issues users may encounter while using Headplane, along with their solutions.
+This document outlines some common issues users may encounter while using HeadplaneCN, along with their solutions.
 
 ## Login does not work
 
 ::: tip
-Headplane tries to detect misconfigurations and will surface a warning banner on
+HeadplaneCN tries to detect misconfigurations and will surface a warning banner on
 the login page if it detects any abnormalities. You may see a banner like this:
 
 <figure>
@@ -20,10 +20,10 @@ the login page if it detects any abnormalities. You may see a banner like this:
 </figure>
 :::
 
-If you attempt to log in to Headplane but nothing happens, it may be due to a
-misconfiguration of the server cookie settings. In your Headplane configuration,
+If you attempt to log in to HeadplaneCN but nothing happens, it may be due to a
+misconfiguration of the server cookie settings. In your HeadplaneCN configuration,
 ensure that `server.cookie_secure` is set appropriately based on how you are
-accessing Headplane:
+accessing HeadplaneCN:
 
 - Serving over HTTPS: `cookie_secure` should be enabled (`true`).
 - Serving over HTTP: `cookie_secure` should be disabled (`false`).
@@ -32,7 +32,7 @@ accessing Headplane:
 
 If logging in works but **every** form submission fails (adding users, creating
 pre-auth keys, saving the ACL policy, switching the language, logging out), the
-reverse proxy in front of Headplane is probably rewriting the `Host` header.
+reverse proxy in front of HeadplaneCN is probably rewriting the `Host` header.
 
 React Router rejects any form submission whose `Origin` header does not match
 the origin it derived from `Host`, as protection against cross-site request
@@ -44,7 +44,7 @@ sanitized message. The server log is more explicit and shows
 
 Pick one of these fixes:
 
-1. **Tell Headplane its public address** (recommended). Set `server.base_url` to
+1. **Tell HeadplaneCN its public address** (recommended). Set `server.base_url` to
    the URL you use in the browser:
 
    ```yaml
@@ -73,13 +73,13 @@ of a logged-in user.
 
 ## "Page is out of date" after an upgrade
 
-Headplane's client is built from hashed files. When a reverse proxy caches the
+HeadplaneCN's client is built from hashed files. When a reverse proxy caches the
 HTML document, a browser that already has the old page keeps loading a shell that
 references chunk files the new build no longer serves. React Router answers a
 route chunk that will not load by reloading the document, which fetches the same
 cached shell, so the page can reload in a loop.
 
-Headplane allows itself **one** automatic reload for that, remembers the attempt
+HeadplaneCN allows itself **one** automatic reload for that, remembers the attempt
 in `sessionStorage`, and stops there: the next boot shows a **Page is out of
 date** notice with a **Reload page** button instead of hydrating into the same
 failure again. Pressing it forgets the recorded attempt and fetches the document

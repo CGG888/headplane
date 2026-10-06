@@ -24,7 +24,7 @@ description: 直接在浏览器里对 Tailnet 节点发起 SSH 会话。
   无法使用；请使用 Headscale 0.28.x 或 0.29.2 及更新版本。
 - 目标节点必须启用 **Tailscale SSH**（`tailscale up --ssh`）。
 - 用户必须通过 **OIDC** 登录（使用 API Key 登录无法使用浏览器 SSH）。
-- 必须[启用并配置](/features/agent) **Headplane Agent**。
+- 必须[启用并配置](/features/agent) **HeadplaneCN Agent**。
 
 :::warning Headscale 0.29.0 beta 至 0.29.1
 由于 `/ts2021` 的 WebSocket 路由回归问题，浏览器 SSH 在 Headscale 0.29 beta 版到 0.29.1 之间
@@ -50,7 +50,7 @@ WebSocket 请求。请把 Headscale 升级到 0.29.2 或更新版本，或使用
 
 ## 反向代理配置
 
-浏览器 SSH 要求浏览器能够直接访问 **Headplane** 和 **Headscale**。如果其中任何一个位于反向
+浏览器 SSH 要求浏览器能够直接访问 **HeadplaneCN** 和 **Headscale**。如果其中任何一个位于反向
 代理之后，代理必须配置为支持 WebSocket 连接 —— WASM 节点正是通过它与 DERP 中继服务器通信。
 
 ### 必需的请求头
@@ -65,12 +65,12 @@ WebSocket 请求。请把 Headscale 升级到 0.29.2 或更新版本，或使用
 
 ### CORS 请求头
 
-Headscale 必须能从 Headplane 所在的源访问。如果 Headplane 与 Headscale 处于不同的源（主机或
+Headscale 必须能从 HeadplaneCN 所在的源访问。如果 HeadplaneCN 与 Headscale 处于不同的源（主机或
 端口不同），你的反向代理必须为 Headscale 的响应添加 CORS 请求头：
 
 | 请求头                         | 取值                                            |
 | ------------------------------ | ----------------------------------------------- |
-| `Access-Control-Allow-Origin`  | 你的 Headplane 实例的源                         |
+| `Access-Control-Allow-Origin`  | 你的 HeadplaneCN 实例的源                         |
 | `Access-Control-Allow-Methods` | `GET, POST, OPTIONS`                            |
 | `Access-Control-Allow-Headers` | `Content-Type, Upgrade, Sec-WebSocket-Protocol` |
 
@@ -115,23 +115,23 @@ server {
 
 ### 同源部署
 
-如果 Headplane 与 Headscale 共用同一个源（例如用一个反向代理把 `/admin` 路由到 Headplane，
+如果 HeadplaneCN 与 Headscale 共用同一个源（例如用一个反向代理把 `/admin` 路由到 HeadplaneCN，
 其余全部路由到 Headscale），则不需要 CORS 请求头。但 WebSocket 升级转发仍然是必需的。
 
 ## 故障排查
 
 ### SSH 不可用
 
-**Error:** "This version of Headplane was not built with browser SSH support."
+**Error:** "This version of HeadplaneCN was not built with browser SSH support."
 
 WASM 资源（`hp_ssh.wasm` 和 `wasm_exec.js`）缺失。请用 `./build.sh --wasm` 重新构建，或确认
 你的 Docker 镜像在构建时带了 `--wasm` 参数。
 
 ### 需要 Agent
 
-**Error:** "Browser SSH is only available when the Headplane agent integration is enabled."
+**Error:** "Browser SSH is only available when the HeadplaneCN agent integration is enabled."
 
-Headplane Agent 没有启用。浏览器 SSH 依赖 Agent 提供 Tailnet 连接和临时节点清理能力。搭建
+HeadplaneCN Agent 没有启用。浏览器 SSH 依赖 Agent 提供 Tailnet 连接和临时节点清理能力。搭建
 方法见 [Agent 文档](/features/agent)。
 
 ### 需要 OIDC
@@ -157,7 +157,7 @@ URL 中的节点名与 Headscale 中注册的任何节点都不匹配。该节�
 
 ### 节点离线
 
-Headplane 会在发起 SSH 会话之前检查目标节点是否已连接到 Tailnet。如果节点离线，你会看到一个
+HeadplaneCN 会在发起 SSH 会话之前检查目标节点是否已连接到 Tailnet。如果节点离线，你会看到一个
 带有 **Retry Connection** 按钮的错误页。请确认节点正在运行并已连接到 Headscale，然后重试。
 
 ### 连接失败并返回 EOF 或卡住
@@ -167,11 +167,11 @@ Headplane 会在发起 SSH 会话之前检查目标节点是否已连接到 Tail
   `405 Method Not Allowed`，请升级到 Headscale 0.29.2 或更新版本，或使用 Headscale 0.28.x。
 - **检查 Headscale 配置里的 `server_url`。** 如果 Headscale 运行在非标准端口上，`server_url`
   必须带上该端口（例如 `https://hs.example.com:8443`）。内嵌 DERP 服务器会据此推导对外公布
-  的端口。**不要**把 DERP 端口写进 Headplane 的 `headscale.public_url` —— 那个设置只用于界面
+  的端口。**不要**把 DERP 端口写进 HeadplaneCN 的 `headscale.public_url` —— 那个设置只用于界面
   显示，改动它会破坏注册命令和授权密钥的提示。
 - **确认反向代理支持 WebSocket。** Headscale 前面的代理必须转发 `Upgrade: websocket` 请求头。
   否则 DERP 连接会立即失败。
-- **不同源时检查 CORS。** 打开浏览器控制台查看是否有 CORS 错误。如果 Headplane 与 Headscale
+- **不同源时检查 CORS。** 打开浏览器控制台查看是否有 CORS 错误。如果 HeadplaneCN 与 Headscale
   处于不同的源，必须在 Headscale 的代理上配置 CORS 请求头。
 - 确认目标节点已启用 Tailscale SSH（`tailscale up --ssh`）。
 - 检查浏览器控制台中的 WASM 错误或 DERP 连接失败信息。

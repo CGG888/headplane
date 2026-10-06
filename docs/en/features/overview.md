@@ -12,7 +12,7 @@ running, how is Headscale configured, and is anything wrong? — in one place.
 
 Nothing on the page writes. There are no forms and no actions, and every card
 degrades on its own: a Headscale that does not answer, a configuration file
-Headplane cannot read or an agent that is not running leave the rest of the
+HeadplaneCN cannot read or an agent that is not running leave the rest of the
 dashboard intact. A value that could not be read is shown as an em dash with a
 short reason ("the Headscale API could not be read", "not configured") instead of
 being guessed at.
@@ -21,11 +21,11 @@ being guessed at.
 
 | Card                 | Shown                                                                                                                             | Source                                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Headplane            | The version this build reports, and the latest Headplane release when it can be looked up                                          | The build version, and the same cached GitHub lookup the system page uses                                     |
+| HeadplaneCN            | The version this build reports, and the latest HeadplaneCN release when it can be looked up                                          | The build version, and the same cached GitHub lookup the system page uses                                     |
 | Headscale            | The running version, and the latest Headscale release when it can be looked up                                                     | Headscale's `/version` API                                                                                    |
-| Headplane Agent      | The Tailscale version the agent reports, its last sync, how many nodes it reported and its last error                             | The agent's host info; when the agent is disabled the card says so and points at **Settings → Agent**         |
+| HeadplaneCN Agent      | The Tailscale version the agent reports, its last sync, how many nodes it reported and its last error                             | The agent's host info; when the agent is disabled the card says so and points at **Settings → Agent**         |
 
-Headplane and Headscale each get an **Update available** chip when a newer release
+HeadplaneCN and Headscale each get an **Update available** chip when a newer release
 exists, and a **No release information** chip when the lookup could not run, so an
 offline instance is never claimed to be up to date.
 
@@ -77,24 +77,24 @@ needs the same treatment.
 
 ## Service facts
 
-Three cards read the configuration Headplane already has:
+Three cards read the configuration HeadplaneCN already has:
 
 | Card              | Shown                                                                                                                                                                        |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Headscale Server  | The configured Headscale URL and whether it answers, `base_domain`, and the policy mode (**File** or **Database**)                                                             |
 | DNS & Policy      | The MagicDNS and override-local-DNS switches, and `dns.extra_records_path`, the extra-records file                                                                            |
-| Metrics & Proxies | The metrics listener address and whether Headplane can reach it — **Reachable**, **Unreachable**, **Not enabled**, **Invalid listen address** or **Unknown** — and how many entries `trusted_proxies` has |
+| Metrics & Proxies | The metrics listener address and whether HeadplaneCN can reach it — **Reachable**, **Unreachable**, **Not enabled**, **Invalid listen address** or **Unknown** — and how many entries `trusted_proxies` has |
 
 ## Counts
 
 | Card           | Shown                                                                                                                                          |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tailnet        | Nodes with their online/offline split, users, pre-auth keys (only on Headscale versions that expose a global key list) and API keys              |
-| Headplane Data | Operation-log entries, and the number of configuration snapshots with their total size                                                          |
+| HeadplaneCN Data | Operation-log entries, and the number of configuration snapshots with their total size                                                          |
 
 Counts that need the Headscale API show an em dash when that API cannot be read.
 The snapshot size is formatted in binary units, and the audit and snapshot counts
-come from Headplane's own stores.
+come from HeadplaneCN's own stores.
 
 ## Health
 

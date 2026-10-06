@@ -19,7 +19,7 @@ compared with the upstream project.
 ### fnOS and native Headscale integration
 
 The docs and compose guidance cover a Headscale installed as a native fnOS
-process next to a containerised Headplane: `pid: host` so `integration.proc` can
+process next to a containerised HeadplaneCN: `pid: host` so `integration.proc` can
 find and signal `headscale serve`, and Headscale's effective `config.yaml`
 mounted **read-write** so the DNS and Settings pages appear. The rule that
 matters most: `derp.paths` is read by **Headscale on the host**, so every entry
@@ -101,7 +101,7 @@ run fails.
 
 ### Configuration snapshots and the audit log
 
-Headplane stores a snapshot before it writes configuration, so a bad change is
+HeadplaneCN stores a snapshot before it writes configuration, so a bad change is
 one click from being restored, and records every write so you can see who changed
 what and when.
 

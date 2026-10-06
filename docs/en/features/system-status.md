@@ -23,7 +23,7 @@ timeout and cached for a few hours; on an offline or restricted network the
 lookup simply yields nothing and no badge is shown, so the page never depends on
 internet access.
 
-Headplane runs the same comparison for **itself**, against the latest Headplane
+HeadplaneCN runs the same comparison for **itself**, against the latest HeadplaneCN
 release on GitHub and with the same timeout and cache. The notice appears above
 the page only when the version this build reports — stamped in at build time —
 is strictly older, and it links to the release. A failed lookup, an untagged
@@ -38,13 +38,13 @@ where it helps a link to the page that fixes it:
 | Check                     | Why it matters                                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Headscale reachable       | `GET /health` — if this fails, nothing else on the page is meaningful.                                                       |
-| API key valid             | Headplane's `headscale.api_key` must still work; an expired key breaks every page.                                           |
-| Version new enough        | The Headplane Agent and browser SSH need Headscale 0.28+; newer releases fix real bugs, 0.29.2 is the recommended baseline.  |
+| API key valid             | HeadplaneCN's `headscale.api_key` must still work; an expired key breaks every page.                                           |
+| Version new enough        | The HeadplaneCN Agent and browser SSH need Headscale 0.28+; newer releases fix real bugs, 0.29.2 is the recommended baseline.  |
 | Policy mode               | With `policy.mode: file` the Access Control editor cannot save through the API; `database` lets it.                          |
 | OIDC configured           | Browser SSH requires users to sign in through OIDC, so it needs a working OIDC block.                                        |
 | Trusted proxies           | Behind a reverse proxy, Headscale only sees the real client address when the proxy's network is listed in `trusted_proxies`. |
 | Headscale config readable | The DNS and Headscale settings pages can only read (or write) when `headscale.config_path` is mounted.                       |
-| Integration enabled       | Without an integration Headplane cannot reload or restart Headscale for you.                                                 |
+| Integration enabled       | Without an integration HeadplaneCN cannot reload or restart Headscale for you.                                                 |
 
 ## Configuration checks
 
@@ -53,7 +53,7 @@ problems that otherwise only show up as a server that will not start or a
 setting that quietly does nothing:
 
 ::: tip Paths a container cannot see
-Headplane can only inspect the paths it can actually reach. When it is given
+HeadplaneCN can only inspect the paths it can actually reach. When it is given
 Headscale's `config.yaml` but not the directories that file points at, a path
 like `/vol1/@appdata/headscale/db.sqlite` does not exist _inside the container_
 even though it is perfectly healthy on the host. Those checks are reported as
@@ -90,13 +90,13 @@ when it cannot show numbers it explains why instead of breaking the page.
 
 The address comes from Headscale's own `metrics_listen_addr`. A missing or empty
 value means the listener is off, and the tab says exactly that; a value that is
-not `host:port` is reported as unparseable. When Headplane cannot read the
+not `host:port` is reported as unparseable. When HeadplaneCN cannot read the
 configuration file at all it says it cannot tell where the listener is, rather
 than claiming the listener is disabled. Headscale often binds the listener to
-`0.0.0.0` or `[::]`, which cannot be dialled as written — in that case Headplane
+`0.0.0.0` or `[::]`, which cannot be dialled as written — in that case HeadplaneCN
 uses the host of your configured Headscale URL. It then fetches
 `http://<address>/metrics` server-side with a short timeout, so the listener has
-to be reachable from Headplane itself, not just from the machine running
+to be reachable from HeadplaneCN itself, not just from the machine running
 Headscale.
 
 On success the tab shows:
@@ -108,12 +108,12 @@ On success the tab shows:
 | Nodes, Users, DERP and relays, Policy and Process (one group each) | The metric families whose names match that group, each summed across the samples it was reported with; the series count is shown when there is more than one. |
 
 Everything else is still available under **Raw metrics**, which shows the
-exposition text exactly as Headplane received it.
+exposition text exactly as HeadplaneCN received it.
 
 A refused connection, a timeout, a non-200 answer or a body with no parsable
-samples all end as the same warning notice, which names the endpoint Headplane
+samples all end as the same warning notice, which names the endpoint HeadplaneCN
 tried and the address it derived — most often because the listener binds loopback
-and Headplane runs in another container.
+and HeadplaneCN runs in another container.
 
 ::: info What the panel leaves out
 

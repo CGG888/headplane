@@ -1,17 +1,17 @@
 ---
 title: Users
-description: Headplane accounts, their roles, linked Headscale users and ACL groups.
+description: HeadplaneCN accounts, their roles, linked Headscale users and ACL groups.
 outline: [2, 3]
 ---
 
 # Users
 
 **Users** separates two things that are easy to confuse: the accounts that sign
-in to Headplane, and the users that exist in Headscale.
+in to HeadplaneCN, and the users that exist in Headscale.
 
-## Headplane users
+## HeadplaneCN users
 
-The first section lists every account that has signed in to Headplane, with its
+The first section lists every account that has signed in to HeadplaneCN, with its
 role, its last login, whether it is linked to a Headscale user, and the machines
 that link gives it.
 
@@ -44,11 +44,11 @@ account to sign in becomes the owner.
 
 ## Unlinked Headscale users
 
-The second section lists the Headscale users no Headplane account has claimed.
-They cannot be managed through Headplane until an account links to them, which is
-what the **Link Headscale user** action on a Headplane account is for.
+The second section lists the Headscale users no HeadplaneCN account has claimed.
+They cannot be managed through HeadplaneCN until an account links to them, which is
+what the **Link Headscale user** action on a HeadplaneCN account is for.
 
-**Add user** creates a **Headscale** user, not a Headplane account: the new user
+**Add user** creates a **Headscale** user, not a HeadplaneCN account: the new user
 appears in this section and is linked automatically once it signs in through your
 OIDC provider. A username has to be at least two characters, start with a letter
 and use only letters, numbers, dots, dashes and underscores.

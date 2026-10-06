@@ -1,6 +1,6 @@
 ---
 title: Sponsor
-description: Support the upkeep of this Headplane fork with a WeChat or Alipay donation.
+description: Support the upkeep of HeadplaneCN with a WeChat or Alipay donation.
 ---
 
 <script setup>
@@ -19,7 +19,7 @@ const qr = (file) => `${site.value.base}sponsor/${file}`;
 <!-- The QR images live in docs/public/sponsor/ and are served as
      /sponsor/wechat.png and /sponsor/alipay.png. -->
 
-Headplane is free and open-source software, and it stays that way. If this fork
+HeadplaneCN is free and open-source software, and it stays that way. If this fork
 has been useful to you and you would like to support its upkeep, you can send a
 donation over WeChat or Alipay — scan whichever one you use.
 
@@ -33,7 +33,7 @@ donation over WeChat or Alipay — scan whichever one you use.
 
 **Sponsoring is entirely voluntary, and it changes nothing about the software.**
 Every feature is available to everyone either way: nothing is gated behind a
-donation, no support is prioritised by it, and no behaviour of Headplane depends
+donation, no support is prioritised by it, and no behaviour of HeadplaneCN depends
 on whether anyone has donated.
 
 Thank you — it really is appreciated.

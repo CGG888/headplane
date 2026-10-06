@@ -1,12 +1,12 @@
 ---
 title: Architecture
-description: Service architecture patterns used in Headplane's server code.
+description: Service architecture patterns used in HeadplaneCN's server code.
 outline: [2, 3]
 ---
 
 # Architecture
 
-Headplane's server code is organized as independent service modules within a
+HeadplaneCN's server code is organized as independent service modules within a
 single Node.js process. Each service manages its own state and lifecycle
 without relying on a shared god-object or dependency injection framework.
 

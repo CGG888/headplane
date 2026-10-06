@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: What is Headplane?
+description: What is HeadplaneCN?
 ---
 
-# What is Headplane (and Headscale)?
+# What is HeadplaneCN (and Headscale)?
 
-Headplane is a web-based UI that bridges the transforms Headscale into a
+HeadplaneCN is a web-based UI that bridges the transforms Headscale into a
 feature-rich VPN platform that rivals Tailscale's official offering. Headscale
 is a self-hosted implementation of the Tailscale control server, enabling users
 to create and manage their own private VPN networks via the Tailscale client.
@@ -13,11 +13,11 @@ to create and manage their own private VPN networks via the Tailscale client.
 <figure>
     <img class="dark-only" src="../assets/preview-dark.png" />
     <img class="light-only" src="../assets/preview-light.png" />
-    <figcaption>Headplane Dashboard</figcaption>
+    <figcaption>HeadplaneCN Dashboard</figcaption>
 </figure>
 
-Headscale does not ship with any web UI by default, which is where Headplane
-comes in. Headplane provides a comprehensive web interface for managing your
+Headscale does not ship with any web UI by default, which is where HeadplaneCN
+comes in. HeadplaneCN provides a comprehensive web interface for managing your
 Headscale instance, allowing you to easily administer your nodes, networks, and
 ACLs.
 
@@ -25,17 +25,17 @@ It goes beyond basic management features, offering advanced capabilities such as
 remote web-based SSH access to your nodes, single sign-on (SSO) via OpenID
 Connect (OIDC), and detailed insights into your Tailnet's configuration and
 status. Things like DNS management, ACL editing, and Headscale configuration can
-all be done directly from the Headplane UI when compared to other Headscale UIs.
+all be done directly from the HeadplaneCN UI when compared to other Headscale UIs.
 
 <figure>
     <img class="dark-only" src="../assets/dns-dark.png" />
     <img class="light-only" src="../assets/dns-light.png" />
-    <figcaption>DNS management in Headplane</figcaption>
+    <figcaption>DNS management in HeadplaneCN</figcaption>
 </figure>
 
-Headplane aims to replicate the functionality offered by the official Tailscale
+HeadplaneCN aims to replicate the functionality offered by the official Tailscale
 product and dashboard, being one of the most feature complete Headscale UIs available.
-These are some of the features that Headplane offers:
+These are some of the features that HeadplaneCN offers:
 
 - Machine management, including expiry, network routing, name, and owner management
 - Access Control List (ACL) and tagging configuration for ACL enforcement
@@ -46,5 +46,5 @@ These are some of the features that Headplane offers:
 <figure>
     <img class="dark-only" src="../assets/machine-dark.png" />
     <img class="light-only" src="../assets/machine-light.png" />
-    <figcaption>Machine management in Headplane</figcaption>
+    <figcaption>Machine management in HeadplaneCN</figcaption>
 </figure>

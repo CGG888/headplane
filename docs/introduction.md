@@ -1,21 +1,21 @@
 ---
 title: 简介
-description: Headplane 是什么？
+description: HeadplaneCN 是什么？
 ---
 
-# Headplane（以及 Headscale）是什么？
+# HeadplaneCN（以及 Headscale）是什么？
 
-Headplane 是一个 Web 界面，它把 Headscale 变成一个功能丰富的 VPN 平台，足以与 Tailscale 官方
+HeadplaneCN 是一个 Web 界面，它把 Headscale 变成一个功能丰富的 VPN 平台，足以与 Tailscale 官方
 产品相比。Headscale 是 Tailscale 控制服务器的自托管实现，让用户可以通过 Tailscale 客户端创建
 并管理自己的私有 VPN 网络。
 
 <figure>
     <img class="dark-only" src="./assets/preview-dark.png" />
     <img class="light-only" src="./assets/preview-light.png" />
-    <figcaption>Headplane 看板</figcaption>
+    <figcaption>HeadplaneCN 看板</figcaption>
 </figure>
 
-Headscale 本身不带任何 Web 界面，Headplane 补上的正是这一块。它为你的 Headscale 实例提供一套
+Headscale 本身不带任何 Web 界面，HeadplaneCN 补上的正是这一块。它为你的 Headscale 实例提供一套
 完整的管理界面，让你轻松管理节点、网络和 ACL。
 
 它不止于基础管理功能，还提供诸如浏览器远程 SSH 访问节点、通过 OpenID Connect（OIDC）实现单点
@@ -25,10 +25,10 @@ Headscale 本身不带任何 Web 界面，Headplane 补上的正是这一块。�
 <figure>
     <img class="dark-only" src="./assets/dns-dark.png" />
     <img class="light-only" src="./assets/dns-light.png" />
-    <figcaption>Headplane 里的 DNS 管理</figcaption>
+    <figcaption>HeadplaneCN 里的 DNS 管理</figcaption>
 </figure>
 
-Headplane 的目标是复刻 Tailscale 官方产品与控制台提供的能力，是目前功能最完整的 Headscale
+HeadplaneCN 的目标是复刻 Tailscale 官方产品与控制台提供的能力，是目前功能最完整的 Headscale
 界面之一。它提供的能力包括：
 
 - 机器管理，涵盖有效期、网络路由、名称与所有者管理
@@ -40,5 +40,5 @@ Headplane 的目标是复刻 Tailscale 官方产品与控制台提供的能力�
 <figure>
     <img class="dark-only" src="./assets/machine-dark.png" />
     <img class="light-only" src="./assets/machine-light.png" />
-    <figcaption>Headplane 里的机器管理</figcaption>
+    <figcaption>HeadplaneCN 里的机器管理</figcaption>
 </figure>

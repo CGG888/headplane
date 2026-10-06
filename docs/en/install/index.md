@@ -1,19 +1,19 @@
 ---
 title: Installation
-description: Get started with Headplane.
+description: Get started with HeadplaneCN.
 outline: [2, 3]
 ---
 
 # Installation
 
-Headplane is designed to be deployed within several different environments to
+HeadplaneCN is designed to be deployed within several different environments to
 ensure that it can seamlessly integrate into your existing infrastructure. First
 set up your configuration file and then pick the installation method that best
 suits your needs.
 
 ## Configuration
 
-Headplane requires a configuration file to operate. A
+HeadplaneCN requires a configuration file to operate. A
 [sample file](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)
 is available to use as a starting point. Some of the important fields include:
 
@@ -30,7 +30,7 @@ through secret path options and environment variables.
 
 ## Deployment Methods
 
-Headplane can be deployed in several different ways, each with its own set of
+HeadplaneCN can be deployed in several different ways, each with its own set of
 advantages and trade-offs. Choose the method that best fits your needs:
 
 ### [Docker](./docker.md): Fast and easy deployment using Docker
@@ -60,6 +60,6 @@ advantages and trade-offs. Choose the method that best fits your needs:
 ### [fnOS (飞牛)](./fnos.md): Deployment on an fnOS NAS
 
 - For NAS setups that run Headscale natively from an fnOS app source and
-  Headplane in Docker.
+  HeadplaneCN in Docker.
 - Includes ready-to-use configuration files, reverse proxy notes and
   per-symptom troubleshooting.

@@ -1,12 +1,12 @@
 ---
-title: Headplane Agent
-description: 配置 Headplane Agent 以获得更完整的功能。
+title: HeadplaneCN Agent
+description: 配置 HeadplaneCN Agent 以获得更完整的功能。
 ---
 
-# Headplane Agent
+# HeadplaneCN Agent
 
-Headplane Agent 是一个可选组件，它会定期从 Tailnet 同步节点信息（版本、操作系统详情等）。
-与早期版本不同，Agent 不再需要你手工创建或管理预授权密钥 —— Headplane 在每次 Agent 启动时
+HeadplaneCN Agent 是一个可选组件，它会定期从 Tailnet 同步节点信息（版本、操作系统详情等）。
+与早期版本不同，Agent 不再需要你手工创建或管理预授权密钥 —— HeadplaneCN 在每次 Agent 启动时
 生成一把新密钥，并在重启之间复用 Agent 已有的 Tailnet 状态。
 
 ## Agent 带来了什么
@@ -45,12 +45,12 @@ Headscale API 只知道控制服务器自己看得到的东西。机器自己测
 1. **需要 Headscale 0.28 或更新版本。** Agent 使用只有标签的预授权密钥，而该特性从
    Headscale 0.28 起才可用。
 
-2. **必须在 Headplane 配置文件里设置 `headscale.api_key`。** Agent 用这把密钥自动生成连接
+2. **必须在 HeadplaneCN 配置文件里设置 `headscale.api_key`。** Agent 用这把密钥自动生成连接
    Tailnet 所需的预授权密钥，并在 Headscale 配置为需要人工批准时自动批准自己的注册。
 
 ## 配置
 
-要启用 Headplane Agent，需要修改 Headplane 配置文件里的以下字段。关于 Headplane 配置的
+要启用 HeadplaneCN Agent，需要修改 HeadplaneCN 配置文件里的以下字段。关于 HeadplaneCN 配置的
 更多信息，请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。
 
 | 字段                                | 说明                                                                              |
@@ -64,21 +64,21 @@ Headscale API 只知道控制服务器自己看得到的东西。机器自己测
 
 ## 原生模式配置
 
-在本地构建 Headplane 之后，`./build` 目录里会有一个名为 `hp_agent` 的二进制文件。请把它
+在本地构建 HeadplaneCN 之后，`./build` 目录里会有一个名为 `hp_agent` 的二进制文件。请把它
 移到 `/usr/libexec/headplane/agent`，并确保它有可执行权限。
 
 ::: tip
-如果因为某些原因无法把二进制文件放到目标位置，可以在 Headplane 配置文件里设置
+如果因为某些原因无法把二进制文件放到目标位置，可以在 HeadplaneCN 配置文件里设置
 **`integration.agent.executable_path`**，指向 Agent 二进制文件的实际位置。
 :::
 
-Agent 默认还会使用 `/var/lib/headplane/agent` 作为数据目录。你可以在 Headplane 配置文件里
-设置 **`integration.agent.work_dir`** 来更改位置。请确保该目录存在，并且运行 Headplane 的
+Agent 默认还会使用 `/var/lib/headplane/agent` 作为数据目录。你可以在 HeadplaneCN 配置文件里
+设置 **`integration.agent.work_dir`** 来更改位置。请确保该目录存在，并且运行 HeadplaneCN 的
 用户对它可写。
 
-Headplane 会把 Agent 的 `tailscaled.state` 保留在这个目录里。这样 Agent 在 Headplane 重启
+HeadplaneCN 会把 Agent 的 `tailscaled.state` 保留在这个目录里。这样 Agent 在 HeadplaneCN 重启
 后仍能保留自己的 Tailnet 身份，而不是每次都注册成新主机。如果 Agent 的状态丢失或不可用，
-Headplane 会退回使用预授权密钥，注册一个新的 Agent 节点。
+HeadplaneCN 会退回使用预授权密钥，注册一个新的 Agent 节点。
 
 ## Tailscale 套接字路由处理
 
@@ -103,14 +103,14 @@ integration:
 ```
 
 把它设为 `false` 只会在专用的 `hp_agent` 进程里关闭 Tailscale 的 mark-or-bind 套接字处理。
-`hp_agent` 与主 Headplane 进程仍然共享容器的 Linux 网络命名空间。主进程的网络行为、容器
+`hp_agent` 与主 HeadplaneCN 进程仍然共享容器的 Linux 网络命名空间。主进程的网络行为、容器
 能力、Docker 网络、接口、路由表和默认网关都不变。除非已经确认该回退会选中错误的接口，否则
 请保持开启；裸机部署和经由 Tailscale 路由的部署可能依赖它的环路避免行为。
 
 ## 交互式批准
 
 正常情况下 Agent 用自动生成的预授权密钥无交互地连接，不需要人工介入。如果你的 Headscale
-服务器配置为需要交互式批准，Headplane 会检测 Agent 打印的认证 URL，并用配置的
+服务器配置为需要交互式批准，HeadplaneCN 会检测 Agent 打印的认证 URL，并用配置的
 `headscale.api_key` 自动批准请求。设置页仍会显示批准链接作为兜底，以防自动批准失败。
 
 ## 使用
@@ -118,10 +118,10 @@ integration:
 <figure>
     <img class="dark-only" src="../assets/preview-dark.png" />
     <img class="light-only" src="../assets/preview-light.png" />
-    <figcaption>Headplane 看板</figcaption>
+    <figcaption>HeadplaneCN 看板</figcaption>
 </figure>
 
-启用并配置 Headplane Agent 之后，重启 Headplane 实例。你应该会在界面里看到更多内容，例如
+启用并配置 HeadplaneCN Agent 之后，重启 HeadplaneCN 实例。你应该会在界面里看到更多内容，例如
 每个节点的主机信息，以及在节点启用 Tailscale SSH 时直接从浏览器打开 SSH 会话的能力。
 
 <figure>

@@ -6,7 +6,7 @@ outline: [2, 3]
 
 # 配置快照
 
-Headplane 会替你写 Headscale 的 `config.yaml` —— DNS、OIDC、策略模式、DERP、日志。
+HeadplaneCN 会替你写 Headscale 的 `config.yaml` —— DNS、OIDC、策略模式、DERP、日志。
 **设置 → 配置快照**在每次写入之前留一份该文件的副本，所以一次后悔的改动只差一次点击就能
 撤销。
 

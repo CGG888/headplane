@@ -7,11 +7,11 @@ outline: [2, 3]
 # 操作审计
 
 一旦不止一个人能管理 tailnet，「昨天是谁改了策略？」就不再是修辞问题。
-**设置 → 操作审计**用 Headplane 自己的记录回答它。
+**设置 → 操作审计**用 HeadplaneCN 自己的记录回答它。
 
 ## 记录了什么
 
-Headplane 对 Headscale 做的每一次改动都会记下操作者身份、动作、目标以及是否成功：
+HeadplaneCN 对 Headscale 做的每一次改动都会记下操作者身份、动作、目标以及是否成功：
 
 | 记录范围         | 示例                                                |
 | ---------------- | --------------------------------------------------- |
@@ -22,11 +22,11 @@ Headplane 对 Headscale 做的每一次改动都会记下操作者身份、动�
 | API 密钥         | 创建与过期                                           |
 | 进程与快照       | 重载/重启、创建与恢复快照                            |
 
-操作者是执行该动作的 Headplane 用户，在能取到时还会记录该用户背后的 API 密钥或 OIDC 身份。
+操作者是执行该动作的 HeadplaneCN 用户，在能取到时还会记录该用户背后的 API 密钥或 OIDC 身份。
 
 ## 记录存放位置
 
-记录写入 Headplane 自己的数据库（`server.data_path`，默认 `/var/lib/headplane/`，文件为
+记录写入 HeadplaneCN 自己的数据库（`server.data_path`，默认 `/var/lib/headplane/`，文件为
 `hp_persist.db`），只保留最新的几千条，避免文件无限增长。想让历史在重建容器后仍然存在，
 就把该目录挂成卷。
 
@@ -51,8 +51,8 @@ Headplane 对 Headscale 做的每一次改动都会记下操作者身份、动�
 互相覆盖；响应头带 `Cache-Control: no-store`。
 
 ::: warning 它覆盖不到的部分
-只有**通过 Headplane** 做的改动会被记录。在宿主机上用 `headscale` 命令、或者手工编辑
-`config.yaml` 的改动不经过 Headplane，这里看不到。
+只有**通过 HeadplaneCN** 做的改动会被记录。在宿主机上用 `headscale` 命令、或者手工编辑
+`config.yaml` 的改动不经过 HeadplaneCN，这里看不到。
 
 审计写入也是尽力而为：写失败时改动本身照常发生，失败只记在服务端日志里，因为丢一行日志
 不该把操作者拦下来。

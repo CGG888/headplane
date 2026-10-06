@@ -20,7 +20,7 @@ export default {
               [
                 "You are currently viewing the ",
                 h("strong", "beta"),
-                " documentation for Headplane. ",
+                " documentation for HeadplaneCN. ",
                 h(
                   "a",
                   {

@@ -1,16 +1,16 @@
 ---
 title: 用户
-description: Headplane 账户、它们的角色、关联的 Headscale 用户与 ACL 用户组。
+description: HeadplaneCN 账户、它们的角色、关联的 Headscale 用户与 ACL 用户组。
 outline: [2, 3]
 ---
 
 # 用户
 
-**用户**页把两件容易混淆的事分开：登录 Headplane 的账户，以及 Headscale 里存在的用户。
+**用户**页把两件容易混淆的事分开：登录 HeadplaneCN 的账户，以及 Headscale 里存在的用户。
 
-## Headplane 用户
+## HeadplaneCN 用户
 
-第一段列出每个登录过 Headplane 的账户，包含它的角色、最后登录时间、是否已关联某个
+第一段列出每个登录过 HeadplaneCN 的账户，包含它的角色、最后登录时间、是否已关联某个
 Headscale 用户，以及该关联带给它的机器。
 
 账户是通过登录创建的。页面顶部的横幅会说明它们来自哪里 —— **用户通过你的 OIDC 提供商管理**
@@ -40,10 +40,10 @@ Headscale 用户，以及该关联带给它的机器。
 
 ## 未关联的 Headscale 用户
 
-第二段列出还没有被任何 Headplane 账户认领的 Headscale 用户。在某个账户关联它们之前，这些
-用户无法通过 Headplane 管理 —— 这正是 Headplane 账户上 **关联 Headscale 用户** 操作的用途。
+第二段列出还没有被任何 HeadplaneCN 账户认领的 Headscale 用户。在某个账户关联它们之前，这些
+用户无法通过 HeadplaneCN 管理 —— 这正是 HeadplaneCN 账户上 **关联 Headscale 用户** 操作的用途。
 
-**添加用户**创建的是 **Headscale** 用户，而不是 Headplane 账户：新用户会出现在这一段里，
+**添加用户**创建的是 **Headscale** 用户，而不是 HeadplaneCN 账户：新用户会出现在这一段里，
 并在通过 OIDC 提供商登录后自动完成关联。用户名至少两个字符、必须以字母开头，并且只能使用
 字母、数字、点、短横线和下划线。
 

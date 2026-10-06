@@ -7,15 +7,15 @@ outline: [2, 3]
 # Machines
 
 **Machines** is the tailnet's inventory: one row per registered machine, and a
-detail page that gathers everything Headplane knows about a single one.
+detail page that gathers everything HeadplaneCN knows about a single one.
 
 ## The machine list
 
 | Column          | Shown                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------- |
-| Machine name    | The name Headplane shows, with its owner beneath it; a machine owned by a tag says `tag:…` instead |
+| Machine name    | The name HeadplaneCN shows, with its owner beneath it; a machine owned by a tag says `tag:…` instead |
 | Addresses       | The machine's Tailscale IPv4 address, and its IPv6 address when it has one                        |
-| Version         | The Tailscale version the machine reports — only with the [Headplane Agent](/en/features/agent)      |
+| Version         | The Tailscale version the machine reports — only with the [HeadplaneCN Agent](/en/features/agent)      |
 | Status          | Online or offline                                                                                 |
 | Last seen       | When the control server last heard from the machine                                               |
 
@@ -47,7 +47,7 @@ owner. Both the card and the menu act on the machine the page is about, so there
 is no confirmation-free bulk path here.
 
 The rows that describe the machine itself — its OS, Tailscale version, client
-connectivity and relays — come from the Headplane Agent, because the Headscale
+connectivity and relays — come from the HeadplaneCN Agent, because the Headscale
 API does not carry them. Without the agent those cards say it is needed instead
 of showing an empty table.
 
@@ -67,11 +67,11 @@ maps, the `derp.urls` maps, then Headscale's embedded region — and a region
 nothing describes is shown by ID. The agent keys its samples by region **and**
 address family (`<regionID>-v4`, `<regionID>-v6`), so a region measured over both
 appears once with its fastest sample. See
-[Headplane Agent](/en/features/agent#the-relay-card-on-a-machine) for the details.
+[HeadplaneCN Agent](/en/features/agent#the-relay-card-on-a-machine) for the details.
 
 ::: tip An "IPv6: No" row is about that machine, not about your relay
 The IPv6 value in **Client Connectivity** is the machine's own self-test: whether
 its network has working IPv6 at all. It tells you nothing about Headscale or the
-DERP server, and it cannot be fixed from Headplane. The
+DERP server, and it cannot be fixed from HeadplaneCN. The
 [fnOS guide](/en/install/fnos) has a troubleshooting entry for it.
 :::

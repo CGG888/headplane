@@ -1,6 +1,6 @@
-# Contributing to Headplane
+# Contributing to HeadplaneCN
 
-Thank you for your interest in contributing to Headplane. I maintain this
+Thank you for your interest in contributing to HeadplaneCN. I maintain this
 project entirely on my own so any help is greatly appreciated. Since I am the
 sole maintainer, I have a few guidelines which help make it significantly easier
 for me to review and merge your contributions.
@@ -14,7 +14,7 @@ for me to review and merge your contributions.
   [discussions](https://github.com/CGG888/headplaneCN/discussions) section.
 
 - **Documentation/Examples**: If you find any issues in the documentation or
-  would like to contribute examples for setting up Headplane, please open a PR
+  would like to contribute examples for setting up HeadplaneCN, please open a PR
   and I will review it and possibly make changes.
 
 - **Code Contributions**: Code contributions are done via PRs but _must_ be
@@ -30,7 +30,7 @@ for me to review and merge your contributions.
 
 - **No Project/Tooling Changes**: Unless there is a very good reason to do so,
   I will not accept changes to the project structure, build system, or tooling
-  used to develop Headplane. This includes things like changing the package
+  used to develop HeadplaneCN. This includes things like changing the package
   manager, docker environment, or CI/CD.
 
 - **Minimal Breaking Changes**: I will not accept any changes that break any

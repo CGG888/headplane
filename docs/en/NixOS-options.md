@@ -32,7 +32,7 @@ _Default:_ `pkgs.headplane`
 
 ## settings
 
-_Description:_ Headplane configuration options. Generates a YAML config file.
+_Description:_ HeadplaneCN configuration options. Generates a YAML config file.
 See: https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml
 
 _Type:_ submodule
@@ -41,7 +41,7 @@ _Default:_ `{ }`
 
 ## settings.headscale
 
-_Description:_ Headscale specific settings for Headplane integration.
+_Description:_ Headscale specific settings for HeadplaneCN integration.
 
 _Type:_ submodule
 
@@ -50,7 +50,7 @@ _Default:_ `{ }`
 ## settings.headscale.api_key_path
 
 _Description:_ Path to a file containing the Headscale API key.
-Required for OIDC authentication and the Headplane agent.
+Required for OIDC authentication and the HeadplaneCN agent.
 
 _Type:_ null or absolute path
 
@@ -62,7 +62,7 @@ _Example:_ `"config.sops.secrets.headscale_api_key.path"`
 
 _Description:_ Path to the Headscale configuration file.
 This is optional, but HIGHLY recommended for the best experience.
-If this is read only, Headplane will show your configuration settings
+If this is read only, HeadplaneCN will show your configuration settings
 in the Web UI, but they cannot be changed.
 
 _Type:_ null or absolute path
@@ -73,7 +73,7 @@ _Example:_ `"/etc/headscale/config.yaml"`
 
 ## settings.headscale.config_strict
 
-_Description:_ Deprecated. Headplane no longer validates the complete Headscale configuration and this option has no effect.
+_Description:_ Deprecated. HeadplaneCN no longer validates the complete Headscale configuration and this option has no effect.
 
 _Type:_ boolean
 
@@ -81,9 +81,9 @@ _Default:_ `true`
 
 ## settings.headscale.dns_records_path
 
-_Description:_ If you are using `dns.extra_records_path` in your Headscale configuration, Headplane reads that path automatically. Set this only when Headplane needs to access the same file at a different path.
-Ensure that the file is both readable and writable by the Headplane process.
-When using this, Headplane will no longer need to automatically restart Headscale for DNS record changes.
+_Description:_ If you are using `dns.extra_records_path` in your Headscale configuration, HeadplaneCN reads that path automatically. Set this only when HeadplaneCN needs to access the same file at a different path.
+Ensure that the file is both readable and writable by the HeadplaneCN process.
+When using this, HeadplaneCN will no longer need to automatically restart Headscale for DNS record changes.
 
 _Type:_ null or absolute path
 
@@ -126,7 +126,7 @@ _Example:_ `"https://headscale.example.com"`
 
 ## settings.integration
 
-_Description:_ Integration configurations for Headplane to interact with Headscale.
+_Description:_ Integration configurations for HeadplaneCN to interact with Headscale.
 
 _Type:_ submodule
 
@@ -134,7 +134,7 @@ _Default:_ `{ }`
 
 ## settings.integration.agent
 
-_Description:_ Agent configuration for the Headplane agent.
+_Description:_ Agent configuration for the HeadplaneCN agent.
 
 _Type:_ submodule
 
@@ -151,7 +151,7 @@ _Default:_ `180000`
 
 ## settings.integration.agent.enabled
 
-_Description:_ The Headplane agent periodically syncs node information (version, OS, etc.)
+_Description:_ The HeadplaneCN agent periodically syncs node information (version, OS, etc.)
 from your Tailnet. It auto-generates ephemeral pre-auth keys using
 headscale.api_key, so no manual key configuration is needed.
 Requires Headscale 0.28 or newer.
@@ -162,7 +162,7 @@ _Default:_ `false`
 
 ## settings.integration.agent.executable_path
 
-_Description:_ Path to the Headplane agent binary.
+_Description:_ Path to the HeadplaneCN agent binary.
 The default is correct if using the NixOS module package.
 
 _Type:_ absolute path
@@ -187,7 +187,7 @@ _Default:_ `pkgs.headplane-agent`
 
 ## settings.integration.agent.tailscale_netns
 
-_Description:_ Use Tailscale's socket-level routing-loop handling in the dedicated Headplane agent process.
+_Description:_ Use Tailscale's socket-level routing-loop handling in the dedicated HeadplaneCN agent process.
 Keep enabled unless its fallback pins the agent's Headscale connection to the wrong interface.
 Set to false only after verifying that ordinary OS routing in the container's network namespace reaches Headscale correctly.
 
@@ -199,7 +199,7 @@ _Default:_ `true`
 
 _Description:_ Do not change this unless you are running a custom deployment.
 The work_dir represents where the agent will store its data to be able to automatically reauthenticate with your Tailnet.
-It needs to be writable by the user running the Headplane process.
+It needs to be writable by the user running the HeadplaneCN process.
 
 _Type:_ absolute path
 
@@ -216,8 +216,8 @@ _Default:_ `{ }`
 ## settings.integration.proc.enabled
 
 _Description:_ Enable "Native" integration that works when Headscale and
-Headplane are running outside of a container. There is no additional
-configuration, but you need to ensure that the Headplane process
+HeadplaneCN are running outside of a container. There is no additional
+configuration, but you need to ensure that the HeadplaneCN process
 can terminate the Headscale process.
 
 _Type:_ boolean
@@ -293,7 +293,7 @@ _Example:_ `"https://provider.example.com/issuer-url"`
 ## settings.oidc.redirect_uri
 
 _Description:_ This should point to your publicly accessible URL
-for your Headplane instance with /admin/oidc/callback.
+for your HeadplaneCN instance with /admin/oidc/callback.
 
 _Type:_ string
 
@@ -303,7 +303,7 @@ _Example:_ `"https://headscale.example.com/admin/oidc/callback"`
 
 ## settings.oidc.role_claim
 
-_Description:_ Optional OIDC claim containing the Headplane role to assign to newly created users.
+_Description:_ Optional OIDC claim containing the HeadplaneCN role to assign to newly created users.
 A valid role claim takes precedence over default_role.
 
 _Type:_ null or string
@@ -322,7 +322,7 @@ _Default:_ `"client_secret_post"`
 
 ## settings.server
 
-_Description:_ Server configuration for Headplane web application.
+_Description:_ Server configuration for HeadplaneCN web application.
 
 _Type:_ submodule
 
@@ -351,7 +351,7 @@ _Default:_ `true`
 
 ## settings.server.data_path
 
-_Description:_ The path to persist Headplane specific data.
+_Description:_ The path to persist HeadplaneCN specific data.
 All data going forward is stored in this directory, including the internal database and any cache related files.
 Data formats prior to 0.6.1 will automatically be migrated.
 
@@ -389,9 +389,9 @@ _Default:_ `{ }`
 
 ## settings.server.proxy_auth.allowed_cidrs
 
-_Description:_ Direct client CIDR ranges allowed to bypass Headplane's login flow.
+_Description:_ Direct client CIDR ranges allowed to bypass HeadplaneCN's login flow.
 These should be the addresses your trusted reverse proxy uses to connect
-to Headplane. Requires headscale.api_key_path.
+to HeadplaneCN. Requires headscale.api_key_path.
 
 _Type:_ list of string
 

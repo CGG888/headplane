@@ -1,6 +1,6 @@
 ---
 title: Single Sign-On (SSO)
-description: Configure Single Sign-On (SSO) authentication for Headplane.
+description: Configure Single Sign-On (SSO) authentication for HeadplaneCN.
 outline: [2, 3]
 ---
 
@@ -12,13 +12,13 @@ outline: [2, 3]
     <figcaption>SSO Configuration Page</figcaption>
 </figure>
 
-Single Sign-On allows users to authenticate with Headplane through an external
+Single Sign-On allows users to authenticate with HeadplaneCN through an external
 Identity Provider (IdP) using the OpenID Connect (OIDC) protocol. When enabled,
-users sign in through your IdP and Headplane automatically links them to their
+users sign in through your IdP and HeadplaneCN automatically links them to their
 Headscale identity, assigns a role, and manages their session.
 
 If your reverse proxy already performs authentication and can pass trusted user
-headers to Headplane, see [Proxy Authentication](./proxy-auth.md) instead.
+headers to HeadplaneCN, see [Proxy Authentication](./proxy-auth.md) instead.
 
 ## Getting Started
 
@@ -26,19 +26,19 @@ headers to Headplane, see [Proxy Authentication](./proxy-auth.md) instead.
 
 You'll need the following before proceeding:
 
-- A working Headplane installation that is already configured.
+- A working HeadplaneCN installation that is already configured.
 - An Identity Provider (IdP) that supports OAuth2 and OpenID Connect (OIDC).
-- `server.base_url` set to the public URL of your Headplane instance in your
+- `server.base_url` set to the public URL of your HeadplaneCN instance in your
   configuration file (the domain visible in the browser).
 - A Headscale API key with a relatively long expiration time (eg. 1 year).
 
 ### Configuring the Client
 
-You'll need to create a client in your Identity Provider that Headplane can use
+You'll need to create a client in your Identity Provider that HeadplaneCN can use
 for authentication. As part of that step, you'll need to register a "redirect
 URL" — this is where the IdP sends users after they authenticate.
 
-For Headplane, the redirect URL will be in the following format (replace the
+For HeadplaneCN, the redirect URL will be in the following format (replace the
 domain with the value set for `server.base_url`):
 
 ```
@@ -53,7 +53,7 @@ Once you have created the client, make note of the following:
 
 ### OIDC Configuration
 
-To enable OIDC authentication in Headplane, add the following to your
+To enable OIDC authentication in HeadplaneCN, add the following to your
 configuration file:
 
 ```yaml
@@ -82,14 +82,14 @@ oidc:
   #  foo: "bar"
 ```
 
-Headplane automatically discovers OIDC endpoints from your issuer's
+HeadplaneCN automatically discovers OIDC endpoints from your issuer's
 `/.well-known/openid-configuration`. If your IdP does not support discovery,
 you'll need to set the endpoints manually.
 
 ### Non-standard Subject Claims
 
 Some providers do not return the standard OIDC `sub` claim in the ID token.
-Headplane always uses `sub` first, but you can configure fallback claims with
+HeadplaneCN always uses `sub` first, but you can configure fallback claims with
 `oidc.subject_claims`.
 
 For Feishu/Lark, the recommended configuration is:
@@ -105,7 +105,7 @@ back to `email` if needed.
 ### Legacy Weak RSA Signing Keys
 
 Some legacy providers still sign ID tokens with RSA keys smaller than 2048
-bits. Headplane rejects those keys by default.
+bits. HeadplaneCN rejects those keys by default.
 
 If your provider cannot rotate to a stronger signing key yet, you can
 explicitly enable the compatibility fallback:
@@ -123,12 +123,12 @@ temporary workaround while your provider rotates to a 2048-bit-or-larger key.
 ### PKCE
 
 ::: warning
-Headplane currently only supports the **`S256`** code challenge method for PKCE.
+HeadplaneCN currently only supports the **`S256`** code challenge method for PKCE.
 You may need to ensure that your Identity Provider is configured to accept this
 method.
 :::
 
-By default, Headplane does not use PKCE (Proof Key for Code Exchange). PKCE is
+By default, HeadplaneCN does not use PKCE (Proof Key for Code Exchange). PKCE is
 a best practice for OIDC and enhances security — some IdPs even require it. To
 enable PKCE:
 
@@ -139,25 +139,25 @@ oidc:
 
 ## How User Matching Works
 
-When a user signs in via OIDC, Headplane needs to link them to their
+When a user signs in via OIDC, HeadplaneCN needs to link them to their
 corresponding Headscale user. This is important for features like showing a
 user's own machines, self-service pre-auth keys, and WebSSH.
 
 ### Matching Strategy
 
-Headplane uses a two-step matching strategy:
+HeadplaneCN uses a two-step matching strategy:
 
 1. **Subject match (primary)**: Headscale stores the IdP's `provider_id` for
-   each OIDC user (e.g. `https://idp.example.com/3d6f6e3f-...`). Headplane
+   each OIDC user (e.g. `https://idp.example.com/3d6f6e3f-...`). HeadplaneCN
    extracts the last path segment and compares it to the resolved OIDC subject.
    The resolved subject uses `sub` first, then falls back to any configured
    `oidc.subject_claims`. If they match, the user is linked.
 
-2. **Email match (fallback)**: If the subject doesn't match, Headplane falls
+2. **Email match (fallback)**: If the subject doesn't match, HeadplaneCN falls
    back to comparing the user's email address from the OIDC `userinfo` endpoint
    against the email stored on the Headscale user record.
 
-Once a link is established, it's stored as a `headscale_user_id` in Headplane's
+Once a link is established, it's stored as a `headscale_user_id` in HeadplaneCN's
 database and reused on subsequent logins — so the matching only needs to succeed
 once.
 
@@ -167,13 +167,13 @@ If your Headscale instance uses **local users** (created via
 `headscale users create`) rather than OIDC, automatic matching cannot work —
 local users have no `provider_id` or email to compare against.
 
-In this case, Headplane will prompt the user during onboarding to manually
+In this case, HeadplaneCN will prompt the user during onboarding to manually
 select which Headscale user they are. This selection is persisted, so it only
 needs to happen once. After linking, all ownership-based features (viewing your
 own machines, self-service pre-auth keys, WebSSH) work normally.
 
 ::: tip
-If you skip the user selection during onboarding, you can still use Headplane
+If you skip the user selection during onboarding, you can still use HeadplaneCN
 — you just won't have ownership-based features. An admin can manage everything
 regardless of whether users are linked.
 :::
@@ -181,17 +181,17 @@ regardless of whether users are linked.
 ### Same Client vs. Different Clients
 
 ::: tip Recommended
-Using the **same OIDC client** for both Headscale and Headplane is the simplest
+Using the **same OIDC client** for both Headscale and HeadplaneCN is the simplest
 and most reliable setup. The `sub` claim will be identical for both services,
 so subject matching always works.
 :::
 
-If your Headscale and Headplane use **different OIDC clients**, some Identity
+If your Headscale and HeadplaneCN use **different OIDC clients**, some Identity
 Providers (notably Azure AD / Entra ID) may issue different `sub` values per
 client application. In this case:
 
 - Subject matching will fail on the first login.
-- Headplane will fall back to email matching, which requires that the `email`
+- HeadplaneCN will fall back to email matching, which requires that the `email`
   claim is available from both your IdP's `userinfo` endpoint and Headscale's
   user record.
 - Once the link is established, subsequent logins will work regardless because
@@ -199,7 +199,7 @@ client application. In this case:
 
 ::: warning
 If you use different clients **and** your IdP does not provide an `email` claim,
-Headplane will not be able to match users to their Headscale identity. Users
+HeadplaneCN will not be able to match users to their Headscale identity. Users
 will still be able to sign in, but they won't be linked to a Headscale user —
 meaning features like viewing their own machines or self-service pre-auth keys
 won't work.
@@ -207,7 +207,7 @@ won't work.
 
 ## Roles and Permissions
 
-When SSO is enabled, Headplane uses a role-based access control system to
+When SSO is enabled, HeadplaneCN uses a role-based access control system to
 determine what each user can do in the UI.
 
 ### Available Roles
@@ -220,7 +220,7 @@ determine what each user can do in the UI.
 | **IT Admin**      | Can manage machines, users, and feature settings. Can configure IAM. Cannot modify ACLs or DNS.        |
 | **Auditor**       | Read-only access to everything. Can generate their own pre-auth keys.                                  |
 | **Viewer**        | Can view machines and users. Can generate their own pre-auth keys.                                     |
-| **Member**        | No UI access. The user exists in Headplane's database but has not been granted any permissions.        |
+| **Member**        | No UI access. The user exists in HeadplaneCN's database but has not been granted any permissions.        |
 
 ### First Login (Owner Bootstrap)
 
@@ -242,11 +242,11 @@ oidc:
 
 This is useful when Headscale already restricts who can authenticate by domain,
 group, or user. For example, if Headscale only allows `@example.com` users to
-sign in and all of those users should be able to view Headplane, set
+sign in and all of those users should be able to view HeadplaneCN, set
 `default_role: "viewer"`.
 
 For per-user roles from your IdP, configure `oidc.role_claim` with the OIDC
-claim that contains a Headplane role:
+claim that contains a HeadplaneCN role:
 
 ```yaml
 oidc:
@@ -255,12 +255,12 @@ oidc:
 
 The claim may be a string, such as `"admin"`, or an array containing one of the
 valid roles. This lets providers such as Keycloak map groups or client roles to
-a final Headplane role before login. When both `role_claim` and `default_role`
+a final HeadplaneCN role before login. When both `role_claim` and `default_role`
 are configured, a valid role claim takes precedence for new users.
 
-For users that already exist in Headplane, a valid `role_claim` is synced on
+For users that already exist in HeadplaneCN, a valid `role_claim` is synced on
 each OIDC login. If their IdP groups or client roles start matching a different
-Headplane role, their Headplane permissions are updated at their next sign-in.
+HeadplaneCN role, their HeadplaneCN permissions are updated at their next sign-in.
 `default_role` remains a creation-time fallback only and does not overwrite
 existing roles. The **Owner** role is reserved for the first-login bootstrap and
 cannot be granted or overwritten by `default_role` or `role_claim`.
@@ -279,14 +279,14 @@ flow can be skipped. Once completed, users are taken to the main dashboard.
 
 ## Single Logout (RP-Initiated Logout)
 
-Headplane supports
+HeadplaneCN supports
 [OpenID Connect RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html).
 When enabled, clicking "Log Out" in the UI from an OIDC-backed session will:
 
-1. Destroy the local Headplane session.
+1. Destroy the local HeadplaneCN session.
 2. Redirect the browser to the identity provider's `end_session_endpoint`.
 3. Pass along the original `id_token` as `id_token_hint`, plus a
-   `post_logout_redirect_uri` so the IdP can return the user to Headplane after
+   `post_logout_redirect_uri` so the IdP can return the user to HeadplaneCN after
    it has cleared its own session.
 
 ### Configuration
@@ -311,16 +311,16 @@ oidc:
 ```
 
 If your provider exposes `end_session_endpoint` in its discovery document
-(Keycloak, Authentik, Auth0, Azure AD, …) Headplane picks it up automatically
+(Keycloak, Authentik, Auth0, Azure AD, …) HeadplaneCN picks it up automatically
 once `use_end_session` is `true`.
 
 ::: tip
-Make sure the redirect URI you supply (or the default one Headplane builds) is
+Make sure the redirect URI you supply (or the default one HeadplaneCN builds) is
 listed under the post-logout / valid redirect URIs in your IdP's client
 configuration, otherwise the provider will refuse to redirect back.
 :::
 
-When `use_end_session` is `false` (the default), Headplane simply destroys its
+When `use_end_session` is `false` (the default), HeadplaneCN simply destroys its
 own session and returns the user to the login page.
 
 ## Troubleshooting
@@ -329,14 +329,14 @@ own session and returns the user to the login page.
 
 - **"OIDC is not enabled or misconfigured"**: Check that your `oidc` section
   is present in the config and that the issuer URL is reachable from the
-  Headplane server.
+  HeadplaneCN server.
 
 - **User signs in but can't see their machines**: The user's Headscale identity
   wasn't matched. Check that either the `sub` claim matches or the `email`
   claim is available (see [How User Matching Works](#how-user-matching-works)).
 
 - **"Session cookie is empty" or login loop**: Check your `cookie_secure`
-  setting. If Headplane is behind a reverse proxy with HTTPS, set it to `true`.
+  setting. If HeadplaneCN is behind a reverse proxy with HTTPS, set it to `true`.
   If running without HTTPS (eg. local development), set it to `false`.
 
 - **Invalid API Key**: The `headscale.api_key` may have expired. Generate

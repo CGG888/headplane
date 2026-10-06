@@ -26,7 +26,7 @@ joins the tailnet for the duration of the SSH session.
   and newer.
 - Target nodes must have **Tailscale SSH** enabled (`tailscale up --ssh`).
 - Users must be logged-in via **OIDC** (API key logins cannot use browser SSH).
-- The **Headplane Agent** must be [enabled and configured](/en/features/agent).
+- The **HeadplaneCN Agent** must be [enabled and configured](/en/features/agent).
 
 :::warning Headscale 0.29.0 beta through 0.29.1
 Browser SSH does not work with Headscale 0.29 beta releases through 0.29.1 due
@@ -56,7 +56,7 @@ When a user opens an SSH session from the UI, the browser:
 
 ## Reverse Proxy Configuration
 
-Browser SSH requires that the browser can reach both **Headplane** and
+Browser SSH requires that the browser can reach both **HeadplaneCN** and
 **Headscale** directly. If either is behind a reverse proxy, the proxy must be
 configured to support WebSocket connections — this is how the WASM node
 communicates with DERP relay servers.
@@ -73,13 +73,13 @@ Your reverse proxy must forward these headers for Headscale's DERP endpoint:
 
 ### CORS Headers
 
-Headscale must be accessible from the origin where Headplane is served. If
-Headplane and Headscale are on different origins (different hosts or ports),
+Headscale must be accessible from the origin where HeadplaneCN is served. If
+HeadplaneCN and Headscale are on different origins (different hosts or ports),
 your reverse proxy must add CORS headers to Headscale responses:
 
 | Header                         | Value                                           |
 | ------------------------------ | ----------------------------------------------- |
-| `Access-Control-Allow-Origin`  | The origin of your Headplane instance           |
+| `Access-Control-Allow-Origin`  | The origin of your HeadplaneCN instance           |
 | `Access-Control-Allow-Methods` | `GET, POST, OPTIONS`                            |
 | `Access-Control-Allow-Headers` | `Content-Type, Upgrade, Sec-WebSocket-Protocol` |
 
@@ -124,15 +124,15 @@ server {
 
 ### Same-Origin Setup
 
-If Headplane and Headscale share the same origin (e.g. a single reverse proxy
-routing `/admin` to Headplane and everything else to Headscale), CORS headers
+If HeadplaneCN and Headscale share the same origin (e.g. a single reverse proxy
+routing `/admin` to HeadplaneCN and everything else to Headscale), CORS headers
 are not needed. WebSocket upgrade forwarding is still required.
 
 ## Troubleshooting
 
 ### SSH Not Available
 
-**Error:** "This version of Headplane was not built with browser SSH support."
+**Error:** "This version of HeadplaneCN was not built with browser SSH support."
 
 The WASM assets (`hp_ssh.wasm` and `wasm_exec.js`) are missing. Rebuild with
 `./build.sh --wasm` or ensure your Docker image was built with the `--wasm`
@@ -140,10 +140,10 @@ flag.
 
 ### Agent Required
 
-**Error:** "Browser SSH is only available when the Headplane agent integration
+**Error:** "Browser SSH is only available when the HeadplaneCN agent integration
 is enabled."
 
-The Headplane Agent is not enabled. Browser SSH depends on the agent for
+The HeadplaneCN Agent is not enabled. Browser SSH depends on the agent for
 Tailnet connectivity and ephemeral node cleanup. See the
 [Agent documentation](/en/features/agent) for setup instructions.
 
@@ -174,7 +174,7 @@ try again.
 
 ### Node Offline
 
-Headplane checks whether the target node is connected to the Tailnet before
+HeadplaneCN checks whether the target node is connected to the Tailnet before
 attempting an SSH session. If the node is offline, you'll see an error page
 with a **Retry Connection** button. Ensure the node is running and connected
 to Headscale, then retry.
@@ -188,14 +188,14 @@ to Headscale, then retry.
 - **Check `server_url` in your Headscale config.** If Headscale runs on a
   non-standard port, `server_url` must include it (e.g.
   `https://hs.example.com:8443`). The embedded DERP server derives its
-  advertised port from this value. Do **not** put the DERP port in Headplane's
+  advertised port from this value. Do **not** put the DERP port in HeadplaneCN's
   `headscale.public_url` — that setting is used for display in the UI and
   changing it will break registration commands and auth key instructions.
 - **Verify reverse proxy WebSocket support.** The proxy in front of Headscale
   must forward `Upgrade: websocket` headers. Without this, the DERP connection
   will fail immediately.
 - **Check CORS if on different origins.** Open the browser console and look for
-  CORS errors. If Headplane and Headscale are on different origins, CORS headers
+  CORS errors. If HeadplaneCN and Headscale are on different origins, CORS headers
   must be configured on Headscale's proxy.
 - Verify that the target node has Tailscale SSH enabled (`tailscale up --ssh`).
 - Check the browser console for WASM errors or DERP connection failures.

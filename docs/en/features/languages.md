@@ -1,6 +1,6 @@
 # Languages
 
-Headplane ships with an interface translated into English, Simplified Chinese,
+HeadplaneCN ships with an interface translated into English, Simplified Chinese,
 and Traditional Chinese. No configuration is required.
 
 ## Switching languages
@@ -11,7 +11,7 @@ the top right corner.
 
 The selected language is stored in a `locale` cookie and applied on the server,
 so the whole page (including error pages) is rendered in that language on the
-next request. If no language has been selected yet, Headplane uses the browser's
+next request. If no language has been selected yet, HeadplaneCN uses the browser's
 `Accept-Language` header and falls back to English.
 
 Dates and numbers follow the selected locale as well: timestamps go through
@@ -37,7 +37,7 @@ match the Headscale and Tailscale documentation. Everything else is translated.
 
 | Term             | Notes                                                   |
 | ---------------- | ------------------------------------------------------- |
-| Headplane        | Product name                                            |
+| HeadplaneCN        | Product name                                            |
 | Headscale        | Product name                                            |
 | Tailscale        | Product name                                            |
 | Tailnet          | Headscale concept                                       |
@@ -56,7 +56,7 @@ because they are values, not prose.
 ## What is intentionally not translated
 
 - **Headscale API errors.** Messages returned by the Headscale server are passed
-  through verbatim; Headplane cannot translate text it does not own.
+  through verbatim; HeadplaneCN cannot translate text it does not own.
 - **Server logs.** `log.*` output stays English so that logs are greppable.
 - **Internal validation errors.** Messages such as `Missing \`action_id\` in the
   form data.` describe misuse of the API and are developer-facing.

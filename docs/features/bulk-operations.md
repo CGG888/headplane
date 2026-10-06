@@ -35,5 +35,5 @@ outline: [2, 3]
 
 ::: warning 删除机器
 删除机器会立刻把它从 Headscale 移除。它的密钥随之消失，设备必须重新认证（`tailscale up`）
-才会再次出现。启用 Headplane Agent 时，节点会在下一次同步时带回新的详情。
+才会再次出现。启用 HeadplaneCN Agent 时，节点会在下一次同步时带回新的详情。
 :::

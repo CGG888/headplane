@@ -41,7 +41,7 @@ offers (`A` or `AAAA`), and any problem names the offending entry so it can be
 fixed. Exact duplicates are skipped rather than added twice.
 
 ::: warning One record per name and type
-Headplane writes records through Headscale's configuration helpers, which keep a
+HeadplaneCN writes records through Headscale's configuration helpers, which keep a
 single record for each `name` + `type` pair. Two different values for the same
 name therefore cannot both be imported, and the import says so instead of
 silently dropping one; add the second value in Headscale's configuration file

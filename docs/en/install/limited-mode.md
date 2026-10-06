@@ -1,6 +1,6 @@
 ---
 title: Limited Mode
-description: Install Headplane in Limited Mode.
+description: Install HeadplaneCN in Limited Mode.
 ---
 
 # Limited Mode
@@ -13,14 +13,14 @@ remote web SSH, and more.
 :::
 
 Limited Mode is good for users who want to test out the _basic_ functionality
-provided by Headplane. It only interacts with the Headplane API and lacks all
+provided by HeadplaneCN. It only interacts with the HeadplaneCN API and lacks all
 advanced features, making it suitable for local testing and development.
 
 ## Prerequisites
 
 - Docker (and optionally Docker Compose)
 - Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for Headplane.
+- A [completed configuration file](./index.md#configuration) for HeadplaneCN.
 
 ## Installation
 
@@ -30,7 +30,7 @@ If you want to test Limited Mode without Docker, you can follow the
 up any of the advanced features.
 :::
 
-Running Headplane in Limited Mode is as simple as running 1 command:
+Running HeadplaneCN in Limited Mode is as simple as running 1 command:
 
 ```bash
 docker run -d \
@@ -43,13 +43,13 @@ docker run -d \
 ```
 
 It's important to mount your configuration file and also provide a persistent
-storage location for Headplane to store its own data. You can also change the
+storage location for HeadplaneCN to store its own data. You can also change the
 port mapping if you want to run it on a different port.
 
 ### Optional: Docker Compose
 
 If you prefer using Docker Compose, here is a minimal example of a
-`compose.yaml` file that runs Headplane in Limited Mode:
+`compose.yaml` file that runs HeadplaneCN in Limited Mode:
 
 ```yaml
 services:
@@ -64,9 +64,9 @@ services:
       - "/path/to/data/storage:/var/lib/headplane"
 ```
 
-## Accessing Headplane
+## Accessing HeadplaneCN
 
-After starting the container, you can access the Headplane web interface by
+After starting the container, you can access the HeadplaneCN web interface by
 navigating to `http://localhost:3000/admin` in your web browser (replace
 `localhost` with your server's IP address or domain name if not running locally).
 
@@ -81,7 +81,7 @@ headscale apikeys create --expiration 90d
 Limited Mode is intended for testing and development purposes, so please avoid
 using it in a production environment. For production deployments, consider using
 one of the other installation methods that will provide both the advanced
-features of Headplane and a more robust deployment.
+features of HeadplaneCN and a more robust deployment.
 
 Limited Mode also technically supports
 [Single Sign-On (SSO) authentication](../features/sso.md), but some parts of it

@@ -1,12 +1,12 @@
 ---
 title: Access Control
-description: Edit the Headscale ACL policy, tags and groups from the Headplane UI.
+description: Edit the Headscale ACL policy, tags and groups from the HeadplaneCN UI.
 ---
 
 # Access Control
 
 Headscale stores its Access Control List (ACL) as a single HuJSON policy. The
-**Access Control** page in Headplane exposes that policy in two ways: a
+**Access Control** page in HeadplaneCN exposes that policy in two ways: a
 structured editor for the parts most people change day to day, and the raw file
 editor for everything else.
 
@@ -22,7 +22,7 @@ policy:
 ```
 
 In `file` mode the policy lives in a file that only Headscale reads, so its API
-refuses the write. Headplane cannot tell which mode Headscale uses without being
+refuses the write. HeadplaneCN cannot tell which mode Headscale uses without being
 able to read Headscale's configuration, so the editor stays usable and the save
 is rejected with an explanation of how to switch modes or edit the file
 directly. Editing also requires the `write_policy` capability, which the
@@ -101,9 +101,9 @@ untouched.
 
 `randomizeClientPort` is a policy-level option that makes machines pick a random
 source port for outgoing connections. It is a switch on the same page; if your
-policy never had the key, Headplane leaves it that way rather than inventing one.
+policy never had the key, HeadplaneCN leaves it that way rather than inventing one.
 
-Anything Headplane does not model inside these sections — a future key inside
+Anything HeadplaneCN does not model inside these sections — a future key inside
 `autoApprovers`, an unknown field inside a grant — is preserved verbatim when a
 policy is saved.
 
@@ -122,7 +122,7 @@ silently ignored. A **validate** button does the same check on demand, which is
 worth doing before a large rewrite.
 
 If Headscale cannot run the check at all (an older release, an unreachable
-server), Headplane saves exactly as it always did rather than blocking you.
+server), HeadplaneCN saves exactly as it always did rather than blocking you.
 
 ## Editing the file directly
 
@@ -134,7 +134,7 @@ file editor and in the diff before it is saved.
 Nothing is sent to Headscale until **Save** is pressed.
 
 ::: warning Comments are not preserved
-HuJSON allows comments and trailing commas. Headplane reads them, but the
+HuJSON allows comments and trailing commas. HeadplaneCN reads them, but the
 structured editors regenerate the policy text, which drops comments. The Rules
 and Tags & Groups tabs show a notice when the loaded policy contains comments —
 use the file editor if you want to keep them.
@@ -142,4 +142,4 @@ use the file editor if you want to keep them.
 
 Unknown top-level keys such as `autoApprovers` and `nodeAttrs` are preserved
 untouched, so using the visual editor never silently drops parts of a policy
-that Headplane does not model.
+that HeadplaneCN does not model.
