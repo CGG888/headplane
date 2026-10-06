@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.7 (October 6, 2026)
+
 ## Fixes
 
 - **The official Tailscale map can be read again, and the region filter knows where it lives.** The official map is served in Tailscale's wire format (`Regions` and PascalCase fields), but the remote reader was reusing the local-map reader, which only understands Headscale's lowercase shape — so it parsed to zero regions and the feature appeared to read nothing (a `curl` from the operator's host returned the JSON in under a second, which is what pointed at parsing rather than the network). One reader now accepts **both** shapes and normalises them into the same internal structure, so the local-map editor, the region-name chain and the mirror all keep working unchanged, and the remote fetch got a longer deadline (10 s) with a single retry before giving up.
@@ -7,6 +9,9 @@
 ## Changes
 
 - **The official region filter moved into the DERP tab.** It is no longer a separate tab: it is a card titled **"Official region filter"** (官方区域节点筛选) placed directly under the address auto-sync card, closed by default and summarising how many official regions exist, how many are selected and which file it maintains. Everything it did is unchanged — the region table with Chinese names and measured latency, the sort/filter/"fastest three" helpers, the 900-series renumbering (901 Hong Kong and 902 Singapore fixed, the rest by latency, numbers kept stable), the schedule, the savings of Check/Run now/Re-rank — and when the official map cannot be read at all, the card says so with the reason instead of showing an empty table.
+
+---
+
 # 0.22.6 (October 6, 2026)
 
 ## Changes
