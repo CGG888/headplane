@@ -10,6 +10,7 @@ import {
   type ProbeTlsAttempt,
   type ProbeUdpFactory,
   type ProbeUdpSocket,
+  type RegionLatencyProbeProgress,
 } from "~/server/derp-mirror/probe.server";
 import type { OfficialRegion, ProbeFamily } from "~/server/derp-mirror/types";
 
@@ -411,5 +412,112 @@ describe("probe run", () => {
     expect(report.attempts).toHaveLength(1);
     expect(report.attempts[0]?.reason).toBe("cancelled");
     expect(report.regions).toEqual([]);
+  });
+
+  test("reports progress after every attempt, with the readings it has so far", async () => {
+    const clock = makeClock();
+    const progress: RegionLatencyProbeProgress[] = [];
+    const udp: ProbeUdpFactory = (family) =>
+      answeringSocket({ clock, latencyMs: family === "ipv4" ? 12 : 30 });
+
+    const report = await probeRegionLatencies(
+      [
+        region(20, [node("a", { ipv4: "44.1.1.1", ipv6: "2001:db8::1" })]),
+        region(21, [node("b", { ipv4: "44.1.1.2" })]),
+      ],
+      {
+        now: clock.now,
+        wallClock: () => MEASURED_AT,
+        concurrency: 1,
+        udp,
+        onProgress: (entry) => progress.push(entry),
+      },
+    );
+
+    expect(report.outcome).toBe("complete");
+    // One report per attempt, and the counters only ever grow towards the run's
+    // total of four node-and-family attempts.
+    expect(progress.map((entry) => [entry.completed, entry.measured])).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+    ]);
+    expect(progress.every((entry) => entry.total === 4)).toBe(true);
+    expect(progress.every((entry) => entry.budgetExhausted === false)).toBe(true);
+
+    // The readings arrive with the attempts: nothing for a region until one of
+    // its attempts answered, and both families once its IPv6 attempt did.
+    expect(
+      progress[0]?.regions.map((entry) => [entry.regionId, entry.bestV4, entry.bestV6]),
+    ).toEqual([[20, 12, undefined]]);
+    expect(
+      progress.at(-1)?.regions.map((entry) => [entry.regionId, entry.bestV4, entry.bestV6]),
+    ).toEqual([
+      [20, 12, 30],
+      [21, 12, 30],
+    ]);
+    expect(progress.at(-1)?.regions.every((entry) => entry.source === "measured")).toBe(true);
+  });
+
+  test("abandons the rest of the run when the overall budget runs out, keeping the partials", async () => {
+    const clock = makeClock();
+    let sockets = 0;
+    // Only the first node answers; every later one sits on a filtered port, so
+    // the run would wait out one attempt budget after another.
+    const udp: ProbeUdpFactory = () => {
+      sockets += 1;
+      return sockets <= 2 ? answeringSocket({ clock, latencyMs: 10 }) : silentSocket();
+    };
+
+    const report = await probeRegionLatencies(
+      [
+        region(20, [node("a", { ipv4: "44.1.1.1", ipv6: "2001:db8::1" })]),
+        region(21, [node("b", { ipv4: "44.1.1.2", ipv6: "2001:db8::2" })]),
+        region(22, [node("c", { ipv4: "44.1.1.3", ipv6: "2001:db8::3" })]),
+      ],
+      {
+        now: clock.now,
+        wallClock: () => MEASURED_AT,
+        // A per-attempt budget far longer than the run's, so only the overall
+        // budget can end this run.
+        timeoutMs: 60_000,
+        overallTimeoutMs: 25,
+        concurrency: 1,
+        udp,
+        tcp: async () => {
+          throw new Error("ECONNREFUSED");
+        },
+      },
+    );
+
+    expect(report.budgetExhausted).toBe(true);
+    // The budget is not the operator stopping the run.
+    expect(report.cancelled).toBe(false);
+    expect(report.outcome).toBe("partial");
+    // Everything the run measured before the budget is kept, and the region the
+    // budget cut off is simply absent.
+    expect(report.regions.map((entry) => entry.regionId)).toEqual([20]);
+    expect(report.regions[0]?.bestV4).toBe(10);
+    expect(report.regions[0]?.bestV6).toBe(10);
+    expect(report.measured).toBe(2);
+    // Two attempts answered and the third was cut off; the rest never started.
+    expect(report.attempts).toHaveLength(3);
+    expect(report.attempted).toBe(6);
+  });
+
+  test("a budget that runs out before anything answered leaves an empty record", async () => {
+    const report = await probeRegionLatencies([region(20, [node("a")])], {
+      now: () => 0,
+      wallClock: () => MEASURED_AT,
+      timeoutMs: 60_000,
+      overallTimeoutMs: 15,
+      udp: () => silentSocket(),
+    });
+
+    expect(report.budgetExhausted).toBe(true);
+    expect(report.outcome).toBe("empty");
+    expect(report.regions).toEqual([]);
+    expect(report.measured).toBe(0);
   });
 });

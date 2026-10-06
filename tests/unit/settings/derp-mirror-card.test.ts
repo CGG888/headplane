@@ -8,12 +8,15 @@ import {
   MIRROR_LATENCY_SOURCE_KEYS,
   MIRROR_PROBE_FRESH_MS,
   MIRROR_PROBE_OUTCOME_KEYS,
+  MIRROR_PROBE_POLL_MS,
+  MIRROR_PROBE_STATUS_ACTION_ID,
   mirrorLatencyNotice,
   mirrorRegionLatency,
   previewRegionNumbers,
   regionsBelowLatency,
   sortMirrorRegions,
   storedRegionNumbers,
+  withLiveMeasurements,
   type MirrorNumbering,
   type MirrorRegionRow,
 } from "~/routes/settings/headscale/derp-mirror";
@@ -208,5 +211,36 @@ describe("probe freshness", () => {
       "settings.headscale.derp.mirror.probeCancelled",
     );
     expect(MIRROR_PROBE_OUTCOME_KEYS.complete).toBeUndefined();
+  });
+});
+
+describe("live probe progress", () => {
+  test("lays the run's measurements over the rows it has already reached", () => {
+    const regions = [row(5, undefined, 300), row(7), row(9, undefined, 10)];
+
+    const live = withLiveMeasurements(regions, { "7": 42 });
+
+    expect(
+      live.map((region) => [region.officialId, region.latencyMs, region.latencySource]),
+    ).toEqual([
+      [5, 300, undefined],
+      [7, 42, "measured"],
+      [9, 10, undefined],
+    ]);
+    // A row the run has not measured is the very row the loader handed over.
+    expect(live[0]).toBe(regions[0]);
+  });
+
+  test("keeps the rows untouched when there is nothing live to lay over them", () => {
+    const regions = [row(5)];
+
+    expect(withLiveMeasurements(regions, {})).toBe(regions);
+    expect(withLiveMeasurements(regions, { "5": Number.NaN })).toEqual(regions);
+    expect(withLiveMeasurements(regions, { "5": -1 })).toEqual(regions);
+  });
+
+  test("polls one small read per second, and names it once for action and card", () => {
+    expect(MIRROR_PROBE_STATUS_ACTION_ID).toBe("derp_latency_probe_status");
+    expect(MIRROR_PROBE_POLL_MS).toBe(1000);
   });
 });

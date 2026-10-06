@@ -1,5 +1,10 @@
 # Next
 
+## Fixes
+
+- **The latency test no longer fails with a 502 through a reverse proxy.** The probe now runs in the background of the region-mirror service instead of inside the request: the button answers immediately, the card follows the run with a light status poll that stops as soon as it finishes, the run has a 25-second budget that keeps whatever it measured, Stop cancels it, and results are merged over earlier runs so the numbering still prefers what this server measured. Every request made while a run is in progress is an in-memory read, so no proxy timeout can be hit again.
+- **The region filter's helper row lines up.** The latency threshold field had its label rendered twice (a visible span plus a hidden field label) and the help text under one field pushed the neighbouring controls out of line; there is now exactly one associated label, the sort control and the threshold field share one height and baseline, the input has a fixed width, and the explanation sits under the row.
+- **The console's help points at this fork's documentation.** The header's question-mark badge and every documentation helper link under `/headplaneCN/`, the badge now has an accessible name for screen readers, and no interface string or link still sends anyone to the upstream site.
 # 0.22.9 (October 6, 2026)
 
 ## Changes

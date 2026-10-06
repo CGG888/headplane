@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import type { ProbeUdpSocket } from "~/server/derp-mirror/probe.server";
 import {
   createDerpMirrorService,
   DERP_MIRROR_SNAPSHOT_REASON,
@@ -737,5 +738,467 @@ describe("DERP region mirror official map loader", () => {
     });
 
     expect(regions).toBeUndefined();
+  });
+});
+
+describe("DERP region mirror latency probe", () => {
+  const MEASURED_AT = new Date("2026-02-03T04:05:06.000Z");
+  /** The number of node-and-family attempts the five official regions plan. */
+  const ATTEMPTS = 12;
+
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "headplane-derp-probe-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** A monotonic clock the fakes advance, so every measured value is exact. */
+  function makeClock() {
+    const state = { value: 0 };
+    return {
+      now: () => state.value,
+      advance: (ms: number) => {
+        state.value += ms;
+      },
+    };
+  }
+
+  /** The binding success a fake socket answers with, for the request it got. */
+  function bindingSuccess(request: Uint8Array): Uint8Array {
+    const message = new Uint8Array(20);
+    const view = new DataView(message.buffer);
+    view.setUint16(0, 0x0101, false);
+    view.setUint16(2, 0, false);
+    view.setUint32(4, 0x2112a442, false);
+    message.set(request.slice(8, 20), 8);
+    return message;
+  }
+
+  /** A socket that answers every binding request after a scripted latency. */
+  function answeringSocket(clock: ReturnType<typeof makeClock>, latencyMs: number): ProbeUdpSocket {
+    let onMessage: ((message: Uint8Array) => void) | undefined;
+
+    return {
+      send(request, _port, _address, callback) {
+        callback?.();
+        const answer = bindingSuccess(request);
+        queueMicrotask(() => {
+          clock.advance(latencyMs);
+          onMessage?.(answer);
+        });
+      },
+      onMessage(listener) {
+        onMessage = listener;
+      },
+      onError() {
+        // Never fails here.
+      },
+      close() {
+        // Nothing to release in a fake.
+      },
+    };
+  }
+
+  /** A socket on a filtered port: it never answers and never errors. */
+  function silentSocket(): ProbeUdpSocket {
+    return {
+      send() {
+        // Dropped, as a filtered port drops it.
+      },
+      onMessage() {
+        // No answer will ever arrive.
+      },
+      onError() {
+        // No error will ever arrive.
+      },
+      close() {
+        // Nothing to release.
+      },
+    };
+  }
+
+  /** A socket that only answers when the test releases it. */
+  function heldSocket() {
+    const state = { sent: 0, request: undefined as Uint8Array | undefined };
+    let onMessage: ((message: Uint8Array) => void) | undefined;
+
+    const socket: ProbeUdpSocket = {
+      send(request, _port, _address, callback) {
+        callback?.();
+        state.sent += 1;
+        state.request = request;
+      },
+      onMessage(listener) {
+        onMessage = listener;
+      },
+      onError() {
+        // Never fails here.
+      },
+      close() {
+        // Nothing to release.
+      },
+    };
+
+    return {
+      socket,
+      sent: () => state.sent,
+      release: () => {
+        if (state.request !== undefined) {
+          onMessage?.(bindingSuccess(state.request));
+        }
+      },
+    };
+  }
+
+  /** A service whose probe seams are fakes: nothing here touches a network. */
+  function service(
+    options: {
+      probe?: Record<string, unknown>;
+      loadOfficialRegions?: () => Promise<OfficialRegion[] | undefined>;
+      loadLatencies?: () => Promise<Record<string, number>>;
+    } = {},
+  ): DerpMirrorService {
+    return createDerpMirrorService({
+      dataPath: dir,
+      config: {
+        getDERPSettings: () => ({ urls: [], autoUpdateEnabled: true, updateFrequency: "3h" }),
+      },
+      headscale: {} as unknown as Headscale,
+      loadOfficialRegions:
+        options.loadOfficialRegions === undefined
+          ? async () => OFFICIAL
+          : options.loadOfficialRegions,
+      ...(options.loadLatencies === undefined ? {} : { loadLatencies: options.loadLatencies }),
+      now: () => MEASURED_AT,
+      probe: {
+        wallClock: () => MEASURED_AT,
+        udp: () => silentSocket(),
+        tcp: async () => {
+          throw new Error("ECONNREFUSED");
+        },
+        concurrency: 1,
+        timeoutMs: 1000,
+        ...options.probe,
+      },
+    });
+  }
+
+  /** Waits for the background run to finish, without waiting inside a request. */
+  async function settle(instance: DerpMirrorService): Promise<void> {
+    await vi.waitFor(() => {
+      expect(instance.latencyProbeStatus().running).toBe(false);
+    });
+  }
+
+  test("starts the run in the background and answers at once", async () => {
+    const clock = makeClock();
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const instance = service({
+      loadOfficialRegions: async () => {
+        // The map read is what a request would otherwise wait for.
+        await gate;
+        return OFFICIAL;
+      },
+      probe: { udp: () => answeringSocket(clock, 5), now: clock.now },
+    });
+
+    try {
+      const started = instance.startLatencyProbe();
+
+      // Nothing has been probed yet — the map is still being fetched — and the
+      // call already answered.
+      expect(started.started).toBe(true);
+      expect(started.status.running).toBe(true);
+      expect(started.status.startedAt).toBe(MEASURED_AT.toISOString());
+      expect(started.status.total).toBe(0);
+      expect(started.status.completed).toBe(0);
+      expect(started.status.regions).toEqual({});
+
+      release?.();
+      await settle(instance);
+
+      const finished = instance.latencyProbeStatus();
+      expect(finished.running).toBe(false);
+      expect(finished.finishedAt).toBe(MEASURED_AT.toISOString());
+      expect(finished.outcome).toBe("complete");
+      expect(finished.regions).toEqual({ "20": 5, "3": 5, "9": 5, "7": 5, "25": 5 });
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("refuses a second start while a run is in flight", async () => {
+    const held = heldSocket();
+    const instance = service({
+      probe: { udp: () => held.socket, timeoutMs: 60_000 },
+    });
+
+    try {
+      const first = instance.startLatencyProbe();
+      expect(first.started).toBe(true);
+
+      // The first attempt is in flight and nothing has answered yet.
+      await vi.waitFor(() => {
+        expect(held.sent()).toBeGreaterThan(0);
+      });
+
+      const second = instance.startLatencyProbe();
+      expect(second.started).toBe(false);
+      expect(second.status.running).toBe(true);
+      expect(second.status.startedAt).toBe(first.status.startedAt);
+      // Only one run is probing: a second one would have opened a second socket.
+      expect(held.sent()).toBe(1);
+
+      held.release();
+      expect(instance.cancelLatencyProbe()).toBe(true);
+      await settle(instance);
+      expect(instance.latencyProbeStatus().outcome).toBe("cancelled");
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("reports progress and the regions measured so far while the run is going", async () => {
+    const clock = makeClock();
+    const held = heldSocket();
+    let sockets = 0;
+    const instance = service({
+      probe: {
+        udp: () => {
+          sockets += 1;
+          return sockets === 1 ? answeringSocket(clock, 7) : held.socket;
+        },
+        now: clock.now,
+      },
+    });
+
+    try {
+      instance.startLatencyProbe();
+
+      // The first region answered, the second attempt is still waiting.
+      await vi.waitFor(() => {
+        expect(instance.latencyProbeStatus().measured).toBe(1);
+      });
+
+      const status = instance.latencyProbeStatus();
+      expect(status.running).toBe(true);
+      expect(status.total).toBe(ATTEMPTS);
+      expect(status.completed).toBe(1);
+      expect(status.regions).toEqual({ "20": 7 });
+      expect(status.outcome).toBeUndefined();
+      expect(status.error).toBeUndefined();
+
+      // The stop control ends the run and keeps what it measured.
+      expect(instance.cancelLatencyProbe()).toBe(true);
+      await settle(instance);
+
+      const stopped = instance.latencyProbeStatus();
+      expect(stopped.running).toBe(false);
+      expect(stopped.outcome).toBe("cancelled");
+      expect(stopped.regions).toEqual({ "20": 7 });
+      // Nothing is left to stop, and that is not an error.
+      expect(instance.cancelLatencyProbe()).toBe(false);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("abandons the rest of the run when its budget runs out and stores the partials", async () => {
+    const clock = makeClock();
+    let sockets = 0;
+    const instance = service({
+      probe: {
+        udp: () => {
+          sockets += 1;
+          return sockets <= 2 ? answeringSocket(clock, 9) : silentSocket();
+        },
+        now: clock.now,
+        timeoutMs: 60_000,
+        overallTimeoutMs: 25,
+      },
+    });
+
+    try {
+      instance.startLatencyProbe();
+      await settle(instance);
+
+      const status = instance.latencyProbeStatus();
+      expect(status.running).toBe(false);
+      expect(status.outcome).toBe("partial");
+      expect(status.regions).toEqual({ "20": 9 });
+
+      // The run's own record, in the shape the numbering reads: per-family
+      // bests, the per-node values behind them, the run's timestamp and source.
+      const document = await readDerpMirrorDocument(dir);
+      const stored = document.settings.latency;
+      expect(stored?.measuredAt).toBe(MEASURED_AT.toISOString());
+      expect(stored?.outcome).toBe("partial");
+      expect(stored?.regions.map((entry) => entry.regionId)).toEqual([20]);
+      expect(stored?.regions[0]?.regionCode).toBe("hkg");
+      expect(stored?.regions[0]?.bestV4).toBe(9);
+      expect(stored?.regions[0]?.bestV6).toBe(9);
+      expect(stored?.regions[0]?.source).toBe("measured");
+      expect(stored?.regions[0]?.measuredAt).toBe(MEASURED_AT.toISOString());
+      expect(stored?.regions[0]?.nodes.map((entry) => [entry.family, entry.latencyMs])).toEqual([
+        ["ipv4", 9],
+        ["ipv6", 9],
+      ]);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("keeps the measurements an earlier run stored when a later run measures less", async () => {
+    // A previous run reached New York; this one only gets as far as Hong Kong.
+    await writeDerpMirrorDocument(dir, {
+      settings: {
+        ...DEFAULT_DERP_MIRROR_SETTINGS,
+        latency: {
+          measuredAt: "2026-01-01T00:00:00.000Z",
+          outcome: "partial",
+          regions: [
+            {
+              regionId: 25,
+              regionCode: "nyc",
+              bestV4: 120,
+              nodes: [
+                {
+                  name: "nyc1",
+                  hostname: "nyc1.example.com",
+                  family: "ipv4",
+                  target: "1.2.3.1",
+                  latencyMs: 120,
+                  method: "stun",
+                },
+              ],
+              measuredAt: "2026-01-01T00:00:00.000Z",
+              source: "measured",
+            },
+          ],
+        },
+      },
+    });
+
+    const clock = makeClock();
+    let sockets = 0;
+    const instance = service({
+      probe: {
+        udp: () => {
+          sockets += 1;
+          return sockets <= 2 ? answeringSocket(clock, 4) : silentSocket();
+        },
+        now: clock.now,
+        timeoutMs: 60_000,
+        overallTimeoutMs: 25,
+      },
+    });
+
+    try {
+      instance.startLatencyProbe();
+      await settle(instance);
+
+      // The status describes this run alone: it measured Hong Kong and nothing
+      // else. The stored record is where the earlier measurement survives.
+      expect(instance.latencyProbeStatus().regions).toEqual({ "20": 4 });
+
+      const document = await readDerpMirrorDocument(dir);
+      const stored = document.settings.latency;
+      expect(stored?.measuredAt).toBe(MEASURED_AT.toISOString());
+      expect(stored?.outcome).toBe("partial");
+      expect(stored?.regions.map((entry) => [entry.regionId, entry.measuredAt])).toEqual([
+        [20, MEASURED_AT.toISOString()],
+        [25, "2026-01-01T00:00:00.000Z"],
+      ]);
+      expect(stored?.regions.find((entry) => entry.regionId === 25)?.bestV4).toBe(120);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("records an all-timeout run as empty instead of leaving nothing behind", async () => {
+    const instance = service({
+      probe: { udp: () => silentSocket(), timeoutMs: 5 },
+    });
+
+    try {
+      instance.startLatencyProbe();
+      await settle(instance);
+
+      const status = instance.latencyProbeStatus();
+      expect(status.outcome).toBe("empty");
+      expect(status.error).toBeUndefined();
+      expect(status.regions).toEqual({});
+
+      // The honest record the card turns into "UDP 3478 may be blocked".
+      const document = await readDerpMirrorDocument(dir);
+      expect(document.settings.latency?.outcome).toBe("empty");
+      expect(document.settings.latency?.regions).toEqual([]);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("records why it could not probe at all when no official map is readable", async () => {
+    const instance = service({ loadOfficialRegions: async () => undefined });
+
+    try {
+      const started = instance.startLatencyProbe();
+      expect(started.started).toBe(true);
+
+      await settle(instance);
+      const status = instance.latencyProbeStatus();
+      expect(status.error).toBe("derpMirrorUnavailable");
+      expect(status.running).toBe(false);
+      expect(status.outcome).toBeUndefined();
+
+      // A run that could not probe writes nothing: earlier measurements stand.
+      const document = await readDerpMirrorDocument(dir);
+      expect(document.settings.latency).toBeUndefined();
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("ranks a region by the value this server measured itself", async () => {
+    const clock = makeClock();
+    // Five regions, in the order the map lists them: Hong Kong (two nodes, four
+    // attempts), Singapore, Tokyo, Frankfurt, New York. Tokyo answers slowly and
+    // Frankfurt quickly, so a fresh ranking puts Frankfurt first of the two.
+    const scripted = [5, 5, 5, 5, 5, 5, 500, 500, 1, 1, 5, 5];
+    let index = 0;
+    const instance = service({
+      probe: {
+        udp: () => answeringSocket(clock, scripted[index++] ?? 5),
+        now: clock.now,
+      },
+    });
+
+    try {
+      await instance.update({
+        targetPath: join(dir, "official-mirror.yaml"),
+        officialRegionIds: [HKG, SIN, TOK, FRA],
+        autoReload: false,
+      });
+
+      instance.startLatencyProbe();
+      await settle(instance);
+      expect(instance.latencyProbeStatus().outcome).toBe("complete");
+
+      // Reassigning is the run that re-ranks by today's measurements, and the
+      // values it ranks on are the ones this server just measured.
+      const run = await instance.reassign();
+
+      expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [FRA]: 903, [TOK]: 904 });
+    } finally {
+      instance.dispose();
+    }
   });
 });

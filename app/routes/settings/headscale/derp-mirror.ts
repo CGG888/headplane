@@ -22,6 +22,7 @@ import type { TranslationKey } from "~/i18n";
 import type {
   DerpMirrorOutcome,
   DerpMirrorProbeOutcome,
+  DerpMirrorProbeStatus,
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
@@ -106,6 +107,50 @@ export interface MirrorProbeView {
   measuredAt?: string;
   /** How that run ended; absent until the first probe finishes. */
   outcome?: DerpMirrorProbeOutcome;
+}
+
+/** Re-exported so the component reads one module for every mirror type. */
+export type MirrorProbeStatus = DerpMirrorProbeStatus;
+
+/**
+ * The `action_id` the card polls while a latency run is in flight. It is a read
+ * of the run's state, never the probe itself, so it answers immediately however
+ * many nodes the run is dialling. Kept here so the action, the card and the
+ * page's revalidation policy cannot drift apart.
+ */
+export const MIRROR_PROBE_STATUS_ACTION_ID = "derp_latency_probe_status";
+
+/**
+ * How often the card reads that status while a run is in flight. One second is
+ * fast enough to look live and slow enough that a run leaves a handful of tiny
+ * requests behind it; a request is only sent once the previous one answered.
+ */
+export const MIRROR_PROBE_POLL_MS = 1000;
+
+/**
+ * The rows with a run's live measurements laid over them, so the table fills in
+ * as the probes answer instead of appearing all at once at the end. A region the
+ * run has already measured is this server's own number and is labelled as such,
+ * exactly like the stored measurement it becomes; every other row is left as the
+ * loader read it.
+ */
+export function withLiveMeasurements(
+  regions: MirrorRegionRow[],
+  measured: Record<string, number>,
+): MirrorRegionRow[] {
+  const ids = Object.keys(measured);
+  if (ids.length === 0) {
+    return regions;
+  }
+
+  return regions.map((region) => {
+    const live = measured[String(region.officialId)];
+    if (live === undefined || !Number.isFinite(live) || live < 0) {
+      return region;
+    }
+
+    return { ...region, latencyMs: live, latencySource: "measured" };
+  });
 }
 
 /**

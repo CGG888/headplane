@@ -10,6 +10,7 @@ import {
   Tags,
 } from "lucide-react";
 import { data } from "react-router";
+import type { ShouldRevalidateFunction, ShouldRevalidateFunctionArgs } from "react-router";
 
 import Code from "~/components/code";
 import Link from "~/components/link";
@@ -81,7 +82,7 @@ import ServerOverview from "./components/server-overview";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
 import type { MirrorNumbering, MirrorRegionRow } from "./derp-mirror";
-import { mirrorRegionLatency } from "./derp-mirror";
+import { MIRROR_PROBE_STATUS_ACTION_ID, mirrorRegionLatency } from "./derp-mirror";
 import {
   classifyDerpRelaySource,
   defaultDerpPrivateKeyPath,
@@ -301,6 +302,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         measuredAt: mirrorSettings.latency?.measuredAt,
         outcome: mirrorSettings.latency?.outcome,
       },
+      // The run in flight, if there is one, so a card opened in the middle of a
+      // latency test starts from the progress already made instead of waiting
+      // for the next poll. Read from memory, like the settings above.
+      probeStatus: derpMirror.latencyProbeStatus(),
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -325,6 +330,28 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export const action = headscaleSettingsAction;
+
+/**
+ * Revalidation policy for the DERP tab.
+ *
+ * The latency status is a read: it reports how far the run in flight has got,
+ * and the card asks for it about once a second while the run is going. React
+ * Router cannot know that — any fetcher submission revalidates every loader of
+ * the current route by default — so answering a poll would re-read the agent
+ * records, the official map and every DERP file once per second for data that
+ * has not changed. The run's own completion is what refreshes the page, and the
+ * card revalidates explicitly when it sees the run finish.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  formData,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) => {
+  if (formData?.get("action_id") === MIRROR_PROBE_STATUS_ACTION_ID) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
+};
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr } = useI18n();
@@ -518,6 +545,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             last={mirror.last}
             numbering={mirror.numbering}
             probe={mirror.probe}
+            probeStatus={mirror.probeStatus}
             regionError={mirror.regionsError}
             regions={mirror.regions}
             settings={mirror.settings}

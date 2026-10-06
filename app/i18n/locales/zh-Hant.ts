@@ -39,6 +39,7 @@ const zhHant = {
       settings: "設定",
     },
     help: {
+      label: "說明",
       docs: "文件",
       headscale: "Headscale",
       download: "下載",
@@ -1814,6 +1815,7 @@ const zhHant = {
           probeStop: "停止",
           probeNever: "本伺服器還沒有測量過延遲。",
           probeMeasuredAt: "本伺服器測量於 {at}。",
+          probeProgress: "正在從本伺服器測量……{total} 個區域中已有 {done} 個回應。",
           probeNote:
             "在這裡測得的結果反映的是本伺服器的網路路徑：對附近的用戶端是不錯的參考，但不能保證遠端用戶端的表現。",
           probePartial: "部分官方區域沒有從本伺服器回應；這些列保留機器回報的數值。",

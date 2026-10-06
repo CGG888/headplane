@@ -1,5 +1,5 @@
 import type { TranslationKey } from "~/i18n";
-import type { DerpMirrorRun } from "~/server/derp-mirror/types";
+import type { DerpMirrorProbeStatus, DerpMirrorRun } from "~/server/derp-mirror/types";
 
 import type { DerpMapIssue, DerpMapIssueCode } from "./derp-map-schema";
 import type { OidcSelfTestReport } from "./oidc-self-test";
@@ -158,6 +158,11 @@ export interface HeadscaleSettingsSuccess {
    * makes the action idempotent).
    */
   addedRegionNames?: number;
+  /**
+   * Present after a latency run was started, read or stopped: the run's state as
+   * plain values, so the card can show progress without waiting for the probes.
+   */
+  probe?: DerpMirrorProbeStatus;
 }
 
 export interface HeadscaleSettingsFailure {

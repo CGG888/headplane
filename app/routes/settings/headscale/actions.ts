@@ -14,13 +14,7 @@ import {
   integrationContext,
   snapshotContext,
 } from "~/server/context";
-import {
-  cancelRegionLatencyProbe,
-  isRegionLatencyProbeRunning,
-  runRegionLatencyProbe,
-  type RegionLatencyProbeReport,
-} from "~/server/derp-mirror/probe.server";
-import { mirrorTargetProblem, loadOfficialRegions } from "~/server/derp-mirror/service.server";
+import { mirrorTargetProblem } from "~/server/derp-mirror/service.server";
 import {
   normalizeOfficialRegionId,
   parseDerpMirrorIntervalHours,
@@ -872,61 +866,43 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
     case "probe_derp_latency": {
       // The official regions are the one part of the map no client can report
       // on: a machine only knows the map Headscale handed it. Measuring them
-      // from this server is what makes them rankable at all. The probe is
-      // fail-soft and cancellable, and its results are stored with the mirror's
-      // own settings so every later render ranks against them.
+      // from this server is what makes them rankable at all.
+      //
+      // The run belongs to the mirror service, not to this request. It starts in
+      // the background and this answers at once, so no request ever waits for
+      // the probes — dozens of nodes across two families, each waiting out its
+      // timeout on a network that filters UDP, would outlast any reverse proxy
+      // in front of Headplane and come back as the proxy's own error page. The
+      // card follows the run by polling `derp_latency_probe_status`.
       const mirror = context.get(derpMirrorContext);
-      if (isRegionLatencyProbeRunning()) {
+      const started = mirror.startLatencyProbe();
+      if (!started.started) {
         return failure("derpMirrorProbeBusy");
       }
 
-      const derp = headscaleConfig.getDERPSettings();
-      // The shared cached fetcher, so a probe adds no download the DERP cards
-      // have not already paid for.
-      const regions = await loadOfficialRegions(derp.urls, {
-        autoUpdateEnabled: derp.autoUpdateEnabled,
-        updateFrequency: derp.updateFrequency,
-      });
+      return data({ success: true, probe: started.status } satisfies HeadscaleSettingsSuccess);
+    }
 
-      if (regions === undefined || regions.length === 0) {
-        return failure("derpMirrorUnavailable");
-      }
-
-      // The probe turns every network failure into a labelled result, so this
-      // only catches a bug — and a bug must not become an error page either.
-      let report: RegionLatencyProbeReport | undefined;
-      try {
-        report = await runRegionLatencyProbe(regions, { requestSignal: request.signal });
-      } catch {
-        return failure("derpMirrorProbeFailed");
-      }
-
-      if (report === undefined) {
-        return failure("derpMirrorProbeBusy");
-      }
-
-      // Through the store's own writer, so the in-memory settings the loaders
-      // read are updated together with the file.
-      const saved = await mirror.update({
-        latency: {
-          measuredAt: report.measuredAt,
-          outcome: report.outcome,
-          regions: report.regions,
-        },
-      });
-
-      if (!saved.success) {
-        return failure("derpMirrorSaveFailed");
-      }
-
-      return success();
+    case "derp_latency_probe_status": {
+      // A read of the in-flight run: counters and the regions measured so far.
+      // It waits for nothing and dials nothing, so polling it every second
+      // costs a few in-memory reads.
+      const mirror = context.get(derpMirrorContext);
+      return data({
+        success: true,
+        probe: mirror.latencyProbeStatus(),
+      } satisfies HeadscaleSettingsSuccess);
     }
 
     case "cancel_derp_latency_probe": {
       // The run in progress closes its sockets and reports what it had; with no
       // run in progress there is nothing to cancel, which is not an error.
-      cancelRegionLatencyProbe();
-      return success();
+      const mirror = context.get(derpMirrorContext);
+      mirror.cancelLatencyProbe();
+      return data({
+        success: true,
+        probe: mirror.latencyProbeStatus(),
+      } satisfies HeadscaleSettingsSuccess);
     }
 
     case "save_derp_map": {

@@ -18,11 +18,16 @@
 // path the clients near this server actually take, and it exists precisely for
 // the official regions no client can report on. Where there is no local value,
 // the reported one is used unchanged.
+//
+// A finished run is merged over what the store already held
+// ({@link mergeLatencyReadings}): a run that was stopped, or that ran out of its
+// overall budget, only measured part of the map, and it must not drop the
+// regions an earlier run had already measured.
 
 import { parseDerpRegionId } from "~/routes/machines/derp-info";
 import type { AgentHostRecord } from "~/utils/agent-coverage";
 
-import type { DerpMirrorLatency } from "./types";
+import type { DerpLatencyRegionReading, DerpMirrorLatency } from "./types";
 
 /** Seconds to milliseconds. */
 const MS_PER_SECOND = 1000;
@@ -80,9 +85,21 @@ function usableLatency(value: unknown): number | undefined {
 export function locallyMeasuredRegionLatencies(
   latency: DerpMirrorLatency | undefined,
 ): Record<string, number> {
+  return regionLatencyBests(latency?.regions ?? []);
+}
+
+/**
+ * The fastest usable value per region id across a set of readings, in
+ * milliseconds. Both the stored record and a run still in flight reduce through
+ * here, so progress the card shows while a run is going and the value that run
+ * finally stores can never be ranked differently.
+ */
+export function regionLatencyBests(
+  readings: readonly DerpLatencyRegionReading[],
+): Record<string, number> {
   const fastest = new Map<number, number>();
 
-  for (const region of latency?.regions ?? []) {
+  for (const region of readings) {
     const candidates = [
       usableLatency(region.bestV4),
       usableLatency(region.bestV6),
@@ -98,6 +115,39 @@ export function locallyMeasuredRegionLatencies(
   }
 
   return Object.fromEntries([...fastest].map(([regionId, ms]) => [String(regionId), ms]));
+}
+
+/**
+ * One finished probe run, merged over what the store already held.
+ *
+ * A run that the operator stopped, or that ran out of its overall budget, only
+ * ever measured some of the regions, and storing its record as it stands would
+ * drop every region an earlier run had measured. So the regions this run did
+ * measure replace their entries and every other entry is carried over with the
+ * timestamp of the run that actually measured it. The record's own `measuredAt`
+ * and `outcome` are always this run's, so the card reports the run that just
+ * happened — including the honest "nothing answered" one.
+ */
+export function mergeLatencyReadings(
+  previous: DerpMirrorLatency | undefined,
+  next: DerpMirrorLatency,
+): DerpMirrorLatency {
+  const merged = new Map<number, DerpLatencyRegionReading>();
+  for (const region of next.regions) {
+    merged.set(region.regionId, region);
+  }
+
+  for (const region of previous?.regions ?? []) {
+    if (!merged.has(region.regionId)) {
+      merged.set(region.regionId, region);
+    }
+  }
+
+  return {
+    measuredAt: next.measuredAt,
+    outcome: next.outcome,
+    regions: [...merged.values()].toSorted((a, b) => a.regionId - b.regionId),
+  };
 }
 
 /**

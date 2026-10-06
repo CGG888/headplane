@@ -111,6 +111,47 @@ export interface DerpMirrorLatency {
   regions: DerpLatencyRegionReading[];
 }
 
+/**
+ * A latency run in flight, as a status read reports it.
+ *
+ * The run belongs to the mirror service, not to the request that started it, so
+ * the card follows it by reading this small snapshot instead of waiting for the
+ * probes: whether one is running, when it started and last finished, how many
+ * attempts it planned and finished, and the fastest value it has measured per
+ * region so far. Plain values only, so an action or a loader can hand it
+ * straight to the card.
+ */
+export interface DerpMirrorProbeStatus {
+  /** Whether a run is in flight right now. */
+  running: boolean;
+  /** ISO timestamp the newest run started; absent before the first run. */
+  startedAt?: string;
+  /** ISO timestamp the newest run finished; absent while it is running. */
+  finishedAt?: string;
+  /** Node-and-family attempts the newest run planned. */
+  total: number;
+  /** Attempts of that run that have finished. */
+  completed: number;
+  /** Finished attempts that produced a value. */
+  measured: number;
+  /** Official region id (as a decimal string) -> fastest value so far, in ms. */
+  regions: Record<string, number>;
+  /** How the newest finished run ended; absent until one finishes. */
+  outcome?: DerpMirrorProbeOutcome;
+  /**
+   * A stable code when the run could not probe at all: no official map to probe
+   * (`derpMirrorUnavailable`), or the run itself failed (`derpMirrorProbeFailed`).
+   */
+  error?: "derpMirrorUnavailable" | "derpMirrorProbeFailed";
+}
+
+/** The answer a start request gets: whether it started one, and the run's state. */
+export interface DerpMirrorProbeStart {
+  /** False when a run was already in flight; `status` then describes that one. */
+  started: boolean;
+  status: DerpMirrorProbeStatus;
+}
+
 /** One node of the generated local map, in Headscale's `derp.paths` format. */
 export interface LocalDerpNode {
   /** `<region number><letter>`, e.g. `901a`. */

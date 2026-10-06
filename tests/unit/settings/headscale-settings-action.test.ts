@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   authContext,
+  derpMirrorContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
@@ -32,6 +33,8 @@ function mockRequest(formData: FormData): Request {
 interface SubmitOptions {
   allowed?: boolean;
   writable?: boolean;
+  /** The mirror service the latency actions act on, when a test needs one. */
+  derpMirror?: unknown;
 }
 
 interface ActionResult {
@@ -67,6 +70,10 @@ function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.f
 
       if (context === integrationContext) {
         return { onConfigChange };
+      }
+
+      if (context === derpMirrorContext) {
+        return options.derpMirror;
       }
 
       return undefined;
@@ -422,5 +429,90 @@ describe("Headscale advanced settings action", () => {
     );
     expect(statusOf(readOnly.result)).toBe(403);
     expect(readOnly.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe("Headscale latency probe action", () => {
+  /** The status of a run that just started and has probed nothing yet. */
+  const RUNNING = {
+    running: true,
+    startedAt: "2026-01-01T00:00:00.000Z",
+    total: 0,
+    completed: 0,
+    measured: 0,
+    regions: {},
+  };
+
+  /** The status of a finished run that measured one region. */
+  const FINISHED = {
+    running: false,
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "2026-01-01T00:00:30.000Z",
+    total: 12,
+    completed: 12,
+    measured: 2,
+    regions: { "20": 12 },
+    outcome: "complete",
+  };
+
+  /**
+   * The mirror service as the action sees it. Every method is a stub: the action
+   * must only start, read or stop a run the service owns, never run the probes.
+   */
+  function mirrorStub(overrides: Record<string, unknown> = {}) {
+    return {
+      startLatencyProbe: vi.fn(() => ({ started: true, status: RUNNING })),
+      latencyProbeStatus: vi.fn(() => FINISHED),
+      cancelLatencyProbe: vi.fn(() => true),
+      ...overrides,
+    };
+  }
+
+  function probeOf(result: ActionResult): unknown {
+    return (result.data as { probe?: unknown } | undefined)?.probe;
+  }
+
+  test("starting a run answers at once with the run's state", async () => {
+    const derpMirror = mirrorStub();
+
+    const { result } = await submit({ action_id: "probe_derp_latency" }, { derpMirror });
+
+    expect(statusOf(result)).toBe(200);
+    expect(probeOf(result)).toEqual(RUNNING);
+    expect(derpMirror.startLatencyProbe).toHaveBeenCalledTimes(1);
+    // The action never reads the run afterwards: the probes are not its work.
+    expect(derpMirror.latencyProbeStatus).not.toHaveBeenCalled();
+  });
+
+  test("a second start while a run is in flight is refused as busy", async () => {
+    const derpMirror = mirrorStub({
+      startLatencyProbe: vi.fn(() => ({ started: false, status: RUNNING })),
+    });
+
+    const { result } = await submit({ action_id: "probe_derp_latency" }, { derpMirror });
+
+    expect(statusOf(result)).toBe(400);
+    expect(errorCodeOf(result)).toBe("derpMirrorProbeBusy");
+  });
+
+  test("the status read reports progress without starting anything", async () => {
+    const derpMirror = mirrorStub();
+
+    const { result } = await submit({ action_id: "derp_latency_probe_status" }, { derpMirror });
+
+    expect(statusOf(result)).toBe(200);
+    expect(probeOf(result)).toEqual(FINISHED);
+    expect(derpMirror.latencyProbeStatus).toHaveBeenCalledTimes(1);
+    expect(derpMirror.startLatencyProbe).not.toHaveBeenCalled();
+  });
+
+  test("the stop control cancels the run and reports what is left", async () => {
+    const derpMirror = mirrorStub();
+
+    const { result } = await submit({ action_id: "cancel_derp_latency_probe" }, { derpMirror });
+
+    expect(statusOf(result)).toBe(200);
+    expect(derpMirror.cancelLatencyProbe).toHaveBeenCalledTimes(1);
+    expect(probeOf(result)).toEqual(FINISHED);
   });
 });

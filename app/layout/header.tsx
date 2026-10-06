@@ -135,6 +135,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
           <Menu>
             <MenuTrigger className="size-8 rounded-full p-1">
               <CircleQuestionMark className="w-5" />
+              <span className="sr-only">{t("header.help.label")}</span>
             </MenuTrigger>
             <MenuContent align="end">
               <MenuItem>

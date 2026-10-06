@@ -42,6 +42,7 @@ const en = {
       settings: "Settings",
     },
     help: {
+      label: "Help",
       docs: "Docs",
       headscale: "Headscale",
       download: "Download",
@@ -1931,6 +1932,8 @@ const en = {
           probeStop: "Stop",
           probeNever: "No latency has been measured from this server yet.",
           probeMeasuredAt: "Measured from this server at {at}.",
+          probeProgress:
+            "Measuring from this server… {done} of {total} regions have answered so far.",
           probeNote:
             "A measurement taken here reflects this server's own network path: a good proxy for clients nearby, not a guarantee for remote ones.",
           probePartial:

@@ -33,6 +33,16 @@
 // immediately and schedules nothing while the mirror is disabled, and `dispose()`
 // clears the timer on shutdown or HMR reload. A tick is guarded against overlap
 // and against throwing.
+//
+// The measuring half of the numbering lives here too. The latency probe dials
+// dozens of official nodes across two address families, each with a 1.2s budget
+// of its own, so a run can take far longer than anything in front of Headplane
+// is willing to wait for; `startLatencyProbe()` therefore starts it as a
+// background run of this service and answers at once, `latencyProbeStatus()` is
+// the small snapshot the card polls while it goes, and `cancelLatencyProbe()`
+// stops it. One run is in flight at a time, and a finished run stores what it
+// measured merged over what the store already held, so a run that was stopped
+// early cannot drop the regions an earlier one measured.
 
 import { constants } from "node:fs";
 import { access, chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -55,7 +65,12 @@ import {
   mirrorMapChanged,
   renderMirrorYaml,
 } from "./generate";
-import { locallyMeasuredRegionLatencies } from "./latency";
+import {
+  locallyMeasuredRegionLatencies,
+  mergeLatencyReadings,
+  regionLatencyBests,
+} from "./latency";
+import { probeRegionLatencies, type ProbeTlsAttempt, type ProbeUdpFactory } from "./probe.server";
 import {
   derpMirrorIntervalMs,
   normalizeDerpMirrorSettings,
@@ -64,7 +79,12 @@ import {
 } from "./settings";
 import { readDerpMirrorDocument, writeDerpMirrorDocument, writeDerpMirrorSettings } from "./store";
 import type {
+  DerpLatencyRegionReading,
+  DerpMirrorLatency,
   DerpMirrorMode,
+  DerpMirrorProbeOutcome,
+  DerpMirrorProbeStart,
+  DerpMirrorProbeStatus,
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
@@ -147,10 +167,35 @@ export interface DerpMirrorServiceOptions {
   ) => Promise<OfficialRegion[] | undefined>;
   /** Measured latency per official region id, in milliseconds. */
   loadLatencies?: () => Promise<Record<string, number>>;
+  /**
+   * Test seams for the background latency probe: its sockets, its clocks and
+   * its budgets. Production passes none, so the run dials the official relays
+   * through the default implementation; a unit test injects fakes and never
+   * touches the network.
+   */
+  probe?: DerpMirrorProbeSeams;
   /** Injectable clock, for tests. */
   now?: () => Date;
   /** Test hook: overrides the interval the settings would schedule. */
   intervalMs?: number;
+}
+
+/** How the background latency run may be steered, for tests. */
+export interface DerpMirrorProbeSeams {
+  /** The budget of one attempt, in milliseconds. */
+  timeoutMs?: number;
+  /** The budget of the whole run, in milliseconds. */
+  overallTimeoutMs?: number;
+  /** How many attempts may run at once. */
+  concurrency?: number;
+  /** Read the monotonic clock the probe times with. */
+  now?: () => number;
+  /** Read the wall clock the stored measurement is dated by. */
+  wallClock?: () => Date;
+  /** Open a UDP socket instead of the real one. */
+  udp?: ProbeUdpFactory;
+  /** Time a TCP/TLS handshake instead of the real one. */
+  tcp?: ProbeTlsAttempt;
 }
 
 export interface DerpMirrorUpdateResult {
@@ -171,6 +216,17 @@ export interface DerpMirrorService {
   runNow(): Promise<DerpMirrorRun | undefined>;
   /** A writing run that drops the stored numbering and ranks every region again. */
   reassign(): Promise<DerpMirrorRun | undefined>;
+  /**
+   * Starts the latency probe as a background run of this service and answers at
+   * once. The run outlives the request that asked for it, so no HTTP request —
+   * and no reverse proxy in front of Headplane — ever waits for the probes;
+   * `started` is false when a run was already in flight.
+   */
+  startLatencyProbe(): DerpMirrorProbeStart;
+  /** The run in flight, or the newest finished one, as plain values. */
+  latencyProbeStatus(): DerpMirrorProbeStatus;
+  /** Stops the run in flight and keeps what it measured; false when there was none. */
+  cancelLatencyProbe(): boolean;
   start(): void;
   dispose(): void;
 }
@@ -248,6 +304,25 @@ interface SettledAssignment {
   assignmentRankedAt?: string;
 }
 
+/**
+ * The latency run in flight, or the newest finished one. It is deliberately not
+ * part of the store: it is what the card polls while the probes are still going,
+ * and the store only ever holds the record a finished run settled on.
+ */
+interface LatencyRun {
+  /** Aborts this run, and only this run. */
+  controller: AbortController;
+  startedAt: string;
+  finishedAt?: string;
+  total: number;
+  completed: number;
+  measured: number;
+  /** What the run has measured so far, in completion order. */
+  readings: DerpLatencyRegionReading[];
+  outcome?: DerpMirrorProbeOutcome;
+  error?: DerpMirrorProbeStatus["error"];
+}
+
 export function createDerpMirrorService(options: DerpMirrorServiceOptions): DerpMirrorService {
   let settings = normalizeDerpMirrorSettings(undefined);
   let last: DerpMirrorRun | undefined;
@@ -256,6 +331,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking = false;
   let tempCounter = 0;
+  let latencyRun: LatencyRun | undefined;
 
   const now = () => options.now?.() ?? new Date();
   const loadRegions = options.loadOfficialRegions ?? loadOfficialRegionsDefault;
@@ -717,6 +793,178 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     }
   }
 
+  async function updateSettings(
+    patch: Partial<DerpMirrorSettings>,
+  ): Promise<DerpMirrorUpdateResult> {
+    await ensureLoaded();
+    const previous = settings;
+    const merged = normalizeDerpMirrorSettings({ ...previous, ...patch });
+
+    // A save leaves the stored numbering covering exactly the regions the
+    // selection keeps. The server's `assignRegionNumbers` only ever returns
+    // the selected regions, so an entry for a region the operator dropped is
+    // stale as soon as the selection is saved, and the preview would be the
+    // only thing still showing it.
+    const next: DerpMirrorSettings = {
+      ...merged,
+      assignment: pruneAssignmentToSelection(merged.assignment, merged.officialRegionIds),
+    };
+
+    try {
+      await writeDerpMirrorSettings(options.dataPath, next);
+    } catch (error) {
+      log.warn("config", "Unable to save the DERP region mirror settings: %s", errorMessage(error));
+      return { success: false, settings: previous };
+    }
+
+    settings = next;
+    schedule();
+    return { success: true, settings: next };
+  }
+
+  // MARK: The latency probe, as a background run
+
+  /**
+   * The run in flight, or the newest finished one, as plain values. It never
+   * touches the store or the network: this is what the card polls while the
+   * probes are still going, and every request it answers is a few in-memory
+   * reads, so none of them can come anywhere near a reverse proxy's timeout.
+   */
+  function latencyProbeStatus(): DerpMirrorProbeStatus {
+    return {
+      running: latencyRun !== undefined && latencyRun.finishedAt === undefined,
+      ...(latencyRun === undefined ? {} : { startedAt: latencyRun.startedAt }),
+      ...(latencyRun?.finishedAt === undefined ? {} : { finishedAt: latencyRun.finishedAt }),
+      total: latencyRun?.total ?? 0,
+      completed: latencyRun?.completed ?? 0,
+      measured: latencyRun?.measured ?? 0,
+      regions: regionLatencyBests(latencyRun?.readings ?? []),
+      ...(latencyRun?.outcome === undefined ? {} : { outcome: latencyRun.outcome }),
+      ...(latencyRun?.error === undefined ? {} : { error: latencyRun.error }),
+    };
+  }
+
+  /**
+   * Starts the probe as a background run and returns at once. Only one run is
+   * ever in flight: two would fight over the same store and double the traffic
+   * the official relays see, and the operator can stop this one instead.
+   */
+  function startLatencyProbe(): DerpMirrorProbeStart {
+    if (latencyRun !== undefined && latencyRun.finishedAt === undefined) {
+      return { started: false, status: latencyProbeStatus() };
+    }
+
+    const controller = new AbortController();
+    latencyRun = {
+      controller,
+      startedAt: now().toISOString(),
+      total: 0,
+      completed: 0,
+      measured: 0,
+      readings: [],
+    };
+
+    // Deliberately not awaited: the run belongs to the service, so the request
+    // that asked for it answers immediately and the run keeps going without it.
+    void executeLatencyProbe(latencyRun);
+    return { started: true, status: latencyProbeStatus() };
+  }
+
+  /** Stops the run in flight; the run itself still finishes and stores what it had. */
+  function cancelLatencyProbe(): boolean {
+    if (latencyRun === undefined || latencyRun.finishedAt !== undefined) {
+      return false;
+    }
+
+    latencyRun.controller.abort();
+    return true;
+  }
+
+  /**
+   * One background latency run: fetch the official map, probe every region and
+   * store what came back. Never rejects and never throws — a run that cannot
+   * even start probing records a stable code the card localizes, and an
+   * unexpected failure is only logged.
+   */
+  async function executeLatencyProbe(run: LatencyRun): Promise<void> {
+    try {
+      await ensureLoaded();
+
+      const derp = options.config.getDERPSettings();
+      let regions: OfficialRegion[] | undefined;
+      try {
+        regions = await loadRegions(derp.urls, {
+          autoUpdateEnabled: derp.autoUpdateEnabled,
+          updateFrequency: derp.updateFrequency,
+        });
+      } catch (error) {
+        regions = undefined;
+        log.debug("config", `The official DERP map could not be read: ${errorMessage(error)}`);
+      }
+
+      if (regions === undefined || regions.length === 0) {
+        // Nothing to probe: the same answer the old in-request path gave, now
+        // carried by the run's own status instead of by a failed request.
+        run.error = "derpMirrorUnavailable";
+        return;
+      }
+
+      const seams = options.probe ?? {};
+      const report = await probeRegionLatencies(regions, {
+        signal: run.controller.signal,
+        ...(seams.timeoutMs === undefined ? {} : { timeoutMs: seams.timeoutMs }),
+        ...(seams.overallTimeoutMs === undefined
+          ? {}
+          : { overallTimeoutMs: seams.overallTimeoutMs }),
+        ...(seams.concurrency === undefined ? {} : { concurrency: seams.concurrency }),
+        ...(seams.now === undefined ? {} : { now: seams.now }),
+        ...(seams.udp === undefined ? {} : { udp: seams.udp }),
+        ...(seams.tcp === undefined ? {} : { tcp: seams.tcp }),
+        wallClock: seams.wallClock ?? now,
+        onProgress: (progress) => {
+          run.total = progress.total;
+          run.completed = progress.completed;
+          run.measured = progress.measured;
+          run.readings = progress.regions;
+        },
+      });
+
+      run.total = report.attempted;
+      run.completed = report.attempts.length;
+      run.measured = report.measured;
+      run.readings = report.regions;
+      run.outcome = report.outcome;
+
+      // Merged over the stored record: a run that was stopped early, or that
+      // ran out of its budget, must not drop what an earlier run measured.
+      const latency: DerpMirrorLatency = mergeLatencyReadings(settings.latency, {
+        measuredAt: report.measuredAt,
+        outcome: report.outcome,
+        regions: report.regions,
+      });
+
+      const saved = await updateSettings({ latency });
+      if (!saved.success) {
+        log.warn("config", "Unable to save the DERP latency probe results");
+      }
+
+      log.info(
+        "config",
+        "DERP region latency probe: %s (%d/%d attempts, %d region(s))%s",
+        report.outcome,
+        report.measured,
+        report.attempted,
+        report.regions.length,
+        report.budgetExhausted ? " budget-exhausted" : "",
+      );
+    } catch (error) {
+      run.error = "derpMirrorProbeFailed";
+      log.warn("config", "The DERP latency probe failed: %s", errorMessage(error));
+    } finally {
+      run.finishedAt = now().toISOString();
+    }
+  }
+
   return {
     async ready() {
       await ensureLoaded();
@@ -730,36 +978,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       return last;
     },
 
-    async update(patch) {
-      await ensureLoaded();
-      const previous = settings;
-      const merged = normalizeDerpMirrorSettings({ ...previous, ...patch });
-
-      // A save leaves the stored numbering covering exactly the regions the
-      // selection keeps. The server's `assignRegionNumbers` only ever returns
-      // the selected regions, so an entry for a region the operator dropped is
-      // stale as soon as the selection is saved, and the preview would be the
-      // only thing still showing it.
-      const next: DerpMirrorSettings = {
-        ...merged,
-        assignment: pruneAssignmentToSelection(merged.assignment, merged.officialRegionIds),
-      };
-
-      try {
-        await writeDerpMirrorSettings(options.dataPath, next);
-      } catch (error) {
-        log.warn(
-          "config",
-          "Unable to save the DERP region mirror settings: %s",
-          errorMessage(error),
-        );
-        return { success: false, settings: previous };
-      }
-
-      settings = next;
-      schedule();
-      return { success: true, settings: next };
-    },
+    update: updateSettings,
 
     check() {
       return execute("check", true, false);
@@ -773,6 +992,12 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       return execute("run", true, true);
     },
 
+    startLatencyProbe,
+
+    latencyProbeStatus,
+
+    cancelLatencyProbe,
+
     start() {
       // Lazy: startup must not wait on the store, and a disabled mirror must
       // cost nothing at all.
@@ -783,6 +1008,9 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
 
     dispose() {
       clearTimer();
+      // A run still in flight is abandoned on shutdown or an HMR reload; it
+      // stores only what it had already measured.
+      latencyRun?.controller.abort();
     },
   };
 }

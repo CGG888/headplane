@@ -1,6 +1,6 @@
 import { Ban, Gauge, Globe, Lock, RefreshCw, Search, Sparkles, Tags, Wand2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFetcher, useRevalidator } from "react-router";
 
 import Button from "~/components/button";
 import Dialog, { DialogPanel } from "~/components/dialog";
@@ -30,6 +30,8 @@ import {
   MIRROR_LATENCY_NOTICE_KEYS,
   MIRROR_LATENCY_SOURCE_KEYS,
   MIRROR_PROBE_OUTCOME_KEYS,
+  MIRROR_PROBE_POLL_MS,
+  MIRROR_PROBE_STATUS_ACTION_ID,
   MIRROR_REASON_KEYS,
   MIRROR_RELOAD_KEYS,
   defaultMirrorSelection,
@@ -46,7 +48,9 @@ import {
   regionsBelowLatency,
   sortMirrorRegions,
   storedRegionNumbers,
+  withLiveMeasurements,
   type MirrorNumbering,
+  type MirrorProbeStatus,
   type MirrorProbeView,
   type MirrorRegionRow,
   type MirrorRun,
@@ -103,6 +107,11 @@ interface DerpRegionMirrorProps {
   numbering: MirrorNumbering;
   /** The newest latency probe this server ran, and how it ended. */
   probe: MirrorProbeView;
+  /**
+   * The run's state as the page loaded it. The card follows a run it starts by
+   * polling, and this is what a card opened in the middle of one starts from.
+   */
+  probeStatus: MirrorProbeStatus;
   /** Why the official map could not be read, when the last read failed. */
   regionError?: RemoteDerpMapFailure;
   /** The cached official map, already reduced to plain values. */
@@ -283,6 +292,7 @@ export default function DerpRegionMirror({
   last,
   numbering,
   probe,
+  probeStatus,
   regionError,
   regions,
   settings,
@@ -296,6 +306,8 @@ export default function DerpRegionMirror({
   const namesFetcher = useFetcher<HeadscaleSettingsResult>();
   const probeFetcher = useFetcher<HeadscaleSettingsResult>();
   const cancelFetcher = useFetcher<HeadscaleSettingsResult>();
+  const statusFetcher = useFetcher<HeadscaleSettingsResult>();
+  const revalidator = useRevalidator();
 
   const fixedIds = useMemo(() => fixedRegionIds(numbering), [numbering]);
   const fixed = useMemo(() => new Set(fixedIds), [fixedIds]);
@@ -310,6 +322,95 @@ export default function DerpRegionMirror({
   const [sortMode, setSortMode] = useState<MirrorSortMode>("official");
   const [ceiling, setCeiling] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // The latency run the card follows. The run itself belongs to the server and
+  // outlives every request the page makes, so the card never waits for it: it
+  // polls the run's small status while the probes are going and shows what that
+  // status has measured so far.
+  const [liveProbe, setLiveProbe] = useState<MirrorProbeStatus>(probeStatus);
+
+  // A status is only adopted when it is not older than the run already being
+  // followed: a poll still in flight when a new run starts answers with the
+  // finished previous run and must not stop the card following the new one.
+  const watchedRunRef = useRef<string | undefined>(probeStatus.startedAt);
+  const adoptProbeStatus = useCallback((status: MirrorProbeStatus | undefined) => {
+    if (status === undefined) {
+      return;
+    }
+
+    const watched = watchedRunRef.current;
+    if (watched !== undefined && status.startedAt !== undefined && status.startedAt < watched) {
+      return;
+    }
+
+    if (status.startedAt !== undefined) {
+      watchedRunRef.current = status.startedAt;
+    }
+
+    setLiveProbe(status);
+  }, []);
+
+  // Every request that carries a status feeds the same state: the action that
+  // started the run, the poll, and the stop control.
+  useEffect(() => {
+    for (const data of [probeFetcher.data, statusFetcher.data, cancelFetcher.data]) {
+      if (data !== undefined && data.success && data.probe !== undefined) {
+        adoptProbeStatus(data.probe);
+      }
+    }
+  }, [adoptProbeStatus, cancelFetcher.data, probeFetcher.data, statusFetcher.data]);
+
+  const starting = probeFetcher.state !== "idle";
+  const stopping = cancelFetcher.state !== "idle";
+  const probing = liveProbe.running || starting || stopping;
+
+  // The fetcher instance is refreshed on every render; the interval reads it
+  // through a ref so re-creating it never restarts (and so never starves) the
+  // timer.
+  const statusFetcherRef = useRef(statusFetcher);
+  useEffect(() => {
+    statusFetcherRef.current = statusFetcher;
+  });
+
+  useEffect(() => {
+    if (!probing) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const fetcher = statusFetcherRef.current;
+      if (fetcher.state !== "idle") {
+        // The previous read has not answered yet; never stack requests.
+        return;
+      }
+
+      const form = new FormData();
+      form.set("action_id", MIRROR_PROBE_STATUS_ACTION_ID);
+      fetcher.submit(form, { method: "POST" });
+    }, MIRROR_PROBE_POLL_MS);
+
+    // Navigating away (or the run finishing) clears the interval, so a closed
+    // card never keeps polling.
+    return () => clearInterval(timer);
+  }, [probing]);
+
+  // The stored measurement only changes when the run finishes, so the page data
+  // is refreshed once per run the card watched — which is what makes the stored
+  // outcome, the notices and the numbering catch up with what was just measured.
+  const watchedToFinishRef = useRef(false);
+  useEffect(() => {
+    if (liveProbe.running) {
+      watchedToFinishRef.current = true;
+      return;
+    }
+
+    if (!watchedToFinishRef.current || liveProbe.finishedAt === undefined) {
+      return;
+    }
+
+    watchedToFinishRef.current = false;
+    revalidator.revalidate();
+  }, [liveProbe, revalidator]);
 
   // The stored values are the source of truth once a save lands, but a live
   // revalidation that changed nothing must not throw away unsaved ticks, so the
@@ -366,9 +467,17 @@ export default function DerpRegionMirror({
   }
 
   const ceilingMs = ceiling.trim() === "" ? undefined : Number(ceiling);
+  // What the run in flight has measured so far, laid over the stored values, so
+  // the table fills in as the probes answer instead of appearing all at once.
+  const liveRegions = liveProbe.regions;
+  const liveCount = Object.keys(liveRegions).length;
   const rows = useMemo(
-    () => regionsBelowLatency(sortMirrorRegions(regions, sortMode), ceilingMs),
-    [ceilingMs, regions, sortMode],
+    () =>
+      regionsBelowLatency(
+        sortMirrorRegions(withLiveMeasurements(regions, liveRegions), sortMode),
+        ceilingMs,
+      ),
+    [ceilingMs, liveRegions, regions, sortMode],
   );
   // The stored numbering is part of the preview: a ticked region the assignment
   // already numbers keeps that number, exactly as the server's rule keeps it.
@@ -419,8 +528,15 @@ export default function DerpRegionMirror({
   const runError = errorFor(runFetcher.data);
   const reassignError = errorFor(reassignFetcher.data);
   const namesError = errorFor(namesFetcher.data);
-  const probeError = errorFor(probeFetcher.data);
-  const probing = probeFetcher.state !== "idle";
+  // A refused start means a run was already in flight: the card follows that
+  // run through the status it is polling, so the busy sentence would only
+  // contradict the progress shown right next to it.
+  const probeError =
+    probeFetcher.data !== undefined &&
+    !probeFetcher.data.success &&
+    probeFetcher.data.errorCode === "derpMirrorProbeBusy"
+      ? undefined
+      : errorFor(probeFetcher.data);
   const namesAdded =
     namesFetcher.data !== undefined && namesFetcher.data.success
       ? namesFetcher.data.addedRegionNames
@@ -485,6 +601,11 @@ export default function DerpRegionMirror({
    * the only thing on the page that dials the official relays, and it goes
    * through a fetcher because the button lives inside the card's one save form,
    * where nothing may nest a second form.
+   *
+   * The request only *starts* the run: the server answers as soon as the run is
+   * under way, because the probes themselves take far longer than a reverse
+   * proxy in front of Headplane is willing to wait. The card then follows the
+   * run through {@link MIRROR_PROBE_STATUS_ACTION_ID}.
    */
   function probeLatency() {
     const form = new FormData();
@@ -503,12 +624,18 @@ export default function DerpRegionMirror({
    * Refreshes only a stale measurement when the card is opened. The card mounts
    * when the operator opens it, never on a page load, and a run younger than
    * {@link MIRROR_PROBE_FRESH_MS} is left alone — so opening the card again
-   * does not dial the official relays again. The guard is the loop breaker: a
-   * render after the run finished must not start another one.
+   * does not dial the official relays again. A run already in flight is followed
+   * rather than restarted, and the guard is the loop breaker: a render after a
+   * run finished must not start another one.
    */
   const autoProbeRef = useRef(false);
   useEffect(() => {
     if (autoProbeRef.current || isDisabled || regions.length === 0) {
+      return;
+    }
+
+    if (liveProbe.running) {
+      autoProbeRef.current = true;
       return;
     }
 
@@ -520,7 +647,7 @@ export default function DerpRegionMirror({
     const form = new FormData();
     form.set("action_id", "probe_derp_latency");
     probeFetcher.submit(form, { method: "POST" });
-  }, [isDisabled, probe, probeFetcher, regions.length]);
+  }, [isDisabled, liveProbe.running, probe, probeFetcher, regions.length]);
 
   const errorBox = (message: string) => (
     <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -611,7 +738,9 @@ export default function DerpRegionMirror({
 
               {/* The one measurement this page can take itself. It never runs on
                   a page load: this card mounts only once it is opened, and only
-                  a stale measurement is refreshed then. */}
+                  a stale measurement is refreshed then. The run happens on the
+                  server, so the card only ever starts it, reads its progress and
+                  stops it — none of these requests waits for the probes. */}
               <div className="flex flex-col gap-2 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
                 <div className="flex flex-wrap items-center gap-3">
                   <Button disabled={isDisabled || probing} onClick={probeLatency} type="button">
@@ -634,9 +763,24 @@ export default function DerpRegionMirror({
                         })}
                   </span>
                 </div>
+                {probing ? (
+                  // Progress as the probes answer: the rows below fill in with
+                  // the same values, so this counts the regions the run in flight
+                  // has measured against every region in the table.
+                  <p className="text-xs text-mist-500 dark:text-mist-400" role="status">
+                    {t("settings.headscale.derp.mirror.probeProgress", {
+                      done: liveCount,
+                      total: regions.length,
+                    })}
+                  </p>
+                ) : undefined}
                 <p className="text-xs text-mist-600 dark:text-mist-400">
                   {t("settings.headscale.derp.mirror.probeNote")}
                 </p>
+                {probeError === undefined ? undefined : errorBox(probeError)}
+                {liveProbe.error === undefined
+                  ? undefined
+                  : errorBox(t(HEADSCALE_SETTINGS_ERROR_KEYS[liveProbe.error]))}
                 {probeNotice === undefined ? undefined : (
                   <p
                     className={cn(
@@ -649,73 +793,81 @@ export default function DerpRegionMirror({
                     {probeNotice}
                   </p>
                 )}
-                {probeError === undefined ? undefined : errorBox(probeError)}
               </div>
 
-              <div className="flex flex-wrap items-end gap-3">
-                <SettingsField
-                  className="min-w-40"
-                  label={t("settings.headscale.derp.mirror.sortLabel")}
-                >
+              {/* The filter row is one horizontal group: the sort select and the
+                  number input each take their label from their own component and
+                  print it above the control, so every control in the row keeps
+                  the same label, the same gap and the same 38px height, and the
+                  preset chips share that one baseline. The filter's help text
+                  sits under the row instead of under a single field, where a
+                  second line on one item would push every other control out of
+                  line with it. */}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-end gap-3">
                   <Select
+                    className="min-w-40"
                     items={sortItems}
+                    label={t("settings.headscale.derp.mirror.sortLabel")}
                     onValueChange={(value) =>
                       setSortMode(value === "latency" ? "latency" : "official")
                     }
                     value={sortMode}
                   />
-                </SettingsField>
 
-                <SettingsField
-                  className="min-w-40"
-                  description={t("settings.headscale.derp.mirror.filterDescription")}
-                  label={t("settings.headscale.derp.mirror.filterLabel")}
-                >
+                  {/* The field's own label is the only visible one: it is wired
+                      to the input with htmlFor/id, so the name is not announced
+                      twice, and the fixed width keeps the label, the number and
+                      the millisecond presets reading as a single control. */}
                   <Input
+                    className="w-40"
                     inputMode="numeric"
                     label={t("settings.headscale.derp.mirror.filterLabel")}
-                    labelHidden
                     onChange={setCeiling}
                     placeholder={t("settings.headscale.derp.mirror.filterPlaceholder")}
                     value={ceiling}
                   />
-                </SettingsField>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {LATENCY_PRESETS.map((preset) => (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {LATENCY_PRESETS.map((preset) => (
+                      <Button
+                        className="rounded-full px-2.5 py-1 text-xs"
+                        key={preset}
+                        onClick={() => setCeiling(String(preset))}
+                        type="button"
+                      >
+                        {t("settings.headscale.derp.mirror.filterPreset", { ms: preset })}
+                      </Button>
+                    ))}
                     <Button
-                      className="rounded-full px-2.5 py-1 text-xs"
-                      key={preset}
-                      onClick={() => setCeiling(String(preset))}
+                      disabled={rows.length === 0}
+                      onClick={() =>
+                        setSelected((previous) => {
+                          const updated = new Set(previous);
+                          for (const row of rows) {
+                            updated.add(row.officialId);
+                          }
+
+                          return updated;
+                        })
+                      }
                       type="button"
                     >
-                      {t("settings.headscale.derp.mirror.filterPreset", { ms: preset })}
+                      {t("settings.headscale.derp.mirror.selectFiltered")}
                     </Button>
-                  ))}
-                  <Button
-                    disabled={rows.length === 0}
-                    onClick={() =>
-                      setSelected((previous) => {
-                        const updated = new Set(previous);
-                        for (const row of rows) {
-                          updated.add(row.officialId);
-                        }
-
-                        return updated;
-                      })
-                    }
-                    type="button"
-                  >
-                    {t("settings.headscale.derp.mirror.selectFiltered")}
-                  </Button>
-                  <Button disabled={ceiling === ""} onClick={() => setCeiling("")} type="button">
-                    {t("settings.headscale.derp.mirror.filterClear")}
-                  </Button>
-                  <Button onClick={applyRecommended} type="button" variant="ghost">
-                    <Sparkles className="h-4 w-4" />
-                    {t("settings.headscale.derp.mirror.recommended")}
-                  </Button>
+                    <Button disabled={ceiling === ""} onClick={() => setCeiling("")} type="button">
+                      {t("settings.headscale.derp.mirror.filterClear")}
+                    </Button>
+                    <Button onClick={applyRecommended} type="button" variant="ghost">
+                      <Sparkles className="h-4 w-4" />
+                      {t("settings.headscale.derp.mirror.recommended")}
+                    </Button>
+                  </div>
                 </div>
+
+                <p className="text-sm text-mist-600 dark:text-mist-400">
+                  {t("settings.headscale.derp.mirror.filterDescription")}
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

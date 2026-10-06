@@ -22,9 +22,18 @@
 // 1.2 s), at most {@link DEFAULT_PROBE_CONCURRENCY} attempts run at once, and
 // the whole run is cancellable through an `AbortSignal`.
 //
+// A run also has an overall budget of its own ({@link DEFAULT_PROBE_BUDGET_MS}):
+// dozens of nodes across two address families, each waiting out its 1.2 s
+// timeout on a network that filters UDP, add up to far more than anything in
+// front of Headplane is willing to wait for. When the budget runs out the
+// attempts that have not started are abandoned and the run reports what it did
+// measure, so a partial answer is stored instead of no answer at all.
+//
 // Nothing here throws and nothing here hangs: every failure becomes a labelled
 // result, an unreachable node never fails the run it belongs to, and a
-// cancelled run returns what it gathered so far.
+// cancelled or budget-limited run returns what it gathered so far. A caller
+// that has to report progress while the run is still going passes
+// {@link RegionLatencyProbeOptions.onProgress} and is told after every attempt.
 
 import { createSocket, type Socket as DgramSocket } from "node:dgram";
 import { isIP } from "node:net";
@@ -48,6 +57,15 @@ export const DEFAULT_PROBE_TIMEOUT_MS = 1200;
 
 /** How many node-and-family attempts may run at once. */
 export const DEFAULT_PROBE_CONCURRENCY = 8;
+
+/**
+ * The overall budget of one run, in milliseconds, however many nodes the map
+ * lists. It is deliberately far below a reverse proxy's usual upstream timeout:
+ * the run is a background job, so cutting it short costs only the regions it had
+ * not reached, while overrunning a proxy's patience costs the operator an error
+ * page and a run they cannot see.
+ */
+export const DEFAULT_PROBE_BUDGET_MS = 25_000;
 
 /** The STUN port the format defaults to when a node does not declare one. */
 export const DEFAULT_STUN_PORT = 3478;
@@ -248,8 +266,20 @@ export interface RegionLatencyProbeOptions {
   signal?: AbortSignal;
   /** The budget of one attempt, in milliseconds. */
   timeoutMs?: number;
+  /**
+   * The budget of the whole run, in milliseconds. When it runs out the attempts
+   * that have not started are abandoned and the partial report is returned;
+   * `0` or a negative value means no overall budget.
+   */
+  overallTimeoutMs?: number;
   /** How many attempts may run at once. */
   concurrency?: number;
+  /**
+   * Called after every attempt that finished, with the run's counters and the
+   * readings those attempts produced so far. Lets the owner of a background run
+   * report progress without waiting for the run to end.
+   */
+  onProgress?: (progress: RegionLatencyProbeProgress) => void;
   /** Read the monotonic clock; injected so a test can script latencies. */
   now?: () => number;
   /** Open a UDP socket; injected so a test can answer instead of a network. */
@@ -279,6 +309,27 @@ export interface RegionLatencyProbeReport extends DerpMirrorLatency {
   attempted: number;
   measured: number;
   cancelled: boolean;
+  /** True when the overall budget ran out and the rest of the run was abandoned. */
+  budgetExhausted: boolean;
+}
+
+/**
+ * How far a run in flight has got: the counters a status read shows, in the
+ * order the attempts finished, and the readings those attempts already produced.
+ */
+export interface RegionLatencyProbeProgress {
+  /** Node-and-family attempts the run planned. */
+  total: number;
+  /** Attempts that have finished, whether they measured anything or not. */
+  completed: number;
+  /** Finished attempts that produced a value. */
+  measured: number;
+  /** The finished attempts, in completion order. */
+  attempts: ProbeAttempt[];
+  /** The per-region readings the finished attempts produced so far. */
+  regions: DerpLatencyRegionReading[];
+  /** True once the overall budget ran out and the rest was abandoned. */
+  budgetExhausted: boolean;
 }
 
 // MARK: The default network
@@ -399,13 +450,16 @@ function resolveFailure(error: unknown): ProbeFailure {
  * Runs at most `limit` workers over the items, in order, and returns the
  * results of the items that were started. Work stops early when `stop` says so,
  * which is what makes a cancelled run leave the untouched attempts out instead
- * of filling them with a made-up result.
+ * of filling them with a made-up result. `onResult` is called as each result
+ * lands, in completion order, which is how a run reports progress while it is
+ * still going.
  */
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
   stop: () => boolean,
   worker: (item: T) => Promise<R>,
+  onResult?: (result: R) => void,
 ): Promise<R[]> {
   const results: Array<R | undefined> = items.map(() => undefined);
   let next = 0;
@@ -424,7 +478,9 @@ async function mapWithConcurrency<T, R>(
 
       const item = items[index];
       if (item !== undefined) {
-        results[index] = await worker(item);
+        const result = await worker(item);
+        results[index] = result;
+        onResult?.(result);
       }
     }
   };
@@ -717,6 +773,7 @@ export async function probeRegionLatencies(
 ): Promise<RegionLatencyProbeReport> {
   const signal = options.signal ?? new AbortController().signal;
   const timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
+  const overallTimeoutMs = options.overallTimeoutMs ?? DEFAULT_PROBE_BUDGET_MS;
   const concurrency = options.concurrency ?? DEFAULT_PROBE_CONCURRENCY;
   const now = options.now ?? (() => performance.now());
   const udp = options.udp ?? defaultUdpFactory;
@@ -739,12 +796,61 @@ export async function probeRegionLatencies(
     }
   }
 
-  const attempts = await mapWithConcurrency(
-    jobs,
-    concurrency,
-    () => signal.aborted,
-    (job) => measureJob(job, { timeoutMs, now, signal, udp, tcp }),
-  );
+  // The run's own signal, so the caller's cancellation and the overall budget
+  // both end it while only the caller's says "the operator stopped this".
+  const runController = new AbortController();
+  let budgetExhausted = false;
+  let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const onCallerAbort = () => runController.abort();
+  if (signal.aborted) {
+    onCallerAbort();
+  } else {
+    signal.addEventListener("abort", onCallerAbort, { once: true });
+  }
+
+  if (Number.isFinite(overallTimeoutMs) && overallTimeoutMs > 0) {
+    budgetTimer = setTimeout(() => {
+      budgetExhausted = true;
+      runController.abort();
+    }, overallTimeoutMs);
+    // A probe must never be the reason the process stays alive.
+    budgetTimer.unref?.();
+  }
+
+  // Completion order, which is what makes the progress counters grow; the
+  // report below keeps the job order it always had.
+  const finished: ProbeAttempt[] = [];
+  const notify = () => {
+    options.onProgress?.({
+      total: jobs.length,
+      completed: finished.length,
+      measured: finished.filter((attempt) => attempt.measured).length,
+      attempts: [...finished],
+      regions: toRegionReadings(regions, finished, measuredAt),
+      budgetExhausted,
+    });
+  };
+
+  let attempts: ProbeAttempt[];
+  try {
+    attempts = await mapWithConcurrency(
+      jobs,
+      concurrency,
+      () => runController.signal.aborted,
+      (job) => measureJob(job, { timeoutMs, now, signal: runController.signal, udp, tcp }),
+      (attempt) => {
+        finished.push(attempt);
+        notify();
+      },
+    );
+  } finally {
+    if (budgetTimer !== undefined) {
+      clearTimeout(budgetTimer);
+    }
+
+    signal.removeEventListener("abort", onCallerAbort);
+  }
 
   const readings = toRegionReadings(regions, attempts, measuredAt);
 
@@ -756,60 +862,13 @@ export async function probeRegionLatencies(
     attempted: jobs.length,
     measured: attempts.filter((attempt) => attempt.measured).length,
     cancelled: signal.aborted,
+    budgetExhausted,
   };
 }
 
 // MARK: One run at a time
-
-/**
- * The run in progress, if any. Only one probe runs at a time: two overlapping
- * runs would fight over the same store and double the traffic the official
- * relays see, and the operator can cancel this one instead.
- */
-let activeProbe: AbortController | undefined;
-
-/** Whether a probe is running right now. */
-export function isRegionLatencyProbeRunning(): boolean {
-  return activeProbe !== undefined;
-}
-
-/**
- * Stops the run in progress. Returns whether there was one to stop; the run
- * itself still returns — with `outcome: "cancelled"` and what it had gathered.
- */
-export function cancelRegionLatencyProbe(): boolean {
-  if (activeProbe === undefined) {
-    return false;
-  }
-
-  activeProbe.abort();
-  return true;
-}
-
-/**
- * Runs one probe, refusing to start a second one on top of a running probe.
- * `undefined` means "a probe is already running" — the caller reports that
- * instead of queueing another run.
- */
-export async function runRegionLatencyProbe(
-  regions: readonly OfficialRegion[],
-  options: RegionLatencyProbeOptions & { requestSignal?: AbortSignal } = {},
-): Promise<RegionLatencyProbeReport | undefined> {
-  if (activeProbe !== undefined) {
-    return undefined;
-  }
-
-  const controller = new AbortController();
-  activeProbe = controller;
-
-  const requestSignal = options.requestSignal;
-  const onRequestAbort = () => controller.abort();
-  requestSignal?.addEventListener("abort", onRequestAbort, { once: true });
-
-  try {
-    return await probeRegionLatencies(regions, { ...options, signal: controller.signal });
-  } finally {
-    requestSignal?.removeEventListener("abort", onRequestAbort);
-    activeProbe = undefined;
-  }
-}
+//
+// The single in-flight run, its abort controller, its timestamps and the
+// counters above live with the mirror service (`./service.server`), which is the
+// process-wide owner of everything the card reads: a probe started from an HTTP
+// request outlives that request there, and the request itself answers at once.

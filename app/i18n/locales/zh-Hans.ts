@@ -39,6 +39,7 @@ const zhHans = {
       settings: "设置",
     },
     help: {
+      label: "帮助",
       docs: "文档",
       headscale: "Headscale",
       download: "下载",
@@ -1814,6 +1815,7 @@ const zhHans = {
           probeStop: "停止",
           probeNever: "本服务器还没有测量过延迟。",
           probeMeasuredAt: "本服务器测量于 {at}。",
+          probeProgress: "正在从本服务器测量……{total} 个区域中已有 {done} 个应答。",
           probeNote:
             "在这里测得的结果反映的是本服务器的网络路径：对附近的客户端是不错的参考，但不能保证远端客户端的表现。",
           probePartial: "部分官方区域没有从本服务器应答；这些行保留机器上报的数值。",
