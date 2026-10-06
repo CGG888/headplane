@@ -218,6 +218,27 @@ export type DerpMirrorReason =
   | "reload-failed"
   | "unexpected";
 
+/**
+ * Why the automatic `derp.paths` step did not write: the configuration file is
+ * mounted read-only, the target names no usable absolute path, or the patch
+ * itself failed. The card localizes the code, so no prose crosses this boundary.
+ */
+export type MirrorPathSkipReason = "read-only" | "invalid-target" | "write-failed";
+
+/**
+ * What making Headscale load the mirrored file did.
+ *
+ * `present` means `derp.paths` already listed it (compared the way every DERP
+ * card compares a configured path, so a trailing slash or a `./` prefix is the
+ * same file), `added` means the entry was appended — `fileExists` says whether
+ * the target was already on disk, which decides whether a reload can be
+ * triggered safely — and `skipped` carries why nothing was written.
+ */
+export type MirrorPathOutcome =
+  | { status: "present"; path: string }
+  | { status: "added"; path: string; fileExists: boolean }
+  | { status: "skipped"; path: string; reason: MirrorPathSkipReason };
+
 /** One run, as the page shows it and as the store keeps it. */
 export interface DerpMirrorRun {
   /** ISO timestamp of the run. */

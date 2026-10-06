@@ -15,6 +15,7 @@ import {
 import { useMemo, useState } from "react";
 import { data, type ShouldRevalidateFunction } from "react-router";
 
+import { AddressVisibilityMenu } from "~/components/address-visibility";
 import Button from "~/components/button";
 import Chip from "~/components/chip";
 import Link from "~/components/link";
@@ -31,6 +32,7 @@ import {
   nodeHistoryContext,
   requestApiContext,
 } from "~/server/context";
+import { locallyMeasuredRegionLatencies } from "~/server/derp-mirror/latency";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { loadDerpNodeInventory } from "~/server/headscale/derp-region-sources";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
@@ -41,16 +43,18 @@ import { getOSInfo, getTSVersion } from "~/utils/host-info";
 import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~/utils/node-info";
 import { getUserDisplayName } from "~/utils/user";
 
+import { derpNodeSources } from "../overview-helpers";
 import { deriveDerpPublicEndpoint } from "../settings/headscale/derp-settings";
 import type { Route } from "./+types/machine";
 import MachineAttribute from "./components/attribute";
+import ClientConnectivity from "./components/client-connectivity";
 import DerpInfo from "./components/derp-info";
 import { NodeAvailabilityBar } from "./components/history-bar";
 import MachineCard from "./components/machine-card";
 import { mapTagsToComponents, uiTagsForNode } from "./components/machine-row";
 import MachineStatus from "./components/machine-status";
 import MenuOptions from "./components/menu";
-import { embeddedDerpRegion, relayRegionSources } from "./derp-info";
+import { embeddedDerpRegion, relayRegionSources, servedDerpRegionIds } from "./derp-info";
 import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
@@ -149,10 +153,11 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     });
   })();
 
-  const [relayResolution, regionNames, nodeInventory] = await Promise.all([
+  const [relayResolution, regionNames, nodeInventory, mirrorSettings] = await Promise.all([
     loadSharedRelayResolution(relayEndpoint?.host),
     readDerpRegionNames(appConfig.server.data_path),
     nodeInventoryLookup,
+    mirrorSettingsLookup,
   ]);
   // The address lines join the declared addresses with the lookup, so each
   // family reads as one line instead of a declared-versus-resolved pair. The
@@ -163,6 +168,22 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   // One region id to the source that serves it, so a relay row can say whether
   // this deployment serves the relay the machine uses.
   const relaySources = relayRegionSources(nodeInventory.groups, embeddedDerpRegion(derp.server));
+  // Every region this deployment serves — the embedded relay's region plus every
+  // region of the maps it actually loads, the region mirror's own file included.
+  // The projection is the Overview card's own served inventory, so the machine
+  // card cannot call a region served that the dashboard does not.
+  const nodeSources = derpNodeSources({
+    embedded: {
+      enabled: derp.server.enabled,
+      regionId: derp.server.regionId,
+      code: derp.server.regionCode,
+      name: derp.server.regionName,
+      ...(relayView.host?.endpoint === undefined ? {} : { endpoint: relayView.host.endpoint }),
+    },
+    groups: nodeInventory.groups,
+    mirrorEnabled: mirrorSettings.enabled,
+    manual: regionNames,
+  });
 
   return {
     agent: agentSync
@@ -186,6 +207,16 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
       remote: nodeInventory.remote,
     },
     relay,
+    // What the latency table needs beyond the machine's own report: every region
+    // this deployment serves, the values this server measured itself (keyed by
+    // the official region id the probe dialled) and the mirror's stored
+    // assignment, which lines a measured official region up with the mirrored
+    // number its row shows. Plain values only: the card never reads the store.
+    relayInventory: {
+      assignment: mirrorSettings.assignment,
+      measured: locallyMeasuredRegionLatencies(mirrorSettings.latency),
+      servedRegionIds: servedDerpRegionIds(nodeSources),
+    },
     relayLines: relayAddressLines(derp.server, relayResolution),
     relaySources,
     existingTags: sortAssignableTags(nodes, policy),
@@ -222,6 +253,7 @@ export default function Page({
     derp,
     derpRegions,
     relay,
+    relayInventory,
     relayLines,
     relaySources,
     stats,
@@ -278,20 +310,26 @@ export default function Page({
               </span>
             </p>
           </div>
-          <MenuOptions
-            existingTags={existingTags}
-            policyTags={policyTags}
-            isFullButton
-            magic={magic}
-            node={node}
-            users={users}
-            supportsNodeOwnerChange={supportsNodeOwnerChange}
-            supportsDisablingKeyExpiry={supportsDisablingKeyExpiry}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Personal, presentation-only: whether addresses stay masked. */}
+            <AddressVisibilityMenu />
+            <MenuOptions
+              existingTags={existingTags}
+              policyTags={policyTags}
+              isFullButton
+              magic={magic}
+              node={node}
+              users={users}
+              supportsNodeOwnerChange={supportsNodeOwnerChange}
+              supportsDisablingKeyExpiry={supportsDisablingKeyExpiry}
+            />
+          </div>
         </div>
       </header>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      {/* `items-stretch` plus `h-full` on the cards keeps every card in a row
+          as tall as the tallest one in it, whatever it holds. */}
+      <div className="grid items-stretch gap-3 lg:grid-cols-2">
         <MachineCard icon={Info} title={t("machines.detail.detailsTitle")}>
           <dl className="flex flex-col">
             <MachineAttribute name={t("machines.detail.creator")} value={owner} />
@@ -346,6 +384,7 @@ export default function Page({
             />
             {magic ? (
               <MachineAttribute
+                isAddress
                 isCopyable
                 name={t("machines.detail.domain")}
                 value={`${node.givenName}.${magic}`}
@@ -357,6 +396,7 @@ export default function Page({
         <MachineCard icon={Network} title={t("machines.detail.addresses")}>
           <dl className="flex flex-col">
             <MachineAttribute
+              isAddress
               isCode
               isCopyable
               name={t("machines.detail.tailscaleIpv4")}
@@ -364,6 +404,7 @@ export default function Page({
               value={getIpv4Address(node.ipAddresses)}
             />
             <MachineAttribute
+              isAddress
               isCode
               isCopyable
               name={t("machines.detail.tailscaleIpv6")}
@@ -378,6 +419,7 @@ export default function Page({
             />
             {magic ? (
               <MachineAttribute
+                isAddress
                 isCopyable
                 name={t("machines.detail.fullDomain")}
                 tooltip={t("machines.detail.fullDomainTooltip")}
@@ -386,6 +428,7 @@ export default function Page({
             ) : undefined}
             {stats?.Endpoints ? (
               <MachineAttribute
+                isAddress
                 name={t("machines.detail.endpoints")}
                 value={stats.Endpoints.join("\n")}
               />
@@ -450,6 +493,7 @@ export default function Page({
         >
           <dl className="flex flex-col">
             <MachineAttribute
+              isAddress
               isCode
               name={t("machines.detail.approved")}
               tooltip={t("machines.detail.approvedTooltip")}
@@ -460,6 +504,7 @@ export default function Page({
               }
             />
             <MachineAttribute
+              isAddress
               isCode
               name={t("machines.detail.awaitingApproval")}
               tooltip={t("machines.detail.awaitingApprovalTooltip")}
@@ -484,6 +529,7 @@ export default function Page({
         </MachineCard>
 
         <MachineCard
+          className="h-full"
           icon={TagsIcon}
           status={
             hasTags ? (
@@ -505,59 +551,56 @@ export default function Page({
         </MachineCard>
 
         {stats ? (
-          <MachineCard icon={Activity} title={t("machines.detail.clientConnectivity")}>
-            <dl className="flex flex-col">
-              <MachineAttribute
-                name={t("machines.detail.varies")}
-                tooltip={t("machines.detail.variesTooltip")}
-                value={
-                  stats.NetInfo?.MappingVariesByDestIP
-                    ? t("machines.common.yes")
-                    : t("machines.common.no")
-                }
-              />
-              <MachineAttribute
-                name={t("machines.detail.hairpinning")}
-                tooltip={t("machines.detail.hairpinningTooltip")}
-                value={
-                  stats.NetInfo?.HairPinning ? t("machines.common.yes") : t("machines.common.no")
-                }
-              />
-              <MachineAttribute
-                name={t("machines.detail.ipv6")}
-                tooltip={t("machines.detail.ipv6Tooltip")}
-                value={
-                  stats.NetInfo?.WorkingIPv6 ? t("machines.common.yes") : t("machines.common.no")
-                }
-              />
-              <MachineAttribute
-                name={t("machines.detail.udp")}
-                tooltip={t("machines.detail.udpTooltip")}
-                value={
-                  stats.NetInfo?.WorkingUDP ? t("machines.common.yes") : t("machines.common.no")
-                }
-              />
-              <MachineAttribute
-                name={t("machines.detail.upnp")}
-                tooltip={t("machines.detail.upnpTooltip")}
-                value={stats.NetInfo?.UPnP ? t("machines.common.yes") : t("machines.common.no")}
-              />
-              <MachineAttribute
-                name={t("machines.detail.pcp")}
-                tooltip={t("machines.detail.pcpTooltip")}
-                value={stats.NetInfo?.PCP ? t("machines.common.yes") : t("machines.common.no")}
-              />
-              <MachineAttribute
-                name={t("machines.detail.natPmp")}
-                tooltip={t("machines.detail.natPmpTooltip")}
-                value={stats.NetInfo?.PMP ? t("machines.common.yes") : t("machines.common.no")}
-              />
-            </dl>
+          <MachineCard
+            className="h-full"
+            icon={Activity}
+            title={t("machines.detail.clientConnectivity")}
+          >
+            <ClientConnectivity
+              facts={[
+                {
+                  name: t("machines.detail.varies"),
+                  tooltip: t("machines.detail.variesTooltip"),
+                  value: Boolean(stats.NetInfo?.MappingVariesByDestIP),
+                },
+                {
+                  name: t("machines.detail.hairpinning"),
+                  tooltip: t("machines.detail.hairpinningTooltip"),
+                  value: Boolean(stats.NetInfo?.HairPinning),
+                },
+                {
+                  name: t("machines.detail.ipv6"),
+                  tooltip: t("machines.detail.ipv6Tooltip"),
+                  value: Boolean(stats.NetInfo?.WorkingIPv6),
+                },
+                {
+                  name: t("machines.detail.udp"),
+                  tooltip: t("machines.detail.udpTooltip"),
+                  value: Boolean(stats.NetInfo?.WorkingUDP),
+                },
+                {
+                  name: t("machines.detail.upnp"),
+                  tooltip: t("machines.detail.upnpTooltip"),
+                  value: Boolean(stats.NetInfo?.UPnP),
+                },
+                {
+                  name: t("machines.detail.pcp"),
+                  tooltip: t("machines.detail.pcpTooltip"),
+                  value: Boolean(stats.NetInfo?.PCP),
+                },
+                {
+                  name: t("machines.detail.natPmp"),
+                  tooltip: t("machines.detail.natPmpTooltip"),
+                  value: Boolean(stats.NetInfo?.PMP),
+                },
+              ]}
+            />
           </MachineCard>
         ) : undefined}
 
         <DerpInfo
           agentEnabled={agentEnabled}
+          inventory={relayInventory}
           regions={derpRegions}
           relay={relay}
           relayLines={relayLines}

@@ -22,16 +22,17 @@ import type { LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { data, unstable_useRoute as useRoute } from "react-router";
 
+import { AddressVisibilityMenu, useAddressVisibility } from "~/components/address-visibility";
 import Button from "~/components/button";
 import Code from "~/components/code";
 import { ErrorBanner } from "~/components/error-banner";
 import Link from "~/components/link";
+import MaskedText from "~/components/masked-text";
 import {
   OverviewCardHideButton,
   OverviewCardManager,
   useOverviewCardVisible,
   useOverviewCardsScope,
-  useOverviewCardsVisible,
 } from "~/components/overview-card-manager";
 import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
@@ -78,6 +79,7 @@ import {
 } from "~/server/relay-dns";
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
+import { maskAddress } from "~/utils/address-visibility";
 import cn from "~/utils/cn";
 import { copyToClipboard } from "~/utils/copy";
 import { alertingOverviewCards, type OverviewCardId } from "~/utils/overview-cards";
@@ -709,6 +711,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const layout = useRoute("layout/app");
   const trendSummary = history.trend ? summarizeFleetTrend(history.trend) : undefined;
 
+  // Addresses and hostnames are masked by default. The address rows mask
+  // themselves through `CopyValue`; the sentences and hover texts that quote an
+  // address have to ask, so they interpolate the same fixed mask instead.
+  const { hidden, revealAll } = useAddressVisibility();
+  const addressesHidden = hidden && !revealAll;
+  const masked = (value: string) => maskAddress(value, addressesHidden);
+
   const reason = {
     agent: t("overview.reason.agentDisabled"),
     api: t("overview.reason.apiUnavailable"),
@@ -796,10 +805,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       return undefined;
     }
 
-    const address = line.addresses[0] ?? "";
+    const address = masked(line.addresses[0] ?? "");
     const note = t(RELAY_VERDICT_KEYS[verdict], { address });
     const fix = RELAY_FIX_KEYS[line.family][verdict];
-    return fix === undefined ? note : `${note} · ${t(fix, { host: host ?? "", address })}`;
+    return fix === undefined ? note : `${note} · ${t(fix, { address, host: masked(host ?? "") })}`;
   };
 
   /** The one short line a family with nothing to print reads as. */
@@ -862,9 +871,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           ? undefined
           : relayVerdictNote(ipv6LegacyLine, derp.relay.host);
       case "echo-match":
-        return t("overview.derp.ipv6EchoMatches", { address: note.address });
+        return t("overview.derp.ipv6EchoMatches", { address: masked(note.address) });
       case "echo-forwarded":
-        return t("overview.derp.ipv6EchoForwarded", { address: note.address });
+        return t("overview.derp.ipv6EchoForwarded", { address: masked(note.address) });
       case "unverified":
         return t("overview.derp.ipv6UnverifiedNote");
       case "dns-fallback":
@@ -872,7 +881,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       case "probe":
         return note.reasons.map((entry) => t(IPV6_REASON_KEYS[entry])).join(" ");
       case "alternates":
-        return t("overview.derp.ipv6Alternates", { addresses: note.addresses.join(", ") });
+        return t("overview.derp.ipv6Alternates", {
+          addresses: masked(note.addresses.join(", ")),
+        });
     }
   };
 
@@ -962,304 +973,307 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       description={t("overview.intro")}
       title={t("overview.title")}
     >
-      {/* Personal, presentation-only: which cards this browser shows. */}
-      <div className="flex justify-end">
+      {/* Personal, presentation-only: which cards this browser shows, and
+          whether the addresses on them stay masked. */}
+      <div className="flex flex-wrap justify-end gap-2">
+        <AddressVisibilityMenu />
         <OverviewCardManager />
       </div>
-      <div className="flex flex-col gap-6">
-        <Section
-          cardIds={["versions-headplane", "versions-headscale", "versions-agent"]}
-          title={t("overview.sections.versions")}
+      {/* One continuous grid: the cards are not grouped by anything the page
+          prints, so the headings that used to sit between the rows are gone and
+          a hidden card simply closes its own gap. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card
+          cardId="versions-headplane"
+          description={t("overview.versions.headplaneBody")}
+          icon={LayoutDashboard}
+          status={releaseStatus(versions.headplane.latest, versions.headplane.updateAvailable)}
+          title={t("overview.versions.headplaneTitle")}
         >
-          <Card
-            cardId="versions-headplane"
-            description={t("overview.versions.headplaneBody")}
-            icon={LayoutDashboard}
-            status={releaseStatus(versions.headplane.latest, versions.headplane.updateAvailable)}
-            title={t("overview.versions.headplaneTitle")}
-          >
-            <Facts>
-              <Fact code label={t("overview.versions.running")} text={versions.headplane.version} />
-              <Fact
-                code
-                label={t("overview.versions.latest")}
-                note={updateNote(
-                  versions.headplane.latest,
-                  versions.headplane.version,
-                  versions.headplane.updateAvailable,
-                )}
-                {...textOrReason(versions.headplane.latest, reason.notReported)}
-              />
-            </Facts>
-          </Card>
+          <Facts>
+            <Fact code label={t("overview.versions.running")} text={versions.headplane.version} />
+            <Fact
+              code
+              label={t("overview.versions.latest")}
+              note={updateNote(
+                versions.headplane.latest,
+                versions.headplane.version,
+                versions.headplane.updateAvailable,
+              )}
+              {...textOrReason(versions.headplane.latest, reason.notReported)}
+            />
+          </Facts>
+        </Card>
 
-          <Card
-            cardId="versions-headscale"
-            description={t("overview.versions.headscaleBody")}
-            icon={Server}
-            status={releaseStatus(versions.headscale.latest, versions.headscale.updateAvailable)}
-            title={t("overview.versions.headscaleTitle")}
-          >
-            <Facts>
-              <Fact code label={t("overview.versions.running")} text={versions.headscale.version} />
-              <Fact
-                code
-                label={t("overview.versions.latest")}
-                note={updateNote(
-                  versions.headscale.latest,
-                  versions.headscale.version,
-                  versions.headscale.updateAvailable,
-                )}
-                {...textOrReason(versions.headscale.latest, reason.notReported)}
-              />
-            </Facts>
-          </Card>
-
-          <Card
-            cardId="versions-agent"
-            description={t("overview.versions.agentBody")}
-            icon={Bot}
-            status={{
-              tone: versions.agent.enabled ? "ok" : "neutral",
-              label: versions.agent.enabled ? enabled : disabled,
-            }}
-            title={t("overview.versions.agentTitle")}
-          >
-            {versions.agent.enabled ? (
-              <Facts>
-                <Fact
-                  code
-                  label={t("overview.versions.agentVersion")}
-                  {...textOrReason(versions.agent.version, reason.notReported)}
-                />
-                <Fact
-                  code
-                  label={t("overview.versions.agentLastSync")}
-                  text={versions.agent.syncedAt ?? t("overview.status.never")}
-                />
-                <Fact label={t("overview.versions.agentNodes")} text={versions.agent.nodeCount} />
-                {versions.agent.error ? (
-                  <Fact label={t("overview.versions.agentError")} text={versions.agent.error} />
-                ) : undefined}
-              </Facts>
-            ) : (
-              <div className="flex flex-col gap-1">
-                <p className="text-sm text-mist-600 dark:text-mist-400">
-                  {t("overview.versions.agentDisabledBody")}
-                </p>
-                {versions.agent.reason ? (
-                  <p className="text-xs text-mist-500 dark:text-mist-400">
-                    {versions.agent.reason}
-                  </p>
-                ) : undefined}
-              </div>
-            )}
-          </Card>
-        </Section>
-
-        <Section
-          cardIds={["derp-region", "derp-relay", "derp-nodes"]}
-          title={t("overview.sections.derp")}
+        <Card
+          cardId="versions-headscale"
+          description={t("overview.versions.headscaleBody")}
+          icon={Server}
+          status={releaseStatus(versions.headscale.latest, versions.headscale.updateAvailable)}
+          title={t("overview.versions.headscaleTitle")}
         >
-          <Card
-            cardId="derp-region"
-            description={t("overview.derp.regionBody")}
-            icon={Network}
-            status={{
-              tone: derp.enabled ? "ok" : "neutral",
-              label: derp.enabled ? enabled : disabled,
-            }}
-            title={t("overview.derp.regionTitle")}
-          >
+          <Facts>
+            <Fact code label={t("overview.versions.running")} text={versions.headscale.version} />
+            <Fact
+              code
+              label={t("overview.versions.latest")}
+              note={updateNote(
+                versions.headscale.latest,
+                versions.headscale.version,
+                versions.headscale.updateAvailable,
+              )}
+              {...textOrReason(versions.headscale.latest, reason.notReported)}
+            />
+          </Facts>
+        </Card>
+
+        <Card
+          cardId="versions-agent"
+          description={t("overview.versions.agentBody")}
+          icon={Bot}
+          status={{
+            tone: versions.agent.enabled ? "ok" : "neutral",
+            label: versions.agent.enabled ? enabled : disabled,
+          }}
+          title={t("overview.versions.agentTitle")}
+        >
+          {versions.agent.enabled ? (
             <Facts>
               <Fact
                 code
-                label={t("overview.derp.region")}
-                text={
-                  resolveDerpRegionLabel(
-                    derp.region?.regionId,
-                    { ...derp.regions, embedded: derp.region },
-                    t("machines.detail.derp.unknown"),
-                  ).label
-                }
+                label={t("overview.versions.agentVersion")}
+                {...textOrReason(versions.agent.version, reason.notReported)}
               />
-              <Fact
-                label={t("overview.derp.relaySource")}
-                note={t("overview.derp.relaySourceNote")}
-                source={derived}
-                text={t(RELAY_SOURCE_KEYS[derp.relaySource])}
-              />
-              <Fact
-                label={t("overview.derp.urls")}
-                source={configured}
-                text={
-                  derp.urlCount > 0
-                    ? t("overview.derp.countConfigured", { count: derp.urlCount })
-                    : t("overview.derp.none")
-                }
-              />
-              <Fact
-                label={t("overview.derp.paths")}
-                source={configured}
-                text={
-                  derp.pathCount > 0
-                    ? t("overview.derp.countFiles", { count: derp.pathCount })
-                    : t("overview.derp.none")
-                }
-              />
-            </Facts>
-          </Card>
-
-          <Card
-            cardId="derp-relay"
-            description={t("overview.derp.publicBody")}
-            icon={Radar}
-            status={
-              derp.ipv6StunWarning
-                ? { tone: "warn", label: t("overview.status.attention") }
-                : derived
-            }
-            title={t("overview.derp.publicTitle")}
-          >
-            <Facts>
               <Fact
                 code
-                label={t("overview.derp.relayClientAddress")}
-                {...textOrReason(derp.relay.endpoint, t("overview.derp.publicUnavailable"))}
+                label={t("overview.versions.agentLastSync")}
+                text={versions.agent.syncedAt ?? t("overview.status.never")}
               />
-              {derp.relay.lines.map((line) => {
-                const selection = line.family === "ipv6" ? relayIpv6 : undefined;
-                const addresses = selection?.addresses ?? line.addresses;
-
-                return (
-                  <Fact
-                    key={line.family}
-                    hint={
-                      selection === undefined
-                        ? relayVerdictNote(line, derp.relay.host)
-                        : ipv6Note(selection)
-                    }
-                    label={relayFamilyLabel(line.family)}
-                    source={
-                      selection === undefined
-                        ? line.source === "declared"
-                          ? relayDeclaredMarker
-                          : undefined
-                        : ipv6SourceChip(selection)
-                    }
-                  >
-                    {addresses.length > 0 ? (
-                      <RelayAddresses addresses={addresses} />
-                    ) : (
-                      <span className="text-xs text-mist-500 dark:text-mist-400">
-                        {selection === undefined ? relayLineText(line) : ipv6StateText(selection)}
-                      </span>
-                    )}
-                  </Fact>
-                );
-              })}
-              {derp.stunListenAddr ? (
-                <Fact code label={t("overview.derp.stun")} text={derp.stunListenAddr} />
+              <Fact label={t("overview.versions.agentNodes")} text={versions.agent.nodeCount} />
+              {versions.agent.error ? (
+                <Fact label={t("overview.versions.agentError")} text={versions.agent.error} />
               ) : undefined}
             </Facts>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-mist-600 dark:text-mist-400">
+                {t("overview.versions.agentDisabledBody")}
+              </p>
+              {versions.agent.reason ? (
+                <p className="text-xs text-mist-500 dark:text-mist-400">{versions.agent.reason}</p>
+              ) : undefined}
+            </div>
+          )}
+        </Card>
+        <Card
+          cardId="derp-region"
+          description={t("overview.derp.regionBody")}
+          icon={Network}
+          status={{
+            tone: derp.enabled ? "ok" : "neutral",
+            label: derp.enabled ? enabled : disabled,
+          }}
+          title={t("overview.derp.regionTitle")}
+        >
+          <Facts>
+            <Fact
+              code
+              label={t("overview.derp.region")}
+              text={
+                resolveDerpRegionLabel(
+                  derp.region?.regionId,
+                  { ...derp.regions, embedded: derp.region },
+                  t("machines.detail.derp.unknown"),
+                ).label
+              }
+            />
+            <Fact
+              label={t("overview.derp.relaySource")}
+              note={t("overview.derp.relaySourceNote")}
+              source={derived}
+              text={t(RELAY_SOURCE_KEYS[derp.relaySource])}
+            />
+            <Fact
+              label={t("overview.derp.urls")}
+              source={configured}
+              text={
+                derp.urlCount > 0
+                  ? t("overview.derp.countConfigured", { count: derp.urlCount })
+                  : t("overview.derp.none")
+              }
+            />
+            <Fact
+              label={t("overview.derp.paths")}
+              source={configured}
+              text={
+                derp.pathCount > 0
+                  ? t("overview.derp.countFiles", { count: derp.pathCount })
+                  : t("overview.derp.none")
+              }
+            />
+          </Facts>
+        </Card>
 
-            {/* A declared address that no source agrees with: the operator has to
+        <Card
+          cardId="derp-relay"
+          description={t("overview.derp.publicBody")}
+          icon={Radar}
+          status={
+            derp.ipv6StunWarning ? { tone: "warn", label: t("overview.status.attention") } : derived
+          }
+          title={t("overview.derp.publicTitle")}
+        >
+          <Facts>
+            <Fact
+              code
+              label={t("overview.derp.relayClientAddress")}
+              reason={t("overview.derp.publicUnavailable")}
+            >
+              {derp.relay.endpoint === undefined ? undefined : (
+                <MaskedText
+                  className="font-mono text-xs text-mist-900 dark:text-mist-50"
+                  value={derp.relay.endpoint}
+                />
+              )}
+            </Fact>
+            {derp.relay.lines.map((line) => {
+              const selection = line.family === "ipv6" ? relayIpv6 : undefined;
+              const addresses = selection?.addresses ?? line.addresses;
+
+              return (
+                <Fact
+                  key={line.family}
+                  hint={
+                    selection === undefined
+                      ? relayVerdictNote(line, derp.relay.host)
+                      : ipv6Note(selection)
+                  }
+                  label={relayFamilyLabel(line.family)}
+                  source={
+                    selection === undefined
+                      ? line.source === "declared"
+                        ? relayDeclaredMarker
+                        : undefined
+                      : ipv6SourceChip(selection)
+                  }
+                >
+                  {addresses.length > 0 ? (
+                    <RelayAddresses addresses={addresses} />
+                  ) : (
+                    <span className="text-xs text-mist-500 dark:text-mist-400">
+                      {selection === undefined ? relayLineText(line) : ipv6StateText(selection)}
+                    </span>
+                  )}
+                </Fact>
+              );
+            })}
+            {derp.stunListenAddr ? (
+              <Fact code label={t("overview.derp.stun")}>
+                <MaskedText
+                  className="font-mono text-xs text-mist-900 dark:text-mist-50"
+                  value={derp.stunListenAddr}
+                />
+              </Fact>
+            ) : undefined}
+          </Facts>
+
+          {/* A declared address that no source agrees with: the operator has to
                 see both values, and the one clients should use is one click away. */}
-            {relayIpv6?.contradiction !== undefined && relayIpv6.copy !== undefined ? (
-              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
-                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <span className="font-medium">{t("overview.derp.ipv6ContradictionTitle")}</span>
-                  <span>
-                    {t(
-                      relayIpv6.contradiction.source === "echo"
-                        ? "overview.derp.ipv6ContradictionEcho"
-                        : "overview.derp.ipv6ContradictionHost",
-                      {
-                        declared: relayIpv6.contradiction.declared,
-                        detected: relayIpv6.contradiction.detected,
-                      },
-                    )}
-                  </span>
-                  <CopyAddress
-                    address={relayIpv6.copy}
-                    label={t("overview.derp.ipv6ContradictionCopy")}
-                  />
-                </div>
+          {relayIpv6?.contradiction !== undefined && relayIpv6.copy !== undefined ? (
+            <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="font-medium">{t("overview.derp.ipv6ContradictionTitle")}</span>
+                <span>
+                  {t(
+                    relayIpv6.contradiction.source === "echo"
+                      ? "overview.derp.ipv6ContradictionEcho"
+                      : "overview.derp.ipv6ContradictionHost",
+                    {
+                      declared: masked(relayIpv6.contradiction.declared),
+                      detected: masked(relayIpv6.contradiction.detected),
+                    },
+                  )}
+                </span>
+                <CopyAddress
+                  address={relayIpv6.copy}
+                  label={t("overview.derp.ipv6ContradictionCopy")}
+                />
               </div>
-            ) : undefined}
+            </div>
+          ) : undefined}
 
-            {relayIpv6?.mismatch && relayIpv6.copy !== undefined ? (
-              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
-                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <span className="font-medium">{t("overview.derp.ipv6MismatchTitle")}</span>
-                  <span>
-                    {t("overview.derp.ipv6MismatchBody", {
-                      dns: relayIpv6.dns.join(", "),
-                      host: relayIpv6.copy,
-                    })}
-                  </span>
-                  <CopyAddress address={relayIpv6.copy} />
-                </div>
+          {relayIpv6?.mismatch && relayIpv6.copy !== undefined ? (
+            <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="font-medium">{t("overview.derp.ipv6MismatchTitle")}</span>
+                <span>
+                  {t("overview.derp.ipv6MismatchBody", {
+                    dns: masked(relayIpv6.dns.join(", ")),
+                    host: masked(relayIpv6.copy),
+                  })}
+                </span>
+                <CopyAddress address={relayIpv6.copy} />
               </div>
-            ) : undefined}
+            </div>
+          ) : undefined}
 
-            {derp.ipv6StunWarning ? (
-              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
-                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="font-medium">{t("overview.derp.ipv6StunTitle")}</span>
-                  <span>
-                    {t("overview.derp.ipv6StunBody", {
-                      ipv6: declaredAddress(derp.declared, "ipv6") ?? "",
-                      stun: derp.stunListenAddr,
-                    })}
-                  </span>
-                </div>
+          {derp.ipv6StunWarning ? (
+            <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="font-medium">{t("overview.derp.ipv6StunTitle")}</span>
+                <span>
+                  {t("overview.derp.ipv6StunBody", {
+                    ipv6: masked(declaredAddress(derp.declared, "ipv6") ?? ""),
+                    stun: masked(derp.stunListenAddr),
+                  })}
+                </span>
               </div>
-            ) : undefined}
+            </div>
+          ) : undefined}
 
-            {/* One short line: what the last address sync or check did, and when.
+          {/* One short line: what the last address sync or check did, and when.
                 The switch that changes any of this lives in the settings card,
                 which is what the link under it points at. */}
-            <div className="flex flex-col gap-1 text-xs text-mist-500 dark:text-mist-400">
-              <p>
-                {derp.sync === undefined
-                  ? t("overview.derp.syncNever")
-                  : t(SYNC_STATUS_KEYS[derp.sync.outcome], {
-                      at: new Date(derp.sync.at).toLocaleString(locale),
-                    })}
-              </p>
-              <p>
-                {tr("overview.derp.relaySetup", {
-                  link: (
-                    <Link
-                      className="font-medium text-indigo-600 dark:text-indigo-400"
-                      to="/settings/headscale"
-                    >
-                      {t("overview.derp.relaySetupLink")}
-                    </Link>
-                  ),
-                })}
-              </p>
-            </div>
-          </Card>
+          <div className="flex flex-col gap-1 text-xs text-mist-500 dark:text-mist-400">
+            <p>
+              {derp.sync === undefined
+                ? t("overview.derp.syncNever")
+                : t(SYNC_STATUS_KEYS[derp.sync.outcome], {
+                    at: new Date(derp.sync.at).toLocaleString(locale),
+                  })}
+            </p>
+            <p>
+              {tr("overview.derp.relaySetup", {
+                link: (
+                  <Link
+                    className="font-medium text-indigo-600 dark:text-indigo-400"
+                    to="/settings/headscale"
+                  >
+                    {t("overview.derp.relaySetupLink")}
+                  </Link>
+                ),
+              })}
+            </p>
+          </div>
+        </Card>
 
-          <Card
-            cardId="derp-nodes"
-            description={t("overview.derp.nodesBody")}
-            icon={MapPinned}
-            status={{
-              tone: "neutral",
-              label: t("overview.derp.nodesSummary", {
-                served: derp.nodes.served,
-                total: derp.nodes.total,
-              }),
-            }}
-            title={t("overview.derp.nodesTitle")}
-          >
-            {/* One group per source, with its regions listed straight away — no
+        <Card
+          cardId="derp-nodes"
+          description={t("overview.derp.nodesBody")}
+          icon={MapPinned}
+          status={{
+            tone: "neutral",
+            label: t("overview.derp.nodesSummary", {
+              served: derp.nodes.served,
+              total: derp.nodes.total,
+            }),
+          }}
+          title={t("overview.derp.nodesTitle")}
+        >
+          {/* One group per source, with its regions listed straight away — no
                 row collapses, so the card reads top to bottom: the embedded
                 relay first, then the two files this machine loads, then the
                 official map that only the clients reach. Each line is the region
@@ -1269,366 +1283,336 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 keeps a bounded height and scrolls in place, which is what keeps
                 this card from growing past its two siblings; it takes focus, so
                 nothing the bound hides is out of reach of a keyboard. */}
-            <div
-              aria-label={t("overview.derp.nodesSourcesLabel")}
-              className={cn(
-                "flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-lg",
-                SCROLL_BOX_RING,
-              )}
-              role="group"
-              tabIndex={0}
-            >
-              {nodeSources.map((source) => (
-                <section className="flex flex-col gap-1" key={source.kind}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span
-                      className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-mist-900 dark:text-mist-50"
-                      title={t(NODE_SOURCE_HINT_KEYS[source.kind])}
-                    >
-                      {nodeSourceLabel(source.kind)}
-                      <SettingsStatus tone={NODE_SOURCE_STATE_TONES[source.state]}>
-                        {t(NODE_SOURCE_STATE_KEYS[source.state])}
-                      </SettingsStatus>
-                    </span>
-                    <SettingsStatus tone={source.state === "served" ? "neutral" : "warn"}>
-                      {t("overview.derp.nodesCount", { count: source.nodes.length })}
+          <div
+            aria-label={t("overview.derp.nodesSourcesLabel")}
+            className={cn(
+              "flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-lg",
+              SCROLL_BOX_RING,
+            )}
+            role="group"
+            tabIndex={0}
+          >
+            {nodeSources.map((source) => (
+              <section className="flex flex-col gap-1" key={source.kind}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-mist-900 dark:text-mist-50"
+                    title={t(NODE_SOURCE_HINT_KEYS[source.kind])}
+                  >
+                    {nodeSourceLabel(source.kind)}
+                    <SettingsStatus tone={NODE_SOURCE_STATE_TONES[source.state]}>
+                      {t(NODE_SOURCE_STATE_KEYS[source.state])}
                     </SettingsStatus>
-                  </div>
+                  </span>
+                  <SettingsStatus tone={source.state === "served" ? "neutral" : "warn"}>
+                    {t("overview.derp.nodesCount", { count: source.nodes.length })}
+                  </SettingsStatus>
+                </div>
 
-                  {source.regions.length === 0 ? (
-                    <p className="text-xs text-mist-600 dark:text-mist-400">
-                      {nodeSourceHint(source) ?? t("overview.derp.nodesEmpty")}
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col">
-                      {source.regions.map((region) => {
-                        // The row is one line: the addresses live in its title.
-                        const endpoints = region.endpoints.join(", ");
+                {source.regions.length === 0 ? (
+                  <p className="text-xs text-mist-600 dark:text-mist-400">
+                    {nodeSourceHint(source) ?? t("overview.derp.nodesEmpty")}
+                  </p>
+                ) : (
+                  <ul className="flex flex-col">
+                    {source.regions.map((region) => {
+                      // The row is one line: the addresses live in its title.
+                      const endpoints = region.endpoints.join(", ");
 
-                        return (
-                          <li
-                            className="flex flex-wrap items-center justify-between gap-2 border-t border-mist-100 py-1 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60"
-                            key={region.regionId}
+                      return (
+                        <li
+                          className="flex flex-wrap items-center justify-between gap-2 border-t border-mist-100 py-1 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60"
+                          key={region.regionId}
+                        >
+                          <span
+                            className="flex min-w-0 items-center gap-1.5"
+                            // The endpoints are addresses, so the hover text
+                            // is dropped while addresses are hidden.
+                            title={
+                              addressesHidden || endpoints.length === 0 ? undefined : endpoints
+                            }
                           >
-                            <span
-                              className="flex min-w-0 items-center gap-1.5"
-                              title={endpoints.length > 0 ? endpoints : undefined}
-                            >
-                              <span className="font-mono text-xs text-mist-500 dark:text-mist-400">
-                                #{region.regionId}
+                            <span className="font-mono text-xs text-mist-500 dark:text-mist-400">
+                              #{region.regionId}
+                            </span>
+                            {region.name === undefined ? undefined : (
+                              <span className="min-w-0 truncate text-xs text-mist-900 dark:text-mist-50">
+                                {region.name}
                               </span>
-                              {region.name === undefined ? undefined : (
-                                <span className="min-w-0 truncate text-xs text-mist-900 dark:text-mist-50">
-                                  {region.name}
-                                </span>
-                              )}
-                            </span>
-                            <span className="shrink-0 text-xs text-mist-500 dark:text-mist-400">
-                              {t("overview.derp.nodesCount", { count: region.nodeCount })}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+                            )}
+                          </span>
+                          <span className="shrink-0 text-xs text-mist-500 dark:text-mist-400">
+                            {t("overview.derp.nodesCount", { count: region.nodeCount })}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
 
-                  {/* The maps behind the source, and the reason a map nobody
+                {/* The maps behind the source, and the reason a map nobody
                       could read contributed nothing: one short line each, never
                       an error. */}
-                  {source.maps
-                    .filter((map) => map.state !== "ok")
-                    .map((map) => (
-                      <p className="text-xs text-mist-500 dark:text-mist-400" key={map.source}>
-                        {nodeMapNotice(source.kind, map)}
-                      </p>
-                    ))}
-                </section>
-              ))}
-            </div>
+                {source.maps
+                  .filter((map) => map.state !== "ok")
+                  .map((map) => (
+                    <p className="text-xs text-mist-500 dark:text-mist-400" key={map.source}>
+                      {nodeMapNotice(source.kind, map)}
+                    </p>
+                  ))}
+              </section>
+            ))}
+          </div>
 
-            {/* Where a node is actually defined: Headscale's embedded relay and
+          {/* Where a node is actually defined: Headscale's embedded relay and
                 every file under `derp.paths` are edited in the DERP settings, so
                 this card links there instead of growing a form of its own. */}
-            <p className="text-xs text-mist-500 dark:text-mist-400">
-              <Link
-                className="font-medium text-indigo-600 dark:text-indigo-400"
-                to="/settings/headscale"
-              >
-                {t("overview.derp.nodesAddLink")}
-              </Link>
-            </p>
-          </Card>
-        </Section>
-
-        <Section
-          cardIds={["service-server", "service-dns", "service-metrics"]}
-          title={t("overview.sections.service")}
+          <p className="text-xs text-mist-500 dark:text-mist-400">
+            <Link
+              className="font-medium text-indigo-600 dark:text-indigo-400"
+              to="/settings/headscale"
+            >
+              {t("overview.derp.nodesAddLink")}
+            </Link>
+          </p>
+        </Card>
+        <Card
+          cardId="service-server"
+          description={t("overview.service.serverBody")}
+          icon={Cable}
+          status={{
+            tone: service.reachable ? "ok" : "error",
+            label: service.reachable
+              ? t("overview.status.reachable")
+              : t("overview.status.unreachable"),
+          }}
+          title={t("overview.service.title")}
         >
-          <Card
-            cardId="service-server"
-            description={t("overview.service.serverBody")}
-            icon={Cable}
-            status={{
-              tone: service.reachable ? "ok" : "error",
-              label: service.reachable
-                ? t("overview.status.reachable")
-                : t("overview.status.unreachable"),
-            }}
-            title={t("overview.service.title")}
-          >
-            <Facts>
-              <Fact code label={t("overview.service.url")} source={configured} text={service.url} />
-              <Fact
-                code
-                label={t("overview.service.baseDomain")}
-                {...textOrReason(service.baseDomain, reason.notConfigured)}
+          <Facts>
+            <Fact label={t("overview.service.url")} source={configured}>
+              <MaskedText
+                className="font-mono text-xs text-mist-900 dark:text-mist-50"
+                value={service.url}
               />
-              <Fact
-                label={t("overview.service.policyMode")}
-                text={
-                  service.policyMode === "database"
-                    ? t("overview.service.policyModeDatabase")
-                    : t("overview.service.policyModeFile")
-                }
-              />
-            </Facts>
-          </Card>
-
-          <Card
-            cardId="service-dns"
-            description={t("overview.service.dnsBody")}
-            icon={Globe}
-            status={{
-              tone: service.magicDns ? "ok" : "neutral",
-              label: service.magicDns ? on : off,
-            }}
-            title={t("overview.service.dnsTitle")}
-          >
-            <Facts>
-              <Fact label={t("overview.service.magicDns")}>
-                <SettingsStatus tone={service.magicDns ? "ok" : "neutral"}>
-                  {service.magicDns ? on : off}
-                </SettingsStatus>
-              </Fact>
-              <Fact label={t("overview.service.overrideDns")}>
-                <SettingsStatus tone={service.overrideDns ? "ok" : "neutral"}>
-                  {service.overrideDns ? on : off}
-                </SettingsStatus>
-              </Fact>
-              <Fact
-                code
-                label={t("overview.service.extraRecords")}
-                note={t("overview.service.extraRecordsNote")}
-                {...textOrReason(service.extraRecordsPath, reason.notConfigured)}
-              />
-            </Facts>
-          </Card>
-
-          <Card
-            cardId="service-metrics"
-            description={t("overview.service.metricsBody")}
-            icon={Activity}
-            status={{
-              tone: METRICS_STATE_TONES[service.metrics.state],
-              label: t(METRICS_STATE_KEYS[service.metrics.state]),
-            }}
-            title={t("overview.service.metricsTitle")}
-          >
-            <Facts>
-              <Fact
-                code
-                label={t("overview.service.metricsListener")}
-                {...textOrReason(service.metrics.address, reason.notConfigured)}
-              />
-              <Fact label={t("overview.service.metricsEndpoint")}>
-                <SettingsStatus tone={METRICS_STATE_TONES[service.metrics.state]}>
-                  {t(METRICS_STATE_KEYS[service.metrics.state])}
-                </SettingsStatus>
-              </Fact>
-              <Fact
-                label={t("overview.service.trustedProxies")}
-                text={t("overview.service.trustedProxiesValue", {
-                  count: service.trustedProxies,
-                })}
-              />
-            </Facts>
-          </Card>
-        </Section>
-
-        <Section
-          cardIds={["counts-tailnet", "counts-headplane", "counts-history"]}
-          title={t("overview.sections.counts")}
-        >
-          <Card
-            cardId="counts-tailnet"
-            description={t("overview.counts.tailnetBody")}
-            icon={Users}
-            title={t("overview.counts.tailnetTitle")}
-          >
-            <dl className="grid grid-cols-2 gap-2">
-              <CountTile
-                detail={
-                  counts.nodes
-                    ? t("overview.counts.nodesSplit", {
-                        online: counts.nodes.online,
-                        offline: counts.nodes.offline,
-                      })
-                    : undefined
-                }
-                label={t("overview.counts.nodes")}
-                reason={reason.api}
-                text={counts.nodes?.total}
-              />
-              <CountTile
-                label={t("overview.counts.users")}
-                reason={reason.api}
-                text={counts.users}
-              />
-              <CountTile
-                label={t("overview.counts.preAuthKeys")}
-                reason={preAuthReason}
-                text={counts.preAuthKeys}
-              />
-              <CountTile
-                label={t("overview.counts.apiKeys")}
-                reason={reason.api}
-                text={counts.apiKeys}
-              />
-            </dl>
-          </Card>
-
-          <Card
-            cardId="counts-headplane"
-            description={t("overview.counts.headplaneBody")}
-            icon={Camera}
-            title={t("overview.counts.headplaneTitle")}
-          >
-            <dl className="grid grid-cols-2 gap-2">
-              <CountTile
-                label={t("overview.counts.audit")}
-                reason={reason.api}
-                text={counts.auditEntries}
-              />
-              <CountTile
-                detail={
-                  counts.snapshots
-                    ? t("overview.counts.snapshotsSize", {
-                        size: counts.snapshots.size ?? t("overview.reason.notReported"),
-                      })
-                    : undefined
-                }
-                label={t("overview.counts.snapshots")}
-                reason={reason.api}
-                text={counts.snapshots?.count}
-              />
-            </dl>
-          </Card>
-
-          <Card
-            cardId="counts-history"
-            description={t("overview.history.body")}
-            icon={TrendingUp}
-            title={t("overview.history.title")}
-          >
-            {history.trend !== undefined &&
-            trendSummary !== undefined &&
-            trendSummary.covered > 0 ? (
-              <div className="flex flex-col gap-2">
-                <FleetTrendBar
-                  buckets={history.trend.buckets}
-                  labels={{
-                    label: t("overview.history.title"),
-                    online: t("overview.history.legendOnline"),
-                    offline: t("overview.history.legendOffline"),
-                    unknown: t("overview.history.legendUnknown"),
-                  }}
+            </Fact>
+            <Fact
+              label={t("overview.service.baseDomain")}
+              reason={reason.notConfigured}
+              source={configured}
+            >
+              {service.baseDomain ? (
+                <MaskedText
+                  className="font-mono text-xs text-mist-900 dark:text-mist-50"
+                  value={service.baseDomain}
                 />
+              ) : undefined}
+            </Fact>
+            <Fact
+              label={t("overview.service.policyMode")}
+              text={
+                service.policyMode === "database"
+                  ? t("overview.service.policyModeDatabase")
+                  : t("overview.service.policyModeFile")
+              }
+            />
+          </Facts>
+        </Card>
+
+        <Card
+          cardId="service-dns"
+          description={t("overview.service.dnsBody")}
+          icon={Globe}
+          status={{
+            tone: service.magicDns ? "ok" : "neutral",
+            label: service.magicDns ? on : off,
+          }}
+          title={t("overview.service.dnsTitle")}
+        >
+          <Facts>
+            <Fact label={t("overview.service.magicDns")}>
+              <SettingsStatus tone={service.magicDns ? "ok" : "neutral"}>
+                {service.magicDns ? on : off}
+              </SettingsStatus>
+            </Fact>
+            <Fact label={t("overview.service.overrideDns")}>
+              <SettingsStatus tone={service.overrideDns ? "ok" : "neutral"}>
+                {service.overrideDns ? on : off}
+              </SettingsStatus>
+            </Fact>
+            <Fact
+              code
+              label={t("overview.service.extraRecords")}
+              note={t("overview.service.extraRecordsNote")}
+              {...textOrReason(service.extraRecordsPath, reason.notConfigured)}
+            />
+          </Facts>
+        </Card>
+
+        <Card
+          cardId="service-metrics"
+          description={t("overview.service.metricsBody")}
+          icon={Activity}
+          status={{
+            tone: METRICS_STATE_TONES[service.metrics.state],
+            label: t(METRICS_STATE_KEYS[service.metrics.state]),
+          }}
+          title={t("overview.service.metricsTitle")}
+        >
+          <Facts>
+            <Fact code label={t("overview.service.metricsListener")} reason={reason.notConfigured}>
+              {service.metrics.address ? (
+                <MaskedText
+                  className="font-mono text-xs text-mist-900 dark:text-mist-50"
+                  value={service.metrics.address}
+                />
+              ) : undefined}
+            </Fact>
+            <Fact label={t("overview.service.metricsEndpoint")}>
+              <SettingsStatus tone={METRICS_STATE_TONES[service.metrics.state]}>
+                {t(METRICS_STATE_KEYS[service.metrics.state])}
+              </SettingsStatus>
+            </Fact>
+            <Fact
+              label={t("overview.service.trustedProxies")}
+              text={t("overview.service.trustedProxiesValue", {
+                count: service.trustedProxies,
+              })}
+            />
+          </Facts>
+        </Card>
+        <Card
+          cardId="counts-tailnet"
+          description={t("overview.counts.tailnetBody")}
+          icon={Users}
+          title={t("overview.counts.tailnetTitle")}
+        >
+          <dl className="grid grid-cols-2 gap-2">
+            <CountTile
+              detail={
+                counts.nodes
+                  ? t("overview.counts.nodesSplit", {
+                      online: counts.nodes.online,
+                      offline: counts.nodes.offline,
+                    })
+                  : undefined
+              }
+              label={t("overview.counts.nodes")}
+              reason={reason.api}
+              text={counts.nodes?.total}
+            />
+            <CountTile label={t("overview.counts.users")} reason={reason.api} text={counts.users} />
+            <CountTile
+              label={t("overview.counts.preAuthKeys")}
+              reason={preAuthReason}
+              text={counts.preAuthKeys}
+            />
+            <CountTile
+              label={t("overview.counts.apiKeys")}
+              reason={reason.api}
+              text={counts.apiKeys}
+            />
+          </dl>
+        </Card>
+
+        <Card
+          cardId="counts-headplane"
+          description={t("overview.counts.headplaneBody")}
+          icon={Camera}
+          title={t("overview.counts.headplaneTitle")}
+        >
+          <dl className="grid grid-cols-2 gap-2">
+            <CountTile
+              label={t("overview.counts.audit")}
+              reason={reason.api}
+              text={counts.auditEntries}
+            />
+            <CountTile
+              detail={
+                counts.snapshots
+                  ? t("overview.counts.snapshotsSize", {
+                      size: counts.snapshots.size ?? t("overview.reason.notReported"),
+                    })
+                  : undefined
+              }
+              label={t("overview.counts.snapshots")}
+              reason={reason.api}
+              text={counts.snapshots?.count}
+            />
+          </dl>
+        </Card>
+
+        <Card
+          cardId="counts-history"
+          description={t("overview.history.body")}
+          icon={TrendingUp}
+          title={t("overview.history.title")}
+        >
+          {history.trend !== undefined && trendSummary !== undefined && trendSummary.covered > 0 ? (
+            <div className="flex flex-col gap-2">
+              <FleetTrendBar
+                buckets={history.trend.buckets}
+                labels={{
+                  label: t("overview.history.title"),
+                  online: t("overview.history.legendOnline"),
+                  offline: t("overview.history.legendOffline"),
+                  unknown: t("overview.history.legendUnknown"),
+                }}
+              />
+              <p className="text-xs text-mist-500 dark:text-mist-400">
+                {t("overview.history.summary", {
+                  covered: trendSummary.covered,
+                  total: trendSummary.total,
+                  peak: trendSummary.peak,
+                })}
+              </p>
+              {history.trend.partial && history.trend.collectingSince ? (
                 <p className="text-xs text-mist-500 dark:text-mist-400">
-                  {t("overview.history.summary", {
-                    covered: trendSummary.covered,
-                    total: trendSummary.total,
-                    peak: trendSummary.peak,
+                  {t("overview.history.collectingSince", {
+                    at: new Date(history.trend.collectingSince).toLocaleString(locale),
                   })}
                 </p>
-                {history.trend.partial && history.trend.collectingSince ? (
-                  <p className="text-xs text-mist-500 dark:text-mist-400">
-                    {t("overview.history.collectingSince", {
-                      at: new Date(history.trend.collectingSince).toLocaleString(locale),
-                    })}
-                  </p>
-                ) : undefined}
-              </div>
-            ) : (
-              <p className="text-sm text-mist-400 dark:text-mist-500">
-                {t("overview.unavailableReason", { reason: t("overview.history.noData") })}
-              </p>
-            )}
-          </Card>
-        </Section>
-
-        <Section cardIds={["health-summary"]} title={t("overview.sections.health")}>
-          <Card
-            cardId="health-summary"
-            description={t("overview.health.body")}
-            icon={HeartPulse}
-            status={{
-              tone: healthTone,
-              label:
-                healthTone === "ok" ? t("overview.status.healthy") : t("overview.status.attention"),
-            }}
-            title={t("overview.health.title")}
-          >
-            <dl className="flex flex-col gap-3">
-              <TallyFact
-                label={t("overview.health.configChecks")}
-                reason={reason.config}
-                tally={health.configChecks}
-              />
-              <TallyFact label={t("overview.health.diagnostics")} tally={healthTally} />
-            </dl>
-            <p className="text-sm text-mist-600 dark:text-mist-400">
-              {tr("overview.health.detailsBody", {
-                link: (
-                  <Link
-                    className="font-medium text-indigo-600 dark:text-indigo-400"
-                    to="/settings/system"
-                  >
-                    {t("overview.health.details")}
-                  </Link>
-                ),
-              })}
+              ) : undefined}
+            </div>
+          ) : (
+            <p className="text-sm text-mist-400 dark:text-mist-500">
+              {t("overview.unavailableReason", { reason: t("overview.history.noData") })}
             </p>
-          </Card>
-        </Section>
+          )}
+        </Card>
+        <Card
+          cardId="health-summary"
+          description={t("overview.health.body")}
+          icon={HeartPulse}
+          status={{
+            tone: healthTone,
+            label:
+              healthTone === "ok" ? t("overview.status.healthy") : t("overview.status.attention"),
+          }}
+          title={t("overview.health.title")}
+        >
+          <dl className="flex flex-col gap-3">
+            <TallyFact
+              label={t("overview.health.configChecks")}
+              reason={reason.config}
+              tally={health.configChecks}
+            />
+            <TallyFact label={t("overview.health.diagnostics")} tally={healthTally} />
+          </dl>
+          <p className="text-sm text-mist-600 dark:text-mist-400">
+            {tr("overview.health.detailsBody", {
+              link: (
+                <Link
+                  className="font-medium text-indigo-600 dark:text-indigo-400"
+                  to="/settings/system"
+                >
+                  {t("overview.health.details")}
+                </Link>
+              ),
+            })}
+          </p>
+        </Card>
       </div>
     </SettingsPage>
-  );
-}
-
-/**
- * Groups related dashboard cards under one small heading. The group owns the
- * heading's visibility too: hiding every card in it takes the heading with it
- * rather than leaving an empty section behind.
- */
-function Section({
-  title,
-  cardIds,
-  children,
-}: {
-  title: string;
-  cardIds: OverviewCardId[];
-  children: ReactNode;
-}) {
-  const visible = useOverviewCardsVisible(cardIds);
-  if (!visible) {
-    return undefined;
-  }
-
-  return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-mist-500 dark:text-mist-400">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
-    </section>
   );
 }
 
@@ -1775,8 +1759,10 @@ function CountTile({ label, text, reason, detail }: CountTileProps) {
   const sub = missing ? reason : detail;
 
   return (
-    <div className="flex min-w-0 flex-col-reverse gap-1 rounded-lg border border-mist-100 bg-mist-50/60 p-3 dark:border-mist-800 dark:bg-mist-900/50">
-      <dt className="truncate text-xs text-mist-500 dark:text-mist-400">{label}</dt>
+    <div className="flex min-w-0 flex-col-reverse gap-1 rounded-lg border border-mist-100 bg-mist-50/60 p-2.5 dark:border-mist-800 dark:bg-mist-900/50">
+      {/* Four cards per row make one tile narrow, so the label wraps instead of
+          truncating: a count whose name is cut off tells the operator nothing. */}
+      <dt className="text-xs break-words text-mist-500 dark:text-mist-400">{label}</dt>
       <dd className="min-w-0">
         <span
           className={cn(

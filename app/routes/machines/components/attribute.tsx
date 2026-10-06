@@ -1,6 +1,8 @@
 import { Check, Copy, Info } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { useAddressMask } from "~/components/address-visibility";
+import { MaskedValue, RevealBadge } from "~/components/masked-text";
 import Tooltip from "~/components/tooltip";
 import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
@@ -15,6 +17,12 @@ export interface MachineAttributeProps {
   /** Renders the value in a monospace face; used for keys, IDs and addresses. */
   isCode?: boolean;
   /**
+   * The value is an IP address, an IPv6 address, a network range or a domain
+   * name, so it is masked by default and carries a reveal badge of its own. It
+   * is deliberately not set for keys, IDs, dates and machine names.
+   */
+  isAddress?: boolean;
+  /**
    * Small chips shown at the end of the row, e.g. which source serves a relay
    * and whether it is the one in use. The value keeps its own width.
    */
@@ -25,6 +33,11 @@ export interface MachineAttributeProps {
  * One read-only fact on the machine detail page. Long values truncate with a
  * `title` tooltip, and copyable ones reveal a copy button on hover so keys and
  * addresses never wrap the definition list.
+ *
+ * An address is masked by default: the row shows the fixed mask, the copy click
+ * still copies the real value, and the badge beside the value reveals it. The
+ * hover title is dropped while it is hidden, because a tooltip would otherwise
+ * be a second way to read the value.
  */
 export default function MachineAttribute({
   name,
@@ -32,10 +45,13 @@ export default function MachineAttribute({
   tooltip,
   isCopyable,
   isCode,
+  isAddress,
   badges,
 }: MachineAttributeProps) {
   const { t } = useI18n();
   const [isCopied, setIsCopied] = useState(false);
+  const { masked, canReveal, toggle } = useAddressMask(value);
+  const isMasked = isAddress === true && masked;
 
   const handleCopy = async () => {
     const copied = await copyToClipboard(value);
@@ -71,10 +87,10 @@ export default function MachineAttribute({
               "dark:focus-visible:ring-indigo-400/40",
             )}
             onClick={handleCopy}
-            title={value}
+            title={isMasked ? undefined : value}
             type="button"
           >
-            <AttributeValue isCode={isCode} value={value} />
+            <AttributeValue isCode={isCode} isMasked={isMasked} value={value} />
             {isCopied ? (
               <Check className="h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
             ) : (
@@ -82,10 +98,13 @@ export default function MachineAttribute({
             )}
           </button>
         ) : (
-          <div className="min-w-0 flex-1 px-1.5 py-1" title={value}>
-            <AttributeValue isCode={isCode} value={value} />
+          <div className="min-w-0 flex-1 px-1.5 py-1" title={isMasked ? undefined : value}>
+            <AttributeValue isCode={isCode} isMasked={isMasked} value={value} />
           </div>
         )}
+        {isAddress === true && canReveal ? (
+          <RevealBadge masked={masked} onToggle={toggle} />
+        ) : undefined}
         {badges ? (
           <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">{badges}</span>
         ) : undefined}
@@ -95,8 +114,23 @@ export default function MachineAttribute({
 }
 
 /** Multi-line values (endpoints, latency) keep one truncated line per entry. */
-function AttributeValue({ value, isCode }: { value: string; isCode?: boolean }) {
+function AttributeValue({
+  value,
+  isCode,
+  isMasked,
+}: {
+  value: string;
+  isCode?: boolean;
+  isMasked?: boolean;
+}) {
   const className = cn("min-w-0 truncate", isCode && "font-mono text-xs");
+
+  // A hidden address is one mask and one badge, however many lines the value
+  // has: per-line masks would still say how many endpoints there are, while the
+  // copy click copies the whole value either way.
+  if (isMasked === true) {
+    return <MaskedValue className={className} masked value={value} />;
+  }
 
   if (!value.includes("\n")) {
     return <div className={className}>{value}</div>;

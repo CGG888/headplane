@@ -27,6 +27,15 @@ const zhHant = {
     online: "上線",
     offline: "離線",
   },
+  address: {
+    hidden: "已隱藏的位址",
+    reveal: "顯示位址",
+    hideByDefault: "位址預設隱藏",
+    showAll: "全部顯示",
+    hideAll: "全部隱藏",
+    menu: "位址顯示",
+    menuBody: "位址與網域預設隱藏，可用眼睛按鈕逐一顯示，也可暫時全部顯示。",
+  },
   header: {
     logoAlt: "HeadplaneCN 標誌",
     brand: "HeadplaneCN 控制台",
@@ -87,13 +96,6 @@ const zhHant = {
       protectedState: "一律顯示",
       healthHideableNote: "隱藏健康摘要只會隱藏摘要本身：檢查失敗仍會透過通知 webhook 送達。",
       restoreDefault: "恢復預設",
-    },
-    sections: {
-      versions: "版本",
-      derp: "DERP",
-      service: "服務",
-      counts: "數量",
-      health: "健康",
     },
     status: {
       enabled: "已啟用",
@@ -364,6 +366,8 @@ const zhHant = {
       columnAddresses: "位址",
       columnVersion: "版本",
       columnLastSeen: "最後上線",
+      columnDerpNode: "DERP 節點",
+      derpNodeNotReported: "未上報",
       sortByName: "依名稱排序",
       sortByIp: "依 IP 位址排序",
       sortByVersion: "依版本排序",
@@ -493,7 +497,11 @@ const zhHant = {
         homeRegion: "歸屬區域",
         preferredRegion: "偏好區域",
         latency: "各區域延遲",
-        latencyMore: "另有 {count} 個區域已測量，這裡只列出最快的幾個。",
+        latencySourceReported: "用戶端回報",
+        latencySourceMeasured: "本機實測",
+        latencyUnmeasured: "未測到",
+        latencySummary:
+          "{measured}/{total} 個區域有延遲 · 用戶端回報 {reported} · 本機實測 {local}",
         idsOnly: "設定的 DERP 地圖與手動名稱都沒有描述的區域，只顯示 ID。",
         embeddedMarker: "內嵌 DERP",
         embeddedEnabled: "Headscale 的內嵌 DERP 伺服器已啟用，提供區域 {region}。",
@@ -1925,6 +1933,25 @@ const zhHant = {
           reloadTriggered: "Headscale 已重新載入。",
           reloadFailed: "重新載入失敗。",
           snapshotNote: "寫入前的快照：{snapshot}",
+          pathStateListed: "已在 derp.paths 中",
+          pathStateMissing: "不在 derp.paths 中",
+          pathStateListedNote:
+            "Headscale 啟動或重新載入時會載入這個檔案，用戶端才能取得鏡像後的地圖。",
+          pathStateMissingNote: "啟用鏡像後儲存，會自動把這個路徑加入 derp.paths。",
+          pathStateReadOnlyNote:
+            "Headscale 設定為唯讀，Headplane 無法自動加入，請手動把 {path} 寫進 derp.paths。",
+          pathStateDisabledNote:
+            "鏡像已關閉，其路徑仍會保留在 derp.paths 中：刪除這個項目等於移除這張卡片並不擁有的設定。",
+          pathHint: "預期路徑：{path} · 目前已列出：{paths}",
+          pathHintNone: "無",
+          pathAddTo: "加入 derp.paths",
+          pathAdding: "正在加入…",
+          pathAdded: "已把 {path} 加入 derp.paths。",
+          pathAddedPending:
+            "已把 {path} 加入 derp.paths。這個檔案由第一次執行寫入，請在執行完成後重新載入 Headscale。",
+          pathSkippedReadOnly: "未加入這個路徑：Headscale 設定為唯讀。",
+          pathSkippedInvalid: "未加入這個路徑：它不是可用的絕對路徑。",
+          pathSkippedWriteFailed: "未加入這個路徑：寫入 Headscale 設定失敗。",
           errors: {
             invalidDerpMirrorInterval: "鏡像間隔不是支援的值。",
             invalidDerpMirrorPath: "目標路徑必須是相對檔案名稱或絕對路徑。",

@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 import {
   Check,
   ChevronDown,
@@ -12,6 +14,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, useSearchParams, type ShouldRevalidateFunction } from "react-router";
 
+import { AddressVisibilityMenu, useAddressVisibility } from "~/components/address-visibility";
 import Button from "~/components/button";
 import Code from "~/components/code";
 import Input from "~/components/input";
@@ -29,9 +32,12 @@ import {
   headscaleLiveStoreContext,
   requestApiContext,
 } from "~/server/context";
+import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
+import { loadDerpRegionSources } from "~/server/headscale/derp-region-sources";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { isUserPrincipal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
+import { maskAddress } from "~/utils/address-visibility";
 import cn from "~/utils/cn";
 import {
   extractTagOwnerTags,
@@ -78,11 +84,29 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const magic = headscaleConfig.getMagicDNSBaseDomain();
 
+  // Region names for the list's relay column come from the same chain the
+  // machine detail card resolves: the operator's manual mapping, the maps in
+  // `derp.paths` and the maps fetched from `derp.urls`, so the two views can
+  // never name a region differently. Both reads are fail-soft and cached, so
+  // they run alongside the agent lookup rather than after it.
+  const derp = headscaleConfig.getDERPSettings();
+  const regionNamesLookup = Promise.all([
+    readDerpRegionNames(config.server.data_path),
+    loadDerpRegionSources({
+      paths: derp.paths,
+      urls: derp.urls,
+      autoUpdateEnabled: derp.autoUpdateEnabled,
+      updateFrequency: derp.updateFrequency,
+      baseDir: config.headscale.config_path ? dirname(config.headscale.config_path) : undefined,
+    }),
+  ]);
+
   const agents = agentsFeature.state === "enabled" ? agentsFeature.value : undefined;
   const [statsResult, policyResult] = await Promise.allSettled([
     agents?.lookup(nodes.map((node) => node.nodeKey)),
     api.policy.get(),
   ]);
+  const [regionNames, derpRegionSources] = await regionNamesLookup;
   const stats = statsResult.status === "fulfilled" ? statsResult.value : undefined;
   const policy = policyResult.status === "fulfilled" ? policyResult.value.policy : undefined;
   const populatedNodes = mapNodes(nodes, stats);
@@ -98,6 +122,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
           nodeKey: agents?.agentNodeKey(),
         }
       : undefined,
+    // Region labels the relay column resolves: the manual names Headplane stores
+    // in its data directory, plus what the configured DERP maps describe. The
+    // column runs them through the same helper the machine card uses.
+    derpRegions: {
+      manual: regionNames,
+      local: derpRegionSources.local,
+      remote: derpRegionSources.remote,
+    },
+    // Headscale's own embedded region, so a machine relaying through it reads
+    // with its name instead of a bare id. Plain values only: the row must never
+    // import a module that reads a file.
+    derpServer: derp.server,
     headscaleUserId: isUserPrincipal(principal) ? principal.user.headscaleUserId : undefined,
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
@@ -281,6 +317,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  // Addresses are masked by default; the addresses column masks itself, and the
+  // one tooltip that quotes the MagicDNS domain follows the same choice.
+  const { hidden, revealAll } = useAddressVisibility();
+  const addressesHidden = hidden && !revealAll;
 
   const searchQuery = searchParams.get("q") ?? "";
   const { filterUser, filterTag, filterStatus, filterRoute, hasActiveFilters } =
@@ -481,12 +522,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             </Link>
           </p>
         </div>
-        <NewMachine
-          disabledKeys={loaderData.preAuth ? [] : ["pre-auth"]}
-          isDisabled={!loaderData.writable}
-          server={loaderData.publicServer ?? loaderData.server}
-          users={loaderData.users}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Personal, presentation-only: whether addresses stay masked. */}
+          <AddressVisibilityMenu />
+          <NewMachine
+            disabledKeys={loaderData.preAuth ? [] : ["pre-auth"]}
+            isDisabled={!loaderData.writable}
+            server={loaderData.publicServer ?? loaderData.server}
+            users={loaderData.users}
+          />
+        </div>
       </div>
 
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
@@ -676,7 +721,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                               code: (
                                 <Code>
                                   [name].
-                                  {loaderData.magic}
+                                  {maskAddress(loaderData.magic, addressesHidden)}
                                 </Code>
                               ),
                             })}
@@ -702,6 +747,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   ) : undefined}
                   <th className={cn(HEADER_CELL, "w-28 whitespace-nowrap")} scope="col">
                     {t("machines.filters.status")}
+                  </th>
+                  {/* The relay each machine is using now. Read-only and not
+                      sortable, because the list only sorts the columns whose
+                      header already offers it. */}
+                  <th className={cn(HEADER_CELL, "w-36")} scope="col">
+                    {t("machines.list.columnDerpNode")}
                   </th>
                   <SortHeader
                     className="w-36"
@@ -734,6 +785,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     magic={loaderData.magic}
                     node={node}
                     onSelectChange={(selected) => toggleSelection(node.id, selected)}
+                    relayRegions={loaderData.derpRegions}
+                    relayServer={loaderData.derpServer}
                     users={loaderData.users}
                     supportsNodeOwnerChange={loaderData.supportsNodeOwnerChange}
                     supportsDisablingKeyExpiry={loaderData.supportsDisablingKeyExpiry}

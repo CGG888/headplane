@@ -57,11 +57,8 @@ describe("relayRegionSources", () => {
 });
 
 describe("buildMachineRelayUse", () => {
-  test("badges every relay row with its source and the preferred one as in use", () => {
-    const info = {
-      HomeDERP: 901,
-      NetInfo: { PreferredDERP: 902, DERPLatency: { "901": 0.02, "902": 0.05, "903": 0.4 } },
-    };
+  test("badges the relay in use and the region this machine calls home", () => {
+    const info = { HomeDERP: 901, NetInfo: { PreferredDERP: 902 } };
     const view = buildDerpInfo(info, { ...EMBEDDED, enabled: false }, UNKNOWN, {
       local: { "901": { regionId: 901, code: "ams", name: "Amsterdam" } },
     });
@@ -85,54 +82,10 @@ describe("buildMachineRelayUse", () => {
       inUse: true,
       source: "mirror",
     });
-    expect(usage.latencies).toEqual([
-      {
-        key: "id:901",
-        label: "#901 · ams · Amsterdam",
-        regionId: 901,
-        latency: "20ms",
-        inUse: false,
-        source: "local",
-      },
-      {
-        key: "id:902",
-        label: "#902",
-        regionId: 902,
-        latency: "50ms",
-        inUse: true,
-        source: "mirror",
-      },
-      {
-        key: "id:903",
-        label: "#903",
-        regionId: 903,
-        latency: "400ms",
-        inUse: false,
-        source: "official",
-      },
-    ]);
   });
 
-  test("marks the agent's own preferred region, never the fastest one", () => {
-    const info = { NetInfo: { PreferredDERP: 903, DERPLatency: { "903": 0.4, "901": 0.02 } } };
-    const view = buildDerpInfo(info, { ...EMBEDDED, enabled: false }, UNKNOWN);
-    const usage = buildMachineRelayUse(info, view, { "903": "official" });
-
-    expect(usage.preferred.inUse).toBe(true);
-    // The fastest sample is not the used relay.
-    expect(usage.latencies.map((row) => [row.regionId, row.inUse])).toEqual([
-      [901, false],
-      [903, true],
-    ]);
-  });
-
-  test("badges nothing for a legacy key no map can name", () => {
-    const info = {
-      NetInfo: {
-        PreferredDERP: 999,
-        DERPLatency: { "derp1.tailscale.com:3478": 0.2, "999": 0.01 },
-      },
-    };
+  test("names the embedded region the agent reports as preferred", () => {
+    const info = { NetInfo: { PreferredDERP: 999 } };
     const view = buildDerpInfo(info, EMBEDDED, UNKNOWN);
     const usage = buildMachineRelayUse(info, view, { "999": "embedded" });
 
@@ -143,12 +96,8 @@ describe("buildMachineRelayUse", () => {
       inUse: true,
       source: "embedded",
     });
-    expect(usage.latencies.map((row) => [row.key, row.latency, row.source])).toEqual([
-      ["id:999", "10ms", "embedded"],
-      ["key:derp1.tailscale.com:3478", "200ms", undefined],
-    ]);
     // A key that names no region id is not an unresolved region, so the card's
-    // id-only note stays off; only the badge is missing from that row.
+    // id-only note stays off.
     expect(view.hasIdOnlyRegions).toBe(false);
   });
 
@@ -164,6 +113,5 @@ describe("buildMachineRelayUse", () => {
       inUse: false,
     });
     expect(usage.preferred).toEqual({ key: "key:preferred", label: UNKNOWN, inUse: false });
-    expect(usage.latencies).toEqual([]);
   });
 });

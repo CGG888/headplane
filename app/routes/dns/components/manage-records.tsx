@@ -3,6 +3,7 @@ import { Form } from "react-router";
 import Button from "~/components/button";
 import Code from "~/components/code";
 import Link from "~/components/link";
+import MaskedText from "~/components/masked-text";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
@@ -52,10 +53,14 @@ export default function ManageRecords({ records, isDisabled }: Props) {
                     {record.type}
                   </p>
                   <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-2">
-                    <p className="truncate font-mono text-sm">{record.name}</p>
-                    <p className="truncate font-mono text-sm opacity-70 sm:opacity-100">
-                      {record.value}
-                    </p>
+                    {/* The record name and its target are a hostname and an
+                        address, so both are masked until revealed. The add and
+                        remove controls below are untouched. */}
+                    <MaskedText className="font-mono text-sm" value={record.name} />
+                    <MaskedText
+                      className="font-mono text-sm opacity-70 sm:opacity-100"
+                      value={record.value}
+                    />
                   </div>
                 </div>
                 <Form method="POST">

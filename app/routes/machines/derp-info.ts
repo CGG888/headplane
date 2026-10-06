@@ -13,7 +13,7 @@
  * receives plain values and never imports a server module.
  */
 
-import type { DerpNodeSourceKind } from "~/routes/overview-helpers";
+import type { DerpNodeSourceKind, DerpNodeSourcesView } from "~/routes/overview-helpers";
 // Type-only: `derp-region-sources` reads the filesystem, and this module is part
 // of the client bundle, so nothing may survive the type erasure here.
 import type { DerpMapGroupReading } from "~/server/headscale/derp-region-sources";
@@ -498,6 +498,15 @@ export function relayRegionSources(
   return sources;
 }
 
+/**
+ * Where one latency row's number came from: the machine's own report
+ * (`NetInfo.DERPLatency`) or a measurement this server took itself. They are
+ * never mixed silently — a local measurement is the path clients near this
+ * server take, a reported one is the path that machine takes — so every row
+ * says which one it shows.
+ */
+export type MachineLatencySource = "reported" | "measured";
+
 /** One relay a machine uses, as the card prints its row. */
 export interface MachineRelayUse {
   /** Stable identity of the row: `id:901`, or the agent's own key for a legacy sample. */
@@ -506,8 +515,10 @@ export interface MachineRelayUse {
   label: string;
   /** The region id the agent's key names, when it names one. */
   regionId?: number;
-  /** The measured round trip, already formatted, when the machine measured it. */
+  /** The measured round trip, already formatted, when anyone measured it. */
   latency?: string;
+  /** Which of the two sources produced `latency`, when there is one. */
+  latencySource?: MachineLatencySource;
   /** True for the region the agent reports as the one this machine uses. */
   inUse: boolean;
   /** Which configured source describes this region, when one does. */
@@ -519,8 +530,6 @@ export interface MachineRelayUseView {
   home: MachineRelayUse;
   /** The region the agent reports as the one it currently uses. */
   preferred: MachineRelayUse;
-  /** Every measured region, fastest first, as the card's latency rows. */
-  latencies: MachineRelayUse[];
 }
 
 /** The source serving one region, or nothing when no source describes it. */
@@ -537,15 +546,15 @@ function sourceOf(
 }
 
 /**
- * The relays this machine uses, as rows: the agent's home and preferred regions,
- * plus every region it measured, each carrying the source that serves it and
- * whether it is the one currently in use.
+ * The relays this machine uses, as the card's summary rows: the agent's home and
+ * preferred regions, each carrying the source that serves it and whether it is
+ * the one currently in use.
  *
  * The labels come from {@link buildDerpInfo}'s view, so a row words its region
  * exactly like every other row, and "in use" is the agent's own `PreferredDERP`
  * — nothing is inferred from latency or from the configuration. `key` is the
  * row's identity: the region id when the agent's key names one, and the agent's
- * own key for a legacy `host:port` sample no map can name.
+ * own key for anything else.
  */
 export function buildMachineRelayUse(
   info: HostInfo | undefined,
@@ -570,13 +579,314 @@ export function buildMachineRelayUse(
   return {
     home: regionRow(homeId, view.home.label, "key:home"),
     preferred: regionRow(preferredId, view.preferred.label, "key:preferred"),
-    latencies: view.latencies.rows.map((row): MachineRelayUse => ({
-      key: regionIdentity(parseDerpRegionKey(row.region)),
-      label: row.label,
-      ...(row.regionId === undefined ? {} : { regionId: row.regionId }),
-      latency: formatDerpLatency(row.seconds),
-      inUse: preferredId !== undefined && row.regionId === preferredId,
-      ...sourceOf(relaySources, row.regionId),
-    })),
   };
+}
+
+// MARK: Latency by region
+
+/**
+ * Every region the latency table lists, taken from the served-node inventory the
+ * Overview card is built from: the embedded relay's region plus every region of
+ * the maps this deployment actually loads — the `derp.paths` files, the region
+ * mirror's own file included. A region the configuration only advertises
+ * upstream (`derp.urls`, the `official` source) is not served by this machine
+ * and is not listed here; the table keeps such a region only when the machine
+ * measured it itself.
+ *
+ * This is a projection of {@link derpNodeSources}, never a second reading of the
+ * configuration, so the machine card and the Overview card cannot disagree about
+ * what `served` means.
+ */
+export function servedDerpRegionIds(view: DerpNodeSourcesView): number[] {
+  const ids = new Set<number>();
+  for (const source of view.sources) {
+    if (source.state !== "served") {
+      continue;
+    }
+
+    for (const region of source.regions) {
+      ids.add(region.regionId);
+    }
+  }
+
+  return [...ids].toSorted((a, b) => a - b);
+}
+
+/** The readings the latency table is built from, all prepared by the loader. */
+export interface MachineLatencyInventory {
+  /** Every region this deployment serves, from {@link servedDerpRegionIds}. */
+  servedRegionIds?: readonly number[];
+  /**
+   * The values this server measured itself, keyed by the official region id the
+   * probe dialled, in milliseconds.
+   */
+  measured?: Readonly<Record<string, number>>;
+  /**
+   * The region mirror's stored assignment: official region id to the number the
+   * region is mirrored as. It is what turns a measurement of an official region
+   * into the value of the mirrored row that carries its number.
+   */
+  assignment?: Readonly<Record<string, number>>;
+}
+
+/** One latency reading that can be printed. */
+function usableLatencyMs(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/** Milliseconds as a locally measured row prints them. */
+function formatLatencyMs(milliseconds: number): string {
+  return `${Math.round(milliseconds)}ms`;
+}
+
+/**
+ * The value this server measured for one displayed region, in milliseconds.
+ *
+ * The row's own id is tried first, because a region the probe dialled directly
+ * is that region. A mirrored row carries the number the filter assigned instead,
+ * so the stored assignment is what maps it back to the official region the probe
+ * measured. Two official regions mirrored onto one number cannot happen in the
+ * settings, and the lowest official id wins if a hand-edited store ever holds
+ * one.
+ */
+function measuredRegionMs(
+  region: number,
+  measured: Readonly<Record<string, number>>,
+  assignment: Readonly<Record<string, number>>,
+): number | undefined {
+  const direct = usableLatencyMs(measured[String(region)]);
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  let value: number | undefined;
+  let officialId: number | undefined;
+  for (const [id, number] of Object.entries(assignment)) {
+    if (number !== region) {
+      continue;
+    }
+
+    const candidate = usableLatencyMs(measured[id]);
+    if (candidate === undefined) {
+      continue;
+    }
+
+    const parsed = Number(id);
+    if (!Number.isSafeInteger(parsed)) {
+      continue;
+    }
+
+    if (officialId === undefined || parsed < officialId) {
+      officialId = parsed;
+      value = candidate;
+    }
+  }
+
+  return value;
+}
+
+/** One served region as a latency row, with or without a number. */
+function servedLatencyRow(
+  regionId: number,
+  label: string,
+  preferredId: number | undefined,
+  relaySources: Readonly<Record<string, DerpNodeSourceKind>>,
+  latency: string | undefined,
+  latencySource: MachineLatencySource | undefined,
+): MachineRelayUse {
+  return {
+    key: `id:${regionId}`,
+    label,
+    regionId,
+    ...(latency === undefined ? {} : { latency }),
+    ...(latencySource === undefined ? {} : { latencySource }),
+    inUse: preferredId !== undefined && regionId === preferredId,
+    ...sourceOf(relaySources, regionId),
+  };
+}
+
+/** The rows the machine card's latency section prints, and what they add up to. */
+export interface MachineLatencyRows {
+  /** Every region this deployment serves, fastest first, unmeasured last. */
+  rows: MachineRelayUse[];
+  /** How many rows carry a number, per source, and how many carry none. */
+  summary: {
+    /** Rows the table lists. */
+    total: number;
+    /** Rows the reporting machine measured. */
+    reported: number;
+    /** Rows this server measured. */
+    measured: number;
+    /** Rows nobody measured. */
+    unmeasured: number;
+  };
+}
+
+export interface MachineLatencyRowsInput {
+  info: HostInfo | undefined;
+  /** The label chain's sources, exactly as {@link buildDerpInfo} receives them. */
+  sources: DerpRegionLabelSources;
+  /** The localized text a region no source names reads as. */
+  unknown: string;
+  /** Which configured source serves each region, keyed by region id. */
+  relaySources?: Readonly<Record<string, DerpNodeSourceKind>>;
+  /** The served regions and the values this server measured itself. */
+  inventory?: MachineLatencyInventory;
+}
+
+/**
+ * The latency table for one machine: **every** region this deployment serves,
+ * whether or not anybody measured it, plus any region the machine measured that
+ * this deployment does not serve (an upstream relay, or a legacy `host:port`
+ * sample) so a measurement is never silently dropped.
+ *
+ * Each row's number comes from, in order, the reporting machine's own value and
+ * then this server's measurement of the same region — translated through the
+ * mirror's assignment when the row carries a mirrored number, so the number
+ * always belongs to the id the row shows. A region neither source measured keeps
+ * its row with no number, which is what tells the reader the region exists and
+ * simply was not measured.
+ *
+ * The order is the fastest first, exactly as every other latency list in
+ * Headplane reads, with the unmeasured regions after them in region-id order.
+ */
+export function buildMachineLatencyRows({
+  info,
+  sources,
+  unknown,
+  relaySources = {},
+  inventory = {},
+}: MachineLatencyRowsInput): MachineLatencyRows {
+  const reported = sortDerpLatencies(info?.NetInfo?.DERPLatency);
+  const preferredId = readRegionId(info?.NetInfo?.PreferredDERP);
+  const measured = inventory.measured ?? {};
+  const assignment = inventory.assignment ?? {};
+
+  // The client measures a region over both families and the card counts regions,
+  // so the fastest sample of a region is the one that stands for it.
+  const reportedByRegion = new Map<number, DerpLatencyEntry>();
+  for (const entry of reported) {
+    if (entry.regionId !== undefined && !reportedByRegion.has(entry.regionId)) {
+      reportedByRegion.set(entry.regionId, entry);
+    }
+  }
+
+  const rows: { row: MachineRelayUse; milliseconds?: number }[] = [];
+  const claimed = new Set<string>();
+
+  for (const regionId of new Set(inventory.servedRegionIds ?? [])) {
+    const label = resolveDerpRegionLabel(regionId, sources, unknown).label;
+    const reportedEntry = reportedByRegion.get(regionId);
+    if (reportedEntry !== undefined) {
+      claimed.add(regionIdentity(parseDerpRegionKey(reportedEntry.region)));
+      rows.push({
+        milliseconds: reportedEntry.seconds * 1000,
+        row: servedLatencyRow(
+          regionId,
+          label,
+          preferredId,
+          relaySources,
+          formatDerpLatency(reportedEntry.seconds),
+          "reported",
+        ),
+      });
+      continue;
+    }
+
+    const local = measuredRegionMs(regionId, measured, assignment);
+    rows.push({
+      ...(local === undefined ? {} : { milliseconds: local }),
+      row: servedLatencyRow(
+        regionId,
+        label,
+        preferredId,
+        relaySources,
+        local === undefined ? undefined : formatLatencyMs(local),
+        local === undefined ? undefined : "measured",
+      ),
+    });
+  }
+
+  // A sample that names a region this deployment does not serve stays listed:
+  // the machine measured it, and a legacy `host:port` key only ever exists as
+  // the agent reported it.
+  for (const entry of reported) {
+    const key = regionIdentity(parseDerpRegionKey(entry.region));
+    if (claimed.has(key)) {
+      continue;
+    }
+
+    rows.push({
+      milliseconds: entry.seconds * 1000,
+      row: {
+        key,
+        label: resolveDerpLatencyKeyLabel(entry.region, sources, unknown),
+        ...(entry.regionId === undefined ? {} : { regionId: entry.regionId }),
+        latency: formatDerpLatency(entry.seconds),
+        latencySource: "reported",
+        inUse: entry.regionId !== undefined && entry.regionId === preferredId,
+        ...sourceOf(relaySources, entry.regionId),
+      },
+    });
+  }
+
+  rows.sort((a, b) => {
+    if ((a.milliseconds === undefined) !== (b.milliseconds === undefined)) {
+      return a.milliseconds === undefined ? 1 : -1;
+    }
+
+    if (a.milliseconds !== undefined && b.milliseconds !== undefined) {
+      const byLatency = a.milliseconds - b.milliseconds;
+      if (byLatency !== 0) {
+        return byLatency;
+      }
+    }
+
+    return (
+      (a.row.regionId ?? Number.MAX_SAFE_INTEGER) - (b.row.regionId ?? Number.MAX_SAFE_INTEGER) ||
+      a.row.key.localeCompare(b.row.key)
+    );
+  });
+
+  const summary = { total: rows.length, reported: 0, measured: 0, unmeasured: 0 };
+  for (const { row } of rows) {
+    summary[row.latencySource ?? "unmeasured"] += 1;
+  }
+
+  return { rows: rows.map((entry) => entry.row), summary };
+}
+
+// MARK: One machine's relay, as the machines list prints it
+
+/**
+ * The relay a machine is using right now, as the machines list's relay column
+ * prints it in its single cell: the region the agent reports as preferred
+ * (`NetInfo.PreferredDERP`, the sample the machine card marks "in use"),
+ * resolved through the one name chain.
+ *
+ * `undefined` means the agent has not reported a preferred region for this
+ * machine yet, so the list shows its own localized not-reported text instead of
+ * a label no source can support.
+ *
+ * This reads the same field and resolves through the same helpers as
+ * {@link buildDerpInfo}, with the same `regions` shape and the same embedded
+ * server, so this column and the machine card's "in use" row can never name a
+ * region differently.
+ */
+export function preferredRelayLabel(
+  info: HostInfo | undefined,
+  server: DerpEmbeddedServer | undefined,
+  unknown: string,
+  regions: DerpRegionNameData = {},
+): string | undefined {
+  const preferred = readRegionId(info?.NetInfo?.PreferredDERP);
+  if (preferred === undefined) {
+    return undefined;
+  }
+
+  return resolveDerpRegionLabel(
+    preferred,
+    { ...regions, embedded: embeddedDerpRegion(server) },
+    unknown,
+  ).label;
 }

@@ -159,15 +159,6 @@ export function useOverviewCardVisible(cardId: OverviewCardId): boolean {
 }
 
 /**
- * Whether any card of one group renders right now, so a group whose cards are
- * all hidden takes its heading with it instead of leaving an empty section.
- */
-export function useOverviewCardsVisible(cardIds: readonly OverviewCardId[]): boolean {
-  const { alerting, hidden } = useOverviewCardsState();
-  return cardIds.some((id) => alerting.has(id) || !hidden.includes(id));
-}
-
-/**
  * The hide control in one card's header. It is absent for a card that reports a
  * problem and before the page has bound its scope, so nothing renders a control
  * that cannot work.

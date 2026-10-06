@@ -52,6 +52,7 @@ import {
   officialRegionLatencies,
 } from "~/server/derp-mirror/latency";
 import { chineseRegionName } from "~/server/derp-mirror/names";
+import { isMirrorPathListed } from "~/server/derp-mirror/paths";
 import { OFFICIAL_DERP_MAP_URL } from "~/server/derp-mirror/service.server";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
@@ -306,6 +307,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       // latency test starts from the progress already made instead of waiting
       // for the next poll. Read from memory, like the settings above.
       probeStatus: derpMirror.latencyProbeStatus(),
+      // Whether Headscale already loads the file the mirror writes, compared
+      // the way every DERP card compares a configured path, plus the entries it
+      // lists right now for the card's hint. Both are plain values from the
+      // configuration the page has already read.
+      pathListed: isMirrorPathListed(
+        derp.paths,
+        mirrorSettings.targetPath,
+        appConfig.headscale.config_path ? dirname(appConfig.headscale.config_path) : undefined,
+      ),
+      paths: [...derp.paths],
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -541,9 +552,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           />
           <DerpRegionMirror
             agentAvailable={agentAvailable}
-            isDisabled={isDisabled}
+            configWritable={writable}
+            isDisabled={!access}
             last={mirror.last}
             numbering={mirror.numbering}
+            pathListed={mirror.pathListed}
+            paths={mirror.paths}
             probe={mirror.probe}
             probeStatus={mirror.probeStatus}
             regionError={mirror.regionsError}

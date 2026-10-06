@@ -14,11 +14,13 @@ import {
   integrationContext,
   snapshotContext,
 } from "~/server/context";
-import { mirrorTargetProblem } from "~/server/derp-mirror/service.server";
+import { ensureMirrorPathInDerpPaths } from "~/server/derp-mirror/paths";
+import { mirrorTargetProblem, type DerpMirrorService } from "~/server/derp-mirror/service.server";
 import {
   normalizeOfficialRegionId,
   parseDerpMirrorIntervalHours,
 } from "~/server/derp-mirror/settings";
+import type { DerpMirrorReload } from "~/server/derp-mirror/types";
 import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
@@ -34,6 +36,7 @@ import { clearHostEchoCache, parseHostEchoUrl, writeHostEchoSettings } from "~/s
 import { snapshotBeforeMutation } from "~/server/snapshots/service.server";
 import type { Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
+import log from "~/utils/log";
 
 import type { Route } from "./+types/overview";
 import {
@@ -60,12 +63,43 @@ import type {
   HeadscaleSettingsErrorCode,
   HeadscaleSettingsFailure,
   HeadscaleSettingsSuccess,
+  MirrorPathReport,
 } from "./error-keys";
 import { runOidcSelfTest } from "./oidc-self-test";
 import { validateTrustedProxyCidr } from "./trusted-proxies";
 
 const PKCE_METHODS = new Set(["plain", "S256"]);
 const POLICY_MODES = new Set(["file", "database"]);
+
+/**
+ * The snapshot reason recorded before the mirror's target file is added to
+ * `derp.paths`. The mirror snapshots the map file it replaces; this one covers
+ * the configuration change that makes Headscale load that file at all.
+ */
+export const DERP_MIRROR_PATH_SNAPSHOT_REASON = "derp-mirror-path";
+
+/**
+ * Actions that must not be refused just because Headscale's configuration file
+ * is mounted read-only.
+ *
+ * The OIDC self-test only reads the configuration. The official-region filter
+ * keeps its own settings in Headplane's data directory and its map file in a
+ * mounted directory, so a read-only Headscale configuration still lets the
+ * operator save, check, run and renumber it; the one step that touches the
+ * configuration — adding the file to `derp.paths` — reports itself as skipped
+ * instead of failing the save. Every other action still needs a write.
+ */
+const READ_ONLY_TOLERANT_ACTIONS = new Set([
+  "test_oidc",
+  "add_mirror_region_names",
+  "save_derp_mirror",
+  "check_derp_mirror",
+  "run_derp_mirror",
+  "reassign_derp_mirror",
+  "probe_derp_latency",
+  "derp_latency_probe_status",
+  "cancel_derp_latency_probe",
+]);
 
 /** Form field to Headscale config path for the boolean feature switches. */
 const FEATURE_PATHS = [
@@ -89,9 +123,10 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
   const formData = await request.formData();
   const action = formData.get("action_id")?.toString();
 
-  // The self-test only reads the configuration and the identity provider, so it
-  // stays available when Headscale's config file is mounted read-only.
-  if (action !== "test_oidc" && !headscaleConfig.writable()) {
+  // The self-test only reads the configuration and the identity provider, and
+  // the region filter keeps everything of its own outside Headscale's
+  // configuration file, so neither is refused when that file is read-only.
+  if (!READ_ONLY_TOLERANT_ACTIONS.has(action ?? "") && !headscaleConfig.writable()) {
     throw data({ localized: { key: "errors.headscaleConfigNotWritable" } }, { status: 403 });
   }
 
@@ -822,13 +857,30 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpMirrorSaveFailed");
       }
 
-      return success();
+      // A mirrored file nobody loads is useless, so enabling the filter also
+      // makes sure Headscale's own `derp.paths` lists its target. Disabling it
+      // deliberately leaves the list alone: dropping a valid entry would delete
+      // configuration the operator may still be using.
+      const pathReport = result.settings.enabled
+        ? await ensureMirrorPath(
+            context,
+            principal,
+            result.settings.targetPath,
+            result.settings.autoReload,
+          )
+        : undefined;
+
+      return data({
+        success: true,
+        ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
+      } satisfies HeadscaleSettingsSuccess);
     }
 
     case "check_derp_mirror": {
       // The tab's dry run: fetch, filter, generate and compare, and write
-      // nothing at all — no snapshot, no reload, and no change to the stored
-      // numbering. The run it returns is reported where it was started.
+      // nothing at all — no snapshot, no reload, no change to the stored
+      // numbering and no change to `derp.paths`. The run it returns is reported
+      // where it was started.
       const mirror = context.get(derpMirrorContext);
       const run = await mirror.check();
       if (run === undefined) {
@@ -840,27 +892,50 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
     case "run_derp_mirror": {
       // The tab's "Update now": the same work as a scheduled tick, writing only
-      // what actually changed and then following the reload switch.
+      // what actually changed and then following the reload switch. Writing the
+      // file is also the moment it becomes worth loading, so the path is made
+      // sure of here too.
       const mirror = context.get(derpMirrorContext);
       const run = await mirror.runNow();
       if (run === undefined) {
         return failure("derpMirrorRunFailed");
       }
 
-      return data({ success: true, mirror: run } satisfies HeadscaleSettingsSuccess);
+      const settings = mirrorPathTarget(mirror);
+      const pathReport =
+        settings === undefined
+          ? undefined
+          : await ensureMirrorPath(context, principal, settings.targetPath, settings.autoReload);
+
+      return data({
+        success: true,
+        mirror: run,
+        ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
+      } satisfies HeadscaleSettingsSuccess);
     }
 
     case "reassign_derp_mirror": {
       // The one action that drops the stored numbering and ranks every selected
       // region again by today's measurements, which is what the tab's preview
-      // shows. Only reachable through the confirmation dialog.
+      // shows. Only reachable through the confirmation dialog, and it writes the
+      // file, so it makes sure of the `derp.paths` entry like "Update now" does.
       const mirror = context.get(derpMirrorContext);
       const run = await mirror.reassign();
       if (run === undefined) {
         return failure("derpMirrorReassignFailed");
       }
 
-      return data({ success: true, mirror: run } satisfies HeadscaleSettingsSuccess);
+      const settings = mirrorPathTarget(mirror);
+      const pathReport =
+        settings === undefined
+          ? undefined
+          : await ensureMirrorPath(context, principal, settings.targetPath, settings.autoReload);
+
+      return data({
+        success: true,
+        mirror: run,
+        ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
+      } satisfies HeadscaleSettingsSuccess);
     }
 
     case "probe_derp_latency": {
@@ -961,6 +1036,161 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
     default: {
       return failure("invalidAction");
     }
+  }
+}
+
+/**
+ * Makes sure Headscale loads the file the region filter writes.
+ *
+ * Saving the filter enabled, or running it again, appends the mirror's target
+ * file to `derp.paths` when it is missing — never removing or reordering an
+ * entry, never adding a second copy of one that is already there, and never
+ * touching another `derp` key. The write takes the page's usual pre-mutation
+ * snapshot and leaves an audit entry; a read-only configuration is a recorded
+ * skip rather than an error, so the save it belongs to still succeeds and the
+ * card can keep the manual instruction visible.
+ *
+ * It never throws: the automatic step rides on top of a change that already
+ * succeeded, so anything unexpected — including a configuration surface that
+ * cannot answer — is reported as a skip instead of failing that change.
+ */
+async function ensureMirrorPath(
+  context: Route.ActionArgs["context"],
+  principal: Principal,
+  targetPath: string,
+  autoReload: boolean,
+): Promise<MirrorPathReport> {
+  try {
+    return await runMirrorPathStep(context, principal, targetPath, autoReload);
+  } catch (error) {
+    log.warn(
+      "config",
+      "Unable to check Headscale's derp.paths for the region mirror: %s",
+      error instanceof Error ? error.message : String(error),
+    );
+    return { status: "skipped", path: targetPath, reason: "write-failed" };
+  }
+}
+
+/** The body of {@link ensureMirrorPath}, which wraps it so nothing escapes. */
+async function runMirrorPathStep(
+  context: Route.ActionArgs["context"],
+  principal: Principal,
+  targetPath: string,
+  autoReload: boolean,
+): Promise<MirrorPathReport> {
+  const appConfig = context.get(appConfigContext);
+  const config = context.get(headscaleConfigContext);
+  const configPath = appConfig?.headscale.config_path;
+
+  // A configuration surface that cannot read or write `derp.paths` at all is
+  // reported like any other skip, so the caller still answers normally.
+  if (
+    !config ||
+    typeof config.getDERPSettings !== "function" ||
+    typeof config.patch !== "function"
+  ) {
+    return { status: "skipped", path: targetPath, reason: "write-failed" };
+  }
+
+  let snapshotId: string | undefined;
+  const outcome = await ensureMirrorPathInDerpPaths({
+    config,
+    targetPath,
+    baseDir: configPath ? dirname(configPath) : undefined,
+    beforeWrite: async () => {
+      const snapshot = await snapshotBeforeMutation(
+        context.get(snapshotContext),
+        DERP_MIRROR_PATH_SNAPSHOT_REASON,
+      );
+      snapshotId = snapshot?.id;
+    },
+  });
+
+  const report: MirrorPathReport = { ...outcome };
+  if (snapshotId !== undefined) {
+    report.snapshotId = snapshotId;
+  }
+
+  // A reload is only asked for once the target file exists: reloading
+  // Headscale into a `derp.paths` entry that names a file nothing has written
+  // yet would take the server down. Until then the first run writes the file
+  // and its own reload switch picks the map up.
+  if (outcome.status === "added" && outcome.fileExists) {
+    report.reload = await reloadAfterMirrorPathAdded(context, autoReload);
+  }
+
+  // An entry that was already there changed nothing, so it is neither
+  // snapshotted nor audited: a repeated save stays idempotent.
+  if (outcome.status !== "present") {
+    await recordMirrorPathChange(context, principal, report);
+  }
+
+  return report;
+}
+
+/**
+ * The mirror's stored target and reload switch, read defensively: the run the
+ * caller just performed is its own result, and a service that cannot answer
+ * must not turn that result into an error.
+ */
+function mirrorPathTarget(
+  mirror: DerpMirrorService,
+): { targetPath: string; autoReload: boolean } | undefined {
+  try {
+    const settings = mirror.settings();
+    return { targetPath: settings.targetPath, autoReload: settings.autoReload };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Follows the mirror's own reload switch after the path was added. */
+async function reloadAfterMirrorPathAdded(
+  context: Route.ActionArgs["context"],
+  autoReload: boolean,
+): Promise<DerpMirrorReload> {
+  if (!autoReload) {
+    return "manual";
+  }
+
+  const integration = context.get(integrationContext);
+  if (integration === undefined) {
+    return "manual";
+  }
+
+  try {
+    await integration.onConfigChange(context.get(headscaleContext));
+    return "triggered";
+  } catch {
+    return "failed";
+  }
+}
+
+/**
+ * Records what happened to Headscale's load list; the audit store swallows its
+ * own failures, and a failure here must never fail the save it describes. The
+ * region-mirror action code is reused: the audit page already filters by it,
+ * and the detail says which half of the mirror changed.
+ */
+async function recordMirrorPathChange(
+  context: Route.ActionArgs["context"],
+  principal: Principal,
+  report: MirrorPathReport,
+): Promise<void> {
+  try {
+    await context.get(auditContext)?.record({
+      ...auditActorOf(principal),
+      action: AUDIT_ACTIONS.derpRegionMirror,
+      target: report.path,
+      detail:
+        report.status === "added"
+          ? `derp.paths: added ${report.path}`
+          : `derp.paths: not added (${report.status === "skipped" ? report.reason : "unknown"})`,
+      result: report.status === "added" ? "success" : "failure",
+    });
+  } catch {
+    // The audit log must never fail the change it describes.
   }
 }
 

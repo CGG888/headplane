@@ -1,5 +1,11 @@
 import type { TranslationKey } from "~/i18n";
-import type { DerpMirrorProbeStatus, DerpMirrorRun } from "~/server/derp-mirror/types";
+import type {
+  DerpMirrorProbeStatus,
+  DerpMirrorReload,
+  DerpMirrorRun,
+  MirrorPathOutcome,
+  MirrorPathSkipReason,
+} from "~/server/derp-mirror/types";
 
 import type { DerpMapIssue, DerpMapIssueCode } from "./derp-map-schema";
 import type { OidcSelfTestReport } from "./oidc-self-test";
@@ -153,6 +159,12 @@ export interface HeadscaleSettingsSuccess {
    */
   mirror?: DerpMirrorRun;
   /**
+   * Present after the filter was saved or run: what the automatic `derp.paths`
+   * step did, so the card can report it right where the target path is edited.
+   * Absent when the step did not apply at all (a disabled filter being saved).
+   */
+  mirrorPath?: MirrorPathReport;
+  /**
    * Present after the mirror's "add region names" action: how many manual names
    * were actually added (`0` when every region already had one, which is what
    * makes the action idempotent).
@@ -163,6 +175,26 @@ export interface HeadscaleSettingsSuccess {
    * plain values, so the card can show progress without waiting for the probes.
    */
   probe?: DerpMirrorProbeStatus;
+}
+
+/**
+ * What the automatic `derp.paths` step did, plus what Headscale still needs.
+ * `reload` is present only when the entry was added and the target file was
+ * already on disk: a path pointing at a file nothing has written yet is left
+ * for the run's own reload instead of reloading Headscale into a missing file.
+ */
+export interface MirrorPathReport {
+  status: MirrorPathOutcome["status"];
+  /** The mirror's target file, as its settings hold it. */
+  path: string;
+  /** `added` only: whether the target was already on disk. */
+  fileExists?: boolean;
+  /** `skipped` only: why nothing was written. */
+  reason?: MirrorPathSkipReason;
+  /** The reload the added entry needed, when one was asked for. */
+  reload?: DerpMirrorReload;
+  /** The snapshot taken before the entry was appended, when one was taken. */
+  snapshotId?: string;
 }
 
 export interface HeadscaleSettingsFailure {

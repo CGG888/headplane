@@ -30,6 +30,16 @@ const en = {
     online: "Online",
     offline: "Offline",
   },
+  address: {
+    hidden: "Hidden address",
+    reveal: "Show address",
+    hideByDefault: "Hide addresses by default",
+    showAll: "Show all",
+    hideAll: "Hide all",
+    menu: "Address visibility",
+    menuBody:
+      "Addresses and hostnames are hidden by default. Reveal one with its eye button, or show them all for now.",
+  },
   header: {
     logoAlt: "HeadplaneCN logo",
     brand: "HeadplaneCN Console",
@@ -91,13 +101,6 @@ const en = {
       healthHideableNote:
         "Hiding the health summary hides the summary only: a failing check is still delivered through the notification webhooks.",
       restoreDefault: "Restore defaults",
-    },
-    sections: {
-      versions: "Versions",
-      derp: "DERP",
-      service: "Service",
-      counts: "Counts",
-      health: "Health",
     },
     status: {
       enabled: "Enabled",
@@ -377,6 +380,8 @@ const en = {
       columnAddresses: "Addresses",
       columnVersion: "Version",
       columnLastSeen: "Last Seen",
+      columnDerpNode: "DERP Node",
+      derpNodeNotReported: "Not reported",
       sortByName: "Sort by name",
       sortByIp: "Sort by IP address",
       sortByVersion: "Sort by version",
@@ -517,7 +522,11 @@ const en = {
         homeRegion: "Home region",
         preferredRegion: "Preferred region",
         latency: "Latency by region",
-        latencyMore: "{count} more regions were measured; only the fastest are shown.",
+        latencySourceReported: "Client report",
+        latencySourceMeasured: "Measured here",
+        latencyUnmeasured: "Not measured",
+        latencySummary:
+          "{measured} of {total} regions measured · {reported} reported by the client · {local} measured here",
         idsOnly:
           "Regions that neither the configured DERP maps nor a manual name describe are shown by ID.",
         embeddedMarker: "embedded DERP",
@@ -2055,6 +2064,27 @@ const en = {
           reloadTriggered: "Headscale was reloaded.",
           reloadFailed: "The reload failed.",
           snapshotNote: "Snapshot taken before the write: {snapshot}",
+          pathStateListed: "Listed in derp.paths",
+          pathStateMissing: "Not in derp.paths",
+          pathStateListedNote:
+            "Headscale loads this file when it starts or reloads, so clients receive the mirrored map.",
+          pathStateMissingNote:
+            "Saving the filter with the mirror enabled adds this path to derp.paths automatically.",
+          pathStateReadOnlyNote:
+            "Headscale's configuration is read-only, so add {path} to derp.paths by hand.",
+          pathStateDisabledNote:
+            "The mirror is off. Its path stays in derp.paths: dropping the entry would remove configuration this card does not own.",
+          pathHint: "Expected path: {path} · currently listed: {paths}",
+          pathHintNone: "nothing",
+          pathAddTo: "Add to derp.paths",
+          pathAdding: "Adding…",
+          pathAdded: "Added {path} to derp.paths.",
+          pathAddedPending:
+            "Added {path} to derp.paths. The first run writes the file; reload Headscale after it runs.",
+          pathSkippedReadOnly: "The path was not added: Headscale's configuration is read-only.",
+          pathSkippedInvalid: "The path was not added: it is not a usable absolute path.",
+          pathSkippedWriteFailed:
+            "The path was not added: writing Headscale's configuration failed.",
           errors: {
             invalidDerpMirrorInterval: "Choose 6, 12 or 24 hours as the mirror interval.",
             invalidDerpMirrorPath:

@@ -12,6 +12,11 @@ import { isNoExpiry, type PopulatedNode } from "~/utils/node-info";
 import { formatTimeDelta } from "~/utils/time";
 import { getUserDisplayName } from "~/utils/user";
 
+import {
+  preferredRelayLabel,
+  type DerpEmbeddedServer,
+  type DerpRegionNameData,
+} from "../derp-info";
 import CopyValue from "./copy-value";
 import MachineStatus from "./machine-status";
 import { AclTags } from "./machine-tags";
@@ -32,6 +37,14 @@ export interface MachineRowProps {
   isSelected?: boolean;
   isSelectionDisabled?: boolean;
   onSelectChange?: (selected: boolean) => void;
+  /**
+   * Region names the loader resolved, for the relay column: the manual mapping
+   * plus what the configured `derp.paths`/`derp.urls` maps describe. The card
+   * list below `md` has no columns, so it leaves these out.
+   */
+  relayRegions?: DerpRegionNameData;
+  /** Headscale's embedded DERP configuration, named through the same chain. */
+  relayServer?: DerpEmbeddedServer;
 }
 
 /**
@@ -74,6 +87,8 @@ export default function MachineRow({
   isSelected,
   isSelectionDisabled,
   onSelectChange,
+  relayRegions,
+  relayServer,
 }: MachineRowProps) {
   const { t, locale } = useI18n();
   const uiTags = uiTagsForNode(node, isAgent);
@@ -88,6 +103,15 @@ export default function MachineRow({
     : t("machines.common.tagOwned");
   const tags = node.tags ?? [];
   const hasChips = uiTags.length > 0 || tags.length > 0;
+  // The relay this machine is using right now: the same preferred region the
+  // detail card marks "in use", resolved through the same name chain. Undefined
+  // simply means the agent has not reported a region for this machine yet.
+  const derpNode = preferredRelayLabel(
+    node.hostInfo,
+    relayServer,
+    t("machines.detail.derp.unknown"),
+    relayRegions,
+  );
 
   return (
     <tr
@@ -230,6 +254,25 @@ export default function MachineRow({
 
       <td className={cn(CELL, "pr-3")}>
         <MachineStatus node={node} />
+      </td>
+
+      {/* The relay this machine is using. One line either way, so a row keeps its
+          height whatever a region is called: the label truncates and the full
+          text stays in the title. Read-only, and unsorted because the list only
+          sorts columns whose header already offers it. */}
+      <td className={cn(CELL, "pr-3")}>
+        {derpNode === undefined ? (
+          <span className="block truncate text-sm text-mist-400 dark:text-mist-500">
+            {t("machines.list.derpNodeNotReported")}
+          </span>
+        ) : (
+          <span
+            className="block truncate text-sm text-mist-700 dark:text-mist-300"
+            title={derpNode}
+          >
+            {derpNode}
+          </span>
+        )}
       </td>
 
       <td className={cn(CELL, "pr-3")}>

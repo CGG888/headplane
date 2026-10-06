@@ -8,6 +8,7 @@ import {
   formatDerpLatency,
   parseDerpRegionId,
   parseDerpRegionKey,
+  preferredRelayLabel,
   regionLabel,
   resolveDerpLatencyKeyLabel,
   resolveDerpRegionLabel,
@@ -468,5 +469,74 @@ describe("region label precedence", () => {
     expect(label({ regionId: 901, code: "ams" })).toBe("#901 · ams");
     expect(label({ regionId: 901, name: "Amsterdam" })).toBe("#901 · Amsterdam");
     expect(label({ regionId: 901, code: "  ", name: "  " })).toBe("#901");
+  });
+});
+
+describe("preferred relay label", () => {
+  test("names the region the agent reports as preferred", () => {
+    // The region's own name, exactly as the machine card would print it.
+    expect(
+      preferredRelayLabel({ NetInfo: { PreferredDERP: 903 } }, EMBEDDED, "Unknown", {
+        remote: { "903": { regionId: 903, code: "sfo", name: "San Francisco" } },
+      }),
+    ).toBe("#903 · sfo · San Francisco");
+  });
+
+  test("uses the manual mapping before every automatic source", () => {
+    expect(
+      preferredRelayLabel({ NetInfo: { PreferredDERP: 901 } }, EMBEDDED, "Unknown", {
+        manual: { "901": "广东东莞" },
+        local: { "901": { regionId: 901, code: "ams", name: "Amsterdam" } },
+      }),
+    ).toBe("#901 · 广东东莞");
+  });
+
+  test("names the embedded region through the same chain", () => {
+    expect(preferredRelayLabel({ NetInfo: { PreferredDERP: 999 } }, EMBEDDED, "Unknown", {})).toBe(
+      "#999 · headscale · Headscale Embedded DERP",
+    );
+  });
+
+  test("falls back to the code when no name is known", () => {
+    expect(
+      preferredRelayLabel({ NetInfo: { PreferredDERP: 901 } }, EMBEDDED, "Unknown", {
+        local: { "901": { regionId: 901, code: "hkg" } },
+      }),
+    ).toBe("#901 · hkg");
+  });
+
+  test("keeps the bare id when only the id is known", () => {
+    expect(preferredRelayLabel({ NetInfo: { PreferredDERP: 42 } }, EMBEDDED, "Unknown")).toBe(
+      "#42",
+    );
+    // A map entry that names nothing usable leaves the id alone too.
+    expect(
+      preferredRelayLabel({ NetInfo: { PreferredDERP: 42 } }, EMBEDDED, "Unknown", {
+        local: { "42": { regionId: 42 } },
+      }),
+    ).toBe("#42");
+  });
+
+  test("reports nothing before the agent has measured a region", () => {
+    expect(preferredRelayLabel(undefined, EMBEDDED, "Unknown")).toBeUndefined();
+    // A home region alone is not the region the machine is using now.
+    expect(preferredRelayLabel({ HomeDERP: 999 }, EMBEDDED, "Unknown")).toBeUndefined();
+    expect(preferredRelayLabel({ NetInfo: {} }, EMBEDDED, "Unknown")).toBeUndefined();
+    // A measurement that is not a finite id names no region either.
+    expect(
+      preferredRelayLabel({ NetInfo: { PreferredDERP: Number.NaN } }, EMBEDDED, "Unknown"),
+    ).toBeUndefined();
+  });
+
+  test("reads exactly like the machine card's preferred row", () => {
+    const info = {
+      HomeDERP: 901,
+      NetInfo: { PreferredDERP: 901, DERPLatency: { "901": 0.052, "999": 0.02 } },
+    };
+    const regions = { manual: { "901": "香港" } };
+
+    expect(preferredRelayLabel(info, EMBEDDED, "Unknown", regions)).toBe(
+      buildDerpInfo(info, EMBEDDED, "Unknown", regions).preferred.label,
+    );
   });
 });

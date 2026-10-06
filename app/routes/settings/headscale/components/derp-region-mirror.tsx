@@ -1,4 +1,15 @@
-import { Ban, Gauge, Globe, Lock, RefreshCw, Search, Sparkles, Tags, Wand2 } from "lucide-react";
+import {
+  Ban,
+  Gauge,
+  Globe,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Tags,
+  Wand2,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 
@@ -57,7 +68,11 @@ import {
   type MirrorSettingsView,
   type MirrorSortMode,
 } from "../derp-mirror";
-import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../error-keys";
+import {
+  HEADSCALE_SETTINGS_ERROR_KEYS,
+  type HeadscaleSettingsResult,
+  type MirrorPathReport,
+} from "../error-keys";
 
 /** How a finished run reads at a glance. */
 const OUTCOME_TONES: Record<string, SettingsStatusTone> = {
@@ -100,11 +115,25 @@ interface DerpRegionMirrorProps {
    * points at the Agent settings page.
    */
   agentAvailable: boolean;
+  /**
+   * Whether Headscale's own configuration file may be written. The mirror keeps
+   * everything of its own outside that file, so the card stays usable when it is
+   * read-only — but the one step that edits `derp.paths` is then left to the
+   * operator, which is what the card says.
+   */
+  configWritable: boolean;
   isDisabled: boolean;
   /** The newest run or check, or `undefined` when neither has happened yet. */
   last: MirrorRun | undefined;
   /** The order and the fixed anchors the server's rule produced. */
   numbering: MirrorNumbering;
+  /**
+   * Whether Headscale's `derp.paths` already lists the mirror's target file,
+   * resolved the way the server compares a configured path.
+   */
+  pathListed: boolean;
+  /** The entries `derp.paths` lists right now, exactly as they are written. */
+  paths: string[];
   /** The newest latency probe this server ran, and how it ended. */
   probe: MirrorProbeView;
   /**
@@ -274,6 +303,59 @@ function RunSummary({ last, regions }: { last: MirrorRun; regions: MirrorRegionR
 }
 
 /**
+ * What the server's automatic `derp.paths` step did, next to the path it
+ * describes.
+ *
+ * A path that was already listed prints nothing here — the state chip above
+ * already says so. An added entry says the truth about the reload: with the
+ * target file on disk the switch follows the other settings actions and says
+ * which happened, and when the first run still has to write the file the card
+ * says so instead of asking for a reload that could not load anything.
+ */
+function PathReport({ report }: { report: MirrorPathReport }) {
+  const { t } = useI18n();
+
+  if (report.status === "present") {
+    return undefined;
+  }
+
+  if (report.status === "skipped") {
+    const key =
+      report.reason === "read-only"
+        ? "settings.headscale.derp.mirror.pathSkippedReadOnly"
+        : report.reason === "invalid-target"
+          ? "settings.headscale.derp.mirror.pathSkippedInvalid"
+          : "settings.headscale.derp.mirror.pathSkippedWriteFailed";
+
+    return (
+      <p className="text-sm text-amber-700 dark:text-amber-300" role="status">
+        {t(key)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5" role="status">
+      <p className="text-sm text-emerald-600 dark:text-emerald-400">
+        {report.fileExists === false
+          ? t("settings.headscale.derp.mirror.pathAddedPending", { path: report.path })
+          : t("settings.headscale.derp.mirror.pathAdded", { path: report.path })}
+      </p>
+      {report.fileExists === false ? undefined : (
+        <p className="text-xs text-mist-500 dark:text-mist-400">
+          {t(MIRROR_RELOAD_KEYS[report.reload ?? "manual"])}
+        </p>
+      )}
+      {report.snapshotId === undefined ? undefined : (
+        <p className="text-xs text-mist-500 dark:text-mist-400">
+          {t("settings.headscale.derp.mirror.snapshotNote", { snapshot: report.snapshotId })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * The official region filter card of the DERP tab.
  *
  * The card explains what these regions are before it shows anything else: they
@@ -288,9 +370,12 @@ function RunSummary({ last, regions }: { last: MirrorRun; regions: MirrorRegionR
  */
 export default function DerpRegionMirror({
   agentAvailable,
+  configWritable,
   isDisabled,
   last,
   numbering,
+  pathListed,
+  paths,
   probe,
   probeStatus,
   regionError,
@@ -304,6 +389,7 @@ export default function DerpRegionMirror({
   const runFetcher = useFetcher<HeadscaleSettingsResult>();
   const reassignFetcher = useFetcher<HeadscaleSettingsResult>();
   const namesFetcher = useFetcher<HeadscaleSettingsResult>();
+  const pathFetcher = useFetcher<HeadscaleSettingsResult>();
   const probeFetcher = useFetcher<HeadscaleSettingsResult>();
   const cancelFetcher = useFetcher<HeadscaleSettingsResult>();
   const statusFetcher = useFetcher<HeadscaleSettingsResult>();
@@ -322,6 +408,11 @@ export default function DerpRegionMirror({
   const [sortMode, setSortMode] = useState<MirrorSortMode>("official");
   const [ceiling, setCeiling] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Which of the three controls last sent a request: the save form, one of the
+  // run buttons, or the manual "add to derp.paths" button. Each reports its own
+  // outcome, and only the newest one is worth showing, so this keeps them from
+  // overwriting each other out of order.
+  const [pathAction, setPathAction] = useState<"save" | "run" | "manual">("save");
 
   // The latency run the card follows. The run itself belongs to the server and
   // outlives every request the page makes, so the card never waits for it: it
@@ -543,6 +634,32 @@ export default function DerpRegionMirror({
       : undefined;
   const addingNames = namesFetcher.state !== "idle";
 
+  // The manual escape hatch for a configuration Headplane may not write. Its
+  // errors are the DERP path action's own codes, localized like every other
+  // error on the page.
+  const pathError = errorFor(pathFetcher.data);
+  const addingPath = pathFetcher.state !== "idle";
+  const savePathReport =
+    saveFetcher.data !== undefined && saveFetcher.data.success
+      ? saveFetcher.data.mirrorPath
+      : undefined;
+  const runPathReport =
+    actionFetcher.data !== undefined && actionFetcher.data.success
+      ? actionFetcher.data.mirrorPath
+      : undefined;
+  // The manual button reports through its own fetcher, so its outcome is the
+  // only one on screen after it was used: the automatic reports describe a
+  // different attempt at the same list.
+  const pathReport =
+    pathAction === "manual" ? undefined : pathAction === "save" ? savePathReport : runPathReport;
+
+  // The hover hint the operator had to guess at before: which path this card is
+  // talking about, and everything Headscale's list holds right now.
+  const pathHint = t("settings.headscale.derp.mirror.pathHint", {
+    path: settings.targetPath,
+    paths: paths.length === 0 ? t("settings.headscale.derp.mirror.pathHintNone") : paths.join(", "),
+  });
+
   // The dialog only closes itself once the server accepted the renumbering, so
   // a rejected request keeps the explanation on screen next to the error.
   useEffect(() => {
@@ -594,6 +711,21 @@ export default function DerpRegionMirror({
     }
 
     namesFetcher.submit(form, { method: "POST" });
+  }
+
+  /**
+   * The manual half of the `derp.paths` step, kept for the case where the
+   * automatic one was skipped: it appends the file the mirror is configured to
+   * write through the same action the DERP tab's own path list uses. It goes
+   * through a fetcher because the button lives inside the card's one save form,
+   * where nothing may nest a second form.
+   */
+  function addMirrorPath() {
+    setPathAction("manual");
+    const form = new FormData();
+    form.set("action_id", "add_derp_path");
+    form.set("path", settings.targetPath);
+    pathFetcher.submit(form, { method: "POST" });
   }
 
   /**
@@ -655,13 +787,26 @@ export default function DerpRegionMirror({
     </p>
   );
 
+  // An enabled filter whose file Headscale never loads is the one state that
+  // outranks the selection count in the card's own chip: the card is collapsed
+  // by default, and that is exactly the confusion this reports.
+  const pathNeedsAttention = settings.enabled && !pathListed;
+
   return (
     <SettingsCollapsible
       description={t("settings.headscale.derp.mirror.regionsBody")}
       icon={Globe}
       status={{
-        tone: regions.length === 0 ? "warn" : selected.size > 0 ? "ok" : "neutral",
-        label: t("settings.headscale.derp.mirror.selectedSummary", { count: selected.size }),
+        tone: pathNeedsAttention
+          ? "warn"
+          : regions.length === 0
+            ? "warn"
+            : selected.size > 0
+              ? "ok"
+              : "neutral",
+        label: pathNeedsAttention
+          ? t("settings.headscale.derp.mirror.pathStateMissing")
+          : t("settings.headscale.derp.mirror.selectedSummary", { count: selected.size }),
       }}
       summary={t("settings.headscale.derp.mirror.summary", {
         file: settings.targetPath,
@@ -1032,6 +1177,14 @@ export default function DerpRegionMirror({
                 onCheckedChange={setEnabled}
               />
             </SettingsField>
+            {enabled || !pathListed ? undefined : (
+              // Turning the mirror off never edits `derp.paths`: removing an
+              // entry the operator may still be relying on is not this card's
+              // job, so the card says the list is left alone.
+              <p className="text-sm text-mist-600 dark:text-mist-400">
+                {t("settings.headscale.derp.mirror.pathStateDisabledNote")}
+              </p>
+            )}
 
             <SettingsField
               description={t("settings.headscale.derp.mirror.pathDescription")}
@@ -1050,6 +1203,54 @@ export default function DerpRegionMirror({
             <p className="rounded-lg bg-mist-100 p-3 text-sm text-mist-600 dark:bg-mist-800/50 dark:text-mist-300">
               {t("settings.headscale.derp.mirror.pathNote", { file: MIRROR_FILE_HINT })}
             </p>
+
+            {/* Whether Headscale actually loads the file this card writes. The
+                chip is the state, the line under it explains what that state
+                means here, and the hover hint names the expected path and every
+                entry the configuration lists right now — which is exactly what
+                the operator had to look up by hand before. */}
+            <div className="flex flex-col gap-1" title={pathHint}>
+              <div className="flex flex-wrap items-center gap-2">
+                <SettingsStatus tone={pathListed ? "ok" : "warn"}>
+                  {t(
+                    pathListed
+                      ? "settings.headscale.derp.mirror.pathStateListed"
+                      : "settings.headscale.derp.mirror.pathStateMissing",
+                  )}
+                </SettingsStatus>
+                <span className="text-sm text-mist-600 dark:text-mist-400">
+                  {pathListed
+                    ? t("settings.headscale.derp.mirror.pathStateListedNote")
+                    : configWritable
+                      ? t("settings.headscale.derp.mirror.pathStateMissingNote")
+                      : t("settings.headscale.derp.mirror.pathStateReadOnlyNote", {
+                          path: settings.targetPath,
+                        })}
+                </span>
+              </div>
+
+              {/* The manual escape hatch: it stays for the case where the
+                  automatic step was skipped. It writes Headscale's own
+                  configuration, so it is only offered when that file may be
+                  written at all. */}
+              {pathListed ? undefined : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    disabled={isDisabled || !configWritable || addingPath || busy}
+                    onClick={addMirrorPath}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    {addingPath
+                      ? t("settings.headscale.derp.mirror.pathAdding")
+                      : t("settings.headscale.derp.mirror.pathAddTo")}
+                  </Button>
+                </div>
+              )}
+              {pathError === undefined ? undefined : errorBox(pathError)}
+              {pathReport === undefined ? undefined : <PathReport report={pathReport} />}
+            </div>
 
             <SettingsField
               description={t("settings.headscale.derp.mirror.intervalDescription")}
@@ -1087,7 +1288,12 @@ export default function DerpRegionMirror({
                 {t("settings.headscale.saved")}
               </span>
             ) : undefined}
-            <Button disabled={isDisabled || busy} type="submit" variant="heavy">
+            <Button
+              disabled={isDisabled || busy}
+              onClick={() => setPathAction("save")}
+              type="submit"
+              variant="heavy"
+            >
               {t("settings.headscale.derp.mirror.save")}
             </Button>
           </SettingsActions>
@@ -1118,7 +1324,10 @@ export default function DerpRegionMirror({
               <Button
                 className="w-full"
                 disabled={isDisabled || running}
-                onClick={() => setResultAction("run")}
+                onClick={() => {
+                  setResultAction("run");
+                  setPathAction("run");
+                }}
                 type="submit"
                 variant="heavy"
               >
@@ -1145,6 +1354,7 @@ export default function DerpRegionMirror({
                   const form = new FormData();
                   form.set("action_id", "reassign_derp_mirror");
                   setResultAction("reassign");
+                  setPathAction("run");
                   reassignFetcher.submit(form, { method: "POST" });
                 }}
               >

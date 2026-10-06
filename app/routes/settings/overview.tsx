@@ -37,7 +37,7 @@ function SettingsSection({ title, children }: { title: string; children: ReactNo
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-mist-500 dark:text-mist-400">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
     </section>
   );
 }
