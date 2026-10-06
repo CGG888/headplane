@@ -78,6 +78,18 @@ features:
 [Headscale 设置 →](/features/headscale-settings)
 
 </div>
+<div class="feature-card">
+<div class="feature-card-icon" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M10.3 21a2 2 0 0 0 3.4 0" /><path d="M3.3 15.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.4 6-2.7 7.3" /></svg>
+</div>
+
+### 告警通知
+
+节点掉线、Headscale 失联、密钥将过期都会通知你。
+
+[告警通知 →](/features/notifications)
+
+</div>
 </div>
 
 本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS
