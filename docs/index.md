@@ -90,4 +90,4 @@ features:
 </div>
 </div>
 
-本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS 环境（尤其是 fnOS 飞牛）。
+本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 为方便中文用户使用而调整，上游功能、署名与许可证全部保留。

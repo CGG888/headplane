@@ -90,4 +90,4 @@ Offline nodes, an unreachable Headscale or expiring keys reach you.
 </div>
 </div>
 
-This is [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) for self-hosted NAS setups (fnOS in particular).
+[`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) is adapted for Chinese-speaking users; every upstream feature, credit and licence is preserved.
