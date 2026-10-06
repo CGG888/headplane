@@ -1,9 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import {
-  derpNodeSources,
-  type EmbeddedDerpNodeInput,
-} from "~/routes/overview-helpers";
+import { derpNodeSources, type EmbeddedDerpNodeInput } from "~/routes/overview-helpers";
 import type { DerpMapFileState, DerpMapGroupReading } from "~/server/headscale/derp-region-sources";
 
 /** One node as a map declares it; only what the card reads is stated. */

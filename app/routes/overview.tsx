@@ -33,11 +33,7 @@ import {
   useOverviewCardsScope,
   useOverviewCardsVisible,
 } from "~/components/overview-card-manager";
-import {
-  SettingsPage,
-  SettingsStatus,
-  type SettingsStatusTone,
-} from "~/components/settings-nav";
+import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import CopyValue from "~/routes/machines/components/copy-value";
