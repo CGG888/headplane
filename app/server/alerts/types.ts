@@ -27,12 +27,28 @@ export type AlertHistoryEventId = AlertEventId | "test";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
+/**
+ * The languages a webhook message can be written in. `default` follows the
+ * application's default locale, so the payload stays readable when a deployment
+ * never touches the setting. The literal list mirrors `~/utils/locale`'s
+ * `LOCALES`; `resolveAlertLanguage` fails to type check if the two drift apart.
+ */
+export const ALERT_LANGUAGE_IDS = ["default", "en", "zh-Hans", "zh-Hant"] as const;
+
+export type AlertLanguage = (typeof ALERT_LANGUAGE_IDS)[number];
+
 export interface AlertSettings {
   enabled: boolean;
   /** Webhook endpoint receiving a JSON POST. Empty means "not configured". */
   webhookUrl: string;
   /** Optional shared secret sent as the `X-Headplane-Secret` header. */
   secret: string;
+  /**
+   * Language of the human-readable `title` and `summary` in the payload. The
+   * machine-readable fields (event, severity, details, timestamps) are the same
+   * in every language.
+   */
+  notificationLanguage: AlertLanguage;
   /** Events to report; anything not listed is detected but never sent. */
   events: AlertEventId[];
   /** How often the scheduler looks for transitions, in seconds. */

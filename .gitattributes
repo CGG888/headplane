@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings on every platform: this repository has
+# core.autocrlf=true, so without this rule a .sh file is checked out with CRLF
+# and bash fails on the stray CR bytes (scripts/sync-tsconnect.sh had them).
+*.sh text eol=lf

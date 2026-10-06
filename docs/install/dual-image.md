@@ -23,6 +23,34 @@ NAS 应用中心托管。原来那种「Headscale 是宿主机原生进程、Hea
 如果你现在的部署还是「Headscale 原生进程 + HeadplaneCN 容器」——[fnOS 部署](/install/fnos)
 或[原生模式](/install/native-mode)——那么[下面的迁移一节](#从当前部署迁移)就是给你的。
 
+## 运行安装脚本（可选）
+
+上面的目录布局、compose 文件、两份配置和迁移步骤，都可以交给脚本一次问清楚再生成：
+[`scripts/dual-image-install.sh`](https://github.com/CGG888/headplaneCN/blob/main/scripts/dual-image-install.sh)。
+
+```bash
+# 在 NAS 上（或直接克隆仓库后：bash scripts/dual-image-install.sh）
+curl -fsSL -o dual-image-install.sh \
+  https://raw.githubusercontent.com/CGG888/headplaneCN/main/scripts/dual-image-install.sh
+
+bash dual-image-install.sh --help      # 每个问题和开关的说明
+bash dual-image-install.sh --dry-run   # 只打印计划，不写任何文件
+bash dual-image-install.sh             # 正式安装
+```
+
+- **全程交互，默认值就是本文的值**：基础目录、两个镜像 tag、`server_url`、DERP 与
+  管理界面的主机名、端口、时区、API Key、cookie secret、是否迁移，逐个询问并校验；
+  输入不合格会重新问，不会直接退出。
+- **目录布局由你决定**：HeadplaneCN 的配置文件与数据目录、Headscale 的配置目录与数据
+  目录、DERP 地图目录（在 Headscale 配置目录里）都会逐个询问（默认值由基础目录推导），
+  校验通过后先打印一次最终布局，再原样用于两个容器的 `volumes:`。
+- **先看后写**：`--dry-run` 打印每一个要写的文件、每一次复制和之后要执行的命令，什么都
+  不改；正式运行也会先打印完整计划，确认之后才落盘，且**不确认就不会启动容器**。
+- **不会删你的数据**：已有配置只按需改写个别键（原文件另存 `.bak`），迁移只做**复制**
+  并先打时间戳备份，脚本里没有任何删除数据的动作。
+- 写完之后会问是否立刻 `docker compose up -d`，并顺手跑一遍 `docker compose ps`、
+  Headscale 日志与 `headscale version` 的验收命令。
+
 ## 为什么用这个形态
 
 - **没有路径与挂载的陷阱了。** `derp.paths` 过去要求「写宿主机路径 + 容器内挂载成同一个绝对

@@ -7,6 +7,7 @@ import Input from "~/components/input";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
+import Select from "~/components/select";
 import {
   SettingsActions,
   SettingsCollapsible,
@@ -19,15 +20,30 @@ import {
 import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
+import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import type { AlertDelivery, AlertSettings } from "~/server/alerts/types";
+import type { AlertDelivery, AlertLanguage, AlertSettings } from "~/server/alerts/types";
 import { alertsContext, authContext } from "~/server/context";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
 import { alertsAction, type AlertActionResult } from "./actions";
+import { alertMessage } from "./alert-message";
 import { ALERT_ERROR_KEYS } from "./error-keys";
 import { ALERT_EVENT_KEYS, ALERT_EVENT_ORDER } from "./labels";
+
+/**
+ * The payload languages the channel can be pinned to. `default` follows the
+ * application default, the other three are the supported UI locales; their
+ * labels come from the existing `language.*` entries so the names are spelled
+ * the same way everywhere.
+ */
+const ALERT_LANGUAGE_ITEMS: { value: AlertLanguage; labelKey: TranslationKey }[] = [
+  { value: "default", labelKey: "settings.notifications.notificationLanguageDefault" },
+  { value: "en", labelKey: "language.en" },
+  { value: "zh-Hans", labelKey: "language.zh-Hans" },
+  { value: "zh-Hant", labelKey: "language.zh-Hant" },
+];
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -100,6 +116,7 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
   const [enabled, setEnabled] = useState(settings.enabled);
   const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl);
   const [secret, setSecret] = useState(settings.secret);
+  const [notificationLanguage, setNotificationLanguage] = useState(settings.notificationLanguage);
 
   const saveResult = saveFetcher.data;
   const saveError =
@@ -146,9 +163,9 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
           </span>
         </SettingsField>
 
-        {/* The two connection fields pair up on a wide page; the switch keeps
+        {/* The connection fields pair up on a wide page; the switch keeps
             the full row because its help text is a sentence, not a label. */}
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <Input
             description={t("settings.notifications.webhookUrlDescription")}
             label={t("settings.notifications.webhookUrlLabel")}
@@ -166,6 +183,20 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
             onChange={setSecret}
             type="password"
             value={secret}
+          />
+
+          <Select
+            description={t("settings.notifications.notificationLanguageDescription")}
+            items={ALERT_LANGUAGE_ITEMS.map((item) => ({
+              value: item.value,
+              label: t(item.labelKey),
+            }))}
+            label={t("settings.notifications.notificationLanguageLabel")}
+            name="notification_language"
+            onValueChange={(value) =>
+              setNotificationLanguage((value ?? "default") as AlertLanguage)
+            }
+            value={notificationLanguage}
           />
         </div>
 
@@ -189,6 +220,7 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
         <input name="action_id" type="hidden" value="test" />
         <input name="webhook_url" type="hidden" value={webhookUrl} />
         <input name="secret" type="hidden" value={secret} />
+        <input name="notification_language" type="hidden" value={notificationLanguage} />
 
         <Text>{t("settings.notifications.testBody")}</Text>
 
@@ -355,13 +387,20 @@ function HistorySection({
 }
 
 function DeliveryRow({ delivery }: { delivery: AlertDelivery }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const kind = delivery.ok ? "ok" : "error";
+  // Built from the catalog on every render, so an alert already in the history
+  // reads in the language the interface is switched to right now.
+  const message = alertMessage(locale, {
+    id: delivery.event,
+    target: delivery.target,
+    threshold: delivery.threshold,
+  });
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{t(ALERT_EVENT_KEYS[delivery.event])}</span>
+        <span className="font-medium">{message.title}</span>
         <SettingsStatus tone={kind}>
           {delivery.ok
             ? t("settings.notifications.historyOk")
@@ -373,6 +412,8 @@ function DeliveryRow({ delivery }: { delivery: AlertDelivery }) {
           </span>
         ) : undefined}
       </span>
+
+      <span className="text-mist-600 dark:text-mist-300">{message.body}</span>
 
       <span className="flex flex-wrap items-center gap-2 text-xs text-mist-600 dark:text-mist-400">
         <span suppressHydrationWarning>{new Date(delivery.at).toLocaleString()}</span>

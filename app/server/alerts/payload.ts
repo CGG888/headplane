@@ -1,11 +1,16 @@
 // MARK: Alert payloads
 //
-// The JSON body POSTed to a webhook. Webhooks are consumed by automation and
-// chat relays, not by the UI, so the copy here is English and lives outside the
-// translation catalogs; the settings page renders its own localized labels from
-// the structured history entry instead of showing this text.
+// The JSON body POSTed to a webhook. The machine-readable fields — the event
+// id, the severity, the target/threshold details, the timestamps and the
+// version — never change with language, so existing automations keep working.
+// Only the human-readable `title` and `summary` are localized, built from the
+// same catalogs the interface uses and in the language the operator selected
+// (`settings.notificationLanguage`).
 
-import type { AlertEvent, AlertHistoryEventId, AlertSeverity } from "./types";
+import { alertMessage } from "~/routes/settings/notifications/alert-message";
+
+import { resolveAlertLanguage } from "./settings";
+import type { AlertEvent, AlertHistoryEventId, AlertLanguage, AlertSeverity } from "./types";
 
 export interface AlertPayload {
   event: AlertHistoryEventId;
@@ -17,47 +22,6 @@ export interface AlertPayload {
   timestamp: string;
   /** The Headplane build that sent the notification. */
   version: string;
-}
-
-const EVENT_TEXT: Record<AlertHistoryEventId, { title: string; summary: string }> = {
-  headscaleUnreachable: {
-    title: "Headscale is unreachable",
-    summary: "HeadplaneCN could not reach the Headscale API.",
-  },
-  headscaleRecovered: {
-    title: "Headscale is reachable again",
-    summary: "HeadplaneCN can reach the Headscale API again.",
-  },
-  nodeOffline: {
-    title: "Node went offline",
-    summary: "{target} is no longer connected to the tailnet.",
-  },
-  nodeOnline: {
-    title: "Node is back online",
-    summary: "{target} is connected to the tailnet again.",
-  },
-  apiKeyExpiring: {
-    title: "API key expiring soon",
-    summary: "API key {target} expires within {threshold} days.",
-  },
-  configCheckFailed: {
-    title: "Configuration check failing",
-    summary: "The Headscale configuration check {target} is failing.",
-  },
-  derpSyncFailed: {
-    title: "DERP address sync failed",
-    summary: "The embedded DERP address sync failed ({target}).",
-  },
-  test: {
-    title: "Test notification",
-    summary: "This is a test notification from HeadplaneCN.",
-  },
-};
-
-function interpolate(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    vars[name] === undefined ? match : String(vars[name]),
-  );
 }
 
 function detailsOf(
@@ -73,27 +37,36 @@ function detailsOf(
   return details;
 }
 
-export function buildAlertPayload(event: AlertEvent, version: string): AlertPayload {
-  const text = EVENT_TEXT[event.id];
-  const vars = detailsOf(event);
+export function buildAlertPayload(
+  event: AlertEvent,
+  version: string,
+  language: AlertLanguage = "default",
+): AlertPayload {
+  const message = alertMessage(resolveAlertLanguage(language), event);
 
   return {
     event: event.id,
-    title: text.title,
+    title: message.title,
     severity: event.severity,
-    summary: interpolate(text.summary, vars),
-    details: vars,
+    summary: message.body,
+    details: detailsOf(event),
     timestamp: event.at,
     version,
   };
 }
 
-export function buildTestAlertPayload(version: string, now: Date = new Date()): AlertPayload {
+export function buildTestAlertPayload(
+  version: string,
+  now: Date = new Date(),
+  language: AlertLanguage = "default",
+): AlertPayload {
+  const message = alertMessage(resolveAlertLanguage(language), { id: "test" });
+
   return {
     event: "test",
-    title: EVENT_TEXT.test.title,
+    title: message.title,
     severity: "info",
-    summary: EVENT_TEXT.test.summary,
+    summary: message.body,
     details: {},
     timestamp: now.toISOString(),
     version,

@@ -65,6 +65,9 @@ HeadplaneCN 给它补上前端：机器、用户、访问控制（ACL）、DNS �
 镜像：`ghcr.io/cgg888/headplanecn`，标签为 `latest`、`x.y.z`，以及带 `-shell` 后缀的调试镜像（含 shell/curl，便于进容器排查）。
 完整步骤见[中文文档](https://cgg888.github.io/headplaneCN/)，其中
 [fnOS（飞牛）安装指南](https://cgg888.github.io/headplaneCN/install/fnos) 含可直接使用的 `config.yaml` 与 `docker-compose.yml`。
+Headscale 与 HeadplaneCN 各跑一个容器的形态见[双镜像部署](https://cgg888.github.io/headplaneCN/install/dual-image)，
+它配套了交互式安装脚本 [`scripts/dual-image-install.sh`](./scripts/dual-image-install.sh)：所有环境相关的值（含各目录布局）都会逐个
+询问并校验，`--dry-run` 只打印计划不写文件，也不会有任何删除数据的动作。
 
 ```yaml
 services:

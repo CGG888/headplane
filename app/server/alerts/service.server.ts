@@ -68,7 +68,9 @@ export interface AlertService {
   history(): AlertDelivery[];
   update(patch: Partial<AlertSettings>): Promise<AlertUpdateResult>;
   /** Posts a sample payload with the given (possibly unsaved) channel config. */
-  test(override?: Pick<AlertSettings, "webhookUrl" | "secret">): Promise<AlertDeliveryOutcome>;
+  test(
+    override?: Pick<AlertSettings, "webhookUrl" | "secret" | "notificationLanguage">,
+  ): Promise<AlertDeliveryOutcome>;
   /** One detection pass; a no-op while notifications are disabled. */
   runOnce(): Promise<void>;
   /**
@@ -230,7 +232,7 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
       for (const event of events) {
         const result = await notifyAlert({
           settings: document.settings,
-          payload: buildAlertPayload(event, __VERSION__),
+          payload: buildAlertPayload(event, __VERSION__, document.settings.notificationLanguage),
           history,
           event: event.id,
           target: event.target,
@@ -313,7 +315,7 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
 
     const result = await notifyAlert({
       settings: document.settings,
-      payload: buildAlertPayload(event, __VERSION__),
+      payload: buildAlertPayload(event, __VERSION__, document.settings.notificationLanguage),
       history: document.history,
       event: event.id,
       target: event.target,
@@ -364,7 +366,7 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
       await ensureLoaded();
       const settings = normalizeAlertSettings({ ...document.settings, ...override });
       const at = now();
-      const payload = buildTestAlertPayload(__VERSION__, at);
+      const payload = buildTestAlertPayload(__VERSION__, at, settings.notificationLanguage);
 
       const outcome = await postAlertPayload(settings, payload, {
         timeoutMs: options.timeoutMs,

@@ -48,6 +48,7 @@ describe("alert document parsing", () => {
           enabled: true,
           webhookUrl: "  https://example.com/hook  ",
           secret: "s3cret",
+          notificationLanguage: "zh-Hans",
           events: ["nodeOffline", "notAnEvent", "nodeOffline"],
           intervalSeconds: 5,
           cooldownSeconds: 10_000_000,
@@ -60,11 +61,24 @@ describe("alert document parsing", () => {
       enabled: true,
       webhookUrl: "https://example.com/hook",
       secret: "s3cret",
+      notificationLanguage: "zh-Hans",
       events: ["nodeOffline"],
       intervalSeconds: 15,
       cooldownSeconds: 86_400,
       apiKeyExpiryDays: DEFAULT_ALERT_SETTINGS.apiKeyExpiryDays,
     });
+  });
+
+  test("an unknown notification language falls back to the default", () => {
+    for (const value of ["klingon", "", 7, undefined]) {
+      const document = parseAlertsDocument(
+        JSON.stringify({
+          settings: { webhookUrl: "https://example.com/hook", notificationLanguage: value },
+        }),
+      );
+
+      expect(document.settings.notificationLanguage, String(value)).toBe("default");
+    }
   });
 
   test("drops history entries that are not usable", () => {

@@ -8,6 +8,7 @@ import {
   ALERT_INTERVAL_MAX_SECONDS,
   ALERT_INTERVAL_MIN_SECONDS,
   isAlertEventId,
+  isAlertLanguage,
   isValidAlertWebhookUrl,
 } from "~/server/alerts/settings";
 import type { AlertEventId } from "~/server/alerts/types";
@@ -61,6 +62,8 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       const enabled = formData.get("enabled")?.toString() === "true";
       const webhookUrl = formData.get("webhook_url")?.toString().trim() ?? "";
       const secret = formData.get("secret")?.toString() ?? "";
+      const postedLanguage = formData.get("notification_language")?.toString().trim();
+      const stored = alerts.settings();
 
       if (webhookUrl.length > 0 && !isValidAlertWebhookUrl(webhookUrl)) {
         return failure("invalidUrl", 400);
@@ -68,8 +71,23 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       if (enabled && !isValidAlertWebhookUrl(webhookUrl)) {
         return failure("notConfigured", 400);
       }
+      // An absent field keeps the stored choice; a present but unknown one is
+      // rejected, exactly like an out-of-range interval.
+      let notificationLanguage = stored.notificationLanguage;
+      if (postedLanguage !== undefined && postedLanguage.length > 0) {
+        if (!isAlertLanguage(postedLanguage)) {
+          return failure("invalidLanguage", 400);
+        }
 
-      const result = await alerts.update({ enabled, webhookUrl, secret });
+        notificationLanguage = postedLanguage;
+      }
+
+      const result = await alerts.update({
+        enabled,
+        webhookUrl,
+        secret,
+        notificationLanguage,
+      });
       return result.success
         ? data({ success: true, kind: "save" } satisfies AlertActionResult)
         : failure("writeFailed", 500);
@@ -114,6 +132,7 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       // posted channel values win over the stored ones when they are present.
       const postedUrl = formData.get("webhook_url")?.toString().trim() ?? "";
       const postedSecret = formData.get("secret")?.toString();
+      const postedLanguage = formData.get("notification_language")?.toString().trim();
       const stored = alerts.settings();
 
       const webhookUrl = postedUrl.length > 0 ? postedUrl : stored.webhookUrl;
@@ -121,9 +140,18 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
         return failure("notConfigured", 400);
       }
 
+      const notificationLanguage =
+        postedLanguage !== undefined && postedLanguage.length > 0
+          ? postedLanguage
+          : stored.notificationLanguage;
+      if (!isAlertLanguage(notificationLanguage)) {
+        return failure("invalidLanguage", 400);
+      }
+
       const outcome = await alerts.test({
         webhookUrl,
         secret: postedUrl.length > 0 ? (postedSecret ?? stored.secret) : stored.secret,
+        notificationLanguage,
       });
 
       return data(

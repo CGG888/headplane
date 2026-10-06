@@ -1,6 +1,6 @@
 import type { TranslationKey } from "~/i18n";
 // Type-only, so the browser bundle never pulls a server module in.
-import type { AlertEventId, AlertHistoryEventId } from "~/server/alerts/types";
+import type { AlertEventId } from "~/server/alerts/types";
 
 /** The order the events card lists them in; must match the server's event ids. */
 export const ALERT_EVENT_ORDER = [
@@ -13,8 +13,11 @@ export const ALERT_EVENT_ORDER = [
   "derpSyncFailed",
 ] as const satisfies readonly AlertEventId[];
 
-/** Localized label for every event the delivery history can contain. */
-export const ALERT_EVENT_KEYS: Record<AlertHistoryEventId, TranslationKey> = {
+/**
+ * Localized label for every reportable event. A Test delivery is not a
+ * reportable event and is labelled by its alert message instead.
+ */
+export const ALERT_EVENT_KEYS: Record<AlertEventId, TranslationKey> = {
   headscaleUnreachable: "settings.notifications.eventHeadscaleUnreachable",
   headscaleRecovered: "settings.notifications.eventHeadscaleRecovered",
   nodeOffline: "settings.notifications.eventNodeOffline",
@@ -22,5 +25,4 @@ export const ALERT_EVENT_KEYS: Record<AlertHistoryEventId, TranslationKey> = {
   apiKeyExpiring: "settings.notifications.eventApiKeyExpiring",
   configCheckFailed: "settings.notifications.eventConfigCheckFailed",
   derpSyncFailed: "settings.notifications.eventDerpSyncFailed",
-  test: "settings.notifications.eventTest",
 };

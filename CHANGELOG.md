@@ -1,5 +1,13 @@
 # Next
 
+## Changes
+
+- **Alert notifications now speak your language and in plain words.** Every alert's title and body come from the interface catalogues instead of being fixed English, so the alert list and the delivery history re-render in whichever language you are using — switch the interface to English and the same alert reads in English. The webhook has its own **notification language** setting (follow the site default, Simplified Chinese, Traditional Chinese or English) so the message that arrives in WeChat, DingTalk or Feishu is in the language you want, while the structured fields stay exactly as they were for anything automating on them. The wording was rewritten to be readable in one pass: what happened, which node, key or check it concerns, what to do about it, and what happens next — for example a node offline notice says the device can no longer receive traffic or policies, suggests checking that it is powered on and running its client, and promises a notice when it reconnects.
+- **A complete interactive installer for the two-container deployment** (`scripts/dual-image-install.sh`, documented on the dual-image page). It asks for the image tags, the client-facing URL, optional DERP and admin hostnames and ports, host or bridge networking, the STUN port, the timezone, the API key, a cookie secret and **every directory** (base, Headplane config and data, Headscale config and data, DERP maps) and writes a compose file whose volume mounts are derived from those answers, with both containers sharing the same host paths. It runs a full **dry run** that prints every file, copy and command and changes nothing, backs everything up before migrating an existing installation (copying, never moving or deleting), writes atomically, keeps secrets at mode 600 and masked, patches an existing Headscale config key by key with a `.bak` and a change summary, and finishes with the commands to start, upgrade and roll back.
+
+## Fixes
+
+- **The automations that only served the upstream community are gone**, so nothing runs on a schedule any more: the dependency-bot workflow, the stale-issue closer, the triage and milestone helpers, the PR labeller, the manual agent workflow and the superseded docs build. The build, the release (images and GitHub Release) and the documentation deploy are untouched and still run on the same triggers.
 # 0.22.13 (October 6, 2026)
 
 ## Fixes

@@ -26,6 +26,37 @@ If your current deployment is still "native Headscale process plus a HeadplaneCN
 [fnOS deployment](/en/install/fnos) or [native mode](/en/install/native-mode) — then the
 [migration section below](#migrating-from-the-current-setup) is written for you.
 
+## Running the installer (optional)
+
+The directory layout, the compose file, both configuration files and the migration steps above
+can be produced by one script that asks for every environment-specific value first:
+[`scripts/dual-image-install.sh`](https://github.com/CGG888/headplaneCN/blob/main/scripts/dual-image-install.sh).
+
+```bash
+# on the NAS (or, from a clone: bash scripts/dual-image-install.sh)
+curl -fsSL -o dual-image-install.sh \
+  https://raw.githubusercontent.com/CGG888/headplaneCN/main/scripts/dual-image-install.sh
+
+bash dual-image-install.sh --help      # every prompt and flag, documented
+bash dual-image-install.sh --dry-run   # print the whole plan, write nothing
+bash dual-image-install.sh             # the real install
+```
+
+- **Interactive, with this guide's defaults**: base directory, both image tags, `server_url`, the
+  DERP and admin hostnames, ports, timezone, API key, cookie secret and whether to migrate are all
+  asked for and validated; a typo is re-asked instead of aborting.
+- **You define the layout**: the HeadplaneCN config file and data directory, the Headscale config
+  and data directories and the DERP map directory (inside the config directory) are asked for with
+  defaults derived from the base directory, validated, printed back once as the resolved layout,
+  and used verbatim in both containers' `volumes:` entries.
+- **Look before it writes**: `--dry-run` prints every file it would write, every copy it would
+  make and every follow-up command, and changes nothing. A real run prints the same plan and only
+  writes after you confirm it — and it never starts a container without asking.
+- **It never deletes your data**: an existing configuration is patched key by key with the
+  original kept as `.bak`, and migration only ever *copies*, after a timestamped backup.
+- Afterwards it offers to run `docker compose up -d` and then runs the verification commands
+  (`docker compose ps`, the Headscale log, `headscale version`).
+
 ## Why this shape
 
 - **The path and mount pitfalls are gone.** `derp.paths` used to require "the host path, mounted at

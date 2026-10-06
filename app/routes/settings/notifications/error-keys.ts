@@ -11,6 +11,7 @@ export type AlertActionErrorCode =
   | "invalidInterval"
   | "invalidCooldown"
   | "invalidExpiry"
+  | "invalidLanguage"
   | "noEvents"
   | "notConfigured"
   | "writeFailed";
@@ -21,6 +22,7 @@ export const ALERT_ERROR_KEYS: Record<AlertActionErrorCode, TranslationKey> = {
   invalidInterval: "settings.notifications.errors.invalidInterval",
   invalidCooldown: "settings.notifications.errors.invalidCooldown",
   invalidExpiry: "settings.notifications.errors.invalidExpiry",
+  invalidLanguage: "settings.notifications.errors.invalidLanguage",
   noEvents: "settings.notifications.errors.noEvents",
   notConfigured: "settings.notifications.errors.notConfigured",
   writeFailed: "settings.notifications.errors.writeFailed",

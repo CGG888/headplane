@@ -6,12 +6,23 @@
 // clamped, unknown event ids are dropped, and a missing document yields the
 // defaults instead of an error.
 
-import { ALERT_EVENT_IDS, type AlertEventId, type AlertSettings } from "./types";
+import { DEFAULT_LOCALE, type Locale } from "~/utils/locale";
+
+import {
+  ALERT_EVENT_IDS,
+  ALERT_LANGUAGE_IDS,
+  type AlertEventId,
+  type AlertLanguage,
+  type AlertSettings,
+} from "./types";
 
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   enabled: false,
   webhookUrl: "",
   secret: "",
+  // Follows the application default instead of pinning a language, so a
+  // deployment that changes `DEFAULT_LOCALE` moves with it.
+  notificationLanguage: "default",
   events: [...ALERT_EVENT_IDS],
   intervalSeconds: 60,
   cooldownSeconds: 300,
@@ -28,6 +39,19 @@ export const ALERT_EXPIRY_WINDOW_MAX_DAYS = 90;
 
 export function isAlertEventId(value: unknown): value is AlertEventId {
   return typeof value === "string" && (ALERT_EVENT_IDS as readonly string[]).includes(value);
+}
+
+export function isAlertLanguage(value: unknown): value is AlertLanguage {
+  return typeof value === "string" && (ALERT_LANGUAGE_IDS as readonly string[]).includes(value);
+}
+
+/**
+ * The concrete locale a payload is written in. `default` resolves to the
+ * application default, which is what a deployment that never sets the option
+ * gets; every other value is already a supported locale.
+ */
+export function resolveAlertLanguage(value: AlertLanguage): Locale {
+  return value === "default" ? DEFAULT_LOCALE : value;
 }
 
 /** Clamps a number into a range, falling back to the default for non-numbers. */
@@ -82,9 +106,10 @@ function readText(value: unknown, fallback = ""): string {
 }
 
 /**
- * Turns an arbitrary value into usable settings: unknown event ids disappear,
- * numbers are clamped, and anything missing falls back to the defaults. An
- * empty event list is kept — "report nothing" is a legitimate configuration.
+ * Turns an arbitrary value into usable settings: unknown event ids and unknown
+ * notification languages disappear, numbers are clamped, and anything missing
+ * falls back to the defaults. An empty event list is kept — "report nothing" is
+ * a legitimate configuration.
  */
 export function normalizeAlertSettings(value: unknown): AlertSettings {
   const source =
@@ -100,6 +125,9 @@ export function normalizeAlertSettings(value: unknown): AlertSettings {
     enabled: source.enabled === true,
     webhookUrl: readText(source.webhookUrl),
     secret: typeof source.secret === "string" ? source.secret : "",
+    notificationLanguage: isAlertLanguage(source.notificationLanguage)
+      ? source.notificationLanguage
+      : DEFAULT_ALERT_SETTINGS.notificationLanguage,
     events,
     intervalSeconds: clampAlertInterval(source.intervalSeconds),
     cooldownSeconds: clampAlertCooldown(source.cooldownSeconds),

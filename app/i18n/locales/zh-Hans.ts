@@ -2746,6 +2746,10 @@ const zhHans = {
       webhookUrlDescription: "必须是完整的 http 或 https 地址。",
       secretLabel: "共享密钥",
       secretDescription: "可选。每次投递都会作为 X-Headplane-Secret 请求头发送。",
+      notificationLanguageLabel: "通知语言",
+      notificationLanguageDescription:
+        "Webhook 中标题和正文使用的语言。事件 ID、级别、对象和时间戳不随语言变化。",
+      notificationLanguageDefault: "默认（跟随应用默认语言）",
       save: "保存",
       saving: "保存中…",
       saved: "已保存。",
@@ -2780,13 +2784,53 @@ const zhHans = {
       eventApiKeyExpiring: "API 密钥即将过期",
       eventConfigCheckFailed: "配置检查失败",
       eventDerpSyncFailed: "DERP 地址同步失败",
-      eventTest: "测试通知",
+      // The alert text itself; the same sentences are sent to the webhook and
+      // shown in the delivery history above.
+      alert: {
+        headscaleUnreachable: {
+          title: "Headscale 无响应",
+          body: "HeadplaneCN 无法连接 Headscale API，界面现在无法读取或修改 Tailnet。请确认 Headscale 正在运行，并且本服务器可以访问它；HeadplaneCN 会持续重试，恢复后会再发一条通知。",
+        },
+        headscaleRecovered: {
+          title: "Headscale 已恢复访问",
+          body: "HeadplaneCN 已能重新连接 Headscale API，界面和修改功能恢复正常，无需处理。",
+        },
+        nodeOffline: {
+          title: "节点 {target} 已离线",
+          body: "节点 {target} 已断开与 Tailnet 的连接，目前无法接收流量或策略。请检查设备是否开机、Tailscale 客户端是否在运行；节点重新上线后 HeadplaneCN 会再发一条通知。",
+        },
+        nodeOnline: {
+          title: "节点 {target} 已恢复在线",
+          body: "节点 {target} 已重新连接到 Tailnet，可以正常接收流量，无需处理。",
+        },
+        apiKeyExpiring: {
+          title: "API 密钥 {target} 即将过期",
+          body: "API 密钥 {target} 将在 {threshold} 天内过期，使用它的自动化任务到期后会失效。请到 API 密钥页面创建新密钥并替换使用位置；HeadplaneCN 只会提醒，不会自动续期。",
+        },
+        configCheckFailed: {
+          title: "配置检查 {target} 开始失败",
+          body: "Headscale 的配置检查 {target} 开始失败，修复前 Headscale 可能无法启动或行为异常。请打开“设置 → 系统”查看详情并修改配置文件；同一项检查只在开始失败时通知一次。",
+        },
+        derpSyncFailed: {
+          title: "DERP 地址同步失败",
+          body: "HeadplaneCN 无法把 DERP 地址列表写入 DERP 地图文件，Headscale 发布的中继信息可能已过期。请检查地图文件是否可写，并在 DERP 设置页面查看同步日志；下次定时同步会再次尝试。",
+        },
+        derpMirrorFailed: {
+          title: "DERP 区域镜像任务失败",
+          body: "HeadplaneCN 未能完成 DERP 区域镜像任务，镜像的区域数据可能不完整。请在 DERP 设置页面查看镜像日志，并检查配置的数据源是否可以访问；下次定时任务会再次尝试。",
+        },
+        test: {
+          title: "测试通知",
+          body: "这是一条测试通知：如果你在微信、钉钉或飞书上收到它，说明 Webhook 配置正确。无需其他操作。",
+        },
+      },
       errors: {
         invalidAction: "无法识别该请求。",
         invalidUrl: "请输入完整的 http 或 https Webhook 地址。",
         invalidInterval: "检查间隔超出允许范围。",
         invalidCooldown: "冷却时间超出允许范围。",
         invalidExpiry: "API 密钥预警窗口超出允许范围。",
+        invalidLanguage: "不支持该通知语言。",
         noEvents: "请至少选择一个要上报的事件。",
         notConfigured: "启用或测试通知前，请先填写 Webhook 地址。",
         writeFailed: "无法将设置写入 HeadplaneCN 的数据目录。",

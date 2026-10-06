@@ -2942,6 +2942,10 @@ const en = {
       webhookUrlDescription: "Must be an absolute http or https URL.",
       secretLabel: "Shared secret",
       secretDescription: "Optional. Sent as the X-Headplane-Secret header on every delivery.",
+      notificationLanguageLabel: "Notification language",
+      notificationLanguageDescription:
+        "The language the webhook's title and message are written in. Event ids, severities, targets and timestamps never change with it.",
+      notificationLanguageDefault: "Default (application default)",
       save: "Save",
       saving: "Saving…",
       saved: "Saved.",
@@ -2977,13 +2981,53 @@ const en = {
       eventApiKeyExpiring: "API key expiring",
       eventConfigCheckFailed: "Configuration check failed",
       eventDerpSyncFailed: "DERP address sync failed",
-      eventTest: "Test notification",
+      // The alert text itself, not the settings labels: the same sentences are
+      // sent to the webhook and shown in the delivery history above.
+      alert: {
+        headscaleUnreachable: {
+          title: "Headscale is not responding",
+          body: "HeadplaneCN cannot reach the Headscale API, so the interface cannot load or change the tailnet. Check that Headscale is running and reachable from this server; HeadplaneCN keeps retrying and will send a recovery notice when it gets through.",
+        },
+        headscaleRecovered: {
+          title: "Headscale is reachable again",
+          body: "HeadplaneCN can reach the Headscale API again, so the interface and its changes work as usual. Nothing needs to be done.",
+        },
+        nodeOffline: {
+          title: "Node {target} went offline",
+          body: "The node {target} is no longer connected to the tailnet, so it cannot receive traffic or policies. Check that the device is powered on and its Tailscale client is running; HeadplaneCN will send a notice when it reconnects.",
+        },
+        nodeOnline: {
+          title: "Node {target} is back online",
+          body: "The node {target} is connected to the tailnet again and can receive traffic. Nothing needs to be done.",
+        },
+        apiKeyExpiring: {
+          title: "API key {target} expires soon",
+          body: "The API key {target} expires within {threshold} days, and any automation using it stops working when it does. Create a replacement on the API keys page and update whatever uses it; HeadplaneCN only warns, it does not renew keys.",
+        },
+        configCheckFailed: {
+          title: "Configuration check {target} is failing",
+          body: "Headscale's configuration check {target} started failing, and Headscale may not start or behave correctly until it is fixed. Open Settings → System to see the details and fix the configuration file; a check is only reported when it starts failing.",
+        },
+        derpSyncFailed: {
+          title: "DERP address sync failed",
+          body: "HeadplaneCN could not write the DERP address list into your DERP map files, so the relays Headscale publishes may be out of date. Check that the map files are writable and review the sync log on the DERP settings page; the next scheduled run will try again.",
+        },
+        derpMirrorFailed: {
+          title: "DERP region mirror run failed",
+          body: "HeadplaneCN could not finish the DERP region mirror run, so the mirrored region data may be incomplete. Review the mirror log on the DERP settings page and check that the configured sources respond; the next scheduled run will try again.",
+        },
+        test: {
+          title: "Test notification",
+          body: "This is a test notification from HeadplaneCN: if it reaches your WeChat, DingTalk or Feishu group, the webhook is set up correctly. Nothing else needs to be done.",
+        },
+      },
       errors: {
         invalidAction: "The request was not understood.",
         invalidUrl: "Enter an absolute http or https webhook URL.",
         invalidInterval: "The check interval is outside the allowed range.",
         invalidCooldown: "The cooldown is outside the allowed range.",
         invalidExpiry: "The API key warning window is outside the allowed range.",
+        invalidLanguage: "That notification language is not supported.",
         noEvents: "Select at least one event to report.",
         notConfigured: "Set a webhook URL before enabling or testing notifications.",
         writeFailed: "The settings could not be written to HeadplaneCN's data directory.",
