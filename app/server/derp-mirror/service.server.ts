@@ -52,7 +52,7 @@ import { validateDerpMap } from "~/routes/settings/headscale/derp-map-schema";
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
 import type { Headscale } from "~/server/headscale/api";
 import {
-  loadRemoteDerpMapDetail,
+  loadRemoteDerpMapOutcome,
   type RemoteDerpMapOptions,
 } from "~/server/headscale/derp-map-remote";
 import type { SnapshotService } from "~/server/snapshots/service.server";
@@ -77,17 +77,26 @@ import {
   pruneAssignmentToSelection,
   type DerpMirrorSettings,
 } from "./settings";
+import {
+  OFFICIAL_DERP_MAP_URL as OFFICIAL_MAP_URL,
+  readPastedMap,
+  resolveMirrorSourceChain,
+  type MirrorSource,
+  type OfficialMapReport,
+} from "./sources";
 import { readDerpMirrorDocument, writeDerpMirrorDocument, writeDerpMirrorSettings } from "./store";
 import type {
   DerpLatencyRegionReading,
   DerpMirrorLatency,
   DerpMirrorMode,
+  DerpMirrorPastedMap,
   DerpMirrorProbeOutcome,
   DerpMirrorProbeStart,
   DerpMirrorProbeStatus,
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
+  DerpMirrorSourceAttempt,
   OfficialRegion,
 } from "./types";
 
@@ -97,9 +106,10 @@ export const DERP_MIRROR_SNAPSHOT_REASON = "derp-region-mirror";
 /**
  * The official map, used when `derp.urls` lists nothing: the operator removed
  * the official URL from Headscale, but the mirror's whole point is Tailscale's
- * public regions, so the official map is what it falls back to.
+ * public regions, so the official map is what it falls back to. Re-exported from
+ * the module that owns the source order, so the service and the page agree.
  */
-export const OFFICIAL_DERP_MAP_URL = "https://controlplane.tailscale.com/derpmap/default";
+export const OFFICIAL_DERP_MAP_URL = OFFICIAL_MAP_URL;
 
 /** How long a fetched official map may be reused, as the fetcher needs it. */
 export interface DerpMirrorCacheSettings {
@@ -159,12 +169,14 @@ export interface DerpMirrorServiceOptions {
   integration?: DerpMirrorReloadPort;
   /**
    * The official map, by default through the shared cached fetcher. Resolves to
-   * undefined when no configured URL yielded a usable map.
+   * the first source that yielded a usable map, with every source it tried and
+   * why each of the others failed; a report with no regions means nothing
+   * answered.
    */
   loadOfficialRegions?: (
-    urls: string[],
+    sources: readonly MirrorSource[],
     cache: DerpMirrorCacheSettings,
-  ) => Promise<OfficialRegion[] | undefined>;
+  ) => Promise<OfficialMapReport>;
   /** Measured latency per official region id, in milliseconds. */
   loadLatencies?: () => Promise<Record<string, number>>;
   /**
@@ -265,37 +277,55 @@ export function mirrorTargetProblem(targetPath: string): DerpMirrorReason | unde
 }
 
 /**
- * The official map through the shared cached fetcher; the first URL that answers
- * with a usable map wins, and a configuration that lists none falls back to the
- * official one. Every URL is dialled at most once per cache window, because the
- * fetcher is the same process-wide cache the DERP cards read through.
+ * The official map through the shared cached fetcher, one source after another.
+ *
+ * The first source that answers with a usable map wins and becomes the run's
+ * recorded source; every source before it is remembered with the reason it
+ * contributed nothing, so a blocked endpoint is visible as a blocked endpoint
+ * instead of as an empty map. A source list that names nothing falls back to the
+ * official address, which is what an unconfigured install has always fetched.
+ * Every URL is dialled at most once per cache window, because the fetcher is the
+ * same process-wide cache the DERP cards read through.
+ */
+export async function loadOfficialRegionsReport(
+  sources: readonly MirrorSource[],
+  cache: DerpMirrorCacheSettings,
+  remote: RemoteDerpMapOptions = {},
+): Promise<OfficialMapReport> {
+  const targets: MirrorSource[] =
+    sources.length > 0 ? [...sources] : [{ url: OFFICIAL_MAP_URL, kind: "official" }];
+
+  const attempts: DerpMirrorSourceAttempt[] = [];
+  for (const source of targets) {
+    const outcome = await loadRemoteDerpMapOutcome(source.url, cache, remote);
+    if (outcome.regions !== undefined && outcome.regions.length > 0) {
+      attempts.push({ url: source.url });
+      return {
+        regions: outcome.regions,
+        source: source.url,
+        sourceKind: source.kind,
+        attempts,
+      };
+    }
+
+    attempts.push({ url: source.url, reason: outcome.reason ?? "unreadable" });
+  }
+
+  return { attempts };
+}
+
+/**
+ * The narrower answer the older callers use: just the regions, or undefined when
+ * no source was usable. Kept so a caller that only needs a map does not have to
+ * read a report.
  */
 export async function loadOfficialRegions(
   urls: string[],
   cache: DerpMirrorCacheSettings,
   remote: RemoteDerpMapOptions = {},
 ): Promise<OfficialRegion[] | undefined> {
-  const targets = [...new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))];
-  if (targets.length === 0) {
-    targets.push(OFFICIAL_DERP_MAP_URL);
-  }
-
-  for (const url of targets) {
-    const regions = await loadRemoteDerpMapDetail(url, cache, remote);
-    if (regions !== undefined && regions.length > 0) {
-      return regions;
-    }
-  }
-
-  return undefined;
-}
-
-/** The service's default fetcher: the shared loader, with no test seams. */
-function loadOfficialRegionsDefault(
-  urls: string[],
-  cache: DerpMirrorCacheSettings,
-): Promise<OfficialRegion[] | undefined> {
-  return loadOfficialRegions(urls, cache);
+  const sources: MirrorSource[] = urls.map((url) => ({ url, kind: "custom" }));
+  return (await loadOfficialRegionsReport(sources, cache, remote)).regions;
 }
 
 /** The assignment a finished run settled on, if it differs from the stored one. */
@@ -334,8 +364,50 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
   let latencyRun: LatencyRun | undefined;
 
   const now = () => options.now?.() ?? new Date();
-  const loadRegions = options.loadOfficialRegions ?? loadOfficialRegionsDefault;
+  const loadRegions = options.loadOfficialRegions ?? loadOfficialRegionsReport;
   const loadLatencies = options.loadLatencies ?? (async () => ({}));
+
+  /**
+   * The official map this run reads: the operator's pasted body when one is
+   * stored — no source is dialled at all then — otherwise the resolved source
+   * chain through the shared cached fetcher. Never throws: a source list that
+   * cannot be read is reported the way a failed fetch is, so the run records the
+   * reasons and keeps the previous file.
+   */
+  async function readOfficialMap(current: DerpMirrorSettings): Promise<OfficialMapReport> {
+    if (current.pastedMap !== undefined) {
+      return readPastedMap(current.pastedMap);
+    }
+
+    // Read outside the guard: a configuration that cannot answer at all is an
+    // unexpected failure, exactly as it was before sources existed.
+    const derp = options.config.getDERPSettings();
+    const chain = resolveMirrorSourceChain(current, derp.urls);
+    try {
+      return await loadRegions(chain, {
+        autoUpdateEnabled: derp.autoUpdateEnabled,
+        updateFrequency: derp.updateFrequency,
+      });
+    } catch (error) {
+      log.debug("config", `The official DERP map could not be read: ${errorMessage(error)}`);
+      return {
+        attempts: chain.map((source) => ({ url: source.url, reason: "network" as const })),
+      };
+    }
+  }
+
+  /** The source a report names, as the fields a run stores about it. */
+  function sourceFields(
+    report: OfficialMapReport,
+    pasted: DerpMirrorPastedMap | undefined,
+  ): Pick<DerpMirrorRun, "source" | "sourceKind" | "pastedAt" | "attempts"> {
+    return {
+      ...(report.source === undefined ? {} : { source: report.source }),
+      ...(report.sourceKind === undefined ? {} : { sourceKind: report.sourceKind }),
+      ...(pasted === undefined ? {} : { pastedAt: pasted.at }),
+      ...(report.attempts.length === 0 ? {} : { attempts: report.attempts }),
+    };
+  }
 
   function ensureLoaded(): Promise<void> {
     loadPromise ??= readDerpMirrorDocument(options.dataPath)
@@ -648,21 +720,19 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         });
       }
 
-      // 3. The official map, through the shared cached fetcher.
-      const derp = options.config.getDERPSettings();
-      let regions: OfficialRegion[] | undefined;
-      try {
-        regions = await loadRegions(derp.urls, {
-          autoUpdateEnabled: derp.autoUpdateEnabled,
-          updateFrequency: derp.updateFrequency,
-        });
-      } catch (error) {
-        regions = undefined;
-        log.debug("config", `The official DERP map could not be read: ${errorMessage(error)}`);
-      }
+      // 3. The official map: a pasted body when one is stored, otherwise the
+      //    resolved source chain through the shared cached fetcher.
+      const report = await readOfficialMap(current);
+      const regions = report.regions;
+      const sources = sourceFields(report, current.pastedMap);
 
       if (regions === undefined || regions.length === 0) {
-        return await finish({ ...base, outcome: "skipped", reason: "fetch-unusable" });
+        return await finish({
+          ...base,
+          ...sources,
+          outcome: "skipped",
+          reason: "fetch-unusable",
+        });
       }
 
       // 4. Only regions the fetched map actually describes can be mirrored.
@@ -671,6 +741,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       if (mirrored.length === 0) {
         return await finish({
           ...base,
+          ...sources,
           outcome: "skipped",
           reason: "no-regions",
           detail: current.officialRegionIds.join(", "),
@@ -702,6 +773,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       if (issues.length > 0) {
         return await finish({
           ...base,
+          ...sources,
           mirrored,
           assignment: numbered.assignment,
           outcome: "skipped",
@@ -714,7 +786,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       //    alone, so the file's modification time is untouched too.
       const previous = await readTarget(targetPath);
       const changed = mirrorMapChanged(previous, yaml);
-      const settled = { ...base, mirrored, assignment: numbered.assignment, changed };
+      const settled = { ...base, ...sources, mirrored, assignment: numbered.assignment, changed };
 
       if (!changed) {
         // The numbering the run settled on is still persisted: a selection that
@@ -890,17 +962,10 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     try {
       await ensureLoaded();
 
-      const derp = options.config.getDERPSettings();
-      let regions: OfficialRegion[] | undefined;
-      try {
-        regions = await loadRegions(derp.urls, {
-          autoUpdateEnabled: derp.autoUpdateEnabled,
-          updateFrequency: derp.updateFrequency,
-        });
-      } catch (error) {
-        regions = undefined;
-        log.debug("config", `The official DERP map could not be read: ${errorMessage(error)}`);
-      }
+      // The same reader a mirror run uses, pasted map included, so the regions
+      // measured here are the regions the mirror would hand out.
+      const mapReport = await readOfficialMap(settings);
+      const regions = mapReport.regions;
 
       if (regions === undefined || regions.length === 0) {
         // Nothing to probe: the same answer the old in-request path gave, now

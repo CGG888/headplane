@@ -9,12 +9,15 @@
 
 import { isAbsolute } from "node:path";
 
+import { MAX_DERP_MAP_BYTES } from "~/routes/settings/headscale/derp-map-limits";
+
 import {
   DERP_MIRROR_INTERVAL_HOURS,
   type DerpLatencyNodeReading,
   type DerpLatencyRegionReading,
   type DerpMirrorIntervalHours,
   type DerpMirrorLatency,
+  type DerpMirrorPastedMap,
   type DerpMirrorProbeOutcome,
   type ProbeFamily,
   type ProbeMethod,
@@ -41,6 +44,21 @@ export const DEFAULT_DERP_MIRROR_ASSIGNMENT: Record<string, number> = {
 export const DERP_MIRROR_NUMBER_MIN = 900;
 export const DERP_MIRROR_NUMBER_MAX = 999;
 
+/**
+ * How many source URLs the operator may configure. The list is tried in order
+ * and stops at the first usable map, so a long list buys nothing but a longer
+ * failing run; the cap keeps a hand-edited document from turning one run into an
+ * unbounded number of requests.
+ */
+export const DERP_MIRROR_MAX_SOURCES = 8;
+
+/**
+ * The largest pasted map this build stores, in bytes. It is the same cap a
+ * fetched body has to pass (`MAX_DERP_MAP_BYTES`), so the two paths into the
+ * mirror accept exactly the same documents.
+ */
+export const DERP_MIRROR_PASTE_MAX_BYTES = MAX_DERP_MAP_BYTES;
+
 export interface DerpMirrorSettings {
   /** When false the scheduled tick does nothing; a manual run still works. */
   enabled: boolean;
@@ -60,6 +78,20 @@ export interface DerpMirrorSettings {
    */
   autoReload: boolean;
   /**
+   * The source URLs to try, in order, before the built-in chain. Empty — the
+   * default — keeps the behaviour an unconfigured install had: Headscale's own
+   * `derp.urls` first, then the official address. Non-empty replaces that chain
+   * entirely, so an operator whose network blocks the official endpoint can
+   * point the mirror at their own proxy.
+   */
+  sourceUrls: string[];
+  /**
+   * An official map the operator pasted by hand, used instead of every URL until
+   * it is cleared. This is the last resort for a network where no source can be
+   * reached at all.
+   */
+  pastedMap?: DerpMirrorPastedMap;
+  /**
    * The latencies this server measured itself, kept alongside the settings it
    * belongs to (Headplane's own JSON store, not Headscale's configuration). The
    * numbering prefers these over what the machines reported, which is what makes
@@ -77,6 +109,9 @@ export const DEFAULT_DERP_MIRROR_SETTINGS: DerpMirrorSettings = {
   targetPath: DEFAULT_DERP_MIRROR_TARGET_PATH,
   intervalHours: 24,
   autoReload: true,
+  // Empty means the built-in chain, so an install that never touches this field
+  // keeps fetching exactly what it fetched before.
+  sourceUrls: [],
 };
 
 /** Only the offered intervals are accepted; anything else is not schedulable. */
@@ -370,6 +405,91 @@ function normalizeTargetPath(value: unknown): string {
   return text.length > 0 && isAbsolute(text) ? text : DEFAULT_DERP_MIRROR_SETTINGS.targetPath;
 }
 
+/**
+ * Whether a stored or submitted value may be used as a source URL: an absolute
+ * `https://` (or `http://`) URL with a host. Anything else — a bare hostname, a
+ * relative path, another scheme — is refused, because the fetcher would either
+ * fail confusingly or dial something the operator did not name.
+ */
+export function isAbsoluteHttpUrl(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const text = value.trim();
+  if (text.length === 0) {
+    return false;
+  }
+
+  try {
+    const url = new URL(text);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The configured source URLs: usable absolute http(s) URLs, deduplicated, in the
+ * order the operator listed them, capped at {@link DERP_MIRROR_MAX_SOURCES}. An
+ * empty list is meaningful — it is the built-in chain — so junk collapses to it
+ * rather than to a source nothing can dial.
+ */
+export function normalizeSourceUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const urls: string[] = [];
+  for (const entry of value) {
+    if (!isAbsoluteHttpUrl(entry)) {
+      continue;
+    }
+
+    const url = (entry as string).trim();
+    if (!urls.includes(url) && urls.length < DERP_MIRROR_MAX_SOURCES) {
+      urls.push(url);
+    }
+  }
+
+  return urls;
+}
+
+/**
+ * A stored pasted map, kept only when it is a dated, non-empty body inside the
+ * size cap. A hand-edited document that fails any of that is dropped, which puts
+ * the mirror back on its URL sources instead of failing every run.
+ */
+export function normalizePastedMap(value: unknown): DerpMirrorPastedMap | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const body = typeof source.body === "string" ? source.body : undefined;
+  if (body === undefined || body.trim().length === 0) {
+    return undefined;
+  }
+
+  if (Buffer.byteLength(body, "utf8") > DERP_MIRROR_PASTE_MAX_BYTES) {
+    return undefined;
+  }
+
+  const at = normalizeRankedAt(source.at);
+  if (at === undefined) {
+    return undefined;
+  }
+
+  const regions =
+    typeof source.regions === "number" &&
+    Number.isSafeInteger(source.regions) &&
+    source.regions >= 0
+      ? source.regions
+      : 0;
+
+  return { body, at, regions };
+}
+
 /** Turns an arbitrary value into usable settings, defaulting anything unknown. */
 export function normalizeDerpMirrorSettings(raw: unknown): DerpMirrorSettings {
   const source =
@@ -379,6 +499,7 @@ export function normalizeDerpMirrorSettings(raw: unknown): DerpMirrorSettings {
 
   const rankedAt = normalizeRankedAt(source.assignmentRankedAt);
   const latency = normalizeDerpMirrorLatency(source.latency);
+  const pastedMap = normalizePastedMap(source.pastedMap);
 
   return {
     enabled: source.enabled === true,
@@ -392,6 +513,8 @@ export function normalizeDerpMirrorSettings(raw: unknown): DerpMirrorSettings {
     // Only an explicit "false" turns the reload off; a document written before
     // the default changed, or one missing the key, gets the default (on).
     autoReload: source.autoReload !== false,
+    sourceUrls: normalizeSourceUrls(source.sourceUrls),
+    ...(pastedMap === undefined ? {} : { pastedMap }),
     ...(latency === undefined ? {} : { latency }),
   };
 }

@@ -2085,12 +2085,51 @@ const en = {
           pathSkippedInvalid: "The path was not added: it is not a usable absolute path.",
           pathSkippedWriteFailed:
             "The path was not added: writing Headscale's configuration failed.",
+          sourcesLabel: "Map sources",
+          sourcesDescription:
+            "One source per row, tried in the order listed: the first one that answers with a readable map is used and the rest are not dialled. Leave the list empty to use the built-in sources, which is what every install without a configured source has always fetched. At most {max} sources.",
+          sourceRowLabel: "Source {index}",
+          sourcePlaceholder: "https://mirror.example.com/derpmap/default",
+          sourceAdd: "Add source",
+          sourceRemove: "Remove",
+          sourcesEffective: "Sources this mirror uses: {sources}",
+          sourcesEffectivePaste:
+            "Sources this mirror uses: the pasted map at the bottom of this card. It takes precedence over every URL source.",
+          sourcesDefaultInUse:
+            "No custom source is set, so the built-in order is in use: Headscale's derp.urls first, then the official map.",
+          sourceKindCustom: "custom",
+          sourceKindHeadscale: "Headscale derp.urls",
+          sourceKindOfficial: "built-in official map",
+          sourceKindPaste: "pasted map",
+          sourceAttempt: "{url} — {reason}",
+          sourceAnswered: "answered",
+          sourcesTriedTitle: "Sources tried",
+          runSource: "Map source: {source}",
+          pasteTitle: "Paste the official map",
+          pasteBody:
+            "The last resort for a network where no source URL can be reached: paste the official map's body here and the mirror uses it instead of fetching anything. Up to {size} is accepted, and only a body the map reader understands is stored.",
+          pasteNone: "No pasted map is stored.",
+          pasteInUse:
+            "The pasted map is in use: {regions} regions, pasted {at}. Every run reads it and no source is fetched until you clear it.",
+          pasteOpen: "Paste a map",
+          pasteDialogTitle: "Paste the official map's body",
+          pasteDialogBody:
+            "The body goes through the reader a fetched map goes through, so a paste and a download produce exactly the same file. Up to {size} is accepted; a larger or unreadable body is refused.",
+          pasteLabel: "Official map body",
+          pastePlaceholder: 'Regions: { "1": { "RegionID": 1, ... } }',
+          pasteSaving: "Storing the pasted map…",
+          pasteSaved: "The pasted map is stored and the next run will use it.",
+          pasteClear: "Clear the pasted map",
+          pasteClearing: "Clearing…",
           errors: {
             invalidDerpMirrorInterval: "Choose 6, 12 or 24 hours as the mirror interval.",
             invalidDerpMirrorPath:
               "Enter a relative file name or an absolute path for the mirrored map.",
             invalidDerpMirrorSelection:
               "The selected regions are not a list of official region ids.",
+            invalidDerpMirrorSource: "Every source must be an absolute http:// or https:// URL.",
+            tooManyDerpMirrorSources:
+              "Too many sources. Remove one before saving, or clear the list to use the built-in sources.",
             derpMirrorSaveFailed:
               "The mirror settings could not be saved. Check that HeadplaneCN can write its data directory.",
             derpMirrorCheckFailed: "The check could not be completed.",
@@ -2100,6 +2139,13 @@ const en = {
               "A latency test is already running. Stop it before starting another.",
             derpMirrorProbeFailed: "The latency test could not be completed.",
             derpMirrorUnavailable: "The region mirror is not available on this server.",
+            emptyDerpMirrorPaste: "Paste the official map's body before storing it.",
+            derpMirrorPasteTooLarge: "The pasted map is larger than the mirror accepts.",
+            derpMirrorPasteInvalid:
+              "The pasted body is not a DERP map. Copy the official map whole, JSON structure and all.",
+            derpMirrorPasteSaveFailed:
+              "The pasted map could not be stored. Check that HeadplaneCN can write its data directory.",
+            derpMirrorPasteClearFailed: "The pasted map could not be cleared.",
           },
         },
         relayDnsTitle: "Relay DNS resolver",

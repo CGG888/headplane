@@ -239,6 +239,42 @@ export type MirrorPathOutcome =
   | { status: "added"; path: string; fileExists: boolean }
   | { status: "skipped"; path: string; reason: MirrorPathSkipReason };
 
+/**
+ * Where one run's official map came from: a source URL the operator configured,
+ * one of Headscale's own `derp.urls`, the built-in official address, or a body
+ * the operator pasted into the card.
+ */
+export type DerpMirrorSourceKind = "custom" | "headscale" | "official" | "paste";
+
+/**
+ * Why one source yielded no usable map, as a stable code. Structurally identical
+ * to the remote reader's `RemoteDerpMapFailure` — the same value is stored — and
+ * kept here so this module still imports nothing.
+ */
+export type DerpMirrorSourceFailure = "timeout" | "network" | "status" | "too-large" | "unreadable";
+
+/** One source a run tried, and why it contributed nothing when it did not. */
+export interface DerpMirrorSourceAttempt {
+  /** The URL that was dialled, or the pasted map's marker. */
+  url: string;
+  /** Absent when the source answered with a usable map. */
+  reason?: DerpMirrorSourceFailure;
+}
+
+/**
+ * The official map an operator pasted into the card, kept verbatim so the run
+ * that consumes it goes through the same reader, generator and write as a
+ * fetched one. It is used until the operator clears it.
+ */
+export interface DerpMirrorPastedMap {
+  /** The body exactly as it was submitted. */
+  body: string;
+  /** ISO timestamp of the save that stored it. */
+  at: string;
+  /** How many regions the body described when it was accepted. */
+  regions: number;
+}
+
 /** One run, as the page shows it and as the store keeps it. */
 export interface DerpMirrorRun {
   /** ISO timestamp of the run. */
@@ -258,6 +294,20 @@ export interface DerpMirrorRun {
   targetPath: string;
   /** Whether the rendered map differed from what the file already held. */
   changed: boolean;
+  /**
+   * The source the run read its map from: the URL that answered, or absent for a
+   * pasted map (which `sourceKind` marks and `pastedAt` dates).
+   */
+  source?: string;
+  /** Where that map came from; absent on a run recorded before sources existed. */
+  sourceKind?: DerpMirrorSourceKind;
+  /** ISO timestamp of the pasted map in use, when one was. */
+  pastedAt?: string;
+  /**
+   * Every source this run tried, in order, with why each failed. The source that
+   * answered is the last entry and carries no reason.
+   */
+  attempts?: DerpMirrorSourceAttempt[];
   /** Why the run did not write; absent on a changed or unchanged run. */
   reason?: DerpMirrorReason;
   /** A stable detail for `reason`: the first issue code, or a technical value. */

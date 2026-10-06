@@ -26,6 +26,8 @@ import type {
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
+  DerpMirrorSourceFailure,
+  DerpMirrorSourceKind,
 } from "~/server/derp-mirror/types";
 
 /**
@@ -36,6 +38,13 @@ import type {
 export const MIRROR_INTERVAL_HOURS = [6, 12, 24] as const;
 
 export type MirrorIntervalHours = (typeof MIRROR_INTERVAL_HOURS)[number];
+
+/**
+ * How many source URLs the card lets the operator add. The server enforces the
+ * same number (`DERP_MIRROR_MAX_SOURCES`) on every save, so the card cannot offer
+ * a row the save would reject.
+ */
+export const MIRROR_MAX_SOURCES = 8;
 
 /** The dedicated file name the settings row recommends. */
 export const MIRROR_FILE_HINT = "official-mirror.yaml";
@@ -210,7 +219,53 @@ export interface MirrorSettingsView {
   selectedIds: number[];
   /** ISO timestamp of the last fresh ranking, when the assignment has one. */
   rankedAt?: string;
+  /** The source URLs the operator configured, in the order they are tried. */
+  sourceUrls: string[];
+  /**
+   * The URL sources a run reads when no pasted map is stored: the configured
+   * list, or the built-in chain when the list is empty. The card shows this
+   * instead of resolving the order itself, so what it prints is what the next
+   * run dials.
+   */
+  sources: MirrorSourceView[];
+  /** The pasted map in the store, when the operator stored one. */
+  paste?: MirrorPasteView;
 }
+
+/** Re-exported so the component reads one module for every mirror type. */
+export type MirrorSourceFailure = DerpMirrorSourceFailure;
+
+/** One source a run tried, and why it contributed nothing when it did not. */
+export interface MirrorSourceAttemptView {
+  /** The URL that was dialled, or the pasted map's marker. */
+  url: string;
+  /** Absent when the source answered with a usable map. */
+  reason?: DerpMirrorSourceFailure;
+}
+
+/** One source a run may read the official map from, as the card lists it. */
+export interface MirrorSourceView {
+  url: string;
+  kind: DerpMirrorSourceKind;
+}
+
+/** The pasted map as the card reports it: when, how big, how many regions. */
+export interface MirrorPasteView {
+  /** ISO timestamp of the save that stored it. */
+  at: string;
+  /** How many regions the body described when it was accepted. */
+  regions: number;
+  /** The stored body's size in bytes. */
+  bytes: number;
+}
+
+/** The wording each kind of source carries, so a URL is never shown bare. */
+export const MIRROR_SOURCE_KIND_KEYS: Record<DerpMirrorSourceKind, TranslationKey> = {
+  custom: "settings.headscale.derp.mirror.sourceKindCustom",
+  headscale: "settings.headscale.derp.mirror.sourceKindHeadscale",
+  official: "settings.headscale.derp.mirror.sourceKindOfficial",
+  paste: "settings.headscale.derp.mirror.sourceKindPaste",
+};
 
 /** Re-exported so the component reads one module for every mirror type. */
 export type MirrorRun = DerpMirrorRun;

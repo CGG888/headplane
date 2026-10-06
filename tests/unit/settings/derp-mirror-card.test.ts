@@ -6,10 +6,12 @@ import {
   isDefaultMirrorSelection,
   isMirrorProbeStale,
   MIRROR_LATENCY_SOURCE_KEYS,
+  MIRROR_MAX_SOURCES,
   MIRROR_PROBE_FRESH_MS,
   MIRROR_PROBE_OUTCOME_KEYS,
   MIRROR_PROBE_POLL_MS,
   MIRROR_PROBE_STATUS_ACTION_ID,
+  MIRROR_SOURCE_KIND_KEYS,
   mirrorLatencyNotice,
   mirrorRegionLatency,
   previewRegionNumbers,
@@ -20,6 +22,7 @@ import {
   type MirrorNumbering,
   type MirrorRegionRow,
 } from "~/routes/settings/headscale/derp-mirror";
+import { DERP_MIRROR_MAX_SOURCES } from "~/server/derp-mirror/settings";
 
 /**
  * A ranking the server produced for five official regions: the two anchors first
@@ -50,6 +53,24 @@ function row(officialId: number, storedNumber?: number, latencyMs?: number): Mir
 function numbersOf(map: Map<number, number>): Record<string, number> {
   return Object.fromEntries([...map].map(([id, number]) => [String(id), number]));
 }
+
+describe("map sources", () => {
+  test("the card and the server agree on how many sources may be added", () => {
+    // The card hides the "add source" button at this number and the save refuses
+    // one more, so the two constants have to be the same number.
+    expect(MIRROR_MAX_SOURCES).toBe(DERP_MIRROR_MAX_SOURCES);
+  });
+
+  test("every kind of source has its own wording", () => {
+    expect(Object.keys(MIRROR_SOURCE_KIND_KEYS).toSorted()).toEqual([
+      "custom",
+      "headscale",
+      "official",
+      "paste",
+    ]);
+    expect(new Set(Object.values(MIRROR_SOURCE_KIND_KEYS)).size).toBe(4);
+  });
+});
 
 describe("region numbering preview", () => {
   test("numbers the pinned anchors the default selection ticks", () => {

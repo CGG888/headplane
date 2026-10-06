@@ -20,6 +20,9 @@ import type {
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
+  DerpMirrorSourceAttempt,
+  DerpMirrorSourceFailure,
+  DerpMirrorSourceKind,
 } from "./types";
 
 /** File under Headplane's `server.data_path`. */
@@ -38,6 +41,14 @@ const REASONS: readonly DerpMirrorReason[] = [
   "validation-failed",
   "reload-failed",
   "unexpected",
+];
+const SOURCE_KINDS: readonly DerpMirrorSourceKind[] = ["custom", "headscale", "official", "paste"];
+const SOURCE_FAILURES: readonly DerpMirrorSourceFailure[] = [
+  "timeout",
+  "network",
+  "status",
+  "too-large",
+  "unreadable",
 ];
 
 /** The document the JSON store holds. */
@@ -97,6 +108,33 @@ function parseIdList(value: unknown): string[] {
   return ids;
 }
 
+/** One entry of a run's source list: the URL, and why it failed when it did. */
+function parseAttempts(value: unknown): DerpMirrorSourceAttempt[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const attempts: DerpMirrorSourceAttempt[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+
+    const attempt = entry as Record<string, unknown>;
+    const url = readText(attempt.url);
+    if (url === undefined) {
+      continue;
+    }
+
+    attempts.push({
+      url,
+      ...(isOneOf(SOURCE_FAILURES, attempt.reason) ? { reason: attempt.reason } : {}),
+    });
+  }
+
+  return attempts;
+}
+
 function parseRun(value: unknown): DerpMirrorRun | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -111,6 +149,8 @@ function parseRun(value: unknown): DerpMirrorRun | undefined {
   const detail = readText(source.detail);
   const snapshotId = readText(source.snapshotId);
   const error = readText(source.error);
+  const mapSource = readText(source.source);
+  const pastedAt = readText(source.pastedAt);
 
   return {
     at,
@@ -123,6 +163,10 @@ function parseRun(value: unknown): DerpMirrorRun | undefined {
     assignment: parseAssignment(source.assignment),
     targetPath: readText(source.targetPath) ?? "",
     changed: source.changed === true,
+    ...(mapSource === undefined ? {} : { source: mapSource }),
+    ...(isOneOf(SOURCE_KINDS, source.sourceKind) ? { sourceKind: source.sourceKind } : {}),
+    ...(pastedAt === undefined ? {} : { pastedAt }),
+    ...(Array.isArray(source.attempts) ? { attempts: parseAttempts(source.attempts) } : {}),
     ...(isOneOf(REASONS, source.reason) ? { reason: source.reason } : {}),
     ...(detail === undefined ? {} : { detail }),
     ...(snapshotId === undefined ? {} : { snapshotId }),

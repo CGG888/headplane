@@ -1,5 +1,6 @@
 import {
   Ban,
+  ClipboardPaste,
   Gauge,
   Globe,
   Lock,
@@ -8,6 +9,7 @@ import {
   Search,
   Sparkles,
   Tags,
+  Trash2,
   Wand2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -31,7 +33,6 @@ import Text from "~/components/text";
 import Title from "~/components/title";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import type { RemoteDerpMapFailure } from "~/server/headscale/derp-map-remote";
 import cn from "~/utils/cn";
 
 import {
@@ -40,11 +41,13 @@ import {
   MIRROR_INTERVAL_KEYS,
   MIRROR_LATENCY_NOTICE_KEYS,
   MIRROR_LATENCY_SOURCE_KEYS,
+  MIRROR_MAX_SOURCES,
   MIRROR_PROBE_OUTCOME_KEYS,
   MIRROR_PROBE_POLL_MS,
   MIRROR_PROBE_STATUS_ACTION_ID,
   MIRROR_REASON_KEYS,
   MIRROR_RELOAD_KEYS,
+  MIRROR_SOURCE_KIND_KEYS,
   defaultMirrorSelection,
   fixedRegionIds,
   formatMirrorLatency,
@@ -67,6 +70,8 @@ import {
   type MirrorRun,
   type MirrorSettingsView,
   type MirrorSortMode,
+  type MirrorSourceAttemptView,
+  type MirrorSourceFailure,
 } from "../derp-mirror";
 import {
   HEADSCALE_SETTINGS_ERROR_KEYS,
@@ -98,15 +103,26 @@ const REGION_TABLE_RING =
 /**
  * Why the official map could not be read, as the sentence the card prints. The
  * server sends the stable code, so the wording stays here with the rest of the
- * card's text.
+ * card's text. The same table words every source a run tried and the pasted body
+ * it could not read, because those are the same codes.
  */
-const FETCH_REASON_KEYS: Record<RemoteDerpMapFailure, TranslationKey> = {
+const FETCH_REASON_KEYS: Record<MirrorSourceFailure, TranslationKey> = {
   timeout: "settings.headscale.derp.mirror.fetchReasonTimeout",
   network: "settings.headscale.derp.mirror.fetchReasonNetwork",
   status: "settings.headscale.derp.mirror.fetchReasonStatus",
   "too-large": "settings.headscale.derp.mirror.fetchReasonTooLarge",
   unreadable: "settings.headscale.derp.mirror.fetchReasonUnreadable",
 };
+
+/** A byte count as the card prints it, rounded up so "0 KB" is never a lie. */
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 KB";
+  }
+
+  const kilobytes = Math.ceil(bytes / 1024);
+  return kilobytes >= 1024 ? `${Math.round(kilobytes / 1024)} MB` : `${kilobytes} KB`;
+}
 
 interface DerpRegionMirrorProps {
   /**
@@ -141,11 +157,49 @@ interface DerpRegionMirrorProps {
    * polling, and this is what a card opened in the middle of one starts from.
    */
   probeStatus: MirrorProbeStatus;
+  /**
+   * How large a pasted body may be, in bytes. Read from the server so the card
+   * states the limit the save actually enforces instead of one of its own.
+   */
+  pasteLimitBytes: number;
   /** Why the official map could not be read, when the last read failed. */
-  regionError?: RemoteDerpMapFailure;
+  regionError?: MirrorSourceFailure;
+  /**
+   * Every source the loader tried, in order, with why each failed. The source
+   * that answered is the last entry and carries no reason.
+   */
+  regionAttempts: MirrorSourceAttemptView[];
   /** The cached official map, already reduced to plain values. */
   regions: MirrorRegionRow[];
   settings: MirrorSettingsView;
+}
+
+/**
+ * The sources a read tried, one line each. A failed source says why in the same
+ * wording the card already uses for an unreadable map, so a blocked endpoint
+ * reads as a blocked endpoint rather than as a map with nothing in it.
+ */
+function SourceAttempts({ attempts }: { attempts: MirrorSourceAttemptView[] }) {
+  const { t } = useI18n();
+  if (attempts.length === 0) {
+    return undefined;
+  }
+
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {attempts.map((attempt, index) => (
+        <li className="text-xs text-mist-500 dark:text-mist-400" key={`${attempt.url}:${index}`}>
+          {t("settings.headscale.derp.mirror.sourceAttempt", {
+            url: attempt.url,
+            reason:
+              attempt.reason === undefined
+                ? t("settings.headscale.derp.mirror.sourceAnswered")
+                : t(FETCH_REASON_KEYS[attempt.reason]),
+          })}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /** Native checkbox, so it works inside the card's single save form. */
@@ -285,6 +339,29 @@ function RunSummary({ last, regions }: { last: MirrorRun; regions: MirrorRegionR
         </div>
       )}
 
+      {/* Which map this run actually read, and every source it tried before it
+          found one. A run that read nothing at all lists the reasons instead of
+          leaving the operator to guess which endpoint was blocked. */}
+      {last.source === undefined && last.sourceKind === undefined ? undefined : (
+        <p className="text-xs text-mist-500 dark:text-mist-400">
+          {t("settings.headscale.derp.mirror.runSource", {
+            source:
+              last.sourceKind === "paste"
+                ? t(MIRROR_SOURCE_KIND_KEYS.paste)
+                : (last.source ?? t(MIRROR_SOURCE_KIND_KEYS[last.sourceKind ?? "custom"])),
+          })}
+        </p>
+      )}
+
+      {last.attempts === undefined || last.attempts.length === 0 ? undefined : (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium">
+            {t("settings.headscale.derp.mirror.sourcesTriedTitle")}
+          </span>
+          <SourceAttempts attempts={last.attempts} />
+        </div>
+      )}
+
       <p className="text-xs text-mist-500 dark:text-mist-400">
         {t(MIRROR_RELOAD_KEYS[last.reload])}
       </p>
@@ -374,10 +451,12 @@ export default function DerpRegionMirror({
   isDisabled,
   last,
   numbering,
+  pasteLimitBytes,
   pathListed,
   paths,
   probe,
   probeStatus,
+  regionAttempts,
   regionError,
   regions,
   settings,
@@ -393,6 +472,8 @@ export default function DerpRegionMirror({
   const probeFetcher = useFetcher<HeadscaleSettingsResult>();
   const cancelFetcher = useFetcher<HeadscaleSettingsResult>();
   const statusFetcher = useFetcher<HeadscaleSettingsResult>();
+  const pasteFetcher = useFetcher<HeadscaleSettingsResult>();
+  const clearPasteFetcher = useFetcher<HeadscaleSettingsResult>();
   const revalidator = useRevalidator();
 
   const fixedIds = useMemo(() => fixedRegionIds(numbering), [numbering]);
@@ -400,6 +481,11 @@ export default function DerpRegionMirror({
 
   const [enabled, setEnabled] = useState(settings.enabled);
   const [targetPath, setTargetPath] = useState(settings.targetPath);
+  // The source list is an ordered, repeatable field, so it lives as one array of
+  // rows in the card and is submitted as one `mirror_source` per row.
+  const [sourceUrls, setSourceUrls] = useState<string[]>(() => [...settings.sourceUrls]);
+  const [pasteBody, setPasteBody] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [intervalHours, setIntervalHours] = useState(String(settings.intervalHours));
   const [autoReload, setAutoReload] = useState(settings.autoReload);
   // The stored selection is the truth: a selection the operator saved as empty
@@ -512,6 +598,7 @@ export default function DerpRegionMirror({
     settings.intervalHours,
     settings.autoReload,
     [...settings.selectedIds].toSorted((a, b) => a - b),
+    settings.sourceUrls,
   ]);
   const syncedRef = useRef(savedKey);
 
@@ -526,6 +613,7 @@ export default function DerpRegionMirror({
     setIntervalHours(String(settings.intervalHours));
     setAutoReload(settings.autoReload);
     setSelected(new Set(settings.selectedIds));
+    setSourceUrls([...settings.sourceUrls]);
   }, [
     saveFetcher.state,
     savedKey,
@@ -533,6 +621,7 @@ export default function DerpRegionMirror({
     settings.enabled,
     settings.intervalHours,
     settings.selectedIds,
+    settings.sourceUrls,
     settings.targetPath,
   ]);
 
@@ -634,6 +723,32 @@ export default function DerpRegionMirror({
       : undefined;
   const addingNames = namesFetcher.state !== "idle";
 
+  // The pasted map: what the store holds, what the operator is writing right
+  // now, and how each request ended. The paste is the one source that outranks
+  // every URL, so the card says so wherever it lists sources.
+  const paste = settings.paste;
+  const pasteLimitLabel = formatBytes(pasteLimitBytes);
+  const pasteError = errorFor(pasteFetcher.data);
+  const clearPasteError = errorFor(clearPasteFetcher.data);
+  const savingPaste = pasteFetcher.state !== "idle";
+  const clearingPaste = clearPasteFetcher.state !== "idle";
+  // Confirmation for the paste that just landed: the loader's own state decides,
+  // so clearing the map takes the message away with it.
+  const pasteStored =
+    paste !== undefined && pasteFetcher.data !== undefined && pasteFetcher.data.success;
+  // Whatever a run would read right now: the pasted map when one is stored,
+  // otherwise the resolved URL chain, labelled with where each source comes from.
+  const effectiveSources =
+    settings.sources
+      .map((source) => `${t(MIRROR_SOURCE_KIND_KEYS[source.kind])}: ${source.url}`)
+      .join(" · ") || t("settings.headscale.derp.mirror.pathHintNone");
+  const sourceSummary =
+    paste === undefined
+      ? t("settings.headscale.derp.mirror.sourcesEffective", { sources: effectiveSources })
+      : t("settings.headscale.derp.mirror.sourcesEffectivePaste");
+  const sourcesAreDefault = settings.sourceUrls.length === 0 && paste === undefined;
+  const canAddSource = sourceUrls.length < MIRROR_MAX_SOURCES;
+
   // The manual escape hatch for a configuration Headplane may not write. Its
   // errors are the DERP path action's own codes, localized like every other
   // error on the page.
@@ -667,6 +782,16 @@ export default function DerpRegionMirror({
       setConfirmOpen(false);
     }
   }, [reassignFetcher.state, reassignFetcher.data]);
+
+  // The paste dialog closes on the same rule, and the textarea is emptied then:
+  // the stored body is what the card reports from the loader, not from a stale
+  // draft the operator would have to clear by hand.
+  useEffect(() => {
+    if (pasteFetcher.state === "idle" && pasteFetcher.data?.success) {
+      setPasteOpen(false);
+      setPasteBody("");
+    }
+  }, [pasteFetcher.state, pasteFetcher.data]);
 
   const intervalItems = MIRROR_INTERVAL_HOURS.map((hours) => ({
     value: String(hours),
@@ -750,6 +875,42 @@ export default function DerpRegionMirror({
     const form = new FormData();
     form.set("action_id", "cancel_derp_latency_probe");
     cancelFetcher.submit(form, { method: "POST" });
+  }
+
+  /** Replaces one source row's URL, keeping the row's position in the order. */
+  function updateSource(index: number, url: string) {
+    setSourceUrls((previous) => previous.map((entry, at) => (at === index ? url : entry)));
+  }
+
+  /** Appends an empty row; the save skips a blank one and validates the rest. */
+  function addSource() {
+    setSourceUrls((previous) =>
+      previous.length >= MIRROR_MAX_SOURCES ? previous : [...previous, ""],
+    );
+  }
+
+  function removeSource(index: number) {
+    setSourceUrls((previous) => previous.filter((_, at) => at !== index));
+  }
+
+  /**
+   * Stores the pasted official map. It goes through a fetcher because the paste
+   * dialog is the card's second form and nothing may nest forms; the server
+   * validates the body with the reader a fetched one goes through, so nothing is
+   * stored that a run could not consume.
+   */
+  function savePaste() {
+    const form = new FormData();
+    form.set("action_id", "save_derp_mirror_paste");
+    form.set("mirror_paste", pasteBody);
+    pasteFetcher.submit(form, { method: "POST" });
+  }
+
+  /** Drops the stored body, putting the mirror back on its URL sources. */
+  function clearPaste() {
+    const form = new FormData();
+    form.set("action_id", "clear_derp_mirror_paste");
+    clearPasteFetcher.submit(form, { method: "POST" });
   }
 
   /**
@@ -850,6 +1011,7 @@ export default function DerpRegionMirror({
                   {t("settings.headscale.derp.mirror.regionsRetry")}
                 </p>
               )}
+              <SourceAttempts attempts={regionAttempts} />
             </div>
           ) : (
             <>
@@ -1204,6 +1366,64 @@ export default function DerpRegionMirror({
               {t("settings.headscale.derp.mirror.pathNote", { file: MIRROR_FILE_HINT })}
             </p>
 
+            {/* The map sources, in the order a run tries them. An empty list is
+                the built-in chain, which is what every install had before this
+                field existed, so the card says which of the two is in use
+                instead of leaving an empty box looking unconfigured. */}
+            <SettingsField
+              description={t("settings.headscale.derp.mirror.sourcesDescription", {
+                max: MIRROR_MAX_SOURCES,
+              })}
+              label={t("settings.headscale.derp.mirror.sourcesLabel")}
+            >
+              <div className="flex flex-col gap-2">
+                {sourceUrls.map((url, index) => (
+                  <div className="flex items-end gap-2" key={index}>
+                    <Input
+                      disabled={isDisabled || busy}
+                      label={t("settings.headscale.derp.mirror.sourceRowLabel", {
+                        index: index + 1,
+                      })}
+                      labelHidden
+                      name="mirror_source"
+                      onChange={(value) => updateSource(index, value)}
+                      placeholder={t("settings.headscale.derp.mirror.sourcePlaceholder")}
+                      value={url}
+                    />
+                    <Button
+                      disabled={isDisabled || busy}
+                      onClick={() => removeSource(index)}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {t("settings.headscale.derp.mirror.sourceRemove")}
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    disabled={isDisabled || busy || !canAddSource}
+                    onClick={addSource}
+                    type="button"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    {t("settings.headscale.derp.mirror.sourceAdd")}
+                  </Button>
+                </div>
+              </div>
+            </SettingsField>
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm text-mist-600 dark:text-mist-400" role="status">
+                {sourceSummary}
+              </p>
+              {sourcesAreDefault ? (
+                <p className="text-sm text-mist-600 dark:text-mist-400">
+                  {t("settings.headscale.derp.mirror.sourcesDefaultInUse")}
+                </p>
+              ) : undefined}
+            </div>
+
             {/* Whether Headscale actually loads the file this card writes. The
                 chip is the state, the line under it explains what that state
                 means here, and the hover hint names the expected path and every
@@ -1380,6 +1600,105 @@ export default function DerpRegionMirror({
           ) : undefined}
 
           {actionRun === undefined ? undefined : <RunSummary last={actionRun} regions={regions} />}
+        </div>
+
+        {/* The last resort for a network no source can be reached from: the
+            operator pastes the official map's body. It is stored, not written,
+            and every run then uses it instead of dialling anything until it is
+            cleared — which is the "until when" this block states. The dialog is
+            the card's second form, so it lives outside the save form. */}
+        <div className="flex flex-col gap-3 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
+          <div className="flex flex-col gap-0.5">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              <ClipboardPaste className="h-4 w-4" />
+              {t("settings.headscale.derp.mirror.pasteTitle")}
+            </span>
+            <span className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.headscale.derp.mirror.pasteBody", { size: pasteLimitLabel })}
+            </span>
+          </div>
+
+          <p
+            className={cn(
+              "text-sm",
+              paste === undefined
+                ? "text-mist-600 dark:text-mist-400"
+                : "text-amber-700 dark:text-amber-300",
+            )}
+            role="status"
+          >
+            {paste === undefined
+              ? t("settings.headscale.derp.mirror.pasteNone")
+              : t("settings.headscale.derp.mirror.pasteInUse", {
+                  regions: paste.regions,
+                  at: new Date(paste.at).toLocaleString(locale),
+                })}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Dialog isOpen={pasteOpen} onOpenChange={setPasteOpen}>
+              <Button disabled={isDisabled} type="button">
+                <ClipboardPaste className="mr-1.5 h-4 w-4" />
+                {t("settings.headscale.derp.mirror.pasteOpen")}
+              </Button>
+              <DialogPanel
+                isDisabled={isDisabled || savingPaste}
+                onSubmit={(event) => {
+                  // The body is validated server-side with the reader a fetched
+                  // map goes through, so only a usable map is ever stored.
+                  event.preventDefault();
+                  savePaste();
+                }}
+              >
+                <Title>{t("settings.headscale.derp.mirror.pasteDialogTitle")}</Title>
+                <Text className="mb-2">
+                  {t("settings.headscale.derp.mirror.pasteDialogBody", { size: pasteLimitLabel })}
+                </Text>
+                <label className="flex flex-col gap-1 text-sm font-medium" htmlFor="mirror_paste">
+                  {t("settings.headscale.derp.mirror.pasteLabel")}
+                  <textarea
+                    className={cn(
+                      "min-h-40 w-full rounded-md px-3 py-2 font-mono text-xs",
+                      "focus:outline-hidden focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1",
+                      "dark:focus:ring-indigo-400/40 dark:focus:ring-offset-mist-900",
+                      "border border-mist-200 bg-white dark:border-mist-800 dark:bg-mist-900",
+                    )}
+                    id="mirror_paste"
+                    onChange={(event) => setPasteBody(event.target.value)}
+                    placeholder={t("settings.headscale.derp.mirror.pastePlaceholder")}
+                    value={pasteBody}
+                  />
+                </label>
+                {savingPaste ? (
+                  <p className="text-sm text-mist-600 dark:text-mist-400">
+                    {t("settings.headscale.derp.mirror.pasteSaving")}
+                  </p>
+                ) : undefined}
+                {pasteError === undefined ? undefined : errorBox(pasteError)}
+              </DialogPanel>
+            </Dialog>
+
+            {paste === undefined ? undefined : (
+              <Button
+                disabled={isDisabled || clearingPaste}
+                onClick={clearPaste}
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                {clearingPaste
+                  ? t("settings.headscale.derp.mirror.pasteClearing")
+                  : t("settings.headscale.derp.mirror.pasteClear")}
+              </Button>
+            )}
+          </div>
+
+          {pasteStored ? (
+            <p className="text-sm text-emerald-600 dark:text-emerald-400" role="status">
+              {t("settings.headscale.derp.mirror.pasteSaved")}
+            </p>
+          ) : undefined}
+          {clearPasteError === undefined ? undefined : errorBox(clearPasteError)}
         </div>
 
         <SettingsCollapsible

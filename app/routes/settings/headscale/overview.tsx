@@ -53,13 +53,15 @@ import {
 } from "~/server/derp-mirror/latency";
 import { chineseRegionName } from "~/server/derp-mirror/names";
 import { isMirrorPathListed } from "~/server/derp-mirror/paths";
-import { OFFICIAL_DERP_MAP_URL } from "~/server/derp-mirror/service.server";
+import { DERP_MIRROR_PASTE_MAX_BYTES } from "~/server/derp-mirror/settings";
+import {
+  PASTED_MAP_SOURCE,
+  parseDerpMapBody,
+  resolveMirrorSourceChain,
+} from "~/server/derp-mirror/sources";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
-import {
-  loadRemoteDerpMapOutcome,
-  type RemoteDerpMapFailure,
-} from "~/server/headscale/derp-map-remote";
+import { loadRemoteDerpMapOutcome } from "~/server/headscale/derp-map-remote";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import {
@@ -82,7 +84,12 @@ import PolicyModeSettings from "./components/policy-mode";
 import ServerOverview from "./components/server-overview";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
-import type { MirrorNumbering, MirrorRegionRow } from "./derp-mirror";
+import type {
+  MirrorNumbering,
+  MirrorRegionRow,
+  MirrorSourceAttemptView,
+  MirrorSourceView,
+} from "./derp-mirror";
 import { MIRROR_PROBE_STATUS_ACTION_ID, mirrorRegionLatency } from "./derp-mirror";
 import {
   classifyDerpRelaySource,
@@ -194,30 +201,64 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const measuredLatencies = locallyMeasuredRegionLatencies(mirrorSettings.latency);
 
   let officialRegions: DerpMapRegionDetail[] = [];
-  // Why the official map could not be read, so the mirror card can say so
-  // instead of rendering an empty table. The first failed attempt wins.
-  let mirrorRegionsError: RemoteDerpMapFailure | undefined;
+  // The sources the mirror would read right now, and — when none of them could
+  // be read — why each one failed. The table shows the same map the next run
+  // would mirror, and the card can name every endpoint it tried instead of
+  // printing one bare reason.
+  const mirrorSourceChain = resolveMirrorSourceChain(mirrorSettings, derp.urls);
+  const mirrorSources: MirrorSourceView[] = mirrorSourceChain.map((source) => ({
+    url: source.url,
+    kind: source.kind,
+  }));
+  const mirrorSourceAttempts: MirrorSourceAttemptView[] = [];
   try {
-    const cache = {
-      autoUpdateEnabled: derp.autoUpdateEnabled,
-      updateFrequency: derp.updateFrequency,
-    };
-    // The service falls back to the official URL when `derp.urls` lists nothing,
-    // so the table reads the same source it would mirror.
-    for (const url of derp.urls.length > 0 ? derp.urls : [OFFICIAL_DERP_MAP_URL]) {
-      const outcome = await loadRemoteDerpMapOutcome(url, cache);
-      if (outcome.regions !== undefined && outcome.regions.length > 0) {
-        officialRegions = outcome.regions;
-        mirrorRegionsError = undefined;
-        break;
+    if (mirrorSettings.pastedMap !== undefined) {
+      const read = parseDerpMapBody(mirrorSettings.pastedMap.body);
+      if (read.regions !== undefined) {
+        officialRegions = read.regions;
+        mirrorSourceAttempts.push({ url: PASTED_MAP_SOURCE });
+      } else {
+        mirrorSourceAttempts.push({
+          url: PASTED_MAP_SOURCE,
+          reason: read.reason ?? "unreadable",
+        });
       }
+    } else {
+      const cache = {
+        autoUpdateEnabled: derp.autoUpdateEnabled,
+        updateFrequency: derp.updateFrequency,
+      };
+      // The service reads the same chain in the same order, so the table shows
+      // exactly the source a run would mirror from.
+      for (const source of mirrorSourceChain) {
+        const outcome = await loadRemoteDerpMapOutcome(source.url, cache);
+        if (outcome.regions !== undefined && outcome.regions.length > 0) {
+          officialRegions = outcome.regions;
+          mirrorSourceAttempts.push({ url: source.url });
+          break;
+        }
 
-      mirrorRegionsError ??= outcome.reason;
+        mirrorSourceAttempts.push({
+          url: source.url,
+          ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+        });
+      }
     }
   } catch {
     officialRegions = [];
-    mirrorRegionsError ??= "network";
+    mirrorSourceAttempts.push({
+      url:
+        mirrorSettings.pastedMap === undefined
+          ? (mirrorSourceChain[0]?.url ?? "")
+          : PASTED_MAP_SOURCE,
+      reason: "network",
+    });
   }
+
+  const mirrorRegionsError =
+    officialRegions.length > 0
+      ? undefined
+      : mirrorSourceAttempts.find((attempt) => attempt.reason !== undefined)?.reason;
 
   const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => {
     const latency = mirrorRegionLatency(measuredLatencies, mirrorLatencies, region.regionId);
@@ -290,12 +331,29 @@ export async function loader({ request, context }: Route.LoaderArgs) {
           .map((id) => Number(id))
           .filter((id) => Number.isSafeInteger(id)),
         rankedAt: mirrorSettings.assignmentRankedAt,
+        // The source list as stored, and the chain it resolves to, so the card
+        // can show what the next run would dial without resolving it itself.
+        sourceUrls: [...mirrorSettings.sourceUrls],
+        sources: mirrorSources,
+        ...(mirrorSettings.pastedMap === undefined
+          ? {}
+          : {
+              paste: {
+                at: mirrorSettings.pastedMap.at,
+                regions: mirrorSettings.pastedMap.regions,
+                bytes: Buffer.byteLength(mirrorSettings.pastedMap.body, "utf8"),
+              },
+            }),
       },
       last: derpMirror.last(),
       numbering: mirrorNumbering,
       regions: mirrorRegions,
-      // A stable code, not a message: the card localizes it.
+      // A stable code, not a message: the card localizes it. The attempts below
+      // carry the same codes per source, which is what makes a blocked endpoint
+      // readable instead of looking like an empty map.
       regionsError: mirrorRegionsError,
+      sourceAttempts: mirrorSourceAttempts,
+      pasteLimitBytes: DERP_MIRROR_PASTE_MAX_BYTES,
       // The newest local probe, as plain values: when it ran and how it ended,
       // so the card can show progress, say when a run found nothing, and decide
       // whether a stale measurement is worth refreshing when it opens.
@@ -556,10 +614,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             isDisabled={!access}
             last={mirror.last}
             numbering={mirror.numbering}
+            pasteLimitBytes={mirror.pasteLimitBytes}
             pathListed={mirror.pathListed}
             paths={mirror.paths}
             probe={mirror.probe}
             probeStatus={mirror.probeStatus}
+            regionAttempts={mirror.sourceAttempts}
             regionError={mirror.regionsError}
             regions={mirror.regions}
             settings={mirror.settings}

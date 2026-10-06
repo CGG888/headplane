@@ -10,15 +10,32 @@ import {
   DERP_MIRROR_SNAPSHOT_REASON,
   derpMirrorFailureReason,
   loadOfficialRegions,
+  loadOfficialRegionsReport,
   mirrorTargetProblem,
   OFFICIAL_DERP_MAP_URL,
   type DerpMirrorService,
 } from "~/server/derp-mirror/service.server";
-import { DEFAULT_DERP_MIRROR_SETTINGS } from "~/server/derp-mirror/settings";
+import {
+  DERP_MIRROR_PASTE_MAX_BYTES,
+  DEFAULT_DERP_MIRROR_SETTINGS,
+} from "~/server/derp-mirror/settings";
+import {
+  PASTED_MAP_SOURCE,
+  parseDerpMapBody,
+  resolveMirrorSourceChain,
+  type OfficialMapReport,
+} from "~/server/derp-mirror/sources";
 import { readDerpMirrorDocument, writeDerpMirrorDocument } from "~/server/derp-mirror/store";
-import type { DerpMirrorRun, OfficialRegion } from "~/server/derp-mirror/types";
+import type {
+  DerpMirrorRun,
+  DerpMirrorSourceFailure,
+  OfficialRegion,
+} from "~/server/derp-mirror/types";
 import type { Headscale } from "~/server/headscale/api";
-import { clearRemoteDerpMapCache } from "~/server/headscale/derp-map-remote";
+import {
+  clearRemoteDerpMapCache,
+  type RemoteDerpMapFailure,
+} from "~/server/headscale/derp-map-remote";
 import type { SnapshotService } from "~/server/snapshots/service.server";
 
 const BASE = Date.UTC(2026, 0, 1, 0, 0, 0);
@@ -56,6 +73,41 @@ const OFFICIAL: OfficialRegion[] = [
   region(NYC, "nyc", "New York"),
 ];
 
+/**
+ * The official map as the wire body Tailscale serves, so the same fixture can
+ * arrive either by download or by paste and the two files can be compared.
+ */
+const OFFICIAL_BODY = JSON.stringify({
+  Regions: {
+    "20": {
+      RegionID: 20,
+      RegionCode: "hkg",
+      RegionName: "Hong Kong",
+      Nodes: [
+        {
+          Name: "hkg1",
+          HostName: "hkg1.example.com",
+          DERPPort: 443,
+          STUNPort: 3478,
+          IPv4: "1.2.3.4",
+        },
+      ],
+    },
+    "3": {
+      RegionID: 3,
+      RegionCode: "sin",
+      RegionName: "Singapore",
+      Nodes: [{ Name: "sin1", HostName: "sin1.example.com", DERPPort: 443, IPv4: "1.2.3.5" }],
+    },
+    "9": {
+      RegionID: 9,
+      RegionCode: "tok",
+      RegionName: "Tokyo",
+      Nodes: [{ Name: "tok1", HostName: "tok1.example.com", DERPPort: 443, IPv4: "1.2.3.6" }],
+    },
+  },
+});
+
 interface Harness {
   service: DerpMirrorService;
   dir: string;
@@ -66,8 +118,12 @@ interface Harness {
   reload: ReturnType<typeof vi.fn>;
   /** The live `derp.urls` list the fake configuration hands out. */
   urls: string[];
-  /** Every fetch request the service made, as the shared loader receives it. */
-  loads: Array<{ urls: string[]; cache: { autoUpdateEnabled: boolean; updateFrequency: string } }>;
+  /** Every source list the service asked the fake loader for, in order. */
+  loads: Array<{
+    urls: string[];
+    kinds: string[];
+    cache: { autoUpdateEnabled: boolean; updateFrequency: string };
+  }>;
   /** The map the fake fetcher answers with; undefined makes it fail. */
   source: { regions: OfficialRegion[] | undefined; latencies: Record<string, number> };
 }
@@ -125,9 +181,28 @@ describe("DERP region mirror service", () => {
           }),
       headscale: {} as unknown as Headscale,
       ...(options.withIntegration === false ? {} : { integration: { onConfigChange: reload } }),
-      loadOfficialRegions: async (requestedUrls, cache) => {
-        loads.push({ urls: [...requestedUrls], cache });
-        return source.regions;
+      loadOfficialRegions: async (sources, cache) => {
+        loads.push({
+          urls: sources.map((source) => source.url),
+          kinds: sources.map((source) => source.kind),
+          cache,
+        });
+
+        // The fake answers from its first source, or from none: a source list
+        // either yields a map or reports every entry as failed.
+        const first = sources[0];
+        if (source.regions !== undefined && source.regions.length > 0 && first !== undefined) {
+          return {
+            regions: source.regions,
+            source: first.url,
+            sourceKind: first.kind,
+            attempts: [{ url: first.url }],
+          };
+        }
+
+        return {
+          attempts: sources.map((entry) => ({ url: entry.url, reason: "timeout" as const })),
+        };
       },
       loadLatencies: async () => source.latencies,
       now: () => new Date(BASE),
@@ -443,14 +518,164 @@ describe("DERP region mirror service", () => {
     const run = await h.service.runNow();
 
     // The selection lists one region the map does not describe; the other is
-    // mirrored, and the loader saw exactly the configured URL list.
+    // mirrored, and the loader saw the configured URL once — a repeated entry is
+    // not dialled twice — followed by the built-in official fallback, which is
+    // the chain an install with no configured sources has always used.
     expect(run?.mirrored).toEqual([HKG]);
     expect(h.loads).toEqual([
       {
-        urls: ["https://maps.example.com/derp.json", "https://maps.example.com/derp.json"],
+        urls: ["https://maps.example.com/derp.json", OFFICIAL_DERP_MAP_URL],
+        kinds: ["headscale", "official"],
         cache: { autoUpdateEnabled: true, updateFrequency: "3h" },
       },
     ]);
+  });
+
+  test("records the source that answered", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG] });
+
+    const run = await h.service.runNow();
+
+    // The default chain is Headscale's own derp.urls first; this fake answers
+    // from the first entry, and the run says which one that was.
+    expect(run?.source).toBe(h.urls[0]);
+    expect(run?.sourceKind).toBe("headscale");
+    expect(run?.attempts).toEqual([{ url: h.urls[0] }]);
+  });
+
+  test("reports every source it tried when none of them answers", async () => {
+    const h = build();
+    await configure(h, {
+      officialRegionIds: [HKG],
+      sourceUrls: ["https://proxy.example.com/a.json", "https://proxy.example.com/b.json"],
+    });
+    await writeFile(h.target, "previous: map\n", "utf8");
+    h.source.regions = undefined;
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.reason).toBe("fetch-unusable");
+    expect(run?.source).toBeUndefined();
+    expect(run?.attempts).toEqual([
+      { url: "https://proxy.example.com/a.json", reason: "timeout" },
+      { url: "https://proxy.example.com/b.json", reason: "timeout" },
+    ]);
+    // A blocked network keeps the previous file: nothing is written or snapshotted.
+    expect(await readFile(h.target, "utf8")).toBe("previous: map\n");
+    expect(h.snapshot).not.toHaveBeenCalled();
+    // The reasons are stored with the run, so the card can show them after a reload.
+    expect((await readDerpMirrorDocument(dir)).last?.attempts).toEqual(run?.attempts);
+  });
+
+  test("uses a pasted map instead of any source, until it is cleared", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG, SIN] });
+
+    const stored = await h.service.update({
+      pastedMap: { body: OFFICIAL_BODY, at: new Date(BASE).toISOString(), regions: 3 },
+    });
+    expect(stored.success).toBe(true);
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("changed");
+    expect(run?.sourceKind).toBe("paste");
+    expect(run?.source).toBeUndefined();
+    expect(run?.pastedAt).toBe(new Date(BASE).toISOString());
+    expect(run?.attempts).toEqual([{ url: PASTED_MAP_SOURCE }]);
+    // No source was dialled at all while a paste is stored.
+    expect(h.loads).toEqual([]);
+    expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902 });
+    expect(await readFile(h.target, "utf8")).toContain("regioncode: hkg");
+    expect((await readDerpMirrorDocument(dir)).settings.pastedMap?.body).toBe(OFFICIAL_BODY);
+
+    // Clearing it puts the mirror back on its sources: the next run fetches.
+    const cleared = await h.service.update({ pastedMap: undefined });
+    expect(cleared.success).toBe(true);
+    expect(cleared.settings.pastedMap).toBeUndefined();
+
+    const after = await h.service.runNow();
+
+    expect(h.loads).toHaveLength(1);
+    expect(after?.sourceKind).toBe("headscale");
+    expect(after?.pastedAt).toBeUndefined();
+  });
+
+  test("a stored pasted body that is not a map keeps the previous file", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG] });
+    await writeFile(h.target, "previous: map\n", "utf8");
+
+    // A hand-edited store can hold anything; the run must refuse it rather than
+    // fail, and it must never reach the write path.
+    await h.service.update({
+      pastedMap: { body: "just: a document\n", at: new Date(BASE).toISOString(), regions: 0 },
+    });
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.reason).toBe("fetch-unusable");
+    expect(run?.sourceKind).toBe("paste");
+    expect(run?.attempts).toEqual([{ url: PASTED_MAP_SOURCE, reason: "unreadable" }]);
+    expect(await readFile(h.target, "utf8")).toBe("previous: map\n");
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.loads).toEqual([]);
+  });
+
+  test("a pasted map and a fetched map produce exactly the same file", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG, SIN, TOK] });
+
+    // One service reads the body through the shared fetcher over a faked
+    // transport; the other reads the same body from the paste store. Everything
+    // after the read — generate, validate, snapshot, write — is the same path,
+    // so the two files must be byte-identical.
+    const fetchedTarget = join(dir, "fetched.yaml");
+    const fetched = createDerpMirrorService({
+      dataPath: join(dir, "fetched-data"),
+      config: {
+        getDERPSettings: () => ({
+          urls: ["https://maps.example.com/same-body.json"],
+          autoUpdateEnabled: true,
+          updateFrequency: "3h",
+        }),
+      },
+      headscale: {} as unknown as Headscale,
+      loadOfficialRegions: (sources, cache) =>
+        loadOfficialRegionsReport(sources, cache, {
+          fetch: async () => ({ ok: true, status: 200, text: async () => OFFICIAL_BODY }),
+        }),
+      now: () => new Date(BASE),
+    });
+
+    try {
+      await fetched.update({
+        enabled: true,
+        targetPath: fetchedTarget,
+        officialRegionIds: [HKG, SIN, TOK],
+        autoReload: false,
+      });
+      const fetchedRun = await fetched.runNow();
+      expect(fetchedRun?.outcome).toBe("changed");
+
+      const pastedTarget = join(dir, "pasted.yaml");
+      await h.service.update({
+        targetPath: pastedTarget,
+        officialRegionIds: [HKG, SIN, TOK],
+        pastedMap: { body: OFFICIAL_BODY, at: new Date(BASE).toISOString(), regions: 3 },
+      });
+      const pastedRun = await h.service.runNow();
+      expect(pastedRun?.outcome).toBe("changed");
+
+      expect(await readFile(pastedTarget, "utf8")).toBe(await readFile(fetchedTarget, "utf8"));
+      expect(pastedRun?.assignment).toEqual(fetchedRun?.assignment);
+      expect(pastedRun?.mirrored).toEqual(fetchedRun?.mirrored);
+    } finally {
+      fetched.dispose();
+    }
   });
 
   test("an unexpected failure is recorded and reported once", async () => {
@@ -466,7 +691,7 @@ describe("DERP region mirror service", () => {
         },
       },
       headscale: {} as unknown as Headscale,
-      loadOfficialRegions: async () => OFFICIAL,
+      loadOfficialRegions: async () => ({ regions: OFFICIAL, attempts: [] }),
       now: () => new Date(BASE),
     });
 
@@ -493,7 +718,7 @@ describe("DERP region mirror service", () => {
         getDERPSettings: () => ({ urls: [], autoUpdateEnabled: false, updateFrequency: "3h" }),
       },
       headscale: {} as unknown as Headscale,
-      loadOfficialRegions: async () => OFFICIAL,
+      loadOfficialRegions: async () => ({ regions: OFFICIAL, attempts: [] }),
     });
 
     try {
@@ -525,7 +750,7 @@ describe("DERP region mirror scheduling", () => {
         getDERPSettings: () => ({ urls: [], autoUpdateEnabled: true, updateFrequency: "3h" }),
       },
       headscale: {} as unknown as Headscale,
-      loadOfficialRegions: async () => OFFICIAL,
+      loadOfficialRegions: async () => ({ regions: OFFICIAL, attempts: [] }),
       now: () => new Date(BASE),
       intervalMs,
     });
@@ -741,6 +966,202 @@ describe("DERP region mirror official map loader", () => {
   });
 });
 
+describe("DERP region mirror sources", () => {
+  const CACHE = { autoUpdateEnabled: true, updateFrequency: "3h" };
+  const OFFICIAL_URL = "https://controlplane.tailscale.com/derpmap/default";
+
+  /** The same wire body the service-level comparison test uses. */
+  const WIRE_BODY = OFFICIAL_BODY;
+
+  // The order the body's own region keys come back in: a JSON object with
+  // integer-like keys is written (and read back) in ascending numeric order.
+  const READ: OfficialRegion[] = [
+    {
+      regionId: 3,
+      code: "sin",
+      name: "Singapore",
+      nodes: [
+        {
+          name: "sin1",
+          hostname: "sin1.example.com",
+          derpPort: 443,
+          stunOnly: false,
+          ipv4: "1.2.3.5",
+        },
+      ],
+    },
+    {
+      regionId: 9,
+      code: "tok",
+      name: "Tokyo",
+      nodes: [
+        {
+          name: "tok1",
+          hostname: "tok1.example.com",
+          derpPort: 443,
+          stunOnly: false,
+          ipv4: "1.2.3.6",
+        },
+      ],
+    },
+    {
+      regionId: 20,
+      code: "hkg",
+      name: "Hong Kong",
+      nodes: [
+        {
+          name: "hkg1",
+          hostname: "hkg1.example.com",
+          derpPort: 443,
+          stunPort: 3478,
+          stunOnly: false,
+          ipv4: "1.2.3.4",
+        },
+      ],
+    },
+  ];
+
+  /** One URL's answer, as the fake transport reports it. */
+  function answering(status: number, text = WIRE_BODY) {
+    return async () => ({ ok: status === 200, status, text: async () => text });
+  }
+
+  beforeEach(() => {
+    clearRemoteDerpMapCache();
+  });
+
+  test("an empty list keeps the built-in order: derp.urls first, then the official map", () => {
+    const chain = resolveMirrorSourceChain({ sourceUrls: [] }, [
+      "https://maps.example.com/one.json",
+      "https://maps.example.com/two.json",
+    ]);
+
+    expect(chain).toEqual([
+      { url: "https://maps.example.com/one.json", kind: "headscale" },
+      { url: "https://maps.example.com/two.json", kind: "headscale" },
+      { url: OFFICIAL_URL, kind: "official" },
+    ]);
+  });
+
+  test("an empty list with no derp.urls still reaches the official map", () => {
+    expect(resolveMirrorSourceChain({ sourceUrls: [] }, [])).toEqual([
+      { url: OFFICIAL_URL, kind: "official" },
+    ]);
+    // Blank entries are dropped before the fallback is appended.
+    expect(resolveMirrorSourceChain({ sourceUrls: [] }, ["", "  "])).toEqual([
+      { url: OFFICIAL_URL, kind: "official" },
+    ]);
+  });
+
+  test("a configured list replaces the built-in chain and keeps its order", () => {
+    const chain = resolveMirrorSourceChain(
+      {
+        sourceUrls: [
+          "https://proxy.example.com/official.json",
+          "https://mirror.example.com/official.json",
+          "https://proxy.example.com/official.json",
+        ],
+      },
+      ["https://maps.example.com/one.json"],
+    );
+
+    // The duplicate collapses into its first position and Headscale's own URLs
+    // are not dialled at all: the operator named exactly what to reach.
+    expect(chain).toEqual([
+      { url: "https://proxy.example.com/official.json", kind: "custom" },
+      { url: "https://mirror.example.com/official.json", kind: "custom" },
+    ]);
+    expect(chain.some((source) => source.kind === "headscale")).toBe(false);
+  });
+
+  test("uses the first source that yields a usable map and reports which one", async () => {
+    const dead = "https://dead.example.com/map.json";
+    const good = "https://good.example.com/map.json";
+    const seen: string[] = [];
+
+    const report = await loadOfficialRegionsReport(
+      [
+        { url: dead, kind: "custom" },
+        { url: good, kind: "custom" },
+        { url: OFFICIAL_URL, kind: "official" },
+      ],
+      CACHE,
+      {
+        fetch: async (url) => {
+          seen.push(url);
+          return answering(url === dead ? 500 : 200)();
+        },
+      },
+    );
+
+    // The winner is dialled first and the third source is never reached.
+    expect(seen).toEqual([dead, good]);
+    expect(report.regions).toEqual(READ);
+    expect(report.source).toBe(good);
+    expect(report.sourceKind).toBe("custom");
+    expect(report.attempts).toEqual([{ url: dead, reason: "status" }, { url: good }]);
+  });
+
+  test("names every source and why it failed when none of them answers", async () => {
+    const dead = "https://dead.example.com/map.json";
+    const slow = "https://slow.example.com/map.json";
+
+    const report = await loadOfficialRegionsReport(
+      [
+        { url: dead, kind: "custom" },
+        { url: slow, kind: "custom" },
+      ],
+      CACHE,
+      {
+        fetch: async (url) =>
+          url === dead ? answering(500)() : answering(200, "just: a document\n")(),
+      },
+    );
+
+    expect(report.regions).toBeUndefined();
+    expect(report.source).toBeUndefined();
+    expect(report.attempts).toEqual([
+      { url: dead, reason: "status" },
+      { url: slow, reason: "unreadable" },
+    ]);
+  });
+
+  test("reads a pasted body exactly like a downloaded one", () => {
+    const read = parseDerpMapBody(WIRE_BODY);
+
+    expect(read.reason).toBeUndefined();
+    expect(read.regions).toEqual(READ);
+  });
+
+  test("refuses a body that is not a map and one over the size cap", () => {
+    expect(parseDerpMapBody("just: a document\n")).toEqual({ reason: "unreadable" });
+    expect(parseDerpMapBody("{ not json")).toEqual({ reason: "unreadable" });
+    expect(parseDerpMapBody("x".repeat(DERP_MIRROR_PASTE_MAX_BYTES + 1))).toEqual({
+      reason: "too-large",
+    });
+  });
+
+  test("the failure codes the store keeps are the reader's own", () => {
+    // Compile-time parity: a code the reader can return must be storable, and
+    // the other way round, or a stored reason would be dropped on the next read.
+    const parity: Record<RemoteDerpMapFailure, DerpMirrorSourceFailure> = {
+      timeout: "timeout",
+      network: "network",
+      status: "status",
+      "too-large": "too-large",
+      unreadable: "unreadable",
+    };
+
+    expect(Object.keys(parity).toSorted()).toEqual([
+      "network",
+      "status",
+      "timeout",
+      "too-large",
+      "unreadable",
+    ]);
+  });
+});
+
 describe("DERP region mirror latency probe", () => {
   const MEASURED_AT = new Date("2026-02-03T04:05:06.000Z");
   /** The number of node-and-family attempts the five official regions plan. */
@@ -858,7 +1279,7 @@ describe("DERP region mirror latency probe", () => {
   function service(
     options: {
       probe?: Record<string, unknown>;
-      loadOfficialRegions?: () => Promise<OfficialRegion[] | undefined>;
+      loadOfficialRegions?: () => Promise<OfficialMapReport>;
       loadLatencies?: () => Promise<Record<string, number>>;
     } = {},
   ): DerpMirrorService {
@@ -870,7 +1291,7 @@ describe("DERP region mirror latency probe", () => {
       headscale: {} as unknown as Headscale,
       loadOfficialRegions:
         options.loadOfficialRegions === undefined
-          ? async () => OFFICIAL
+          ? async () => ({ regions: OFFICIAL, attempts: [] })
           : options.loadOfficialRegions,
       ...(options.loadLatencies === undefined ? {} : { loadLatencies: options.loadLatencies }),
       now: () => MEASURED_AT,
@@ -905,7 +1326,7 @@ describe("DERP region mirror latency probe", () => {
       loadOfficialRegions: async () => {
         // The map read is what a request would otherwise wait for.
         await gate;
-        return OFFICIAL;
+        return { regions: OFFICIAL, attempts: [] };
       },
       probe: { udp: () => answeringSocket(clock, 5), now: clock.now },
     });
@@ -1147,8 +1568,7 @@ describe("DERP region mirror latency probe", () => {
   });
 
   test("records why it could not probe at all when no official map is readable", async () => {
-    const instance = service({ loadOfficialRegions: async () => undefined });
-
+    const instance = service({ loadOfficialRegions: async () => ({ attempts: [] }) });
     try {
       const started = instance.startLatencyProbe();
       expect(started.started).toBe(true);

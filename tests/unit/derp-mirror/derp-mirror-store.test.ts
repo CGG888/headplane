@@ -60,7 +60,30 @@ describe("DERP mirror document parsing", () => {
       targetPath: DEFAULT_DERP_MIRROR_SETTINGS.targetPath,
       intervalHours: DEFAULT_DERP_MIRROR_SETTINGS.intervalHours,
       autoReload: true,
+      sourceUrls: [],
     });
+  });
+
+  test("keeps a source list and a pasted map, dropping only what is unusable", () => {
+    const at = "2026-01-02T03:04:05.000Z";
+    const document = parseDerpMirrorDocument(
+      JSON.stringify({
+        settings: {
+          sourceUrls: ["https://mirror.example.com/map.json", "not a url", 7],
+          pastedMap: { body: '{"Regions":{}}', at, regions: 3 },
+        },
+      }),
+    );
+
+    expect(document.settings.sourceUrls).toEqual(["https://mirror.example.com/map.json"]);
+    expect(document.settings.pastedMap).toEqual({ body: '{"Regions":{}}', at, regions: 3 });
+
+    // An undated body is dropped rather than kept as a source nothing can date.
+    const undated = parseDerpMirrorDocument(
+      JSON.stringify({ settings: { pastedMap: { body: "map", regions: 1 } } }),
+    );
+    expect(undated.settings.pastedMap).toBeUndefined();
+    expect(undated.settings.sourceUrls).toEqual([]);
   });
 
   test("drops parts of the last run that are not usable", () => {
@@ -112,6 +135,42 @@ describe("DERP mirror document parsing", () => {
     expect(document.last?.mode).toBe("check");
     expect(document.last?.reason).toBe("validation-failed");
     expect(document.last?.detail).toBe("derpNodeInvalidIpv4");
+  });
+
+  test("keeps the sources a run tried and the one that answered", () => {
+    const document = parseDerpMirrorDocument(
+      JSON.stringify({
+        last: {
+          at: "2026-01-01T00:00:00.000Z",
+          source: "https://mirror.example.com/map.json",
+          sourceKind: "custom",
+          pastedAt: "2026-01-01T00:00:00.000Z",
+          attempts: [
+            { url: "https://dead.example.com/map.json", reason: "timeout" },
+            { url: "https://mirror.example.com/map.json" },
+            { url: "", reason: "unreadable" },
+            { url: "https://junk.example.com/map.json", reason: "why" },
+            "nonsense",
+          ],
+        },
+      }),
+    );
+
+    expect(document.last?.source).toBe("https://mirror.example.com/map.json");
+    expect(document.last?.sourceKind).toBe("custom");
+    expect(document.last?.pastedAt).toBe("2026-01-01T00:00:00.000Z");
+    // An entry without a URL and a reason that is not a code are both dropped.
+    expect(document.last?.attempts).toEqual([
+      { url: "https://dead.example.com/map.json", reason: "timeout" },
+      { url: "https://mirror.example.com/map.json" },
+      { url: "https://junk.example.com/map.json" },
+    ]);
+
+    const unknownKind = parseDerpMirrorDocument(
+      JSON.stringify({ last: { at: "2026-01-01T00:00:00.000Z", sourceKind: "nonsense" } }),
+    );
+    expect(unknownKind.last?.sourceKind).toBeUndefined();
+    expect(unknownKind.last?.attempts).toBeUndefined();
   });
 
   test("serializes stable JSON with a trailing newline", () => {

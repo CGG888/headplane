@@ -1,5 +1,6 @@
 import type { TranslationKey } from "~/i18n";
 import type {
+  DerpMirrorPastedMap,
   DerpMirrorProbeStatus,
   DerpMirrorReload,
   DerpMirrorRun,
@@ -71,13 +72,20 @@ export type HeadscaleSettingsErrorCode =
   | "invalidDerpMirrorInterval"
   | "invalidDerpMirrorPath"
   | "invalidDerpMirrorSelection"
+  | "invalidDerpMirrorSource"
+  | "tooManyDerpMirrorSources"
   | "derpMirrorSaveFailed"
   | "derpMirrorCheckFailed"
   | "derpMirrorRunFailed"
   | "derpMirrorReassignFailed"
   | "derpMirrorProbeBusy"
   | "derpMirrorProbeFailed"
-  | "derpMirrorUnavailable";
+  | "derpMirrorUnavailable"
+  | "emptyDerpMirrorPaste"
+  | "derpMirrorPasteTooLarge"
+  | "derpMirrorPasteInvalid"
+  | "derpMirrorPasteSaveFailed"
+  | "derpMirrorPasteClearFailed";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -135,6 +143,8 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   invalidDerpMirrorInterval: "settings.headscale.derp.mirror.errors.invalidDerpMirrorInterval",
   invalidDerpMirrorPath: "settings.headscale.derp.mirror.errors.invalidDerpMirrorPath",
   invalidDerpMirrorSelection: "settings.headscale.derp.mirror.errors.invalidDerpMirrorSelection",
+  invalidDerpMirrorSource: "settings.headscale.derp.mirror.errors.invalidDerpMirrorSource",
+  tooManyDerpMirrorSources: "settings.headscale.derp.mirror.errors.tooManyDerpMirrorSources",
   derpMirrorSaveFailed: "settings.headscale.derp.mirror.errors.derpMirrorSaveFailed",
   derpMirrorCheckFailed: "settings.headscale.derp.mirror.errors.derpMirrorCheckFailed",
   derpMirrorRunFailed: "settings.headscale.derp.mirror.errors.derpMirrorRunFailed",
@@ -142,6 +152,11 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpMirrorProbeBusy: "settings.headscale.derp.mirror.errors.derpMirrorProbeBusy",
   derpMirrorProbeFailed: "settings.headscale.derp.mirror.errors.derpMirrorProbeFailed",
   derpMirrorUnavailable: "settings.headscale.derp.mirror.errors.derpMirrorUnavailable",
+  emptyDerpMirrorPaste: "settings.headscale.derp.mirror.errors.emptyDerpMirrorPaste",
+  derpMirrorPasteTooLarge: "settings.headscale.derp.mirror.errors.derpMirrorPasteTooLarge",
+  derpMirrorPasteInvalid: "settings.headscale.derp.mirror.errors.derpMirrorPasteInvalid",
+  derpMirrorPasteSaveFailed: "settings.headscale.derp.mirror.errors.derpMirrorPasteSaveFailed",
+  derpMirrorPasteClearFailed: "settings.headscale.derp.mirror.errors.derpMirrorPasteClearFailed",
 };
 
 export interface HeadscaleSettingsSuccess {
@@ -175,6 +190,12 @@ export interface HeadscaleSettingsSuccess {
    * plain values, so the card can show progress without waiting for the probes.
    */
   probe?: DerpMirrorProbeStatus;
+  /**
+   * Present after a pasted map was stored or cleared: the body now in the store,
+   * or absent when it was cleared. The card re-reads the page anyway; this is
+   * what confirms the paste the operator just submitted.
+   */
+  paste?: DerpMirrorPastedMap;
 }
 
 /**

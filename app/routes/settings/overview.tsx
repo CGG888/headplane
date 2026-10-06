@@ -99,7 +99,12 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
 
   return (
     <SettingsPage
-      className="md:max-w-5xl"
+      // The hub is a grid of cards, not a form: it takes the page width every
+      // other page has. `SettingsPage` caps itself at `md:max-w-4xl` for the
+      // settings forms, so that one class is overridden here (and on the
+      // Overview) to the shell's own `container` width — the same right edge
+      // the header's controls and the machines list share.
+      className="md:max-w-none"
       description={t("settings.overview.intro")}
       title={t("settings.overview.title")}
     >

@@ -969,7 +969,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
   return (
     <SettingsPage
-      className="md:max-w-5xl"
+      // The dashboard is a grid of cards, not a form: it takes the page width
+      // every other page has. `SettingsPage` caps itself at `md:max-w-4xl` for
+      // the settings forms, so the one class is overridden here (and on the
+      // settings hub) to the shell's own `container` width — the same right
+      // edge the header's controls and the machines list share.
+      className="md:max-w-none"
       description={t("overview.intro")}
       title={t("overview.title")}
     >
@@ -981,8 +986,19 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </div>
       {/* One continuous grid: the cards are not grouped by anything the page
           prints, so the headings that used to sit between the rows are gone and
-          a hidden card simply closes its own gap. */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          a hidden card simply closes its own gap.
+
+          The column count comes from the content, not from a fixed four. A
+          track is `24rem` because that is the narrowest card the widest content
+          fits in: the counts cards hold two tiles side by side and their longest
+          split line ("12 online · 3 offline" / "12 在线 · 3 离线") measures
+          ~21.5rem inside them, and a relay card has to show a full IPv6 address
+          with its copy and reveal controls (~19rem) beside its label. `auto-fit`
+          then fits as many of those tracks as the container allows, so a row
+          holds as many cards as fit without clipping — three of them on a
+          1536px display, where a fixed four left 327px cards — and `items-stretch`
+          with the cards' own `h-full` keeps every card in a row the same height. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(24rem,1fr))] items-stretch gap-3">
         <Card
           cardId="versions-headplane"
           description={t("overview.versions.headplaneBody")}
@@ -1702,15 +1718,22 @@ interface FactProps {
 
 /**
  * One fact of a card: a label (with its source chip and explanation) over a
- * value. The pair is stacked on a phone and put on one line from `sm` up, so a
- * long path or URL truncates inside the card instead of overflowing it.
+ * value. The pair is stacked on a phone and put on one line from `sm` up.
+ *
+ * The value is what the card is read for, so it is never the part that gives
+ * way: on a wide card the two share a line, but the value always keeps at least
+ * `14rem` — the widest value a card prints ("Embedded server and DERP map" next
+ * to its label) — and when a long label or its note would eat into that, the
+ * value drops to a line of its own instead of being clipped to an ellipsis. It
+ * still truncates, with its full text in the title, in the one case nothing can
+ * help: a value longer than the whole row.
  */
 function Fact({ label, source, note, hint, children, code = false, text, reason }: FactProps) {
   const { t } = useI18n();
 
   return (
     <div
-      className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+      className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-4"
       title={hint}
     >
       <dt className="flex min-w-0 flex-col gap-0.5 text-sm text-mist-600 sm:max-w-[55%] dark:text-mist-400">
@@ -1722,7 +1745,7 @@ function Fact({ label, source, note, hint, children, code = false, text, reason 
           <span className="text-xs text-mist-500 dark:text-mist-400">{note}</span>
         ) : undefined}
       </dt>
-      <dd className="min-w-0 sm:flex-1 sm:text-right">
+      <dd className="min-w-0 sm:min-w-[14rem] sm:flex-1 sm:text-right">
         {children ??
           (text === undefined ? (
             <span className="text-sm text-mist-400 dark:text-mist-500">
@@ -1759,9 +1782,12 @@ function CountTile({ label, text, reason, detail }: CountTileProps) {
   const sub = missing ? reason : detail;
 
   return (
-    <div className="flex min-w-0 flex-col-reverse gap-1 rounded-lg border border-mist-100 bg-mist-50/60 p-2.5 dark:border-mist-800 dark:bg-mist-900/50">
-      {/* Four cards per row make one tile narrow, so the label wraps instead of
-          truncating: a count whose name is cut off tells the operator nothing. */}
+    <div className="flex min-w-0 flex-col-reverse gap-1 rounded-lg border border-mist-100 bg-mist-50/60 p-3 dark:border-mist-800 dark:bg-mist-900/50">
+      {/* The grid's own track never gets narrower than `24rem`, so the tile
+          takes the comfortable padding above instead of the smaller one a fixed
+          four-per-row used to force. A label that still has to wrap does, rather
+          than truncating: a count whose name is cut off tells the operator
+          nothing. */}
       <dt className="text-xs break-words text-mist-500 dark:text-mist-400">{label}</dt>
       <dd className="min-w-0">
         <span

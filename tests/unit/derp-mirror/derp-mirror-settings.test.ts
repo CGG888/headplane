@@ -1,12 +1,17 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  DERP_MIRROR_MAX_SOURCES,
+  DERP_MIRROR_PASTE_MAX_BYTES,
   DEFAULT_DERP_MIRROR_SETTINGS,
   DEFAULT_DERP_MIRROR_TARGET_PATH,
   derpMirrorIntervalMs,
+  isAbsoluteHttpUrl,
   normalizeDerpMirrorSettings,
   normalizeMirrorNumber,
   normalizeOfficialRegionIds,
+  normalizePastedMap,
+  normalizeSourceUrls,
   parseDerpMirrorIntervalHours,
   pruneAssignmentToSelection,
 } from "~/server/derp-mirror/settings";
@@ -20,8 +25,10 @@ describe("DERP mirror settings", () => {
       targetPath: DEFAULT_DERP_MIRROR_TARGET_PATH,
       intervalHours: 24,
       autoReload: true,
+      sourceUrls: [],
     });
     expect(DEFAULT_DERP_MIRROR_SETTINGS.assignmentRankedAt).toBeUndefined();
+    expect(DEFAULT_DERP_MIRROR_SETTINGS.pastedMap).toBeUndefined();
   });
 
   test("a missing or junk document reads as the defaults", () => {
@@ -174,6 +181,88 @@ describe("DERP mirror settings", () => {
     }).latency;
     expect(empty?.outcome).toBe("empty");
     expect(empty?.regions).toEqual([]);
+  });
+
+  test("accepts only absolute http(s) URLs as sources", () => {
+    expect(isAbsoluteHttpUrl("https://mirror.example.com/derpmap/default")).toBe(true);
+    expect(isAbsoluteHttpUrl("http://10.0.0.5:8080/derp.json")).toBe(true);
+    expect(isAbsoluteHttpUrl("  https://mirror.example.com/a.json  ")).toBe(true);
+
+    // A relative path, a bare host, another scheme and junk are all refused.
+    for (const value of [
+      "mirror.example.com/a.json",
+      "/derpmap/default",
+      "ftp://mirror.example.com/a.json",
+      "file:///etc/derp.json",
+      "https://",
+      "",
+      "   ",
+      null,
+      7,
+    ]) {
+      expect(isAbsoluteHttpUrl(value)).toBe(false);
+    }
+  });
+
+  test("keeps the source list in order, deduplicated, capped and clean", () => {
+    expect(
+      normalizeSourceUrls([
+        "https://b.example.com/map.json",
+        "https://a.example.com/map.json",
+        "https://b.example.com/map.json",
+        "not a url",
+        "",
+        null,
+      ]),
+    ).toEqual(["https://b.example.com/map.json", "https://a.example.com/map.json"]);
+
+    // Anything that is not a list is the built-in chain, not a broken source.
+    expect(normalizeSourceUrls("https://a.example.com/map.json")).toEqual([]);
+    expect(normalizeSourceUrls(undefined)).toEqual([]);
+
+    const many = Array.from(
+      { length: DERP_MIRROR_MAX_SOURCES + 3 },
+      (_, index) => `https://s${index}.example.com/map.json`,
+    );
+    expect(normalizeSourceUrls(many)).toHaveLength(DERP_MIRROR_MAX_SOURCES);
+  });
+
+  test("keeps a dated, sized pasted body and drops anything else", () => {
+    const at = "2026-01-02T03:04:05.000Z";
+    expect(normalizePastedMap({ body: '{"Regions":{}}', at, regions: 2 })).toEqual({
+      body: '{"Regions":{}}',
+      at,
+      regions: 2,
+    });
+
+    // A hand-edited document cannot smuggle in an undated, empty or oversized body.
+    expect(normalizePastedMap({ body: "", at, regions: 2 })).toBeUndefined();
+    expect(normalizePastedMap({ body: "   ", at, regions: 2 })).toBeUndefined();
+    expect(normalizePastedMap({ body: "x", at: "whenever", regions: 2 })).toBeUndefined();
+    expect(normalizePastedMap({ at, regions: 2 })).toBeUndefined();
+    expect(normalizePastedMap("nope")).toBeUndefined();
+    expect(normalizePastedMap(null)).toBeUndefined();
+
+    const oversized = normalizePastedMap({
+      body: "x".repeat(DERP_MIRROR_PASTE_MAX_BYTES + 1),
+      at,
+      regions: 2,
+    });
+    expect(oversized).toBeUndefined();
+
+    // A missing region count reads as zero rather than dropping the body.
+    expect(normalizePastedMap({ body: "map", at })?.regions).toBe(0);
+  });
+
+  test("normalizes the new fields through the whole settings document", () => {
+    const settings = normalizeDerpMirrorSettings({
+      sourceUrls: ["https://mirror.example.com/map.json", "nope"],
+      pastedMap: { body: "map", at: "2026-01-02T03:04:05.000Z", regions: 1 },
+    });
+
+    expect(settings.sourceUrls).toEqual(["https://mirror.example.com/map.json"]);
+    expect(settings.pastedMap?.regions).toBe(1);
+    expect(settings.enabled).toBe(false);
   });
 });
 

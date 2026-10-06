@@ -17,9 +17,12 @@ import {
 import { ensureMirrorPathInDerpPaths } from "~/server/derp-mirror/paths";
 import { mirrorTargetProblem, type DerpMirrorService } from "~/server/derp-mirror/service.server";
 import {
+  DERP_MIRROR_MAX_SOURCES,
+  isAbsoluteHttpUrl,
   normalizeOfficialRegionId,
   parseDerpMirrorIntervalHours,
 } from "~/server/derp-mirror/settings";
+import { parseDerpMapBody } from "~/server/derp-mirror/sources";
 import type { DerpMirrorReload } from "~/server/derp-mirror/types";
 import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
@@ -93,6 +96,8 @@ const READ_ONLY_TOLERANT_ACTIONS = new Set([
   "test_oidc",
   "add_mirror_region_names",
   "save_derp_mirror",
+  "save_derp_mirror_paste",
+  "clear_derp_mirror_paste",
   "check_derp_mirror",
   "run_derp_mirror",
   "reassign_derp_mirror",
@@ -844,6 +849,31 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("invalidDerpMirrorPath");
       }
 
+      // The source URLs are tried in order, so their order is the submitted
+      // order. A blank row is a leftover from "add source", not a source; any
+      // other entry has to be an absolute http(s) URL the fetcher can dial.
+      const sourceUrls: string[] = [];
+      for (const entry of formData.getAll("mirror_source")) {
+        const url = entry.toString().trim();
+        if (url.length === 0) {
+          continue;
+        }
+
+        if (!isAbsoluteHttpUrl(url)) {
+          return failure("invalidDerpMirrorSource");
+        }
+
+        if (sourceUrls.includes(url)) {
+          continue;
+        }
+
+        if (sourceUrls.length >= DERP_MIRROR_MAX_SOURCES) {
+          return failure("tooManyDerpMirrorSources");
+        }
+
+        sourceUrls.push(url);
+      }
+
       const mirror = context.get(derpMirrorContext);
       const result = await mirror.update({
         enabled,
@@ -851,6 +881,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         intervalHours,
         targetPath,
         officialRegionIds,
+        sourceUrls,
       });
 
       if (!result.success) {
@@ -936,6 +967,57 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         mirror: run,
         ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
       } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "save_derp_mirror_paste": {
+      // The last resort for a network where no source URL can be reached: the
+      // operator brings the official map's body in by hand. It is validated with
+      // the reader a fetched body goes through and stored verbatim, so the run
+      // that consumes it takes exactly the same generate, validate, snapshot and
+      // write path as a downloaded one. Nothing is written to the map file here:
+      // the next run is what writes it.
+      const body = formData.get("mirror_paste")?.toString() ?? "";
+      if (body.trim().length === 0) {
+        return failure("emptyDerpMirrorPaste");
+      }
+
+      const read = parseDerpMapBody(body);
+      if (read.regions === undefined) {
+        return failure(
+          read.reason === "too-large" ? "derpMirrorPasteTooLarge" : "derpMirrorPasteInvalid",
+        );
+      }
+
+      const mirror = context.get(derpMirrorContext);
+      const result = await mirror.update({
+        pastedMap: {
+          body,
+          at: new Date().toISOString(),
+          regions: read.regions.length,
+        },
+      });
+
+      if (!result.success) {
+        return failure("derpMirrorPasteSaveFailed");
+      }
+
+      return data({
+        success: true,
+        ...(result.settings.pastedMap === undefined ? {} : { paste: result.settings.pastedMap }),
+      } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "clear_derp_mirror_paste": {
+      // Clearing puts the mirror back on its URL sources. The patch names only
+      // this field, so every other setting keeps whatever the store holds,
+      // whether or not the service has read it into memory yet.
+      const mirror = context.get(derpMirrorContext);
+      const result = await mirror.update({ pastedMap: undefined });
+      if (!result.success || result.settings.pastedMap !== undefined) {
+        return failure("derpMirrorPasteClearFailed");
+      }
+
+      return success();
     }
 
     case "probe_derp_latency": {
