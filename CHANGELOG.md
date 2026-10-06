@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.14 (October 6, 2026)
+
 ## Changes
 
 - **Alert notifications now speak your language and in plain words.** Every alert's title and body come from the interface catalogues instead of being fixed English, so the alert list and the delivery history re-render in whichever language you are using — switch the interface to English and the same alert reads in English. The webhook has its own **notification language** setting (follow the site default, Simplified Chinese, Traditional Chinese or English) so the message that arrives in WeChat, DingTalk or Feishu is in the language you want, while the structured fields stay exactly as they were for anything automating on them. The wording was rewritten to be readable in one pass: what happened, which node, key or check it concerns, what to do about it, and what happens next — for example a node offline notice says the device can no longer receive traffic or policies, suggests checking that it is powered on and running its client, and promises a notice when it reconnects.
@@ -8,6 +10,9 @@
 ## Fixes
 
 - **The automations that only served the upstream community are gone**, so nothing runs on a schedule any more: the dependency-bot workflow, the stale-issue closer, the triage and milestone helpers, the PR labeller, the manual agent workflow and the superseded docs build. The build, the release (images and GitHub Release) and the documentation deploy are untouched and still run on the same triggers.
+
+---
+
 # 0.22.13 (October 6, 2026)
 
 ## Fixes
