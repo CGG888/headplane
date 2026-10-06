@@ -8,7 +8,8 @@ outline: [2, 3]
 
 **Settings → Alert Notifications** posts a JSON body to one webhook whenever
 something needs attention: Headscale dropping out of reach, a node going offline,
-an API key about to expire, or a configuration check turning into a failure. It
+an API key about to expire, a configuration check turning into a failure, or a
+DERP address sync run that could not write. It
 is the push half of the [System Status](/features/system-status) page — that page
 tells you what is wrong when you look, this one tells you when you are not
 looking.
@@ -33,6 +34,25 @@ than one per interval.
 | Node came back online      | `info`     | A node that was offline in the previous check is no longer offline; the target is its name, or its id if it left the tailnet.                           |
 | API key expiring           | `warning`  | A key enters the warning window; the target is the key prefix and `threshold` is the window in days. A key already past its expiration is not reported. |
 | Configuration check failed | `warning`  | A configuration check newly reports `fail`; the target is the check id.                                                                                 |
+| DERP address sync failed   | `warning`  | A **writing** [address auto-sync](/features/headscale-settings#address-auto-sync) or [official region filter](/features/headscale-settings#official-region-filter) run fails; see below. |
+
+The DERP sync events are reported by the sync services themselves rather than by
+the background check loop, but they go through the same enabled/selected filter,
+the same cooldown and the same delivery history:
+
+- It fires only for a run that **writes**. A **Check** never reports anything,
+  because its result is on the screen in front of you, and a run that found
+  nothing to change is not a failure either.
+- It fires when a writing run failed: nothing usable was detected for a family,
+  the configuration was not writable, the write itself failed, or the reload
+  that follows it failed. The target carries the reason — the failure code for
+  the address sync, or `derp-region-mirror:<code>` for the region filter — and
+  the payload's title is the one shown above.
+- **A later successful writing run clears it.** Nothing is sent for the success;
+  the flag is only reset, so the next failure is a new transition and is
+  reported again. While the notifier is switched off, a failure is not recorded
+  at all, so turning notifications on and seeing another failure is still a real
+  transition worth reporting.
 
 The cooldown sits on top of that: when a condition does change back inside the
 cooldown window, the repeat is suppressed. It is what stops a flapping node from
@@ -50,7 +70,7 @@ Two situations are deliberately silent rather than guessed at:
   previous check state is kept.
 - **Node and API key events need an API key.** Without `headscale.api_key`
   Headplane cannot list nodes or keys, so those three events are never detected;
-  reachability and the configuration checks still are.
+  reachability, the configuration checks and the DERP sync reports still are.
 
 ## Settings
 
@@ -58,7 +78,7 @@ Two situations are deliberately silent rather than guessed at:
 | ---------------------- | ------- | -------------- | ---------------------------------------------------------------- |
 | Webhook URL            | empty   | —              | Absolute `http` or `https` URL; required to enable or test.      |
 | Shared secret          | empty   | —              | Optional; sent as the `X-Headplane-Secret` header on every POST. |
-| Reported events        | all six | —              | At least one must stay selected.                                 |
+| Reported events        | all seven | —              | At least one must stay selected.                                 |
 | Check interval         | 60 s    | 15–3600        | How often Headplane looks for changes.                           |
 | Cooldown               | 300 s   | 30–86400       | Shortest time before the same condition may be reported again.   |
 | API key warning window | 7 days  | 1–90           | How far ahead an expiring API key is worth reporting.            |
@@ -77,7 +97,7 @@ and outside the translation catalogs, so automation can match on stable text:
 
 | Field       | Meaning                                                                                                                      |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `event`     | One of the six event ids above, or `test`.                                                                                   |
+| `event`     | One of the seven event ids above, or `test`.                                                                                 |
 | `title`     | Short headline, e.g. `Node went offline`.                                                                                    |
 | `severity`  | `info`, `warning` or `critical`.                                                                                             |
 | `summary`   | One line with the target and threshold filled in.                                                                            |
@@ -119,9 +139,9 @@ because it is kept next to the state rather than in memory.
 Everything lives in `alerts.json`, directly inside Headplane's data directory
 (`server.data_path`): the settings, the delivery history, and the last-known state
 the detector compares against — whether Headscale was reachable, which nodes were
-offline, which keys were inside the window, which checks were failing, and when
-each condition was last reported. There is no database table and no migration to
-run.
+offline, which keys were inside the window, which checks were failing, whether the
+last DERP sync run failed, and when each condition was last reported. There is no
+database table and no migration to run.
 
 A missing or corrupt file reads as the defaults, and a write goes through a
 temporary file plus a rename, so an interrupted write leaves the earlier document

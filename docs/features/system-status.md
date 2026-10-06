@@ -72,6 +72,12 @@ them into real checks.
 | DNS records          | Both `dns.extra_records` and `dns.extra_records_path` set means the inline records are silently ignored.                                                                 |
 | OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                   |
 | Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                         |
+| Local DERP map files | Every entry in `derp.paths` gets its own rows — the file exists, is readable, is writable, is inside the size cap, parses as YAML, validates as a DERP map, and keeps its region ids and codes unique. A path this container cannot see is **unverifiable**. |
+
+The local-map rows are the same checks the DERP card shows next to each path in
+[Settings → Headscale → DERP](/features/headscale-settings#editing-local-derp-map-files);
+here they are part of the one list you can read top to bottom, and each row names
+the file it inspected.
 
 A check that turns into a failure can also be pushed to a webhook instead of
 waiting to be read here; see [Alert Notifications](/features/notifications).

@@ -200,6 +200,10 @@ and lower case. The JSON map's top-level `Regions` object becomes the YAML
 | `IPv4`         | `ipv4`       | Optional, a bare address.                                                   |
 | `IPv6`         | `ipv6`       | Optional, a bare address.                                                   |
 
+Headplane's readers accept either spelling, so a map it fetches from a URL — the
+official one included — is understood whether it arrives in this wire format or
+in the lower-case shape above.
+
 `Latitude`, `Longitude` and `CanPort80` are wire-format fields: the JSON map
 carries them, while the local YAML leaves them out and Headscale does not read
 them from it. `derpport` defaults to **443** and `stunport` to **3478** when a node
@@ -475,6 +479,67 @@ Clients also have to reach the region's public address, so firewall and NAT rule
 are the usual reason a freshly enabled region never appears in use. The page
 repeats this next to the controls.
 
+### Official region filter
+
+Directly below the [address auto-sync](#address-auto-sync) card, **Official
+region filter** mirrors **Tailscale's official public DERP regions** —
+Tailscale's own relays, not the nodes you host yourself — into a local map file
+that Headscale hands to clients, keeping only the regions you tick and
+renumbering them into the 900s. The card starts collapsed; its summary reads
+`{regions} official regions · {selected} selected · {file}`.
+
+The table lists every official region with the number it would be mirrored as,
+the Chinese name the mirrored file carries, the official code and name, how many
+nodes the region has, the latency the agent measured, and a checkbox. Ticking a
+box only changes the preview: nothing is written until **Save**.
+
+Numbers are the point of the card:
+
+| Region                 | Number                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| Hong Kong              | **901**, always — its checkbox cannot be cleared                                                       |
+| Singapore              | **902**, always — its checkbox cannot be cleared                                                       |
+| Everything else ticked | **903** and up, fastest measured latency first; equal latencies go to the lower official id, then code |
+
+A number is **sticky**: once a region has one it keeps it across later runs, so a
+client's relay choice does not change just because a latency sample moved. Only
+**Renumber** re-ranks the regions and can move a number.
+
+The settings, all written by **Save**:
+
+| Setting             | Default                                                    | Notes                                                                                                                                                                                                             |
+| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enable the mirror   | off                                                        | Enabling lets Headplane rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                 |
+| Target file path    | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`  | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                             |
+| Refresh interval    | every 24 hours                                             | 6, 12 or 24 hours.                                                                                                                                                                                                |
+| Reload after writing | on                                                        | When a run actually changed the file, Headplane asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
+
+Its actions:
+
+| Action         | What it does                                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Save**       | Writes the settings and the selection.                                                                                                                                                                                                                |
+| **Check**      | Fetches the official map, filters and renumbers it, then compares it with the file on disk — **writing nothing**: no snapshot, no reload, no alert, and no change to the stored numbering. It is the safe way to see what a run would do.              |
+| **Update now** | The same pass, writing what changed: snapshot, atomic replace, audit entry, then the reload switch.                                                                                                                                                    |
+| **Renumber**   | The same writing run with the stored numbering dropped first, so every region is ranked again from the latest measurements. Its dialog warns that **clients may briefly drop and re-select their relays** while the new numbers spread through the tailnet. |
+
+The card also offers a sort order, a latency ceiling with quick presets, a
+**Select the regions shown** button and a **Recommended: the fastest three**
+preset; none of them write anything on their own.
+
+A run that cannot write **leaves the previous file exactly as it was** and names
+the reason in its summary: no region is selected, the official map could not be
+fetched, it describes none of the selected regions, the target path is not
+absolute or contains a `..` segment, the target is not writable, the generated
+map was rejected by the map validator, or the reload failed. A *writing* run that
+failed also raises the
+[DERP address sync failed](/features/notifications#reported-events) notification;
+a check never does.
+
+Measured latency comes from the Headplane Agent, so a region nothing measured
+reads **Not measured** and ranks last. Without the agent the card says so and you
+tick regions by hand.
+
 ### Region names
 
 Headscale only hands Headplane the region **ids** a machine reports — its own
@@ -483,6 +548,22 @@ The embedded region gets its name from your configuration automatically, and
 **Settings → Headscale → DERP** has a small editor for naming the others (a
 region id → name mapping kept in Headplane's own data directory, never written
 into Headscale's configuration). Names then appear on the machine details too.
+
+A name is resolved through one chain, most deliberate source first: the manual
+mapping, the map files listed in `derp.paths`, the maps fetched from
+`derp.urls`, then Headscale's own embedded region. A region none of them
+describes keeps its bare `#id`.
+
+Those maps are read in either spelling of the format. Tailscale serves its
+official map in the wire format (`Regions`, `RegionID`, `HostName`, `IPv4`, …),
+while Headscale's local files use lower-case keys (`regions`, `regionid`,
+`hostname`, `ipv4`); one reader accepts both and normalises them, which is why
+the official regions a machine reports now resolve to their codes and names. The
+fetch has a **10-second deadline** and retries **once** when the connection
+itself fails — a timeout or a refused connection; an answered error status or a
+body that is not a DERP map is definitive and is not retried. A successful answer
+is cached for a few hours and a failure for a few minutes, so an unreachable URL
+is not dialled on every render.
 
 Below the form, the page lists which relay region each machine is currently
 using, with the latency it measured. That live view needs the Headplane Agent,

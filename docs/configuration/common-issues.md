@@ -70,3 +70,28 @@ Pick one of these fixes:
 Do not add wildcard entries. Anything listed here may submit actions on behalf
 of a logged-in user.
 :::
+
+## "Page is out of date" after an upgrade
+
+Headplane's client is built from hashed files. When a reverse proxy caches the
+HTML document, a browser that already has the old page keeps loading a shell that
+references chunk files the new build no longer serves. React Router answers a
+route chunk that will not load by reloading the document, which fetches the same
+cached shell, so the page can reload in a loop.
+
+Headplane allows itself **one** automatic reload for that, remembers the attempt
+in `sessionStorage`, and stops there: the next boot shows a **Page is out of
+date** notice with a **Reload page** button instead of hydrating into the same
+failure again. Pressing it forgets the recorded attempt and fetches the document
+once more.
+
+Two things fix the underlying cause:
+
+- **Hard refresh the page** — `Ctrl+Shift+R`, or `Cmd+Shift+R` on macOS — to
+  bypass the browser and proxy caches for one load. That is enough when the
+  proxy has already picked up the new build.
+- **Stop the reverse proxy from caching the HTML document.** Only the hashed
+  files under `/assets/` are safe to cache for a long time; the document itself
+  has to be revalidated on every navigation, or a shell from an older build keeps
+  being served long after the upgrade.
+

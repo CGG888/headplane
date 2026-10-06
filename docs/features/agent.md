@@ -25,6 +25,30 @@ machines measure about themselves arrives through the agent:
 Without the agent those pages say the agent is needed rather than showing an
 empty table — the control server does not carry this data.
 
+## The relay card on a machine
+
+A machine's detail page carries a **DERP Relays** card in two halves.
+
+**Relay clients reach** is read-only and shows what Headscale hands to clients:
+the endpoint derived from `server_url`, then the **IPv4** and **IPv6** addresses
+`derp.server` declares — the same values the
+[Headscale settings](/features/headscale-settings#address-auto-sync) card manages
+— each with a copy button, the verdict against what the hostname actually
+resolves to, and the resolver the lookup used. It configures nothing and links
+back to the settings card for the schedule, the families and the detection
+panel.
+
+**Relays this machine uses** needs the agent, and lists the home and preferred
+region plus the measured latency, fastest first. Region names are resolved
+through the same chain the settings page describes: the manual region-name
+mapping, the map files listed in `derp.paths`, the maps fetched from
+`derp.urls`, then Headscale's embedded region; a region none of them describes
+is shown by ID. The agent reports latency under Tailscale's own keys —
+`<regionID>-v4` and `<regionID>-v6` — so a region measured over both address
+families appears **once**, with its fastest sample, and a key that names no
+region (a legacy `host:port`, or a region code) is matched against the
+configured maps or printed as it arrived.
+
 ## Prerequisites
 
 Before enabling the agent, ensure the following:
