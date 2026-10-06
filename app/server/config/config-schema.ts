@@ -166,6 +166,11 @@ const oidcConfig = type({
   end_session_endpoint: "string.url?",
   jwks_endpoint: "string.url?",
   post_logout_redirect_uri: "string.url?",
+  // RP-initiated logout for HeadplaneCN's own console session. Off by default,
+  // so an existing deployment keeps logging out locally only.
+  logout_idp: "boolean = false",
+  // Deprecated spelling of `logout_idp`, kept so configurations written before
+  // it was renamed keep working. Either flag enables the provider logout.
   use_end_session: "boolean = false",
   token_endpoint_auth_method: '"client_secret_basic" | "client_secret_post" | "client_secret_jwt"?',
 
@@ -196,6 +201,7 @@ const partialOidcConfig = type({
   end_session_endpoint: "string.url?",
   jwks_endpoint: "string.url?",
   post_logout_redirect_uri: "string.url?",
+  logout_idp: "boolean?",
   use_end_session: "boolean?",
   token_endpoint_auth_method: '"client_secret_basic" | "client_secret_post" | "client_secret_jwt"?',
 

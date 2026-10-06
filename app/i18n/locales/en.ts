@@ -1336,6 +1336,89 @@ const en = {
       notificationsBody:
         "Tell an operator when Headscale goes down, a node drops offline, an API key is about to expire, or a configuration check starts failing.",
       notificationsSettings: "Manage Notifications",
+      consoleLoginTitle: "Console Login",
+      consoleLoginBody:
+        "Check the OpenID Connect configuration that signs people in to HeadplaneCN itself, including whether logging out also ends the identity provider's session.",
+      consoleLoginAction: "Test Console Login",
+    },
+    login: {
+      title: "HeadplaneCN Console Login",
+      body: "How HeadplaneCN signs people in to its own console. This is a separate OIDC configuration from the one Headscale uses for its clients, and HeadplaneCN reads it from its config file once, at startup.",
+      restartTitle: "Restart required",
+      restartNotice:
+        "These values are read once, when the container starts. Editing the config file has no effect until HeadplaneCN is restarted.",
+      disabledTitle: "Console sign-in is not active",
+      disabledBody:
+        "HeadplaneCN is not signing people in with OIDC right now ({reason}). The checks below still report the configured values.",
+      headscaleHint:
+        "This tests HeadplaneCN's own login. The OIDC block Headscale uses for its clients is tested on the Headscale settings page.",
+      selfTestTitle: "Test console login",
+      selfTestBody:
+        "Reads the discovery document for the configured issuer, compares it with the values HeadplaneCN will use at sign-in, and reports every result with the value it saw and what to do about it. Nothing is written to disk, and the client secret is never sent back to this page.",
+      selfTestButton: "Run login self-test",
+      selfTestRunning: "Running checks…",
+      selfTestNotRun: "Not run yet",
+      selfTestSummary: "{passed} of {total} checks passed",
+      selfTestSkipped: "{count} checks were skipped",
+      selfTestCopyThis: "Copy this into the config file",
+      selfTestSecretNote:
+        "The client secret is only read on the server; it is never part of this report.",
+      selfTestStatusPass: "Passed",
+      selfTestStatusWarn: "Warning",
+      selfTestStatusFail: "Failed",
+      selfTestStatusSkip: "Skipped",
+      selfTestVerdictGood: "All good",
+      selfTestVerdictWarn: "Warnings: {count}",
+      selfTestVerdictFail: "Failed: {count}",
+      selfTestCheckDiscovery: "Discovery document",
+      selfTestCheckIssuer: "Issuer match (iss)",
+      selfTestCheckScopes: "Scopes",
+      selfTestCheckSigningAlg: "ID token signing algorithm",
+      selfTestCheckEndSession: "Provider logout endpoint",
+      selfTestCheckTokenAuth: "Token endpoint authentication",
+      selfTestSkippedPrerequisite: "Not checked because the discovery document is unavailable.",
+      selfTestDiscoverySkipped: "No oidc.issuer is configured, so there is nothing to discover.",
+      selfTestDiscoveryOk: "The discovery document was fetched from {url} (HTTP {status}).",
+      selfTestDiscoveryFailed: "Fetching {url} failed: {error} (HTTP {status}).",
+      selfTestIssuerMissing:
+        "No oidc.issuer is configured, so the issuer in the document cannot be compared.",
+      selfTestIssuerNotReported:
+        "The discovery document has no issuer field. HeadplaneCN compares that field with the configured {expected} and rejects the sign-in when it is missing.",
+      selfTestIssuerMismatch:
+        "The document reports {actual}, but the config sets {expected}. HeadplaneCN compares the two character for character, so a trailing slash or a different tenant path makes every sign-in fail.",
+      selfTestIssuerOk:
+        "The document's issuer matches the configured {issuer} character for character.",
+      selfTestScopesUnknown:
+        "The document does not advertise scopes_supported, so the configured scopes ({scopes}) cannot be confirmed.",
+      selfTestScopesMissing:
+        "The requested scopes are missing {missing}; the provider advertises {advertised}.",
+      selfTestScopesClaimGrant:
+        "The provider lists {scopes} in scopes_supported, but listing is not granting. Many providers, Logto among them, only return the profile and email claims after those user scopes have been granted to the application in the provider's console. If sign-in works but the name, email, or picture stay empty, grant {scopes} to this application there.",
+      selfTestScopesOk: "Every requested scope ({scopes}) is advertised by the provider.",
+      selfTestSigningAlgUnknown:
+        "The document does not advertise id_token_signing_alg_values_supported, so the signing algorithm cannot be confirmed.",
+      selfTestSigningAlgUnverifiable:
+        "The provider advertises {algos}, and this build cannot verify any of them, so no ID token would be accepted.",
+      selfTestSigningAlgEs384Unsupported:
+        "The provider advertises {algos}, including ES384, but this build cannot verify ES384 (ECDSA P-384) signatures. Ask the identity provider to sign ID tokens with RS256 as well, or run HeadplaneCN on a runtime that supports P-384.",
+      selfTestSigningAlgOkEs384:
+        "The provider advertises {algos}. ES384 verification works in this build, so an ES384-only provider can sign users in.",
+      selfTestSigningAlgOk:
+        "The provider advertises {algos}; ES384 is not offered, so the ES384 path is not used.",
+      selfTestEndSessionMissing:
+        "The discovery document has no end_session_endpoint, so HeadplaneCN cannot end the identity provider's session on logout. Set oidc.end_session_endpoint if the provider has one it does not advertise.",
+      selfTestEndSessionInsecure:
+        "The end-session endpoint {endpoint} (from {source}) is not an https URL, so HeadplaneCN will not redirect to it and logging out stays local.",
+      selfTestEndSessionDisabled:
+        "The provider offers {endpoint} (from {source}), but oidc.logout_idp is false, so logging out only ends the local session and the provider signs the user straight back in. Set logout_idp: true and register {postLogout} with the provider as a post-logout redirect URI.",
+      selfTestEndSessionOk:
+        "Logging out will redirect to {endpoint} (from {source}) and then return to {postLogout}, which the provider must have registered as a post-logout redirect URI.",
+      selfTestTokenAuthUnknown:
+        "The document does not advertise token_endpoint_auth_methods_supported. HeadplaneCN will try {used} first and fall back to the other client-secret method if the provider rejects it.",
+      selfTestTokenAuthMismatch:
+        "oidc.token_endpoint_auth_method is set to {used}, but the provider only advertises {advertised}.",
+      selfTestTokenAuthOk:
+        "HeadplaneCN authenticates at the token endpoint with {used}; the provider advertises {advertised}.",
     },
     system: {
       breadcrumb: "System Status",

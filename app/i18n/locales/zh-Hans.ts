@@ -1256,6 +1256,81 @@ const zhHans = {
       notificationsBody:
         "当 Headscale 无法访问、节点离线、API 密钥即将过期或配置检查开始失败时，通知运维人员。",
       notificationsSettings: "管理通知",
+      consoleLoginTitle: "控制台登录",
+      consoleLoginBody:
+        "检查 HeadplaneCN 自身控制台登录所用的 OpenID Connect 配置，包括退出登录时是否也会结束身份提供者的会话。",
+      consoleLoginAction: "测试控制台登录",
+    },
+    login: {
+      title: "HeadplaneCN 控制台登录",
+      body: "HeadplaneCN 自身控制台登录的方式。这与 Headscale 用于其客户端的 OIDC 配置不同，HeadplaneCN 只在启动时从配置文件读取一次。",
+      restartTitle: "需要重启",
+      restartNotice: "这些值只在容器启动时读取一次。修改配置文件后必须重启 HeadplaneCN 才会生效。",
+      disabledTitle: "控制台登录未启用",
+      disabledBody:
+        "HeadplaneCN 当前没有使用 OIDC 登录（{reason}）。下面的检查仍会报告配置中的值。",
+      headscaleHint:
+        "这里测试的是 HeadplaneCN 自身的登录。Headscale 用于其客户端的 OIDC 配置请在 Headscale 设置页面测试。",
+      selfTestTitle: "测试控制台登录",
+      selfTestBody:
+        "读取所配置 issuer 的发现文档，与 HeadplaneCN 登录时实际使用的值逐项对比，并给出每项检查看到的值和处理建议。不会写入任何文件，客户端密钥也不会回传到本页面。",
+      selfTestButton: "运行登录自检",
+      selfTestRunning: "正在检查…",
+      selfTestNotRun: "尚未运行",
+      selfTestSummary: "{total} 项检查中有 {passed} 项通过",
+      selfTestSkipped: "{count} 项检查被跳过",
+      selfTestCopyThis: "复制到配置文件",
+      selfTestSecretNote: "客户端密钥只在服务端读取，不会出现在本报告中。",
+      selfTestStatusPass: "通过",
+      selfTestStatusWarn: "警告",
+      selfTestStatusFail: "失败",
+      selfTestStatusSkip: "已跳过",
+      selfTestVerdictGood: "全部正常",
+      selfTestVerdictWarn: "警告：{count}",
+      selfTestVerdictFail: "失败：{count}",
+      selfTestCheckDiscovery: "发现文档",
+      selfTestCheckIssuer: "issuer 一致性（iss）",
+      selfTestCheckScopes: "作用域",
+      selfTestCheckSigningAlg: "ID 令牌签名算法",
+      selfTestCheckEndSession: "提供者退出端点",
+      selfTestCheckTokenAuth: "令牌端点认证",
+      selfTestSkippedPrerequisite: "跳过：发现文档不可用。",
+      selfTestDiscoverySkipped: "未配置 oidc.issuer，没有可发现的内容。",
+      selfTestDiscoveryOk: "已从 {url} 获取发现文档（HTTP {status}）。",
+      selfTestDiscoveryFailed: "获取 {url} 失败：{error}（HTTP {status}）。",
+      selfTestIssuerMissing: "未配置 oidc.issuer，无法与文档中的 issuer 比较。",
+      selfTestIssuerNotReported:
+        "发现文档中没有 issuer 字段。HeadplaneCN 会用它与配置的 {expected} 比较，缺失时登录会被拒绝。",
+      selfTestIssuerMismatch:
+        "文档报告的是 {actual}，而配置中是 {expected}。HeadplaneCN 会逐字符比较两者，多一个结尾斜杠或租户路径不同都会导致每次登录失败。",
+      selfTestIssuerOk: "文档中的 issuer 与配置的 {issuer} 逐字符一致。",
+      selfTestScopesUnknown: "文档未声明 scopes_supported，无法确认配置的作用域（{scopes}）。",
+      selfTestScopesMissing: "请求的作用域缺少 {missing}；提供者声明的是 {advertised}。",
+      selfTestScopesClaimGrant:
+        "提供者在 scopes_supported 中列出了 {scopes}，但列出不等于已授权。许多提供者（包括 Logto）只有在提供者控制台中把这两个用户作用域授予该应用后，才会返回 profile 和 email 声明。如果登录成功但姓名、邮箱或头像为空，请在那里为这个应用授予 {scopes}。",
+      selfTestScopesOk: "提供者声明了所有请求的作用域（{scopes}）。",
+      selfTestSigningAlgUnknown:
+        "文档未声明 id_token_signing_alg_values_supported，无法确认签名算法。",
+      selfTestSigningAlgUnverifiable:
+        "提供者声明的是 {algos}，当前构建无法验证其中任何一种，因此不会接受任何 ID 令牌。",
+      selfTestSigningAlgEs384Unsupported:
+        "提供者声明的是 {algos}，其中包含 ES384，而当前构建无法验证 ES384（ECDSA P-384）签名。请让身份提供者同时使用 RS256 签发 ID 令牌，或在支持 P-384 的运行环境中运行 HeadplaneCN。",
+      selfTestSigningAlgOkEs384:
+        "提供者声明的是 {algos}。当前构建可以验证 ES384，因此只提供 ES384 的提供者可以正常登录。",
+      selfTestSigningAlgOk: "提供者声明的是 {algos}，未提供 ES384，因此不会用到 ES384 路径。",
+      selfTestEndSessionMissing:
+        "发现文档中没有 end_session_endpoint，HeadplaneCN 无法在退出登录时结束身份提供者的会话。如果提供者有此端点但未声明，请设置 oidc.end_session_endpoint。",
+      selfTestEndSessionInsecure:
+        "退出端点 {endpoint}（来自 {source}）不是 https 地址，HeadplaneCN 不会跳转到它，退出登录只在本地生效。",
+      selfTestEndSessionDisabled:
+        "提供者提供了 {endpoint}（来自 {source}），但 oidc.logout_idp 为 false，退出登录只结束本地会话，提供者会立即让用户重新登录。请设置 logout_idp: true，并把 {postLogout} 注册为提供者的退出后重定向地址。",
+      selfTestEndSessionOk:
+        "退出登录会跳转到 {endpoint}（来自 {source}），然后返回 {postLogout}，该地址必须已在提供者处注册为退出后重定向地址。",
+      selfTestTokenAuthUnknown:
+        "文档未声明 token_endpoint_auth_methods_supported。HeadplaneCN 会先尝试 {used}，若提供者拒绝则回退到另一种客户端密钥方式。",
+      selfTestTokenAuthMismatch:
+        "oidc.token_endpoint_auth_method 设置为 {used}，但提供者只声明了 {advertised}。",
+      selfTestTokenAuthOk: "HeadplaneCN 会用 {used} 在令牌端点认证；提供者声明的是 {advertised}。",
     },
     system: {
       breadcrumb: "系统状态",

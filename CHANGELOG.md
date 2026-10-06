@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **Signing out can now sign you out of the identity provider as well.** With `oidc.logout_idp: true` (the older `oidc.use_end_session` still works), logging out of the console clears the local session as before and then sends the browser to the provider's end-session endpoint, so the next "sign in with OIDC" really asks for credentials instead of silently signing you back in from the provider's still-live session. `oidc.end_session_endpoint` overrides the endpoint discovered from the issuer and `oidc.post_logout_redirect_uri` sets where the provider returns you. Everything about the attempt is fail-soft: a missing endpoint, a non-HTTPS or malformed URL, a slow or erroring provider, or no stored ID token all end on the login page with the local session already cleared. The default is off, so nothing changes for an existing deployment.
+- **A self-test for the console's own OIDC login** (Settings → Console login). It fetches the discovery document and reports, item by item and with the value it saw: whether the issuer is reachable and its HTTP status, whether the document's `iss` matches the configured issuer character for character, whether every configured scope is advertised — with a pointed warning that providers such as Logto require `profile` and `email` to be granted to the application before they may be requested, which is what usually causes `invalid_scope` — whether the runtime can actually verify the advertised ID-token signing algorithm (it performs a real signing probe rather than trusting the list, so an ES384-only provider is answered definitively), whether an end-session endpoint exists for the logout behaviour above, which token-endpoint authentication methods the provider offers, and a reminder that the configuration is read at start-up so a change needs a restart. It runs server-side and never exposes the client secret.
 # 0.22.17 (October 6, 2026)
 
 ## Changes

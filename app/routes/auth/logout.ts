@@ -3,6 +3,12 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "reac
 import { appConfigContext, authContext, oidcContext } from "~/server/context";
 import log from "~/utils/log";
 
+import {
+  defaultPostLogoutRedirectUri,
+  isIdpLogoutEnabled,
+  resolveLogoutRedirect,
+} from "./end-session";
+
 /**
  * Logout happens through a plain navigation (`GET /logout`) because submitting
  * to a resource route can degrade into a native form POST, which reverse
@@ -51,36 +57,40 @@ async function performLogout({ request, context }: ActionFunctionArgs | LoaderFu
 
   // When API key is disabled, we need to explicitly redirect
   // with a logout state to prevent auto login again.
-  let url = config.oidc?.disable_api_key_login ? "/login?s=logout" : "/login";
+  const localRedirect = config.oidc?.disable_api_key_login ? "/login?s=logout" : "/login";
 
-  // For OIDC sessions, redirect to the provider's RP-initiated logout
-  // endpoint when explicitly enabled, so the upstream IdP session is also
+  // The local session ends first and unconditionally: this cookie is what makes
+  // the logout visible even if everything below fails.
+  const destroyCookie = await auth.destroySession(request);
+
+  // For OIDC sessions, redirect to the provider's RP-initiated logout endpoint
+  // when `oidc.logout_idp` is enabled, so the upstream IdP session is also
   // ended. Disabled by default because the post_logout_redirect_uri must be
   // pre-registered on the IdP — turning this on without registering it would
   // strand users on the IdP's error page.
-  if (principal?.kind === "oidc" && oidc.state === "enabled" && config.oidc?.use_end_session) {
-    // Never let an unreachable or misconfigured IdP block the local logout.
-    try {
-      const service = oidc.value;
-      const status = service.status();
-      if (status.state !== "ready") {
-        // Trigger discovery if it hasn't happened yet so we can find the
-        // end_session_endpoint without forcing a re-login.
-        await service.discover();
-      }
+  const idpLogout =
+    isIdpLogoutEnabled(config.oidc) && principal?.kind === "oidc" && oidc.state === "enabled"
+      ? {
+          provider: oidc.value,
+          clientId: config.oidc?.client_id ?? "",
+          idToken: principal.idToken,
+          postLogoutRedirectUri:
+            config.oidc?.post_logout_redirect_uri ??
+            defaultPostLogoutRedirectUri(
+              config.server.base_url,
+              config.oidc?.disable_api_key_login === true,
+            ),
+        }
+      : null;
 
-      const endSessionUrl = service.buildEndSessionUrl(principal.idToken);
-      if (endSessionUrl) {
-        url = endSessionUrl;
-      }
-    } catch (error) {
-      log.warn("auth", "OIDC end-session logout failed, falling back to local logout: %s", error);
-    }
-  }
+  // Never let an unreachable or misconfigured IdP block the local logout: the
+  // helper bounds the discovery attempt, rejects anything that is not a safe
+  // https target, and returns the login page when it cannot build one.
+  const url = await resolveLogoutRedirect({ localRedirect, idpLogout });
 
   return redirect(url, {
     headers: {
-      "Set-Cookie": await auth.destroySession(request),
+      "Set-Cookie": destroyCookie,
     },
   });
 }

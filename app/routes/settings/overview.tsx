@@ -148,6 +148,13 @@ export default function Page({ loaderData: { config, isOidcEnabled } }: Route.Co
 
         <SettingsSection title={t("settings.overview.headplaneSection")}>
           <SettingsCard
+            action={t("settings.overview.consoleLoginAction")}
+            description={t("settings.overview.consoleLoginBody")}
+            icon={ShieldCheck}
+            title={t("settings.overview.consoleLoginTitle")}
+            to="/settings/login"
+          />
+          <SettingsCard
             action={t("settings.overview.agentSettings")}
             description={t("settings.overview.agentBody")}
             icon={Bot}

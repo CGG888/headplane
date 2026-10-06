@@ -14,6 +14,7 @@ import log from "~/utils/log";
 import { createOidcStateCookie } from "~/utils/oidc-state";
 
 import type { Route } from "./+types/oidc-callback";
+import { isIdpLogoutEnabled } from "./end-session";
 
 export async function loader({ request, context, url }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -93,8 +94,9 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
   }
 
   // Only persist the id_token when RP-initiated logout is enabled — otherwise
-  // we'd be storing a credential we never use.
-  const idToken = config.oidc?.use_end_session ? identity.idToken : undefined;
+  // we'd be storing a credential we never use. Both the documented
+  // `logout_idp` switch and its older spelling enable it.
+  const idToken = isIdpLogoutEnabled(config.oidc) ? identity.idToken : undefined;
 
   return redirect("/", {
     headers: {

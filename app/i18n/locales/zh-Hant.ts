@@ -1256,6 +1256,81 @@ const zhHant = {
       notificationsBody:
         "當 Headscale 無法連線、節點離線、API 金鑰即將到期或設定檢查開始失敗時，通知維運人員。",
       notificationsSettings: "管理通知",
+      consoleLoginTitle: "主控台登入",
+      consoleLoginBody:
+        "檢查 HeadplaneCN 自身主控台登入所用的 OpenID Connect 設定，包括登出時是否也會結束身分提供者的工作階段。",
+      consoleLoginAction: "測試主控台登入",
+    },
+    login: {
+      title: "HeadplaneCN 主控台登入",
+      body: "HeadplaneCN 自身主控台登入的方式。這與 Headscale 用於其用戶端的 OIDC 設定不同，HeadplaneCN 只在啟動時從設定檔讀取一次。",
+      restartTitle: "需要重新啟動",
+      restartNotice:
+        "這些值只在容器啟動時讀取一次。修改設定檔後必須重新啟動 HeadplaneCN 才會生效。",
+      disabledTitle: "主控台登入未啟用",
+      disabledBody: "HeadplaneCN 目前沒有使用 OIDC 登入（{reason}）。下列檢查仍會報告設定中的值。",
+      headscaleHint:
+        "這裡測試的是 HeadplaneCN 自身的登入。Headscale 用於其用戶端的 OIDC 設定請在 Headscale 設定頁面測試。",
+      selfTestTitle: "測試主控台登入",
+      selfTestBody:
+        "讀取所設定 issuer 的探索文件，與 HeadplaneCN 登入時實際使用的值逐項對比，並給出每項檢查看到的值與處理建議。不會寫入任何檔案，用戶端密鑰也不會回傳到本頁面。",
+      selfTestButton: "執行登入自我檢查",
+      selfTestRunning: "正在檢查…",
+      selfTestNotRun: "尚未執行",
+      selfTestSummary: "{total} 項檢查中有 {passed} 項通過",
+      selfTestSkipped: "{count} 項檢查被略過",
+      selfTestCopyThis: "複製到設定檔",
+      selfTestSecretNote: "用戶端密鑰只在伺服器端讀取，不會出現在本報告中。",
+      selfTestStatusPass: "通過",
+      selfTestStatusWarn: "警告",
+      selfTestStatusFail: "失敗",
+      selfTestStatusSkip: "已略過",
+      selfTestVerdictGood: "全部正常",
+      selfTestVerdictWarn: "警告：{count}",
+      selfTestVerdictFail: "失敗：{count}",
+      selfTestCheckDiscovery: "探索文件",
+      selfTestCheckIssuer: "issuer 一致性（iss）",
+      selfTestCheckScopes: "作用域",
+      selfTestCheckSigningAlg: "ID 權杖簽章演算法",
+      selfTestCheckEndSession: "提供者登出端點",
+      selfTestCheckTokenAuth: "權杖端點驗證",
+      selfTestSkippedPrerequisite: "略過：探索文件無法使用。",
+      selfTestDiscoverySkipped: "未設定 oidc.issuer，沒有可探索的內容。",
+      selfTestDiscoveryOk: "已從 {url} 取得探索文件（HTTP {status}）。",
+      selfTestDiscoveryFailed: "取得 {url} 失敗：{error}（HTTP {status}）。",
+      selfTestIssuerMissing: "未設定 oidc.issuer，無法與文件中的 issuer 比較。",
+      selfTestIssuerNotReported:
+        "探索文件中沒有 issuer 欄位。HeadplaneCN 會用它與設定的 {expected} 比較，缺少時登入會被拒絕。",
+      selfTestIssuerMismatch:
+        "文件報告的是 {actual}，而設定中是 {expected}。HeadplaneCN 會逐字元比較兩者，多一個結尾斜線或租戶路徑不同都會導致每次登入失敗。",
+      selfTestIssuerOk: "文件中的 issuer 與設定的 {issuer} 逐字元一致。",
+      selfTestScopesUnknown: "文件未宣告 scopes_supported，無法確認設定的作用域（{scopes}）。",
+      selfTestScopesMissing: "要求的作用域缺少 {missing}；提供者宣告的是 {advertised}。",
+      selfTestScopesClaimGrant:
+        "提供者在 scopes_supported 中列出了 {scopes}，但列出不等於已授權。許多提供者（包括 Logto）只有在提供者主控台中把這兩個使用者作用域授予該應用程式後，才會傳回 profile 與 email 宣告。如果登入成功但姓名、電子郵件或頭像為空，請在那裡為這個應用程式授予 {scopes}。",
+      selfTestScopesOk: "提供者宣告了所有要求的作用域（{scopes}）。",
+      selfTestSigningAlgUnknown:
+        "文件未宣告 id_token_signing_alg_values_supported，無法確認簽章演算法。",
+      selfTestSigningAlgUnverifiable:
+        "提供者宣告的是 {algos}，目前建置無法驗證其中任何一種，因此不會接受任何 ID 權杖。",
+      selfTestSigningAlgEs384Unsupported:
+        "提供者宣告的是 {algos}，其中包含 ES384，而目前建置無法驗證 ES384（ECDSA P-384）簽章。請讓身分提供者同時使用 RS256 簽發 ID 權杖，或在支援 P-384 的執行環境中執行 HeadplaneCN。",
+      selfTestSigningAlgOkEs384:
+        "提供者宣告的是 {algos}。目前建置可以驗證 ES384，因此只提供 ES384 的提供者可以正常登入。",
+      selfTestSigningAlgOk: "提供者宣告的是 {algos}，未提供 ES384，因此不會用到 ES384 路徑。",
+      selfTestEndSessionMissing:
+        "探索文件中沒有 end_session_endpoint，HeadplaneCN 無法在登出時結束身分提供者的工作階段。如果提供者有此端點但未宣告，請設定 oidc.end_session_endpoint。",
+      selfTestEndSessionInsecure:
+        "登出端點 {endpoint}（來自 {source}）不是 https 位址，HeadplaneCN 不會跳轉到它，登出只在本地生效。",
+      selfTestEndSessionDisabled:
+        "提供者提供了 {endpoint}（來自 {source}），但 oidc.logout_idp 為 false，登出只結束本地工作階段，提供者會立即讓使用者重新登入。請設定 logout_idp: true，並把 {postLogout} 註冊為提供者的登出後重定向位址。",
+      selfTestEndSessionOk:
+        "登出會跳轉到 {endpoint}（來自 {source}），然後返回 {postLogout}，該位址必須已在提供者處註冊為登出後重定向位址。",
+      selfTestTokenAuthUnknown:
+        "文件未宣告 token_endpoint_auth_methods_supported。HeadplaneCN 會先嘗試 {used}，若提供者拒絕則回退到另一種用戶端密鑰方式。",
+      selfTestTokenAuthMismatch:
+        "oidc.token_endpoint_auth_method 設定為 {used}，但提供者只宣告了 {advertised}。",
+      selfTestTokenAuthOk: "HeadplaneCN 會用 {used} 在權杖端點驗證；提供者宣告的是 {advertised}。",
     },
     system: {
       breadcrumb: "系統狀態",
