@@ -39,9 +39,7 @@ features:
     icon: "📝"
 ---
 
-## What makes this fork different
-
-<div class="feature-grid">
+<div class="feature-grid feature-grid-home">
 <div class="feature-card">
 <div class="feature-card-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><ellipse cx="12" cy="12" rx="3.6" ry="9" /></svg>
@@ -92,9 +90,4 @@ Offline nodes, an unreachable Headscale or expiring keys reach you.
 </div>
 </div>
 
-This is [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) for
-self-hosted NAS setups (fnOS in particular), based on the upstream
-[Headplane](https://github.com/tale/headplane) project by
-[tale](https://github.com/tale), with that credit, its licence and its original
-features kept intact; see [differences from upstream](/en/differences) for what
-it adds or changes.
+This is [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) for self-hosted NAS setups (fnOS in particular).

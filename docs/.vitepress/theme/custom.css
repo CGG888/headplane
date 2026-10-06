@@ -42,6 +42,67 @@ figcaption {
 }
 
 /*
+ * Version footer. `theme/index.ts` renders it into VitePress's
+ * `layout-bottom` slot, so it lands at the bottom of both homepages (`/`,
+ * `/en/`) and below the content column of every other page. The version
+ * string is read from the repository's `package.json` at build time; the
+ * markup lives in `theme/VersionFooter.vue`.
+ *
+ * It deliberately stays quiet: small muted text in the same 1152px column as
+ * the rest of the site, a hairline divider above it, and colours taken from
+ * the `--vp-c-*` variables so light and dark mode both read cleanly.
+ */
+.version-footer {
+  padding: 0 24px 40px;
+}
+
+.version-footer-inner {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding-top: 24px;
+  border-top: 1px solid var(--vp-c-divider);
+  text-align: center;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--vp-c-text-3);
+}
+
+.version-footer-inner p {
+  margin: 0;
+  padding: 0;
+}
+
+.version-footer-inner .version-footer-title {
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+}
+
+.version-footer-inner .version-footer-note {
+  margin-top: 4px;
+}
+
+.version-footer-inner .version-footer-links,
+.version-footer-inner .version-footer-credit {
+  margin-top: 8px;
+}
+
+.version-footer-inner a {
+  color: var(--vp-c-text-2);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+
+.version-footer-inner a:hover {
+  color: var(--vp-c-brand-1);
+  text-decoration: underline;
+}
+
+.version-footer-inner .version-footer-sep {
+  margin: 0 8px;
+  color: var(--vp-c-divider);
+}
+
+/*
  * Markdown-level card grid, used by the feature blocks on both homepages
  * (`/`, `/en/`) and by the fork-differences pages (`/differences`,
  * `/en/differences`). The pages wrap each item in plain
@@ -53,12 +114,11 @@ figcaption {
  * title and a muted description) so a markdown card row reads as a direct
  * continuation of the frontmatter feature row above it. The grid keeps
  * `VPFeatures`' 16px gap and the doc container already shares its left/right
- * edges, so both rows line up. `auto-fit` with a 240px floor packs as many
- * equal columns as the container allows (four across a 1152px container, so a
- * four-card row lines up with `VPFeatures`' own four-up row), while longer
- * lists such as the nine cards on the differences pages simply wrap onto the
- * next row. Colours come from the `--vp-c-*` variables, which keeps light and
- * dark mode intact.
+ * edges, so both rows line up. Longer lists such as the nine cards on the
+ * differences pages use `auto-fit`: as many equal columns as the container
+ * allows (four across 1152px, wrapping once a card would fall under 240px).
+ * Colours come from the `--vp-c-*` variables, which keeps light and dark mode
+ * intact.
  */
 .vp-doc .feature-grid {
   display: grid;
@@ -70,6 +130,35 @@ figcaption {
 @media (min-width: 768px) {
   .vp-doc .feature-grid {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/*
+ * The homepage rows sit straight under the frontmatter feature row with no
+ * heading between them, so they step through exactly the same widths as
+ * `VPFeatures`' four-card row (`grid-4`: full width, then 2-up from 640px, then
+ * 4-up from 960px). `auto-fit` alone would pack a third column between 960px
+ * and roughly 1135px of container width and break that alignment.
+ *
+ * `VPFeatures` wraps each card in a `calc(100%/n)` item with 8px of padding and
+ * pulls the list back with a -8px margin, so its cards are `(width + 16)/n -
+ * 16` wide with 16px gutters. The same 16px `gap` here yields 276px cards
+ * against `VPFeatures`' 276px at the 1152px container (1152 = 4 * 276 + 3 *
+ * 16), and the 16px top margin continues the row above instead of a 24px seam.
+ */
+.vp-doc .feature-grid.feature-grid-home {
+  margin-top: 16px;
+}
+
+@media (min-width: 640px) {
+  .vp-doc .feature-grid.feature-grid-home {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .vp-doc .feature-grid.feature-grid-home {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

@@ -39,9 +39,7 @@ features:
     icon: "📝"
 ---
 
-## 本分支特色
-
-<div class="feature-grid">
+<div class="feature-grid feature-grid-home">
 <div class="feature-card">
 <div class="feature-card-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><ellipse cx="12" cy="12" rx="3.6" ry="9" /></svg>
@@ -92,8 +90,4 @@ features:
 </div>
 </div>
 
-本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS
-环境（尤其是 fnOS 飞牛），基于上游
-[Headplane](https://github.com/tale/headplane)（作者
-[tale](https://github.com/tale)）构建，上游署名、许可证和原有功能都完整保留；新增或改动
-的内容见[与上游的差异](/differences)。
+本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS 环境（尤其是 fnOS 飞牛）。
