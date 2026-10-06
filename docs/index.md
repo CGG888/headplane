@@ -41,48 +41,47 @@ features:
 
 ## 本分支特色
 
+<div class="feature-grid">
+<div class="feature-card">
+<div class="feature-card-icon" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><ellipse cx="12" cy="12" rx="3.6" ry="9" /></svg>
+</div>
+
+### 官方区域节点筛选
+
+只镜像你选中的官方中继，编号固定为 901/902。
+
+[Headscale 设置 →](/features/headscale-settings)
+
+</div>
+<div class="feature-card">
+<div class="feature-card-icon" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 9h13" /><path d="M13.5 5.5 17 9l-3.5 3.5" /><path d="M20 15H7" /><path d="M10.5 11.5 7 15l3.5 3.5" /></svg>
+</div>
+
+### 中继地址自动同步与外部 IPv6 回显
+
+中继地址定时或手动更新，可选外部 IPv6 回显。
+
+[Headscale 设置 →](/features/headscale-settings)
+
+</div>
+<div class="feature-card">
+<div class="feature-card-icon" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12.5 20.5h8" /><path d="M15.8 4.1a2.12 2.12 0 0 1 3 3L7.5 18.4l-3.9 1 1-3.9z" /></svg>
+</div>
+
+### DERP 地图文件在浏览器里编辑
+
+浏览器内编辑 `derp.paths`，保存前校验，可一键回滚。
+
+[Headscale 设置 →](/features/headscale-settings)
+
+</div>
+</div>
+
 本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS
 环境（尤其是 fnOS 飞牛），基于上游
 [Headplane](https://github.com/tale/headplane)（作者
 [tale](https://github.com/tale)）构建，上游署名、许可证和原有功能都完整保留；新增或改动
 的内容见[与上游的差异](/differences)。
-
-<div class="feature-grid">
-<div class="feature-card">
-
-### fnOS 与原生 Headscale 一体化
-
-用 `pid: host` 和以读写方式挂载的 `config.yaml`，让容器里的 HeadplaneCN 管好飞牛上
-原生运行的 Headscale。
-
-[fnOS 部署指南 →](/install/fnos)
-
-</div>
-<div class="feature-card">
-
-### 官方区域节点筛选
-
-只镜像你选中的官方中继并统一编号：901 香港、902 新加坡固定不变。
-
-[Headscale 设置 →](/features/headscale-settings)
-
-</div>
-<div class="feature-card">
-
-### 中继地址自动同步与外部 IPv6 回显
-
-中继地址按计划或手动探测写回并留快照，外部 IPv6 回显可选。
-
-[Headscale 设置 →](/features/headscale-settings)
-
-</div>
-<div class="feature-card">
-
-### DERP 地图文件在浏览器里编辑
-
-`derp.paths` 文件可在浏览器里编辑，保存前校验并留快照，可一键回滚。
-
-[Headscale 设置 →](/features/headscale-settings)
-
-</div>
-</div>

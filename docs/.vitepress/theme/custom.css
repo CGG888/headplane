@@ -42,25 +42,40 @@ figcaption {
 }
 
 /*
- * Card grid for the fork-differences pages (`/differences`, `/en/differences`).
- * The pages wrap each item in plain `feature-grid`/`feature-card` divs, so the
- * layout lives here in the theme rather than in a component. Colours come from
- * the default theme's variables, which keeps both light and dark mode intact.
+ * Markdown-level card grid, used by the feature blocks on both homepages
+ * (`/`, `/en/`) and by the fork-differences pages (`/differences`,
+ * `/en/differences`). The pages wrap each item in plain
+ * `feature-grid`/`feature-card` divs, so the layout lives here in the theme
+ * rather than in a component.
+ *
+ * The cards deliberately mirror the default theme's own `VPFeature` boxes
+ * (soft background, 12px radius, 24px padding, a 48px icon tile above a bold
+ * title and a muted description) so a markdown card row reads as a direct
+ * continuation of the frontmatter feature row above it. The grid keeps
+ * `VPFeatures`' 16px gap and 3-up breakpoint and the doc container already
+ * shares its left/right edges, so both rows line up. Colours come from the
+ * `--vp-c-*` variables, which keeps light and dark mode intact.
  */
 .vp-doc .feature-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   margin: 24px 0;
+}
+
+@media (min-width: 768px) {
+  .vp-doc .feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .vp-doc .feature-card {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--vp-c-divider);
+  border: 1px solid var(--vp-c-bg-soft);
   border-radius: 12px;
   background-color: var(--vp-c-bg-soft);
-  padding: 20px;
+  padding: 24px;
   transition:
     border-color 0.25s,
     background-color 0.25s;
@@ -68,21 +83,44 @@ figcaption {
 
 .vp-doc .feature-card:hover {
   border-color: var(--vp-c-brand-1);
-  background-color: var(--vp-c-bg-alt);
+}
+
+/* 48px tile that matches `VPFeature`'s `.icon` container. */
+.vp-doc .feature-card-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  background-color: var(--vp-c-default-soft);
+  color: var(--vp-c-text-1);
+  transition: background-color 0.25s;
+}
+
+.vp-doc .feature-card-icon svg {
+  display: block;
+  width: 22px;
+  height: 22px;
 }
 
 .vp-doc .feature-card h3 {
   margin: 0;
   padding: 0;
   border-top: 0;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 24px;
+  font-weight: 600;
 }
 
 .vp-doc .feature-card p {
-  margin: 8px 0 0;
+  margin: 0;
+  padding-top: 8px;
   font-size: 14px;
-  line-height: 22px;
+  line-height: 24px;
+  font-weight: 500;
   color: var(--vp-c-text-2);
 }
 
