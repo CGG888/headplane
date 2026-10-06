@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **Nodes with a missing address can be fixed from the machines list.** A "fix missing IPs" button (offered to operators who may change machines) asks for confirmation and then reports how many nodes were given an address, or that nothing was missing. The confirmation says what Headscale actually does: it fills the gaps and never rewrites, moves or reassigns an address that already exists — and it also clears the addresses of an address family whose prefix was removed from the configuration, which is why the run has to be confirmed explicitly (Headscale refuses to run without that confirmation).
+- **A debug node can be created from the machine page.** In the danger zone, a dialog takes the optional user, registration key, name and routes (routes validated as CIDRs before submitting) and says plainly that this really creates a node on the tailnet, that the node exists until it is deleted and should be removed from the machines list once debugging is done, and that any field left empty is filled in by Headscale itself. On success it names the created node and links to the machines list where it can be deleted.
 # 0.22.16 (October 6, 2026)
 
 ## Changes

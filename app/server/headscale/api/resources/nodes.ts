@@ -44,6 +44,20 @@ export interface NodeApi {
    */
   setExpiry(nodeId: string, expiry: Date): Promise<void>;
   /**
+   * Backfill the IP addresses of nodes that are missing one, via
+   * `POST /api/v1/node/backfillips?confirmed=true`.
+   *
+   * `confirmed` is not a dry-run switch and not optional in practice: the
+   * handler in every Headscale release Headplane supports (0.26.0-0.29.4,
+   * `headscaleV1APIServer.BackfillNodeIPs`) aborts with "not confirmed,
+   * aborting" unless it is true, so this client always sends it. The response's
+   * `changes` is a list of human-readable lines — one per address assigned or
+   * removed (`assigned IPv4 "100.64.0.1" to Node(3) "host"`) — which is why the
+   * method answers with the raw list. A missing `changes` field is treated as
+   * "nothing to do" rather than as an error.
+   */
+  backfillIps(): Promise<string[]>;
+  /**
    * Create a debug node via `POST /api/v1/debug/node`.
    *
    * This is *not* a per-node debug-info endpoint: the spec
@@ -156,6 +170,17 @@ export function makeNodeApi(
         path: `v1/node/${nodeId}/expire?expiry=${encodeURIComponent(expiry.toISOString())}`,
         apiKey,
       });
+    },
+    backfillIps: async () => {
+      // `confirmed=true` is the whole request: the gateway binds it as a query
+      // parameter (the proto request has no `body` annotation) and the handler
+      // refuses to run without it. There is no dry-run form of this call.
+      const result = await transport.request<{ changes?: string[] } | undefined>({
+        method: "POST",
+        path: "v1/node/backfillips?confirmed=true",
+        apiKey,
+      });
+      return result?.changes ?? [];
     },
     debug: async ({ user, key, name, routes }) => {
       // POST /api/v1/debug/node { user, key, name, routes } -> { node }

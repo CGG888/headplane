@@ -16,6 +16,8 @@ export const AUDIT_ACTIONS = {
   restrictionAddUser: "restriction.add_user",
   restrictionRemoveUser: "restriction.remove_user",
   registrationReject: "registration.reject",
+  nodeBackfillIps: "node.backfill_ips",
+  nodeDebugCreate: "node.debug_create",
   derpAddressSync: "derp.address_sync",
   derpRegionMirror: "derp.region_mirror",
   snapshotCreate: "snapshot.create",

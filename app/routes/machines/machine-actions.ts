@@ -10,9 +10,12 @@ import {
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
 import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
+import type { Machine } from "~/types";
 import { normalizeRegistrationKey } from "~/utils/register-key";
 
 import type { Route } from "./+types/machine";
+import { BACKFILL_ACTION, backfillSummary } from "./backfill-request";
+import { DEBUG_NODE_ACTION, debugNodeSummary, isCidr } from "./debug-node-request";
 
 /**
  * Stable error codes returned to the machine expiry dialog. The UI maps these
@@ -37,6 +40,13 @@ export type MachineBulkErrorCode =
  * outcomes that dialog has to tell apart.
  */
 export type MachineRejectErrorCode = "missingKey" | "invalidKey" | "unsupported" | "failed";
+
+/**
+ * Stable error codes for the two node-wide operations the machines pages offer
+ * outside the per-node flow: the list's address backfill and the detail page's
+ * debug-node dialog. As above, the UI maps these onto localized messages.
+ */
+export type MachineMaintenanceErrorCode = "failed" | "invalidRoutes";
 
 /**
  * The client this action needs for a rejection, taken structurally: the method
@@ -71,6 +81,35 @@ function bulkError(errorCode: MachineBulkErrorCode | MachineExpiryErrorCode) {
 /** One rejection outcome, as the dialog reads it. */
 function rejectError(errorCode: MachineRejectErrorCode, status = 400) {
   return data({ success: false as const, errorCode }, { status });
+}
+
+/**
+ * One maintenance outcome, as its dialog reads it. The server's own message
+ * travels beside the code whenever Headscale explained itself, so the dialog
+ * can show what the server said instead of a generic line.
+ */
+function maintenanceError(
+  errorCode: MachineMaintenanceErrorCode,
+  options: { message?: string; status?: number } = {},
+) {
+  return data(
+    {
+      success: false as const,
+      errorCode,
+      ...(options.message !== undefined ? { error: options.message } : {}),
+    },
+    { status: options.status ?? 502 },
+  );
+}
+
+/** Headscale's own explanation of a failed call, when it gave one. */
+function apiErrorMessage(error: unknown): string | undefined {
+  if (isDataWithApiError(error)) {
+    return extractApiErrorMessage(error.data);
+  }
+
+  const message = describeError(error);
+  return message === "unknown error" ? undefined : message;
 }
 
 /** A thrown value as one short line the audit log can keep. */
@@ -209,6 +248,121 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
     // machine that was created, and never a full page reload.
     await headscaleLiveStore.refresh(nodesResource, api);
     return { success: true as const };
+  }
+
+  // Backfilling addresses is a repair across the whole server, not an action on
+  // one node, so it is handled before the `node_id` lookup. It writes, so it is
+  // gated on the same capability as every other machine mutation.
+  if (action === BACKFILL_ACTION) {
+    if (!auth.can(principal, Capabilities.write_machines)) {
+      throw data(
+        { localized: { key: "errors.permission.manageMachines" } },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    let changes: string[];
+    try {
+      changes = await api.nodes.backfillIps();
+    } catch (error) {
+      // A failed repair is worth recording: it is the one path where a node
+      // that needs an address is left without one.
+      await audit?.record({
+        ...auditActorOf(principal),
+        action: AUDIT_ACTIONS.nodeBackfillIps,
+        target: "all nodes",
+        detail: describeError(error),
+        result: "failure",
+      });
+
+      return maintenanceError("failed", { message: apiErrorMessage(error) });
+    }
+
+    const summary = backfillSummary(changes);
+    await audit?.record({
+      ...auditActorOf(principal),
+      action: AUDIT_ACTIONS.nodeBackfillIps,
+      target: summary.nodeIds.join(", "),
+      detail: changes.length > 0 ? changes.join("; ") : "nothing was missing",
+      result: "success",
+    });
+
+    // The addresses live on the nodes themselves, so the list is re-read rather
+    // than patched.
+    await headscaleLiveStore.refresh(nodesResource, api);
+    return { success: true as const, changes };
+  }
+
+  // The debug dialog fabricates a node instead of registering a device, so like
+  // `register` above it is answered before any existing node is looked up; the
+  // node it reports does not exist until this call has run.
+  if (action === DEBUG_NODE_ACTION) {
+    if (!auth.can(principal, Capabilities.write_machines)) {
+      throw data(
+        { localized: { key: "errors.permission.manageMachines" } },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    // Only what the operator filled in travels; an empty field is omitted so
+    // Headscale chooses it rather than receiving a blank one.
+    const read = (name: string) => {
+      const value = formData.get(name)?.toString().trim() ?? "";
+      return value.length > 0 ? value : undefined;
+    };
+
+    const user = read("user");
+    const key = read("key");
+    const name = read("name");
+    const routes = (formData.get("routes")?.toString() ?? "")
+      .split(",")
+      .map((route) => route.trim())
+      .filter((route) => route.length > 0);
+
+    // The dialog validates before it submits; this is the same rule enforced
+    // once more so a hand-built request cannot reach Headscale with a prefix
+    // length it will reject anyway.
+    if (!routes.every(isCidr)) {
+      return maintenanceError("invalidRoutes", { status: 400 });
+    }
+
+    let node: Machine;
+    try {
+      node = await api.nodes.debug({
+        user,
+        key,
+        name,
+        routes: routes.length > 0 ? routes : undefined,
+      });
+    } catch (error) {
+      await audit?.record({
+        ...auditActorOf(principal),
+        action: AUDIT_ACTIONS.nodeDebugCreate,
+        target: name ?? "debug node",
+        detail: describeError(error),
+        result: "failure",
+      });
+
+      return maintenanceError("failed", { message: apiErrorMessage(error) });
+    }
+
+    const summary = debugNodeSummary(node);
+    await audit?.record({
+      ...auditActorOf(principal),
+      action: AUDIT_ACTIONS.nodeDebugCreate,
+      target: summary.name || summary.id,
+      detail: routes.length > 0 ? routes.join(", ") : "no routes",
+      result: "success",
+    });
+
+    // The node the response describes is a real entry in Headscale now, so the
+    // list behind the dialog is re-read before the operator is told its name.
+    await headscaleLiveStore.refresh(nodesResource, api);
+    return { success: true as const, node: summary };
   }
 
   // Bulk actions run against a list of machines instead of the single node the

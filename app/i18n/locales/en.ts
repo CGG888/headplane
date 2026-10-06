@@ -336,6 +336,55 @@ const en = {
       ownerLabel: "Owner",
       selectUser: "Select a user",
     },
+    backfill: {
+      action: "Backfill missing IPs",
+      title: "Backfill missing node IPs",
+      body: "Headscale scans every node and gives an address to the ones that are missing one, using the IP prefixes configured on the server. Only the gaps are filled: an address that already exists is never rewritten, moved or reassigned.",
+      removals:
+        "Headscale also clears the addresses of an address family whose prefix was removed from its configuration, so a node can lose an address here as well.",
+      successNodes: {
+        one: "Filled in missing addresses on {count} node. The machines list has been refreshed.",
+        other:
+          "Filled in missing addresses on {count} nodes. The machines list has been refreshed.",
+      },
+      successChanges: {
+        one: "Headscale reported {count} address change. The machines list has been refreshed.",
+        other: "Headscale reported {count} address changes. The machines list has been refreshed.",
+      },
+      successNone: "Nothing was missing: every node already has its addresses.",
+      errors: {
+        failed: "Headscale could not backfill node IPs.",
+      },
+    },
+    debug: {
+      menu: "Create debug node",
+      title: "Create a debug node",
+      body: "This really creates a node on your tailnet: Headscale fabricates it from whatever you enter below instead of a device registering itself.",
+      lifetime:
+        "The node exists until it is deleted, so remove it from the machines list once you are done debugging.",
+      userLabel: "User",
+      userDescription: "Name of the user that should own the node.",
+      keyLabel: "Machine key",
+      keyDescription:
+        "Registration key the fabricated node is created under: the full hskey-authreq-... key on Headscale 0.29 and newer, the bare registration ID before that.",
+      nameLabel: "Node name",
+      nameDescription: "Hostname to give the node.",
+      routesLabel: "Routes",
+      routesDescription:
+        "CIDRs separated by commas or spaces, for example 10.0.0.0/24, 192.168.1.0/24.",
+      routesInvalid:
+        "Enter CIDRs with a prefix length, separated by commas or spaces, for example 10.0.0.0/24.",
+      defaults:
+        "All four fields are optional: leave one empty and Headscale fills it in itself. Some Headscale versions still require a user and a key.",
+      createdTitle: "Debug node created",
+      createdBody: "Headscale created this node and put it on your tailnet:",
+      createdDelete:
+        "Open it from the machines list and delete it there once the debugging is done.",
+      unnamed: "Unnamed debug node",
+      errors: {
+        failed: "Headscale could not create the debug node.",
+      },
+    },
     filters: {
       user: "User",
       tag: "Tag",
@@ -2863,6 +2912,8 @@ const en = {
         apiKeyDelete: "Delete API key",
         preAuthKeyDelete: "Delete pre-auth key",
         registrationReject: "Reject registration",
+        nodeBackfillIps: "Backfill node IPs",
+        nodeDebugCreate: "Create debug node",
         restrictionAddDomain: "Allow domain",
         restrictionRemoveDomain: "Remove domain",
         restrictionAddGroup: "Allow group",

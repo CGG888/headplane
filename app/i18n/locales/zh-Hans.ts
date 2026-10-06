@@ -322,6 +322,50 @@ const zhHans = {
       ownerLabel: "所有者",
       selectUser: "选择用户",
     },
+    backfill: {
+      action: "回填缺失的 IP",
+      title: "回填缺失的节点 IP",
+      body: "Headscale 会扫描所有节点，按服务器上配置的 IP 前缀，为缺少地址的节点补上地址。它只补空缺：已经存在的地址不会被改写、移动或重新分配。",
+      removals:
+        "如果某个地址族的前缀已从 Headscale 配置中移除，该族的地址也会被清除，因此这里也可能让节点失去地址。",
+      successNodes: {
+        one: "已为 {count} 个节点补上缺失的地址，机器列表已刷新。",
+        other: "已为 {count} 个节点补上缺失的地址，机器列表已刷新。",
+      },
+      successChanges: {
+        one: "Headscale 报告了 {count} 处地址变动，机器列表已刷新。",
+        other: "Headscale 报告了 {count} 处地址变动，机器列表已刷新。",
+      },
+      successNone: "没有缺失：每个节点都已经有地址。",
+      errors: {
+        failed: "Headscale 无法回填节点 IP。",
+      },
+    },
+    debug: {
+      menu: "创建调试节点",
+      title: "创建调试节点",
+      body: "这会真实地在你的 Tailnet 中创建一个节点：Headscale 根据下面填写的内容凭空创建它，而不是由设备自行注册。",
+      lifetime: "该节点会一直存在，直到被删除；调试结束后请到机器列表中把它删除。",
+      userLabel: "用户",
+      userDescription: "应当拥有该节点的用户名。",
+      keyLabel: "机器密钥",
+      keyDescription:
+        "创建该节点时使用的注册密钥：Headscale 0.29 及更新版本填完整的 hskey-authreq-... 密钥，更早版本填裸注册 ID。",
+      nameLabel: "节点名称",
+      nameDescription: "为该节点设置的主机名。",
+      routesLabel: "路由",
+      routesDescription: "用逗号或空格分隔的 CIDR，例如 10.0.0.0/24、192.168.1.0/24。",
+      routesInvalid: "请填写带前缀长度的 CIDR，用逗号或空格分隔，例如 10.0.0.0/24。",
+      defaults:
+        "四个字段都是可选的：留空的部分由 Headscale 自行填写。部分 Headscale 版本仍然要求填写用户和密钥。",
+      createdTitle: "调试节点已创建",
+      createdBody: "Headscale 已创建该节点，并将它加入你的 Tailnet：",
+      createdDelete: "调试结束后，可以在机器列表中找到它并删除。",
+      unnamed: "未命名调试节点",
+      errors: {
+        failed: "Headscale 无法创建调试节点。",
+      },
+    },
     filters: {
       user: "用户",
       tag: "标签",
@@ -2673,6 +2717,8 @@ const zhHans = {
         apiKeyDelete: "删除 API 密钥",
         preAuthKeyDelete: "删除预授权密钥",
         registrationReject: "拒绝注册",
+        nodeBackfillIps: "回填节点 IP",
+        nodeDebugCreate: "创建调试节点",
         restrictionAddDomain: "允许域名",
         restrictionRemoveDomain: "移除域名",
         restrictionAddGroup: "允许组",

@@ -27,6 +27,25 @@ function createTransportRecorder() {
 const capabilities = capabilitiesFor(parseServerVersion("0.28.0"));
 
 describe("Headscale API path encoding", () => {
+  test("backfills node IPs with the confirmation Headscale requires", async () => {
+    const { calls, transport } = createTransportRecorder();
+
+    const changes = await makeNodeApi(transport, capabilities, "api-key").backfillIps();
+
+    // `confirmed` is not optional in practice: Headscale's BackfillNodeIPs
+    // handler aborts with "not confirmed, aborting" unless it is true, so the
+    // client always sends it — as a query parameter, with no body.
+    expect(calls).toEqual([
+      {
+        method: "POST",
+        path: "v1/node/backfillips?confirmed=true",
+        apiKey: "api-key",
+      },
+    ]);
+    // A response without `changes` reads as "nothing to do", not as an error.
+    expect(changes).toEqual([]);
+  });
+
   test("encodes node rename names as a single URL segment", async () => {
     const { calls, transport } = createTransportRecorder();
 

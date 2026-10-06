@@ -52,6 +52,7 @@ import { MachineFilters } from "./components/machine-filters";
 import MachineListCard from "./components/machine-list-card";
 import MachineRow from "./components/machine-row";
 import SelectCheckbox from "./components/select-checkbox";
+import BackfillIps from "./dialogs/backfill-ips";
 import NewMachine from "./dialogs/new";
 import { useMachineFilterParams } from "./hooks/use-machine-filter-params";
 import { machineAction } from "./machine-actions";
@@ -525,6 +526,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <div className="flex flex-wrap items-center gap-2">
           {/* Personal, presentation-only: whether addresses stay masked. */}
           <AddressVisibilityMenu />
+          {/* A server-wide repair, so it is offered exactly where the other
+              machine mutations are: to a principal who can write machines. */}
+          {loaderData.writable ? <BackfillIps /> : undefined}
           <NewMachine
             disabledKeys={loaderData.preAuth ? [] : ["pre-auth"]}
             isDisabled={!loaderData.writable}

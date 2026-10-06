@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 
 import {
   Activity,
+  Bug,
   CalendarClock,
   ChartColumn,
   Info,
@@ -56,6 +57,7 @@ import MachineStatus from "./components/machine-status";
 import MenuOptions from "./components/menu";
 import NodeDiagnostics from "./components/node-diagnostics";
 import { embeddedDerpRegion, relayRegionSources, servedDerpRegionIds } from "./derp-info";
+import DebugNode from "./dialogs/debug-node";
 import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
@@ -268,6 +270,7 @@ export default function Page({
   const [showRouting, setShowRouting] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
   const [showExpire, setShowExpire] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const uptime = availability ? uptimePercent(availability.uptime) : undefined;
 
   const uiTags = useMemo(() => {
@@ -285,6 +288,7 @@ export default function Page({
       <Routes isOpen={showRouting} node={node} setIsOpen={setShowRouting} />
       <Delete isOpen={showRemove} machine={node} setIsOpen={setShowRemove} />
       <Expire isOpen={showExpire} machine={node} setIsOpen={setShowExpire} />
+      <DebugNode isOpen={showDebug} setIsOpen={setShowDebug} />
 
       <header className="flex flex-col gap-3">
         <nav className="text-sm text-mist-600 dark:text-mist-400">
@@ -635,6 +639,13 @@ export default function Page({
           <Button onClick={() => setShowExpire(true)}>
             <CalendarClock className="h-4 w-4" />
             {t("machines.menu.expire")}
+          </Button>
+          {/* The one entry here that adds a node instead of removing one, kept
+              beside the destructive action because it fabricates a machine that
+              really exists until it is deleted again. */}
+          <Button onClick={() => setShowDebug(true)}>
+            <Bug className="h-4 w-4" />
+            {t("machines.debug.menu")}
           </Button>
           <Button onClick={() => setShowRemove(true)} variant="danger">
             <Trash2 className="h-4 w-4" />

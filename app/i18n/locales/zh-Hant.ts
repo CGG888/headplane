@@ -322,6 +322,50 @@ const zhHant = {
       ownerLabel: "擁有者",
       selectUser: "選擇使用者",
     },
+    backfill: {
+      action: "回填缺少的 IP",
+      title: "回填缺少的節點 IP",
+      body: "Headscale 會掃描所有節點，依伺服器上設定的 IP 前置字元，為缺少位址的節點補上位址。它只補空缺：已經存在的位址不會被改寫、搬移或重新指派。",
+      removals:
+        "如果某個位址族的前置字元已從 Headscale 設定中移除，該族的位址也會被清除，因此這裡也可能讓節點失去位址。",
+      successNodes: {
+        one: "已為 {count} 個節點補上缺少的位址，機器清單已重新整理。",
+        other: "已為 {count} 個節點補上缺少的位址，機器清單已重新整理。",
+      },
+      successChanges: {
+        one: "Headscale 回報了 {count} 處位址變更，機器清單已重新整理。",
+        other: "Headscale 回報了 {count} 處位址變更，機器清單已重新整理。",
+      },
+      successNone: "沒有任何缺少：每個節點都已經有自身的位址。",
+      errors: {
+        failed: "Headscale 無法回填節點 IP。",
+      },
+    },
+    debug: {
+      menu: "建立除錯節點",
+      title: "建立除錯節點",
+      body: "這會真實地在你的 Tailnet 中建立一個節點：Headscale 依下方填寫的內容憑空建立它，而不是由裝置自行註冊。",
+      lifetime: "該節點會一直存在，直到被刪除；除錯結束後請到機器清單中將它刪除。",
+      userLabel: "使用者",
+      userDescription: "應當擁有該節點的使用者名稱。",
+      keyLabel: "機器金鑰",
+      keyDescription:
+        "建立該節點時使用的註冊金鑰：Headscale 0.29 及更新版本請填完整的 hskey-authreq-... 金鑰，更早版本請填裸註冊 ID。",
+      nameLabel: "節點名稱",
+      nameDescription: "為該節點設定的主機名稱。",
+      routesLabel: "路由",
+      routesDescription: "以逗號或空格分隔的 CIDR，例如 10.0.0.0/24、192.168.1.0/24。",
+      routesInvalid: "請填寫帶前置字元長度的 CIDR，以逗號或空格分隔，例如 10.0.0.0/24。",
+      defaults:
+        "四個欄位都是選填的：留空的部分由 Headscale 自行填寫。部分 Headscale 版本仍然要求填寫使用者與金鑰。",
+      createdTitle: "除錯節點已建立",
+      createdBody: "Headscale 已建立該節點，並將它加入你的 Tailnet：",
+      createdDelete: "除錯結束後，可以在機器清單中找到它並刪除。",
+      unnamed: "未命名除錯節點",
+      errors: {
+        failed: "Headscale 無法建立除錯節點。",
+      },
+    },
     filters: {
       user: "使用者",
       tag: "標籤",
@@ -2673,6 +2717,8 @@ const zhHant = {
         apiKeyDelete: "刪除 API 金鑰",
         preAuthKeyDelete: "刪除預先授權金鑰",
         registrationReject: "拒絕註冊",
+        nodeBackfillIps: "回填節點 IP",
+        nodeDebugCreate: "建立除錯節點",
         restrictionAddDomain: "允許網域",
         restrictionRemoveDomain: "移除網域",
         restrictionAddGroup: "允許群組",

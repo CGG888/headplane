@@ -63,6 +63,14 @@ beforeAll(async () => {
         response.end(JSON.stringify({ node: { id: "9", name: "debug-node", tags: [] } }));
         return;
       }
+      if (request.method === "POST" && request.url === "/api/v1/node/backfillips?confirmed=true") {
+        response.end(
+          JSON.stringify({
+            changes: ['assigned IPv4 "100.64.0.1" to Node(3) "alpha"'],
+          }),
+        );
+        return;
+      }
       response.end(JSON.stringify({}));
     });
   });
@@ -243,6 +251,24 @@ describe("Debug node requests", () => {
     expect(request.method).toBe("POST");
     expect(request.url).toBe("/api/v1/debug/node");
     expect(JSON.parse(request.body)).toEqual({});
+  });
+});
+
+describe("Node backfill requests", () => {
+  test("asks for the backfill with confirmed=true and reads the changes back", async () => {
+    const nodes = makeNodeApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    const changes = await nodes.backfillIps();
+
+    const request = lastRequest();
+    expect(request.method).toBe("POST");
+    // `confirmed` is a query parameter on the gateway, and it is the only thing
+    // standing between a request and "not confirmed, aborting".
+    expect(request.url).toBe("/api/v1/node/backfillips?confirmed=true");
+    expect(request.body).toBe("");
+    expect(request.auth).toBe(`Bearer ${API_KEY}`);
+    expect(changes).toEqual(['assigned IPv4 "100.64.0.1" to Node(3) "alpha"']);
   });
 });
 
