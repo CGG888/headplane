@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.11 (October 6, 2026)
+
 ## Changes
 
 - **Addresses are hidden by default and revealed on demand.** IP addresses, IPv6 addresses and hostnames in the interface render as a mask until you reveal them — per value with the eye badge beside it, or all at once from the address-visibility menu on the Overview, machines list and machine detail pages. The preference is per user and remembered in the browser; copying still copies the real value, tooltips do not leak it while hidden, and inputs, key material, ports shown alone and the audit log are left alone.
@@ -7,6 +9,9 @@
 - **Setting the region filter up now wires itself in.** Saving it as enabled adds its map file to `derp.paths` when it is missing — idempotently, without touching other entries — after a snapshot and with an audit entry, and the card reflects the new state at once. Disabling the filter does not remove the entry, a read-only configuration skips the step with the reason shown, and the hover hint names the expected path beside what `derp.paths` currently lists.
 - **The machine detail page was reworked.** The client-connectivity card lists its seven facts two per row and is about 45% shorter, sharing its height with the ACL tags card whatever either holds. The DERP relay card spans the full row, its facts sit in an aligned two-column layout, and "latency by region" now covers **every region this deployment serves** — measured here, reported by a machine, or an honest "not measured" — with the source labelled per row, server-side measurements translated onto the mirrored numbering, and a summary of the coverage.
 - **Both the settings hub and the Overview now lay their cards out four per row**, and the Overview's cards no longer carry the section labels above them — the cards read as one grid. The "manage cards" panel still lists every card, hidden cards stay hidden, and a card that is alerting still stays visible.
+
+---
+
 # 0.22.10 (October 6, 2026)
 
 ## Fixes
