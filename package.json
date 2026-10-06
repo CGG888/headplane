@@ -1,6 +1,6 @@
 {
   "name": "headplanecn",
-  "version": "0.22.11",
+  "version": "0.22.12",
   "private": true,
   "repository": "git+https://github.com/CGG888/headplaneCN.git",
   "type": "module",

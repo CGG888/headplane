@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.12 (October 6, 2026)
+
 ## Changes
 
 - **The region filter can get its map from several places now.** Give it an ordered list of source URLs and it tries them in turn, use your own mirror or proxy of the official map, or paste the map JSON by hand when the official endpoint is unreachable — a pasted map goes through exactly the same normalisation, filtering, renumbering, validation, snapshot and write path as a fetched one, and stays in use until you clear it. When nothing works the card lists **which source failed and why**, and the previous file is kept rather than replaced.
@@ -9,6 +11,9 @@
 
 - **The Overview and the settings hub use the same content width as the machines list**, so their right-hand edge lines up with the header controls instead of stopping far short of them — the pages are no longer capped at a narrower container than the rest of the interface.
 - **The Overview's cards are laid out by size.** Four per row was squeezing them into clipped values; the grid now takes as many columns as fit their content, cards in a row share a height, values that used to ellipsize are shown in full, and the paddings that the narrower layout had forced are back to comfortable values.
+
+---
+
 # 0.22.11 (October 6, 2026)
 
 ## Changes
