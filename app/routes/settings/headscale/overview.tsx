@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
 
 import {
+  Globe,
   KeyRound,
   Network,
   Scale,
@@ -9,6 +10,7 @@ import {
   SlidersHorizontal,
   Tags,
 } from "lucide-react";
+import { useState } from "react";
 import { data } from "react-router";
 
 import Code from "~/components/code";
@@ -30,13 +32,27 @@ import {
   agentsContext,
   appConfigContext,
   authContext,
+  derpMirrorContext,
   derpSyncContext,
   headscaleConfigContext,
   headscaleLiveStoreContext,
   requestApiContext,
   snapshotContext,
 } from "~/server/context";
+import {
+  assignRegionNumbers,
+  HONG_KONG_MIRROR_NUMBER,
+  HONG_KONG_REGION_ID,
+  MIRROR_NUMBER_FIRST_RANKED,
+  SINGAPORE_MIRROR_NUMBER,
+  SINGAPORE_REGION_ID,
+} from "~/server/derp-mirror/generate";
+import { officialRegionLatencies } from "~/server/derp-mirror/latency";
+import { chineseRegionName } from "~/server/derp-mirror/names";
+import { OFFICIAL_DERP_MAP_URL } from "~/server/derp-mirror/service.server";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
+import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
+import { loadRemoteDerpMapDetail } from "~/server/headscale/derp-map-remote";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import {
@@ -49,6 +65,7 @@ import { Capabilities } from "~/server/web/roles";
 import type { Route } from "./+types/overview";
 import { headscaleSettingsAction } from "./actions";
 import AdvancedSettings from "./components/advanced-settings";
+import DerpRegionMirror from "./components/derp-region-mirror";
 import DerpRegionNames from "./components/derp-region-names";
 import DerpSettings from "./components/derp-settings";
 import DerpStatus from "./components/derp-status";
@@ -58,6 +75,7 @@ import PolicyModeSettings from "./components/policy-mode";
 import ServerOverview from "./components/server-overview";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
+import type { MirrorNumbering, MirrorRegionRow } from "./derp-mirror";
 import {
   classifyDerpRelaySource,
   defaultDerpPrivateKeyPath,
@@ -76,6 +94,7 @@ const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
   const auth = context.get(authContext);
+  const derpMirror = context.get(derpMirrorContext);
   const derpSync = context.get(derpSyncContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const appConfig = context.get(appConfigContext);
@@ -127,6 +146,76 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   await derpSync.ready();
   const hostEcho = await readHostEchoSettings(appConfig.server.data_path);
 
+  // The official region mirror keeps its settings in Headplane's own data
+  // directory and reads Tailscale's map through the same cached fetcher a run
+  // uses. The table needs that map, the latency the agent measured and the order
+  // the server's numbering rule produces: the rule itself is neither
+  // re-implemented here nor in the browser, the component only filters an order
+  // the server already ranked.
+  await derpMirror.ready();
+  const mirrorSettings = derpMirror.settings();
+
+  let mirrorLatencies: Record<string, number> = {};
+  if (agents) {
+    try {
+      mirrorLatencies = officialRegionLatencies(await agents.hostRecords());
+    } catch {
+      // Best-effort: without measurements nothing is ranked, and the table says so.
+      mirrorLatencies = {};
+    }
+  }
+
+  let officialRegions: DerpMapRegionDetail[] = [];
+  try {
+    const cache = {
+      autoUpdateEnabled: derp.autoUpdateEnabled,
+      updateFrequency: derp.updateFrequency,
+    };
+    // The service falls back to the official URL when `derp.urls` lists nothing,
+    // so the table reads the same source it would mirror.
+    for (const url of derp.urls.length > 0 ? derp.urls : [OFFICIAL_DERP_MAP_URL]) {
+      const loaded = await loadRemoteDerpMapDetail(url, cache);
+      if (loaded !== undefined && loaded.length > 0) {
+        officialRegions = loaded;
+        break;
+      }
+    }
+  } catch {
+    officialRegions = [];
+  }
+
+  const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => ({
+    officialId: region.regionId,
+    code: region.code,
+    officialName: region.name,
+    // The name the mirrored file will carry, so the column and the file agree.
+    chineseName: chineseRegionName(region.code, region.name),
+    nodeCount: region.nodes.length,
+    latencyMs: mirrorLatencies[String(region.regionId)],
+    storedNumber: mirrorSettings.assignment[String(region.regionId)],
+  }));
+
+  // One call to the server's rule over every official region yields the ranking
+  // order and the pinned anchors; ticking a subset only filters that order, which
+  // is why the preview matches the numbers a fresh ranking assigns to it.
+  const ranked = assignRegionNumbers(
+    mirrorRegions.map((region) => String(region.officialId)),
+    mirrorLatencies,
+  );
+  const describedIds = new Set(mirrorRegions.map((region) => region.officialId));
+  const orderedIds = Object.entries(ranked.assignment)
+    .map(([id, number]) => ({ officialId: Number(id), number }))
+    .toSorted((a, b) => a.number - b.number || a.officialId - b.officialId)
+    .map((entry) => entry.officialId);
+  const mirrorNumbering: MirrorNumbering = {
+    fixed: [
+      { officialId: Number(HONG_KONG_REGION_ID), number: HONG_KONG_MIRROR_NUMBER },
+      { officialId: Number(SINGAPORE_REGION_ID), number: SINGAPORE_MIRROR_NUMBER },
+    ].filter((entry) => describedIds.has(entry.officialId)),
+    firstFreeNumber: MIRROR_NUMBER_FIRST_RANKED,
+    order: orderedIds,
+  };
+
   return {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
@@ -141,6 +230,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         defaultUrl: DEFAULT_HOST_ECHO_URL,
         fallbacks: [...FALLBACK_HOST_ECHO_URLS],
       },
+    },
+    mirror: {
+      settings: {
+        enabled: mirrorSettings.enabled,
+        targetPath: mirrorSettings.targetPath,
+        intervalHours: mirrorSettings.intervalHours,
+        autoReload: mirrorSettings.autoReload,
+        // The store keeps region ids as decimal strings; the checkboxes compare
+        // numbers, and the action validates whatever comes back anyway.
+        selectedIds: mirrorSettings.officialRegionIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isSafeInteger(id)),
+        rankedAt: mirrorSettings.assignmentRankedAt,
+      },
+      last: derpMirror.last(),
+      numbering: mirrorNumbering,
+      regions: mirrorRegions,
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -169,6 +275,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     access,
     writable,
     derpSync,
+    mirror,
     oidc,
     advanced,
     derp,
@@ -184,6 +291,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     fatalOidcKeys,
   } = loaderData;
   const isDisabled = writable ? !access : true;
+
+  // The tabs are controlled so the mirror tab can link to the DERP tab, where
+  // the local map files the mirror writes are edited.
+  const [tab, setTab] = useState("oidc");
 
   // Which relays clients are handed, shown above the DERP blocks so it is
   // readable without opening any of them.
@@ -235,7 +346,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       }
       title={t("settings.headscale.title")}
     >
-      <SettingsTabs defaultValue="oidc" label={t("settings.headscale.title")}>
+      <SettingsTabs label={t("settings.headscale.title")} onValueChange={setTab} value={tab}>
         <SettingsTabList>
           <SettingsTab className="shrink-0" icon={KeyRound} value="oidc">
             {t("settings.headscale.oidcTitle")}
@@ -251,6 +362,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={Network} value="derp">
             {t("settings.headscale.derp.title")}
+          </SettingsTab>
+          <SettingsTab className="shrink-0" icon={Globe} value="derp-mirror">
+            {t("settings.headscale.derp.mirror.title")}
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={Tags} value="derp-regions">
             {t("settings.headscale.derp.regionNamesTitle")}
@@ -355,6 +469,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             embedded={derp.server}
             regionNames={derpRegionNames}
             rows={derpRelay}
+          />
+        </SettingsPanel>
+
+        <SettingsPanel value="derp-mirror">
+          <DerpRegionMirror
+            agentEnabled={agentEnabled}
+            isDisabled={isDisabled}
+            last={mirror.last}
+            numbering={mirror.numbering}
+            onOpenDerpTab={() => setTab("derp")}
+            regions={mirror.regions}
+            settings={mirror.settings}
           />
         </SettingsPanel>
 

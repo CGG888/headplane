@@ -1,5 +1,13 @@
 # Next
 
+## Changes
+
+- **A new "Region mirror" tab that keeps only the official relays you want, and keeps them current.** Tailscale's public DERP relays are the ones listed; the tab mirrors the official map into a **local map file** that Headscale hands to your clients, dropping the regions you do not select and **renumbering them into the 900s** so they cannot collide with the official numbering. **901 is always Hong Kong and 902 always Singapore**; the rest are numbered from 903 **in order of the latency your machines actually measure** (through the agent), unmeasured regions last. Numbers already assigned stay put, so a scheduled refresh never shuffles what clients see — "Re-rank" is an explicit action with a confirmation, because clients may briefly re-select relays. Region names are shown in Chinese (Hong Kong, Singapore, Tokyo …) with the official name kept as a fallback, the table sorts and filters by latency and offers a "fastest three" preset, and the settings give the enable switch, the target file (a dedicated `official-mirror.yaml`, maintained by this task — manual edits are overwritten), the 6/12/24-hour schedule and the auto-reload switch with its client-interruption warning.
+- The tab starts by saying what these are: **Tailscale's official public relays, not self-hosted nodes**, mirrored and filtered into your own map file, refreshed automatically because the official addresses change.
+
+## Fixes
+
+- The mirror never writes an unusable map: an empty selection, a relative or escaping path, an unreachable official map, a selection that matches nothing, a schema failure or an unwritable file all keep the previous file and record the reason. A write compares the rendered file first (no change, no write, no reload), takes a single-file snapshot before replacing it, records an audit entry, and only then reloads if the switch allows it. **Check** previews the whole thing and writes nothing.
 # 0.22.5 (October 6, 2026)
 
 ## Changes

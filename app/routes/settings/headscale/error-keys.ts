@@ -1,4 +1,5 @@
 import type { TranslationKey } from "~/i18n";
+import type { DerpMirrorRun } from "~/server/derp-mirror/types";
 
 import type { DerpMapIssue, DerpMapIssueCode } from "./derp-map-schema";
 import type { OidcSelfTestReport } from "./oidc-self-test";
@@ -60,7 +61,15 @@ export type HeadscaleSettingsErrorCode =
   | "derpMapUnavailable"
   | "derpMapNotWritable"
   | "derpMapWriteFailed"
-  | "derpMapNoSnapshot";
+  | "derpMapNoSnapshot"
+  | "invalidDerpMirrorInterval"
+  | "invalidDerpMirrorPath"
+  | "invalidDerpMirrorSelection"
+  | "derpMirrorSaveFailed"
+  | "derpMirrorCheckFailed"
+  | "derpMirrorRunFailed"
+  | "derpMirrorReassignFailed"
+  | "derpMirrorUnavailable";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
   invalidAction: "settings.headscale.errors.invalidAction",
@@ -115,6 +124,14 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpMapNotWritable: "settings.headscale.errors.derpMapNotWritable",
   derpMapWriteFailed: "settings.headscale.errors.derpMapWriteFailed",
   derpMapNoSnapshot: "settings.headscale.errors.derpMapNoSnapshot",
+  invalidDerpMirrorInterval: "settings.headscale.derp.mirror.errors.invalidDerpMirrorInterval",
+  invalidDerpMirrorPath: "settings.headscale.derp.mirror.errors.invalidDerpMirrorPath",
+  invalidDerpMirrorSelection: "settings.headscale.derp.mirror.errors.invalidDerpMirrorSelection",
+  derpMirrorSaveFailed: "settings.headscale.derp.mirror.errors.derpMirrorSaveFailed",
+  derpMirrorCheckFailed: "settings.headscale.derp.mirror.errors.derpMirrorCheckFailed",
+  derpMirrorRunFailed: "settings.headscale.derp.mirror.errors.derpMirrorRunFailed",
+  derpMirrorReassignFailed: "settings.headscale.derp.mirror.errors.derpMirrorReassignFailed",
+  derpMirrorUnavailable: "settings.headscale.derp.mirror.errors.derpMirrorUnavailable",
 };
 
 export interface HeadscaleSettingsSuccess {
@@ -125,6 +142,12 @@ export interface HeadscaleSettingsSuccess {
   snapshotId?: string;
   /** Whether a snapshot of the previous content was taken at all. */
   snapshotTaken?: boolean;
+  /**
+   * Present after a region-mirror check, update or renumbering: the run the
+   * service performed, so the tab can report its result where it was started
+   * instead of only in the persisted "last run" summary.
+   */
+  mirror?: DerpMirrorRun;
 }
 
 export interface HeadscaleSettingsFailure {

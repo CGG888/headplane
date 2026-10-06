@@ -30,6 +30,7 @@ import {
   authContext,
   createAppContext,
   dbContext,
+  derpMirrorContext,
   derpSyncContext,
   headscaleApiKeyContext,
   headscaleConfigContext,
@@ -92,6 +93,7 @@ function getLoadContext(request: Request, client: ClientAddress) {
   routerContext.set(auditContext, ctx.audit);
   routerContext.set(authContext, ctx.auth);
   routerContext.set(dbContext, ctx.db);
+  routerContext.set(derpMirrorContext, ctx.derpMirror);
   routerContext.set(derpSyncContext, ctx.derpSync);
   routerContext.set(headscaleContext, ctx.headscale);
   routerContext.set(headscaleApiKeyContext, ctx.headscaleApiKey);

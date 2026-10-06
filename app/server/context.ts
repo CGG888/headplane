@@ -9,6 +9,8 @@ import { createAuditService } from "./audit";
 import type { HeadplaneConfig } from "./config/config-schema";
 import { loadIntegration } from "./config/integration";
 import { createDbClient } from "./db/client.server";
+import { officialRegionLatencies } from "./derp-mirror/latency";
+import { createDerpMirrorService } from "./derp-mirror/service.server";
 import { createDerpSyncService } from "./derp-sync/service.server";
 import { disabled, enabled, type Feature } from "./feature";
 import { createHeadscale, type HeadscaleClient } from "./headscale/api";
@@ -32,6 +34,7 @@ export const auditContext = createContext<AppContext["audit"]>();
 export const authContext = createContext<AppContext["auth"]>();
 export const dbContext = createContext<AppContext["db"]>();
 export const derpSyncContext = createContext<AppContext["derpSync"]>();
+export const derpMirrorContext = createContext<AppContext["derpMirror"]>();
 export const headscaleContext = createContext<AppContext["headscale"]>();
 export const headscaleApiKeyContext = createContext<AppContext["headscaleApiKey"]>();
 export const headscaleConfigContext = createContext<AppContext["hs"]>();
@@ -179,12 +182,33 @@ export async function createAppContext(config: HeadplaneConfig) {
     integration,
   });
 
+  // The official-region mirror keeps a local map file holding only the Tailscale
+  // public relays the operator selected, renumbered into the 900s and refreshed
+  // on a schedule because the official addresses move. It reads the official map
+  // through the same cached fetcher the DERP cards use, validates the document
+  // with the map editor's validator before writing, snapshots the one file it
+  // replaces, and records every failure as a reason code the page localizes. The
+  // numbering is ranked by the latency the Headplane Agent's clients measured, so
+  // it only consults that database when the agent feature is on.
+  const derpMirror = createDerpMirrorService({
+    dataPath: config.server.data_path,
+    config: hs,
+    snapshots,
+    audit,
+    alerts,
+    headscale,
+    integration,
+    loadLatencies: async () =>
+      agents.state === "enabled" ? officialRegionLatencies(await agents.value.hostRecords()) : {},
+  });
+
   // Disposers run in reverse-registration order on shutdown.
   const disposers: Array<() => Promise<void> | void> = [
     () => auth.stop(),
     () => alerts.dispose(),
     () => nodeHistory.dispose(),
     () => derpSync.dispose(),
+    () => derpMirror.dispose(),
     () => hsLive.dispose(),
     () => headscale.dispose(),
   ];
@@ -205,6 +229,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     alerts.start();
     nodeHistory.start();
     derpSync.start();
+    derpMirror.start();
   }
 
   async function dispose() {
@@ -223,6 +248,7 @@ export async function createAppContext(config: HeadplaneConfig) {
     audit,
     alerts,
     derpSync,
+    derpMirror,
     headscale,
     headscaleApiKey,
     agents,

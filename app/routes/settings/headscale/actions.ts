@@ -5,12 +5,18 @@ import { data } from "react-router";
 import {
   appConfigContext,
   authContext,
+  derpMirrorContext,
   derpSyncContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
   snapshotContext,
 } from "~/server/context";
+import { mirrorTargetProblem } from "~/server/derp-mirror/service.server";
+import {
+  normalizeOfficialRegionId,
+  parseDerpMirrorIntervalHours,
+} from "~/server/derp-mirror/settings";
 import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
@@ -714,6 +720,103 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       }
 
       return success();
+    }
+
+    case "save_derp_mirror": {
+      // The mirror's own settings live in Headplane's data directory; only the
+      // map file a run writes lives where Headscale reads it. The stored
+      // numbering is deliberately left alone: a save must not shuffle the
+      // numbers clients already know, so re-ranking is its own action below.
+      const enabled = readBooleanField(formData, "mirror_enabled");
+      const autoReload = readBooleanField(formData, "mirror_auto_reload");
+      if (enabled === undefined || autoReload === undefined) {
+        return failure("invalidBooleanValue");
+      }
+
+      const intervalHours = parseDerpMirrorIntervalHours(
+        readField(formData, "mirror_interval_hours"),
+      );
+      if (intervalHours === undefined) {
+        return failure("invalidDerpMirrorInterval");
+      }
+
+      const officialRegionIds: string[] = [];
+      let invalidSelection = false;
+      for (const entry of formData.getAll("mirror_region")) {
+        const id = normalizeOfficialRegionId(entry);
+        if (id === undefined) {
+          invalidSelection = true;
+          break;
+        }
+
+        if (!officialRegionIds.includes(id)) {
+          officialRegionIds.push(id);
+        }
+      }
+
+      if (invalidSelection) {
+        return failure("invalidDerpMirrorSelection");
+      }
+
+      // The run refuses a relative path or one with a `..` segment, so the same
+      // check here turns it into a field error instead of a failed run.
+      const targetPath = readField(formData, "mirror_path");
+      if (mirrorTargetProblem(targetPath) !== undefined) {
+        return failure("invalidDerpMirrorPath");
+      }
+
+      const mirror = context.get(derpMirrorContext);
+      const result = await mirror.update({
+        enabled,
+        autoReload,
+        intervalHours,
+        targetPath,
+        officialRegionIds,
+      });
+
+      if (!result.success) {
+        return failure("derpMirrorSaveFailed");
+      }
+
+      return success();
+    }
+
+    case "check_derp_mirror": {
+      // The tab's dry run: fetch, filter, generate and compare, and write
+      // nothing at all — no snapshot, no reload, and no change to the stored
+      // numbering. The run it returns is reported where it was started.
+      const mirror = context.get(derpMirrorContext);
+      const run = await mirror.check();
+      if (run === undefined) {
+        return failure("derpMirrorCheckFailed");
+      }
+
+      return data({ success: true, mirror: run } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "run_derp_mirror": {
+      // The tab's "Update now": the same work as a scheduled tick, writing only
+      // what actually changed and then following the reload switch.
+      const mirror = context.get(derpMirrorContext);
+      const run = await mirror.runNow();
+      if (run === undefined) {
+        return failure("derpMirrorRunFailed");
+      }
+
+      return data({ success: true, mirror: run } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "reassign_derp_mirror": {
+      // The one action that drops the stored numbering and ranks every selected
+      // region again by today's measurements, which is what the tab's preview
+      // shows. Only reachable through the confirmation dialog.
+      const mirror = context.get(derpMirrorContext);
+      const run = await mirror.reassign();
+      if (run === undefined) {
+        return failure("derpMirrorReassignFailed");
+      }
+
+      return data({ success: true, mirror: run } satisfies HeadscaleSettingsSuccess);
     }
 
     case "save_derp_map": {
