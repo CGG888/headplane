@@ -1,10 +1,15 @@
 # Next
 
+# 0.22.19 (October 6, 2026)
+
 ## Changes
 
 - **The console's own OIDC login can now be configured in the web UI.** Settings → Console login gained a form above its self-test covering the issuer, client id and secret, scopes, PKCE, default role, end-session logout and the allow-lists/pinning that matter for signing in. Every field shows where its current value comes from — an environment variable, what was saved here, the configuration file, or the schema default — and a field pinned by an environment variable is shown read-only with the variable named, because the environment always wins: environment variable, then what was saved here, then the configuration file. Edits are stored in the application's own data directory rather than written into the configuration file, which is frequently mounted read-only; the file is only ever read.
 - **The secret stays secret and the form cannot lock you out.** The client secret is never rendered back — the form shows that one is set, lets you replace it or clear it deliberately, and leaves it untouched when you submit the field empty — and it never reaches the audit log, an error message, a URL or a log line. Values are validated against the schema before saving (an enabled configuration needs an absolute HTTPS issuer, a client id, scopes and a secret from some layer), and a change that could leave nobody able to sign in asks for confirmation first, spelling out what will happen and what would still work; it refuses only when there would genuinely be no way in. Every change is audited by field name, including refused ones.
 - **You can see whether a restart is still pending.** The page compares the running configuration against what is stored and shows a banner naming the fields that differ, since the configuration is read at start-up, and the self-test now evaluates the merged configuration so a saved edit is checked before you restart.
+
+---
+
 # 0.22.18 (October 6, 2026)
 
 ## Changes
