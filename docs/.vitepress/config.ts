@@ -8,6 +8,7 @@ const base = "/headplaneCN/";
 // mirror `enNav`/`enSidebar` one-for-one: same groups, same pages, same order.
 const zhHansNav = [
   { text: "首页", link: "/" },
+  { text: "与上游的差异", link: "/differences" },
   { text: "赞助", link: "/sponsor" },
   { text: "更新日志", link: "/CHANGELOG" },
 ];
@@ -27,6 +28,7 @@ const zhHansSidebar = [
           { text: "fnOS（飞牛）", link: "/install/fnos" },
         ],
       },
+      { text: "与上游的差异", link: "/differences" },
       {
         text: "配置",
         link: "/configuration",
@@ -84,6 +86,7 @@ const zhHansSidebar = [
 // English mirrors the same structure under `/en/`; no entry leaves the prefix.
 const enNav = [
   { text: "Home", link: "/en/" },
+  { text: "Differences from upstream", link: "/en/differences" },
   { text: "Sponsor", link: "/en/sponsor" },
   { text: "Changelog", link: "/en/CHANGELOG" },
 ];
@@ -103,6 +106,7 @@ const enSidebar = [
           { text: "fnOS (飞牛)", link: "/en/install/fnos" },
         ],
       },
+      { text: "Differences from upstream", link: "/en/differences" },
       {
         text: "Configuration",
         link: "/en/configuration",

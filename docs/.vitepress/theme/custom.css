@@ -40,3 +40,65 @@ figcaption {
   text-decoration: underline;
   margin-left: 8px;
 }
+
+/*
+ * Card grid for the fork-differences pages (`/differences`, `/en/differences`).
+ * The pages wrap each item in plain `feature-grid`/`feature-card` divs, so the
+ * layout lives here in the theme rather than in a component. Colours come from
+ * the default theme's variables, which keeps both light and dark mode intact.
+ */
+.vp-doc .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.vp-doc .feature-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background-color: var(--vp-c-bg-soft);
+  padding: 20px;
+  transition:
+    border-color 0.25s,
+    background-color 0.25s;
+}
+
+.vp-doc .feature-card:hover {
+  border-color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-bg-alt);
+}
+
+.vp-doc .feature-card h3 {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+  font-size: 17px;
+  line-height: 24px;
+}
+
+.vp-doc .feature-card p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc .feature-card p:last-child {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.vp-doc .feature-card p:last-child a {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+}
+
+.vp-doc .feature-card p:last-child a:hover {
+  text-decoration: underline;
+}
+
