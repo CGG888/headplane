@@ -685,17 +685,43 @@ export type DerpNodeSourceGap =
   | "covered";
 
 /**
- * A short hint a source that *does* list nodes still needs, because the nodes
- * are not the ones clients receive: `unlisted` is the region filter's own file
- * before `derp.paths` lists it.
+ * What the configuration makes of one source, as the one chip on its row reads
+ * it: `served` — this machine hands these nodes to its clients; `pending` — the
+ * source is configured, but the configuration does not load it yet, so nobody
+ * receives what it describes; `upstream` — Tailscale serves these regions, never
+ * this machine; `off` — nothing is configured for the source at all.
  */
-export type DerpNodeSourceNote = "unlisted";
+export type DerpNodeSourceState = "served" | "pending" | "upstream" | "off";
 
-/** One node, as the card prints it: a name and the address a client dials. */
+/**
+ * One node of a source: the name its map gives it and the address a client
+ * dials. The card counts these; what it prints per region is
+ * {@link DerpNodeRegionLine}.
+ */
 export interface DerpNodeLine {
   name: string;
   /** `hostname:derpport`, absent only for a map node with no hostname. */
   address?: string;
+}
+
+/**
+ * One region of a source, as the card's flat list prints it: the region id, the
+ * name it is known by, and how many nodes this source contributes to it. The
+ * endpoints are the addresses those nodes declare — the row's hover text holds
+ * them, so the card body stays one line per region.
+ */
+export interface DerpNodeRegionLine {
+  regionId: number;
+  /**
+   * The name the card shows: the operator's manual mapping first, then the name
+   * the map itself declares, then its code. Absent only when no source names the
+   * region at all, which leaves the row as its id.
+   */
+  name?: string;
+  /** How many nodes this source contributes to the region. */
+  nodeCount: number;
+  /** `hostname:derpport` of every node of the region that declares one. */
+  endpoints: string[];
 }
 
 /** One map behind a source, and what reading it produced. */
@@ -708,16 +734,20 @@ export interface DerpNodeSourceMap {
 /** One source of nodes, with the maps behind it and everything it contributes. */
 export interface DerpNodeSource {
   kind: DerpNodeSourceKind;
-  /** True when this machine hands these nodes to its clients. */
-  served: boolean;
+  /** What the configuration makes of this source, and the chip its row shows. */
+  state: DerpNodeSourceState;
   /** Every node of this source; a region an earlier source described is not counted twice. */
   nodes: DerpNodeLine[];
+  /**
+   * One entry per region this source contributes, in the order the map lists
+   * them: what the card's flat list reads, top to bottom, with a region an
+   * earlier source described listed only there.
+   */
+  regions: DerpNodeRegionLine[];
   /** The maps behind the source, in the order they are configured. */
   maps: DerpNodeSourceMap[];
   /** Why the source lists no node, or `undefined` when it lists at least one. */
   gap?: DerpNodeSourceGap;
-  /** Why the nodes it does list are not handed out yet, when that is the case. */
-  note?: DerpNodeSourceNote;
 }
 
 /** Headscale's own embedded relay, as the node card reads it. */
@@ -738,6 +768,12 @@ export interface DerpNodeSourcesInput {
   groups: readonly DerpMapGroupReading[];
   /** True when the official-region filter is switched on. */
   mirrorEnabled: boolean;
+  /**
+   * The operator's manual region-id to name mapping. It is the most deliberate
+   * source, so a region it names reads with that name on every row — the same
+   * precedence the region label chain uses.
+   */
+  manual?: Readonly<Record<string, string>>;
 }
 
 export interface DerpNodeSourcesView {
@@ -770,12 +806,25 @@ const DERP_NODE_SOURCE_ORDER: readonly DerpNodeSourceKind[] = [
  * not serve itself.
  *
  * A group the configuration does not load — the region filter's own file while
- * `derp.paths` still leaves it out — keeps its nodes and gains a `note`; its
- * nodes are counted in `total` but not in `served`, because nothing hands them
- * to a client yet.
+ * `derp.paths` still leaves it out — keeps its nodes and its state reads
+ * `pending`; its nodes are counted in `total` but not in `served`, because
+ * nothing hands them to a client yet.
+ *
+ * Every claimed region also becomes one `regions` entry: the card lists those
+ * straight away, so its body is the region id, the region's name and its node
+ * count — never a per-node row.
  */
 export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesView {
   const nodes: Record<DerpNodeSourceKind, DerpNodeLine[]> = {
+    embedded: [],
+    local: [],
+    mirror: [],
+    official: [],
+  };
+  // The card's flat list, one entry per region a source claims: the same pass
+  // that counts the nodes builds it, so a region can never be listed twice or
+  // counted twice.
+  const regionLines: Record<DerpNodeSourceKind, DerpNodeRegionLine[]> = {
     embedded: [],
     local: [],
     mirror: [],
@@ -812,10 +861,12 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
     claimed.add(input.embedded.regionId);
     regions.embedded += 1;
     described.embedded += 1;
-    nodes.embedded.push({
+    const line: DerpNodeLine = {
       name: embeddedRegionLabel(input.embedded),
       ...(input.embedded.endpoint === undefined ? {} : { address: input.embedded.endpoint }),
-    });
+    };
+    nodes.embedded.push(line);
+    regionLines.embedded.push(regionLine(input.embedded, [line], input.manual));
   }
 
   for (const group of input.groups) {
@@ -833,9 +884,9 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
 
       claimed.add(region.regionId);
       regions[kind] += 1;
-      for (const node of region.nodes) {
-        nodes[kind].push(derpNodeLine(node));
-      }
+      const lines = region.nodes.map(derpNodeLine);
+      nodes[kind].push(...lines);
+      regionLines[kind].push(regionLine(region, lines, input.manual));
     }
   }
 
@@ -849,22 +900,25 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
       maps[kind],
       input.mirrorEnabled,
     );
-    // A source nobody hands out is not served, but only while it has nodes to
-    // hand out: without any, the honest reason is its `gap`, not this note.
-    const notHandedOut = withheld.has(kind) && list.length > 0;
+    const state = sourceState(kind, {
+      embeddedEnabled: input.embedded.enabled,
+      mapCount: maps[kind].length,
+      withheld: withheld.has(kind),
+      mirrorEnabled: input.mirrorEnabled,
+    });
 
     return {
       kind,
-      served: kind !== "official" && !notHandedOut,
+      state,
       nodes: list,
+      regions: regionLines[kind],
       maps: maps[kind],
       ...(gap === undefined ? {} : { gap }),
-      ...(notHandedOut ? { note: "unlisted" as const } : {}),
     };
   });
 
   const served = sources
-    .filter((source) => source.served)
+    .filter((source) => source.state === "served")
     .reduce((total, source) => total + source.nodes.length, 0);
   // Every node any source describes, served here or not: a node an unlisted
   // filter file holds is known even though no client receives it yet.
@@ -875,6 +929,51 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
     served,
     total,
   };
+}
+
+/**
+ * The one state a source row shows, decided from the configuration rather than
+ * from a fixed label.
+ *
+ * The embedded relay and every file `derp.paths` lists are served here as soon
+ * as they are configured, because Headscale loads them. The region filter's file
+ * is served only once `derp.paths` lists it: while the filter is on and that
+ * file is not loaded — or the filter names no file at all — the row is
+ * `pending`, not off, because the source *is* configured. The official upstream
+ * is never served by this machine, so its state names who serves it instead:
+ * `upstream` for a configured `derp.urls`, and `off` only when nothing is
+ * configured there at all.
+ */
+function sourceState(
+  kind: DerpNodeSourceKind,
+  input: {
+    /** `derp.server.enabled`. */
+    embeddedEnabled: boolean;
+    /** How many maps the configuration holds for this source. */
+    mapCount: number;
+    /** True for the filter's file while `derp.paths` leaves it out. */
+    withheld: boolean;
+    /** `mirrorSettings.enabled`. */
+    mirrorEnabled: boolean;
+  },
+): DerpNodeSourceState {
+  if (kind === "official") {
+    return input.mapCount > 0 ? "upstream" : "off";
+  }
+
+  if (kind === "mirror") {
+    if (input.withheld || (input.mirrorEnabled && input.mapCount === 0)) {
+      return "pending";
+    }
+
+    return input.mapCount > 0 ? "served" : "off";
+  }
+
+  if (kind === "embedded") {
+    return input.embeddedEnabled ? "served" : "off";
+  }
+
+  return input.mapCount > 0 ? "served" : "off";
 }
 
 /** Why a source lists no node, or `undefined` when it lists at least one. */
@@ -896,7 +995,7 @@ function sourceGap(
     case "mirror":
       // Nothing tagged: either the filter is off, or it names no file to read.
       // A file it names is read whether or not `derp.paths` lists it, so an
-      // unlisted one reaches this point with nodes and a `note` instead.
+      // unlisted one has the nodes it holds and reads `pending` instead.
       if (maps.length === 0) {
         return mirrorEnabled ? "unlisted" : "unconfigured";
       }
@@ -936,6 +1035,50 @@ function derpNodeLine(node: { name: string; hostname: string; derpPort?: number 
 }
 
 /**
+ * One region as the card's flat list reads it: the id from the map, the name
+ * every source agrees on, the count of the nodes this source contributes and the
+ * endpoints those nodes declare. The lines are the nodes already read out, so
+ * the entry and the node inventory can never disagree.
+ */
+function regionLine(
+  region: { regionId: number; code?: string; name?: string },
+  lines: readonly DerpNodeLine[],
+  manual: Readonly<Record<string, string>> | undefined,
+): DerpNodeRegionLine {
+  const name = regionDisplayName(region, manual);
+
+  return {
+    regionId: region.regionId,
+    ...(name === undefined ? {} : { name }),
+    nodeCount: lines.length,
+    endpoints: lines.flatMap((line) => (line.address === undefined ? [] : [line.address])),
+  };
+}
+
+/**
+ * The name one region reads with: the operator's manual mapping first, then the
+ * name the map itself declares, then its code. Nothing is invented — a region no
+ * source names keeps no name at all, and the card shows its id alone.
+ */
+function regionDisplayName(
+  region: { regionId: number; code?: string; name?: string },
+  manual: Readonly<Record<string, string>> | undefined,
+): string | undefined {
+  const mapped = manual?.[String(region.regionId)]?.trim();
+  if (mapped !== undefined && mapped.length > 0) {
+    return mapped;
+  }
+
+  const name = (region.name ?? "").trim();
+  if (name.length > 0) {
+    return name;
+  }
+
+  const code = (region.code ?? "").trim();
+  return code.length > 0 ? code : undefined;
+}
+
+/**
  * `#999 · headscale · Headscale Embedded DERP` for the embedded relay, the shape
  * the shared region-label chain prints (`~/routes/machines/derp-info`), dropping
  * a name that only repeats its code.
@@ -953,27 +1096,6 @@ function embeddedRegionLabel(embedded: EmbeddedDerpNodeInput): string {
   }
 
   return parts.join(" · ");
-}
-
-/**
- * Most node names one source prints inline. A configured official map lists
- * hundreds of relays, so a source ends with one "+N more" line rather than
- * growing without bound.
- */
-export const DERP_SOURCE_NODE_LINE_LIMIT = 24;
-
-/** The node names one source prints, and how many it left out. */
-export type DerpSourceNodeLines = CappedLines<DerpNodeLine>;
-
-/**
- * The first `limit` nodes of one source, plus a count of the rest. The map's own
- * order is kept, because that is how the file lists its relays.
- */
-export function capDerpSourceNodes(
-  nodes: readonly DerpNodeLine[],
-  limit = DERP_SOURCE_NODE_LINE_LIMIT,
-): DerpSourceNodeLines {
-  return capLines(nodes, limit);
 }
 
 // MARK: Headscale configuration
