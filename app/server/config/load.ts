@@ -3,6 +3,12 @@ import { access, constants, readFile } from "node:fs/promises";
 import { type } from "arktype";
 import { load } from "js-yaml";
 
+import {
+  normalizeLoginOidcSettings,
+  sanitizeLoginOidcSettings,
+  type LoginOidcSettings,
+} from "~/routes/settings/login/login-oidc";
+import { readLoginOidcSettings } from "~/server/headplane-store/login-oidc";
 import log from "~/utils/log";
 
 import {
@@ -10,13 +16,58 @@ import {
   PartialHeadplaneConfig,
   partialHeadplaneConfig,
   pathSupportedKeys,
+  type HeadplaneConfig,
 } from "./config-schema";
 import { ConfigError } from "./error";
 
+/** Where the config file is read from; also the file never written by the UI. */
+export function resolveConfigPath(configPathOverride?: string): string {
+  return configPathOverride != null
+    ? configPathOverride
+    : process.env.HEADPLANE_CONFIG_PATH != null
+      ? String(process.env.HEADPLANE_CONFIG_PATH)
+      : "/etc/headplane/config.yaml";
+}
+
 /**
- * Main entrypoint that attempts to load and merge configuration from both
- * a YAML config file (if available) and environment variables. Importantly,
- * the environment variables will override any values set in the config file.
+ * The three configuration layers, kept apart instead of merged, so callers can
+ * say which one supplied a value. `saved` is what the operator stored on
+ * /settings/login, which sits between the file and the environment.
+ */
+export interface ConfigLayers {
+  configPath: string;
+  dataPath: string;
+  file: PartialHeadplaneConfig | undefined;
+  env: PartialHeadplaneConfig | undefined;
+  saved: LoginOidcSettings;
+}
+
+/**
+ * Reads the config file, the environment overrides and the saved console-login
+ * overrides. Errors from the file are propagated exactly as before; the saved
+ * document itself never throws.
+ *
+ * @param configPathOverride Used for testing to override the config file path
+ */
+export async function loadConfigLayers(configPathOverride?: string): Promise<ConfigLayers> {
+  const configPath = resolveConfigPath(configPathOverride);
+  const file = await loadConfigFile(configPath);
+  const env = await loadConfigEnv();
+
+  // The data directory is never editable from the UI, so a preliminary merge of
+  // the file and the environment is enough to locate the store.
+  const preliminary = deepMerge(file, env);
+  const dataPath = preliminary.server?.data_path ?? "/var/lib/headplane/";
+  const saved = await readLoginOidcSettings(dataPath);
+
+  return { configPath, dataPath, file, env, saved };
+}
+
+/**
+ * Main entrypoint that attempts to load and merge configuration from a
+ * YAML config file (if available), the console-login overrides saved from the
+ * UI, and environment variables. The order is deliberate and documented:
+ * environment variables override the saved values, which override the file.
  *
  * The function also supports loading secret values from file paths for
  * specific configuration keys (e.g., certificates, private keys) by checking
@@ -28,27 +79,94 @@ import { ConfigError } from "./error";
  * @throws {Error} If there are validation errors in the final configuration
  */
 export async function loadConfig(configPathOverride?: string) {
-  const configPath =
-    configPathOverride != null
-      ? configPathOverride
-      : process.env.HEADPLANE_CONFIG_PATH != null
-        ? String(process.env.HEADPLANE_CONFIG_PATH)
-        : "/etc/headplane/config.yaml";
+  const layers = await loadConfigLayers(configPathOverride);
 
-  const fileConfig = await loadConfigFile(configPath);
-  const envConfig = await loadConfigEnv();
+  const savedOverride = loginOidcOverride(layers.saved);
+  const combinedConfig = deepMerge(layers.file, savedOverride, layers.env);
 
-  const combinedConfig = deepMerge(fileConfig, envConfig);
+  // A saved value supersedes the config file's older indirection for the same
+  // setting; keeping both would either be ignored or fail validation.
+  supersedeLoginOidcKeys(combinedConfig, layers.saved, layers.env);
+
   await loadConfigKeyPaths(combinedConfig);
 
   const finalConfig = headplaneConfig(combinedConfig);
   if (finalConfig instanceof type.errors) {
+    // A saved override must never be able to stop HeadplaneCN from starting:
+    // if it is the reason the configuration is invalid, it is dropped with a
+    // loud log and the file plus environment are used instead.
+    const fallback = await loadConfigWithoutSaved(layers);
+    if (fallback !== undefined) {
+      log.error(
+        "config",
+        "Ignoring the console login settings saved on /settings/login because they are invalid: %s",
+        finalConfig.map((e) => e.toString()).join("; "),
+      );
+      return fallback;
+    }
+
     throw ConfigError.from("INVALID_REQUIRED_FIELDS", {
       messages: finalConfig.map((e) => e.toString()),
     });
   }
 
   return finalConfig;
+}
+
+/**
+ * The `oidc:` block a saved document contributes, with any individually
+ * invalid field dropped so a hand-edited document cannot fail the whole load.
+ */
+function loginOidcOverride(saved: LoginOidcSettings): PartialHeadplaneConfig | undefined {
+  const settings = sanitizeLoginOidcSettings(normalizeLoginOidcSettings(saved));
+  if (Object.keys(settings).length === 0) {
+    return undefined;
+  }
+
+  return { oidc: settings } as unknown as PartialHeadplaneConfig;
+}
+
+/**
+ * Removes the config-file keys a saved value makes obsolete:
+ *
+ * - a secret saved from the UI replaces `oidc.client_secret_path`, because
+ *   having both is a hard startup error;
+ * - a saved `logout_idp` replaces the legacy `oidc.use_end_session`, unless the
+ *   environment sets the legacy flag, which always wins.
+ */
+function supersedeLoginOidcKeys(
+  config: PartialHeadplaneConfig,
+  saved: LoginOidcSettings,
+  env: PartialHeadplaneConfig | undefined,
+): void {
+  const oidc = config.oidc as unknown as Record<string, unknown> | undefined;
+  if (oidc === undefined || oidc === null) {
+    return;
+  }
+
+  if (saved.client_secret !== undefined) {
+    delete oidc.client_secret_path;
+  }
+
+  if (saved.logout_idp !== undefined && env?.oidc?.use_end_session === undefined) {
+    delete oidc.use_end_session;
+  }
+}
+
+/** The configuration with the saved layer left out, when that one validates. */
+async function loadConfigWithoutSaved(layers: ConfigLayers): Promise<HeadplaneConfig | undefined> {
+  if (Object.keys(layers.saved).length === 0) {
+    return undefined;
+  }
+
+  try {
+    const combined = deepMerge(layers.file, layers.env);
+    await loadConfigKeyPaths(combined);
+    const config = headplaneConfig(combined);
+    return config instanceof type.errors ? undefined : config;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

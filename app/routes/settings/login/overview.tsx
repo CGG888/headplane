@@ -1,5 +1,5 @@
-import { ShieldCheck } from "lucide-react";
-import { data, useFetcher } from "react-router";
+import { KeyRound, ShieldCheck } from "lucide-react";
+import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Notice from "~/components/notice";
@@ -13,19 +13,21 @@ import {
 } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import { isIdpLogoutEnabled } from "~/routes/auth/end-session";
-import { appConfigContext, authContext, oidcContext } from "~/server/context";
-import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
+import { loginOidcAction, loginOidcLoader } from "./actions";
+import LoginOidcSettings from "./components/login-oidc-settings";
+import { LOGIN_FIELD_LABELS } from "./labels";
 import {
-  evaluateLoginSelfTest,
-  probeIssuer,
-  supportsEs384Verification,
   type LoginSelfTestCheckId,
   type LoginSelfTestReport,
   type LoginSelfTestStatus,
 } from "./self-test";
+
+// The loader and action live in their own module so the unit tests can drive
+// them without importing React.
+export const loader = loginOidcLoader;
+export const action = loginOidcAction;
 
 const STATUS_KEYS: Record<LoginSelfTestStatus, TranslationKey> = {
   pass: "settings.login.selfTestStatusPass",
@@ -62,65 +64,22 @@ const VERDICT_TONES: Record<LoginSelfTestReport["verdict"], SettingsStatusTone> 
   fail: "error",
 };
 
-export async function loader({ request, context }: Route.LoaderArgs) {
-  const auth = context.get(authContext);
-  const oidc = context.get(oidcContext);
-  const principal = await auth.require(request);
-
-  return {
-    canTest: auth.can(principal, Capabilities.configure_iam),
-    // The checks read the configuration file, so they are worth running even
-    // while sign-in is switched off; the notice just explains that state.
-    oidcEnabled: oidc.state === "enabled",
-    disabledReason: oidc.state === "enabled" ? null : oidc.reason,
-  };
-}
-
-export async function action({ request, context }: Route.ActionArgs) {
-  const auth = context.get(authContext);
-  const appConfig = context.get(appConfigContext);
-  const principal = await auth.require(request);
-
-  if (!auth.can(principal, Capabilities.configure_iam)) {
-    return data({ success: false as const }, { status: 403 });
-  }
-
-  const oidc = appConfig.oidc;
-
-  // The discovery fetch and the P-384 runtime probe are independent.
-  const [probe, es384] = await Promise.all([
-    probeIssuer(oidc?.issuer),
-    supportsEs384Verification(),
-  ]);
-
-  const report = evaluateLoginSelfTest({
-    config: {
-      issuer: oidc?.issuer,
-      scope: oidc?.scope,
-      endSessionEndpoint: oidc?.end_session_endpoint,
-      postLogoutRedirectUri: oidc?.post_logout_redirect_uri,
-      idpLogoutEnabled: isIdpLogoutEnabled(oidc),
-      tokenEndpointAuthMethod: oidc?.token_endpoint_auth_method,
-      baseUrl: appConfig.server.base_url,
-    },
-    probe,
-    runtime: { es384 },
-  });
-
-  // Only the report crosses the wire: the client secret never does.
-  return { success: true as const, report };
-}
-
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t } = useI18n();
   const fetcher = useFetcher<typeof action>();
   const isBusy = fetcher.state !== "idle";
 
-  const report = fetcher.data?.success === true ? fetcher.data.report : undefined;
+  const report =
+    fetcher.data?.success === true && fetcher.data.kind === "self_test"
+      ? fetcher.data.report
+      : undefined;
   const isForbidden = fetcher.data?.success === false;
 
   const warnCount = report?.checks.filter((check) => check.status === "warn").length ?? 0;
   const failCount = report?.checks.filter((check) => check.status === "fail").length ?? 0;
+
+  const view = loaderData.view;
+  const restartLabels = view.restartFields.map((id) => t(LOGIN_FIELD_LABELS[id])).join(", ");
 
   return (
     <SettingsPage
@@ -129,6 +88,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           {!loaderData.oidcEnabled ? (
             <Notice title={t("settings.login.disabledTitle")} variant="warning">
               {t("settings.login.disabledBody", { reason: loaderData.disabledReason ?? "—" })}
+            </Notice>
+          ) : undefined}
+          {view.restartRequired ? (
+            <Notice title={t("settings.login.restartBannerTitle")} variant="warning">
+              {t("settings.login.restartBannerBody", { fields: restartLabels })}
             </Notice>
           ) : undefined}
           <Notice title={t("settings.login.restartTitle")}>
@@ -140,6 +104,22 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       description={t("settings.login.body")}
     >
       <SettingsCollapsibleGroup>
+        <SettingsCollapsible
+          description={t("settings.login.configBody")}
+          icon={KeyRound}
+          status={{
+            tone: view.restartRequired ? "warn" : view.savedCount > 0 ? "ok" : "neutral",
+            label: view.restartRequired
+              ? t("settings.login.restartRequiredShort")
+              : view.savedCount > 0
+                ? t("settings.login.cardStatusSaved", { count: view.savedCount })
+                : t("settings.login.cardStatusFile"),
+          }}
+          title={t("settings.login.configTitle")}
+        >
+          <LoginOidcSettings canEdit={loaderData.canEdit} view={view} />
+        </SettingsCollapsible>
+
         <SettingsCollapsible
           description={t("settings.login.selfTestBody")}
           icon={ShieldCheck}
@@ -157,12 +137,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             </p>
 
             <fetcher.Form method="post">
-              <Button disabled={!loaderData.canTest || isBusy} type="submit" variant="heavy">
+              <input name="action_id" type="hidden" value="self_test" />
+              <Button disabled={!loaderData.canEdit || isBusy} type="submit" variant="heavy">
                 {isBusy ? t("settings.login.selfTestRunning") : t("settings.login.selfTestButton")}
               </Button>
             </fetcher.Form>
 
-            {!loaderData.canTest ? (
+            {!loaderData.canEdit ? (
               <p className="text-sm text-mist-600 dark:text-mist-400">
                 {t("errors.permission.modifyIam")}
               </p>

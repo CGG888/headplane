@@ -54,6 +54,8 @@ const ACTION_KEYS: Record<string, TranslationKey> = {
   [AUDIT_ACTIONS.derpAddressSync]: "settings.audit.actions.derpAddressSync",
   [AUDIT_ACTIONS.snapshotCreate]: "settings.audit.actions.snapshotCreate",
   [AUDIT_ACTIONS.snapshotRestore]: "settings.audit.actions.snapshotRestore",
+  [AUDIT_ACTIONS.loginOidcUpdate]: "settings.audit.actions.loginOidcUpdate",
+  [AUDIT_ACTIONS.loginOidcChangeBlocked]: "settings.audit.actions.loginOidcChangeBlocked",
 };
 
 const ACTOR_TYPE_KEYS: Record<AuditActorType, TranslationKey> = {

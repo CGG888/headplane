@@ -1346,7 +1346,7 @@ const en = {
       body: "How HeadplaneCN signs people in to its own console. This is a separate OIDC configuration from the one Headscale uses for its clients, and HeadplaneCN reads it from its config file once, at startup.",
       restartTitle: "Restart required",
       restartNotice:
-        "These values are read once, when the container starts. Editing the config file has no effect until HeadplaneCN is restarted.",
+        "These values are read once, when the container starts. A change saved here, or an edit to the config file, has no effect until HeadplaneCN is restarted.",
       disabledTitle: "Console sign-in is not active",
       disabledBody:
         "HeadplaneCN is not signing people in with OIDC right now ({reason}). The checks below still report the configured values.",
@@ -1354,7 +1354,7 @@ const en = {
         "This tests HeadplaneCN's own login. The OIDC block Headscale uses for its clients is tested on the Headscale settings page.",
       selfTestTitle: "Test console login",
       selfTestBody:
-        "Reads the discovery document for the configured issuer, compares it with the values HeadplaneCN will use at sign-in, and reports every result with the value it saw and what to do about it. Nothing is written to disk, and the client secret is never sent back to this page.",
+        "Reads the discovery document for the effective configuration — the config file, the values saved above and the environment, merged — and reports every result with the value it saw and what to do about it. A change saved above is checked here before a restart puts it to work. Nothing is written to disk, and the client secret is never sent back to this page.",
       selfTestButton: "Run login self-test",
       selfTestRunning: "Running checks…",
       selfTestNotRun: "Not run yet",
@@ -1419,6 +1419,93 @@ const en = {
         "oidc.token_endpoint_auth_method is set to {used}, but the provider only advertises {advertised}.",
       selfTestTokenAuthOk:
         "HeadplaneCN authenticates at the token endpoint with {used}; the provider advertises {advertised}.",
+      configTitle: "Console login configuration",
+      configBody:
+        "Edit the OpenID Connect values HeadplaneCN uses to sign people in to its own console. Changes are stored in HeadplaneCN's data directory, never in the config file, and take effect after a restart.",
+      configPrecedence:
+        "Precedence: an environment variable overrides what is saved here, which overrides the config file. A field pinned by an environment variable is read-only.",
+      configRestartWarning:
+        "The values saved here differ from the ones running. Restart HeadplaneCN to apply them.",
+      cardStatusSaved: "{count} saved here",
+      cardStatusFile: "From the config file",
+      restartRequiredShort: "Restart required",
+      saveButton: "Save configuration",
+      saving: "Saving…",
+      savedMessage: "Saved. Restart HeadplaneCN to apply the change.",
+      pinnedHint: "This field is set by {env} and cannot be changed here.",
+      sourceEnv: "Environment",
+      sourceSaved: "Saved here",
+      sourceFile: "Config file",
+      sourceDefault: "Default",
+      sourceUnset: "Not set",
+      groupSignIn: "Sign-in",
+      groupClaims: "Claims and roles",
+      groupSession: "Session and logout",
+      fieldEnabledLabel: "Console sign-in with OIDC",
+      fieldEnabledDescription:
+        "Turn Single Sign-On on or off for the HeadplaneCN console. API-key sign-in is configured in the config file and is not changed here.",
+      fieldIssuerLabel: "Issuer",
+      fieldIssuerDescription:
+        "The provider's issuer URL. It must be an absolute https URL and match the issuer the provider reports character for character.",
+      fieldClientIdLabel: "Client ID",
+      fieldClientIdDescription: "The client ID registered with the provider for this console.",
+      fieldClientSecretLabel: "Client secret",
+      fieldClientSecretDescription:
+        "A secret stored here is never shown again. Leave the field empty to keep the current one.",
+      fieldClientSecretSet: "A client secret is set. Typing a new one replaces it.",
+      fieldClientSecretUnset:
+        "No client secret is stored here; one may still come from the config file or the environment.",
+      fieldClientSecretClear: "Clear the stored client secret",
+      fieldClientSecretClearDescription:
+        "Removes the secret saved here so the field falls back to the config file or the environment.",
+      fieldScopeLabel: "Scopes",
+      fieldScopeDescription: "Space-separated scopes requested at sign-in. Must include openid.",
+      fieldDefaultRoleLabel: "Default role",
+      fieldDefaultRoleDescription: "The role granted to someone who signs in without a role claim.",
+      fieldPkceLabel: "Use PKCE",
+      fieldPkceDescription: "Send a PKCE challenge with the authorization request.",
+      fieldLogoutIdpLabel: "End the provider session on logout",
+      fieldLogoutIdpDescription:
+        "Redirect to the provider's end-session endpoint when someone logs out of the console.",
+      fieldEndSessionLabel: "End-session endpoint",
+      fieldEndSessionDescription: "Overrides the end-session endpoint from the discovery document.",
+      fieldPostLogoutLabel: "Post-logout redirect URI",
+      fieldPostLogoutDescription:
+        "Where the provider returns the browser after ending its session. Register this value with the provider.",
+      errorInvalidType: "This value has the wrong type.",
+      errorInvalidEmpty: "This value cannot be empty.",
+      errorInvalidIssuer: "The issuer must be an absolute https URL.",
+      errorInvalidUrl: "This value must be an absolute http(s) URL.",
+      errorInvalidRole: "That is not a role HeadplaneCN supports.",
+      errorMissingIssuer: "Console sign-in is enabled, so an issuer is required.",
+      errorMissingClientId: "Console sign-in is enabled, so a client ID is required.",
+      errorMissingScope: "At least one scope is required.",
+      errorMissingClientSecret:
+        "Console sign-in is enabled and no client secret is available, so HeadplaneCN would not start. Set one here, in the config file, or in the environment.",
+      errorNoWayIn:
+        "Nothing would be left to sign in with: OIDC and API-key sign-in would both be unavailable. The change was refused.",
+      errorInvalidAction: "That action is not supported.",
+      errorConfigUnreadable:
+        "The config file could not be read, so the values below may be incomplete. The file itself was not modified.",
+      errorWriteFailed:
+        "The configuration could not be saved. Check that HeadplaneCN can write to its data directory.",
+      confirmTitle: "This change may lock you out",
+      confirmIntro: "Confirm what will happen after the next restart:",
+      confirmOidcDisabled: "Console sign-in with OIDC will be off.",
+      confirmOidcIncomplete:
+        "Console sign-in with OIDC will stop working until it is complete again.",
+      confirmSecretCleared: "The stored client secret will be removed.",
+      confirmNoWayIn: "No way to sign in would remain.",
+      confirmRemaining: "Still available to sign in with: {methods}.",
+      confirmHint: "The change is written only after you confirm it.",
+      confirmButton: "Save anyway",
+      pathOidc: "OIDC",
+      pathApiKey: "an API key",
+      pathProxy: "a trusted proxy header",
+      pathNone: "nothing",
+      restartBannerTitle: "Restart required",
+      restartBannerBody:
+        "The configuration stored on this page differs from the one HeadplaneCN is running ({fields}). Restart HeadplaneCN to apply it.",
     },
     system: {
       breadcrumb: "System Status",
@@ -3006,6 +3093,8 @@ const en = {
         derpAddressSync: "Sync DERP addresses",
         snapshotCreate: "Take snapshot",
         snapshotRestore: "Restore snapshot",
+        loginOidcUpdate: "Update console login",
+        loginOidcChangeBlocked: "Blocked console login change",
       },
       filtersTitle: "Filters",
       filtersDescription: "Choose which operations are listed.",

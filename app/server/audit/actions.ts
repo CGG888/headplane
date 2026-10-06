@@ -22,6 +22,11 @@ export const AUDIT_ACTIONS = {
   derpRegionMirror: "derp.region_mirror",
   snapshotCreate: "snapshot.create",
   snapshotRestore: "snapshot.restore",
+  // HeadplaneCN's own console-login configuration: an update names the fields
+  // that changed (never their values), and a blocked change is recorded because
+  // the refusal is a security decision worth keeping.
+  loginOidcUpdate: "login_oidc.update",
+  loginOidcChangeBlocked: "login_oidc.change_blocked",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

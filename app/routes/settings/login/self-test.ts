@@ -14,6 +14,8 @@
 
 import type { TranslationKey } from "~/i18n";
 
+import type { LoginOidcSettings } from "./login-oidc";
+
 /** Short enough that an unreachable provider cannot stall the settings page. */
 export const LOGIN_SELF_TEST_TIMEOUT_MS = 5_000;
 
@@ -56,9 +58,12 @@ export interface LoginSelfTestReport {
 }
 
 /**
- * The values the checks compare against. They come straight from HeadplaneCN's
- * own config file; `unknown` is avoided by coercing in the caller, which is why
- * every field is optional — a missing `oidc:` block is a valid state to test.
+ * The values the checks compare against. They come from the *effective*
+ * configuration — the config file, the values saved on /settings/login and the
+ * environment, merged in that order — so the panel reports what the login flow
+ * will use at the next start rather than what the file alone says. `unknown` is
+ * avoided by coercing in the caller, which is why every field is optional — a
+ * missing `oidc:` block is a valid state to test.
  */
 export interface LoginSelfTestConfig {
   issuer?: string;
@@ -70,6 +75,31 @@ export interface LoginSelfTestConfig {
   idpLogoutEnabled: boolean;
   tokenEndpointAuthMethod?: string;
   baseUrl?: string;
+}
+
+/** The inputs the merged settings are turned into the checks' own shape from. */
+export interface LoginSelfTestSettingsInput {
+  /** The effective (merged) console-login settings, not just the file. */
+  settings: LoginOidcSettings;
+  /** `oidc.token_endpoint_auth_method`, which the editing form does not touch. */
+  tokenEndpointAuthMethod?: string;
+  baseUrl?: string;
+}
+
+/**
+ * Builds the check input from the merged settings, so the self-test always
+ * evaluates the configuration a restart would read.
+ */
+export function loginSelfTestConfigFrom(input: LoginSelfTestSettingsInput): LoginSelfTestConfig {
+  return {
+    issuer: coerceString(input.settings.issuer),
+    scope: coerceString(input.settings.scope),
+    endSessionEndpoint: coerceString(input.settings.end_session_endpoint),
+    postLogoutRedirectUri: coerceString(input.settings.post_logout_redirect_uri),
+    idpLogoutEnabled: input.settings.logout_idp === true,
+    tokenEndpointAuthMethod: coerceString(input.tokenEndpointAuthMethod),
+    baseUrl: coerceString(input.baseUrl),
+  };
 }
 
 /** What reading the discovery document produced, success or failure. */
