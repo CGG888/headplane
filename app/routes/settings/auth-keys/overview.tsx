@@ -5,6 +5,7 @@ import Code from "~/components/code";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import Select from "~/components/select";
+import { SettingsPage } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import {
@@ -18,6 +19,7 @@ import { isUserPrincipal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
 import type { PreAuthKey } from "~/types";
 import type { User } from "~/types/User";
+import cn from "~/utils/cn";
 import log from "~/utils/log";
 import { getUserDisplayName } from "~/utils/user";
 
@@ -200,39 +202,42 @@ export default function Page({
   };
 
   return (
-    <div className="flex flex-col md:w-2/3">
-      <p className="text-md mb-8">
-        <Link className="font-medium" to="/settings">
-          {t("settings.overview.title")}
-        </Link>
-        <span className="mx-2">/</span> {t("settings.authKeys.breadcrumb")}
-      </p>
-      {!access ? (
-        <Notice title={t("settings.authKeys.restrictedTitle")} variant="warning">
-          {t("settings.authKeys.restrictedBody")}
-        </Notice>
-      ) : missing.length > 0 ? (
-        <Notice title={t("settings.authKeys.missingTitle")} variant="error">
-          {t("settings.authKeys.missingBody")}
-          {missing.map(({ user }, index) => (
-            <>
-              <Code key={user.id}>{getUserDisplayName(user, t("machines.common.tagOwned"))}</Code>
-              {index < missing.length - 1 ? ", " : ". "}
-            </>
-          ))}
-          {t("settings.authKeys.missingFooter")}
-        </Notice>
-      ) : undefined}
-      <h1 className="mb-2 text-2xl font-medium">{t("settings.authKeys.title")}</h1>
-      <p className="mb-4">
-        {tr("settings.overview.preAuthBody", {
-          link: (
-            <Link external styled to="https://tailscale.com/kb/1085/auth-keys/">
-              {t("settings.overview.tailscaleDocs")}
-            </Link>
-          ),
-        })}
-      </p>
+    <SettingsPage
+      breadcrumb={
+        <>
+          <Link className="font-medium" to="/settings">
+            {t("settings.overview.title")}
+          </Link>
+          <span className="mx-2">/</span> {t("settings.authKeys.breadcrumb")}
+        </>
+      }
+      description={tr("settings.overview.preAuthBody", {
+        link: (
+          <Link external styled to="https://tailscale.com/kb/1085/auth-keys/">
+            {t("settings.overview.tailscaleDocs")}
+          </Link>
+        ),
+      })}
+      notices={
+        !access ? (
+          <Notice title={t("settings.authKeys.restrictedTitle")} variant="warning">
+            {t("settings.authKeys.restrictedBody")}
+          </Notice>
+        ) : missing.length > 0 ? (
+          <Notice title={t("settings.authKeys.missingTitle")} variant="error">
+            {t("settings.authKeys.missingBody")}
+            {missing.map(({ user }, index) => (
+              <>
+                <Code key={user.id}>{getUserDisplayName(user, t("machines.common.tagOwned"))}</Code>
+                {index < missing.length - 1 ? ", " : ". "}
+              </>
+            ))}
+            {t("settings.authKeys.missingFooter")}
+          </Notice>
+        ) : undefined
+      }
+      title={t("settings.authKeys.title")}
+    >
       <AddAuthKey
         currentHeadscaleUserId={currentHeadscaleUserId}
         currentSubject={currentSubject}
@@ -240,106 +245,119 @@ export default function Page({
         url={url}
         users={users}
       />
-      <div className="mt-4 flex flex-wrap items-end gap-4">
-        <Select
-          className="w-full"
-          defaultValue={ALL_USERS}
-          disabled={isDisabled}
-          label={t("settings.authKeys.userLabel")}
-          onValueChange={(value) => setSelectedUser(value ?? "")}
-          placeholder={t("settings.authKeys.userPlaceholder")}
-          items={[
-            { value: ALL_USERS, label: t("settings.authKeys.all") },
-            ...keys
-              .filter((k): k is { user: User; preAuthKeys: PreAuthKey[] } => k.user !== null)
-              .map(({ user }) => ({
-                value: user.id,
-                label: getUserDisplayName(user, t("machines.common.tagOwned")),
-              })),
-            ...(keys.some(({ user }) => user === null)
-              ? [{ value: TAG_ONLY, label: t("settings.authKeys.tagOnly") }]
-              : []),
-          ]}
-        />
-        <Select
-          className="w-full"
-          defaultValue="all"
-          disabled={isDisabled}
-          label={t("settings.authKeys.statusLabel")}
-          onValueChange={(value) => setStatus((value ?? "all") as AuthKeyStatus)}
-          placeholder={t("settings.authKeys.statusPlaceholder")}
-          items={[
-            { value: "all", label: t("settings.authKeys.statusAll") },
-            { value: "active", label: t("settings.authKeys.statusActive") },
-            { value: "expired", label: t("settings.authKeys.statusUsedExpired") },
-            { value: "reusable", label: t("settings.authKeys.statusReusable") },
-            { value: "ephemeral", label: t("settings.authKeys.statusEphemeral") },
-          ]}
-        />
-        <p className="text-sm text-mist-600 dark:text-mist-300">
-          {t("settings.authKeys.expiredCount", { count: expiredCount })}
-        </p>
-        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm text-mist-600 dark:text-mist-300">
-          <SelectCheckbox
-            aria-label={t("settings.authKeys.selectAll")}
-            checked={allSelected}
-            disabled={isDisabled || visibleIds.length === 0}
-            indeterminate={selectedVisible.length > 0 && !allSelected}
-            onChange={toggleAll}
+
+      {/* The list is the page, so it stays open; the card only groups the
+          filters with the rows they narrow. */}
+      <section
+        className={cn(
+          "flex flex-col gap-4 rounded-xl border p-4",
+          "border-mist-200 bg-white",
+          "dark:border-mist-800 dark:bg-mist-950/40",
+        )}
+      >
+        {/* The filters stay one row above the list they narrow, and the two
+              selects keep a readable width instead of filling the page. */}
+        <div className="flex flex-wrap items-end gap-4">
+          <Select
+            className="w-full sm:w-72"
+            defaultValue={ALL_USERS}
+            disabled={isDisabled}
+            label={t("settings.authKeys.userLabel")}
+            onValueChange={(value) => setSelectedUser(value ?? "")}
+            placeholder={t("settings.authKeys.userPlaceholder")}
+            items={[
+              { value: ALL_USERS, label: t("settings.authKeys.all") },
+              ...keys
+                .filter((k): k is { user: User; preAuthKeys: PreAuthKey[] } => k.user !== null)
+                .map(({ user }) => ({
+                  value: user.id,
+                  label: getUserDisplayName(user, t("machines.common.tagOwned")),
+                })),
+              ...(keys.some(({ user }) => user === null)
+                ? [{ value: TAG_ONLY, label: t("settings.authKeys.tagOnly") }]
+                : []),
+            ]}
           />
-          {t("settings.authKeys.selectAll")}
-        </label>
-      </div>
-      {selected.length > 0 ? (
-        <BulkExpireAuthKeys keys={expirableKeys} onClearSelection={() => setSelected([])} />
-      ) : null}
-      <TableList className="mt-4">
-        {keys.flatMap(({ preAuthKeys }) => preAuthKeys).length === 0 ? (
-          <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
-            <FileKey2 />
-            <p className="font-semibold">{t("settings.authKeys.empty")}</p>
-          </TableList.Item>
-        ) : filteredKeys.length === 0 ? (
-          <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
-            <FileKey2 />
-            <p className="font-semibold">{t("settings.authKeys.emptyFiltered")}</p>
-          </TableList.Item>
-        ) : (
-          filteredKeys.map((key) => {
-            // Tag-only keys have no user
-            if (!key.user) {
+          <Select
+            className="w-full sm:w-72"
+            defaultValue="all"
+            disabled={isDisabled}
+            label={t("settings.authKeys.statusLabel")}
+            onValueChange={(value) => setStatus((value ?? "all") as AuthKeyStatus)}
+            placeholder={t("settings.authKeys.statusPlaceholder")}
+            items={[
+              { value: "all", label: t("settings.authKeys.statusAll") },
+              { value: "active", label: t("settings.authKeys.statusActive") },
+              { value: "expired", label: t("settings.authKeys.statusUsedExpired") },
+              { value: "reusable", label: t("settings.authKeys.statusReusable") },
+              { value: "ephemeral", label: t("settings.authKeys.statusEphemeral") },
+            ]}
+          />
+          <p className="pb-2 text-sm text-mist-600 dark:text-mist-300">
+            {t("settings.authKeys.expiredCount", { count: expiredCount })}
+          </p>
+          <label className="ml-auto flex cursor-pointer items-center gap-2 pb-2 text-sm text-mist-600 dark:text-mist-300">
+            <SelectCheckbox
+              aria-label={t("settings.authKeys.selectAll")}
+              checked={allSelected}
+              disabled={isDisabled || visibleIds.length === 0}
+              indeterminate={selectedVisible.length > 0 && !allSelected}
+              onChange={toggleAll}
+            />
+            {t("settings.authKeys.selectAll")}
+          </label>
+        </div>
+        {selected.length > 0 ? (
+          <BulkExpireAuthKeys keys={expirableKeys} onClearSelection={() => setSelected([])} />
+        ) : null}
+        <TableList className="border-0">
+          {keys.flatMap(({ preAuthKeys }) => preAuthKeys).length === 0 ? (
+            <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
+              <FileKey2 />
+              <p className="font-semibold">{t("settings.authKeys.empty")}</p>
+            </TableList.Item>
+          ) : filteredKeys.length === 0 ? (
+            <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
+              <FileKey2 />
+              <p className="font-semibold">{t("settings.authKeys.emptyFiltered")}</p>
+            </TableList.Item>
+          ) : (
+            filteredKeys.map((key) => {
+              // Tag-only keys have no user
+              if (!key.user) {
+                return (
+                  <TableList.Item key={key.id}>
+                    <AuthKeyRow
+                      authKey={key}
+                      onSelectedChange={(checked) => toggleKey(key.id, checked)}
+                      selected={selected.includes(key.id)}
+                      user={null}
+                    />
+                  </TableList.Item>
+                );
+              }
+
+              // TODO: Why is Headscale using email as the user ID here?
+              // https://github.com/juanfont/headscale/issues/2520
+              const user = usersById.get(key.user.id);
+              if (!user) {
+                return null;
+              }
+
               return (
                 <TableList.Item key={key.id}>
                   <AuthKeyRow
                     authKey={key}
                     onSelectedChange={(checked) => toggleKey(key.id, checked)}
                     selected={selected.includes(key.id)}
-                    user={null}
+                    user={user}
                   />
                 </TableList.Item>
               );
-            }
-
-            // TODO: Why is Headscale using email as the user ID here?
-            // https://github.com/juanfont/headscale/issues/2520
-            const user = usersById.get(key.user.id);
-            if (!user) {
-              return null;
-            }
-
-            return (
-              <TableList.Item key={key.id}>
-                <AuthKeyRow
-                  authKey={key}
-                  onSelectedChange={(checked) => toggleKey(key.id, checked)}
-                  selected={selected.includes(key.id)}
-                  user={user}
-                />
-              </TableList.Item>
-            );
-          })
-        )}
-      </TableList>
-    </div>
+            })
+          )}
+        </TableList>
+      </section>
+    </SettingsPage>
   );
 }

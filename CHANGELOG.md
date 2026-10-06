@@ -1,5 +1,9 @@
 # Next
 
+## Fixes
+
+- **A settings card carrying an error now opens itself, everywhere.** The earlier pass made every settings card start closed and open on error, but the Headscale cards were missed: a failed save, run, probe or reload, an invalid value, a paste or source error, or a map file the checks mark as failing now expands the card that holds it — and so do the forms inside those cards (trusted proxies, OIDC, policy mode, region names and the map-file rows), which previously rendered their errors inside a card that stayed shut. The sync card also shows the failure of its Check and Run buttons now instead of swallowing it, and opens when either fails. Cards that cannot fail were left alone and a healthy card still stays closed.
+- **The settings destination pages and the DNS page fill the page like the rest of the interface.** They were still capped at a narrower container than the hub, the Overview and the machines list, which left their right edge short of the header's controls by up to 448px on a wide screen; the shared cap is gone, so every settings page and the DNS page use the same content width, and both areas were tidied to use it — field rows in two columns so labels stop drifting, filters in their own card, the audit and notification lists on proper grids, readable line lengths instead of full-width paragraphs, and on the DNS page a card shell with the tailnet name beside MagicDNS, the nameservers grouped global-first, and the records laid out as a type/name/value/remove grid. Address masking and its reveal badges are untouched.
 # 0.22.12 (October 6, 2026)
 
 ## Changes

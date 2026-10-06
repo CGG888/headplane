@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -40,6 +41,11 @@ interface OidcSelfTestProps {
    * so it needs the IAM capability but no write access to the config file.
    */
   canTest: boolean;
+  /**
+   * Reports whether this section is showing an error, up through the OIDC card
+   * that renders it, so the page's card can open on a failed run.
+   */
+  onErrorChange?: (hasError: boolean) => void;
 }
 
 /**
@@ -47,7 +53,7 @@ interface OidcSelfTestProps {
  * result renders in place, so an operator can compare what Headscale will do
  * against what the identity provider advertises without starting a sign-in.
  */
-export default function OidcSelfTest({ canTest }: OidcSelfTestProps) {
+export default function OidcSelfTest({ canTest, onErrorChange }: OidcSelfTestProps) {
   const { t } = useI18n();
   const fetcher = useFetcher<HeadscaleSettingsResult>();
   const isBusy = fetcher.state !== "idle";
@@ -57,6 +63,12 @@ export default function OidcSelfTest({ canTest }: OidcSelfTestProps) {
     fetcher.data && !fetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[fetcher.data.errorCode])
       : undefined;
+
+  // The message below stays where it is drawn; only the fact that one exists
+  // travels up.
+  useEffect(() => {
+    onErrorChange?.(error !== undefined);
+  }, [error, onErrorChange]);
 
   return (
     <section className="flex w-full flex-col gap-4 border-t border-mist-200 pt-4 dark:border-mist-800">

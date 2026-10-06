@@ -17,6 +17,8 @@ import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import cn from "~/utils/cn";
 
+import DnsSection from "./dns-section";
+
 interface Props {
   searchDomains: string[];
   isDisabled: boolean;
@@ -33,9 +35,9 @@ export default function ManageDomains({ searchDomains, isDisabled, magic }: Prop
   }, [searchDomains]);
 
   return (
-    <div className="flex w-full flex-col sm:w-2/3">
-      <h1 className="mb-4 text-2xl font-medium">{t("dns.domains.title")}</h1>
-      <p className="mb-4">{t("dns.domains.body")}</p>
+    // The order of the list is the order clients try the domains in, so the
+    // rows stay compact and aligned rather than spread across the page.
+    <DnsSection description={t("dns.domains.body")} title={t("dns.domains.title")}>
       <DndContext
         collisionDetection={closestCorners}
         modifiers={[restrictToVerticalAxis, restrictToParentElement]}
@@ -64,7 +66,7 @@ export default function ManageDomains({ searchDomains, isDisabled, magic }: Prop
           setActiveId(event.active.id);
         }}
       >
-        <TableList>
+        <TableList className="max-w-4xl">
           {magic ? (
             <TableList.Item key="magic-dns-sd">
               <div
@@ -120,7 +122,7 @@ export default function ManageDomains({ searchDomains, isDisabled, magic }: Prop
           )}
         </TableList>
       </DndContext>
-    </div>
+    </DnsSection>
   );
 }
 

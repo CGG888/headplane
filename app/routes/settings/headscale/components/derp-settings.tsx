@@ -17,6 +17,7 @@ import type { DERPSettingsView } from "~/server/headscale/config-loader";
 import type { DerpMapFileView } from "~/server/headscale/derp-map-files";
 import cn from "~/utils/cn";
 
+import { computeDerpMapChecks } from "../derp-map-checks";
 import {
   isDerpIpv4Address,
   isDerpIpv6Address,
@@ -29,6 +30,29 @@ import DerpEmbeddedPreset, { type EmbeddedDerpPresetValues } from "./derp-embedd
 import DerpMapFiles from "./derp-map-files";
 import DerpPublicEndpoint from "./derp-public-endpoint";
 import RelayDnsResolver from "./relay-dns-resolver";
+
+/**
+ * Whether any configured map file fails a check. The rows inside the paths card
+ * print those verdicts, and the card starts closed, so the same check engine the
+ * rows use decides whether the card has to open. A warning — a path whose file
+ * has not been written yet, an unwritable one, an oversized one — is not an
+ * error and leaves the card closed, exactly as the System page treats a failed
+ * check as the only reason to open one.
+ */
+function mapFilesHaveFailures(mapFiles: DerpMapFileView[]): boolean {
+  return mapFiles.some((file) =>
+    computeDerpMapChecks({
+      path: file.path,
+      exists: file.exists,
+      isFile: file.isFile,
+      readable: file.readable,
+      writable: file.writable,
+      tooLarge: file.tooLarge,
+      unavailable: file.unavailable,
+      issues: file.issues,
+    }).some((check) => check.status === "fail"),
+  );
+}
 
 interface DerpSettingsProps {
   isDisabled: boolean;
@@ -147,6 +171,9 @@ export default function DerpSettings({
   const [urlLocalError, setUrlLocalError] = useState<string | undefined>();
   const [pathValue, setPathValue] = useState("");
   const [pathLocalError, setPathLocalError] = useState<string | undefined>();
+  // What the map-file rows report about their own saves: the card starts closed,
+  // so a row's failure has to reach it from outside the card's own children.
+  const [mapFilesError, setMapFilesError] = useState(false);
 
   const [autoUpdate, setAutoUpdate] = useState(settings.autoUpdateEnabled);
   const [updateFrequency, setUpdateFrequency] = useState(settings.updateFrequency);
@@ -285,6 +312,7 @@ export default function DerpSettings({
     <SettingsCollapsibleGroup>
       <SettingsCollapsible
         description={t("settings.headscale.derp.urlsBody")}
+        hasError={Boolean(urlLocalError ?? addUrlError ?? removeUrlError)}
         icon={Map}
         status={relaySourceStatus}
         summary={relaySourceSummary}
@@ -352,6 +380,9 @@ export default function DerpSettings({
 
       <SettingsCollapsible
         description={t("settings.headscale.derp.pathsBody")}
+        hasError={
+          Boolean(pathLocalError ?? addPathError) || mapFilesHaveFailures(mapFiles) || mapFilesError
+        }
         icon={MapPinned}
         status={{
           tone: settings.paths.length > 0 ? "ok" : "neutral",
@@ -372,6 +403,7 @@ export default function DerpSettings({
             <DerpMapFiles
               files={mapFiles}
               isDisabled={isDisabled || pathBusy}
+              onErrorChange={setMapFilesError}
               paths={settings.paths}
             />
           )}
@@ -406,6 +438,7 @@ export default function DerpSettings({
 
       <SettingsCollapsible
         description={t("settings.headscale.derp.refreshBody")}
+        hasError={Boolean(refreshError)}
         icon={RefreshCw}
         status={{
           tone: autoUpdate ? "ok" : "neutral",
@@ -454,6 +487,7 @@ export default function DerpSettings({
 
       <SettingsCollapsible
         description={t("settings.headscale.derp.serverBody")}
+        hasError={Boolean(serverLocalError ?? serverFetchError)}
         icon={Server}
         status={{
           tone: serverEnabled ? "ok" : "neutral",

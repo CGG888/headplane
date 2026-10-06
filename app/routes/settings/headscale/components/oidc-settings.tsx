@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -42,9 +42,20 @@ interface OidcSettingsProps {
   canTest: boolean;
   isDisabled: boolean;
   oidc: OIDCSettingsView | null;
+  /**
+   * Reports whether this section — its own save or either of the two sections it
+   * renders below — is showing an error. The card that holds it starts closed, so
+   * the page that owns that card has to hear about a rejected action.
+   */
+  onErrorChange?: (hasError: boolean) => void;
 }
 
-export default function OidcSettings({ canTest, isDisabled, oidc }: OidcSettingsProps) {
+export default function OidcSettings({
+  canTest,
+  isDisabled,
+  oidc,
+  onErrorChange,
+}: OidcSettingsProps) {
   const { t, tr } = useI18n();
   const fetcher = useFetcher<HeadscaleSettingsResult>();
   const isBusy = fetcher.state !== "idle";
@@ -55,6 +66,10 @@ export default function OidcSettings({ canTest, isDisabled, oidc }: OidcSettings
   const [onlyStartIfOidc, setOnlyStartIfOidc] = useState(settings.onlyStartIfOIDCIsAvailable);
   const [pkceEnabled, setPkceEnabled] = useState(settings.pkceEnabled);
   const [pkceMethod, setPkceMethod] = useState(settings.pkceMethod);
+  // What the extra-parameter editor and the self-test report about themselves,
+  // kept apart so one resolving cannot clear the other's failure.
+  const [extraParamsError, setExtraParamsError] = useState(false);
+  const [selfTestError, setSelfTestError] = useState(false);
 
   const disabled = isDisabled || isBusy;
   const error =
@@ -62,6 +77,12 @@ export default function OidcSettings({ canTest, isDisabled, oidc }: OidcSettings
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[fetcher.data.errorCode])
       : undefined;
   const saved = Boolean(fetcher.data?.success) && !isBusy;
+
+  // The messages stay where they are drawn, inside this section and the two
+  // below it; only the fact that one exists travels up, as one value.
+  useEffect(() => {
+    onErrorChange?.(error !== undefined || extraParamsError || selfTestError);
+  }, [error, extraParamsError, onErrorChange, selfTestError]);
 
   return (
     <section className="flex w-full flex-col gap-4">
@@ -227,8 +248,12 @@ export default function OidcSettings({ canTest, isDisabled, oidc }: OidcSettings
         </SettingsActions>
       </fetcher.Form>
 
-      <OidcExtraParams extraParams={settings.extraParams} isDisabled={isDisabled} />
-      <OidcSelfTest canTest={canTest} />
+      <OidcExtraParams
+        extraParams={settings.extraParams}
+        isDisabled={isDisabled}
+        onErrorChange={setExtraParamsError}
+      />
+      <OidcSelfTest canTest={canTest} onErrorChange={setSelfTestError} />
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -19,6 +19,11 @@ interface Row {
 interface OidcExtraParamsProps {
   isDisabled: boolean;
   extraParams: Record<string, string>;
+  /**
+   * Reports whether this section is showing an error, up through the OIDC card
+   * that renders it, so the page's card can open on a rejected save.
+   */
+  onErrorChange?: (hasError: boolean) => void;
 }
 
 /**
@@ -26,7 +31,11 @@ interface OidcExtraParamsProps {
  * identity provider's authorization endpoint, so the whole map is saved at
  * once: an empty list removes the key from the file.
  */
-export default function OidcExtraParams({ isDisabled, extraParams }: OidcExtraParamsProps) {
+export default function OidcExtraParams({
+  isDisabled,
+  extraParams,
+  onErrorChange,
+}: OidcExtraParamsProps) {
   const { t } = useI18n();
   const fetcher = useFetcher<HeadscaleSettingsResult>();
   const isBusy = fetcher.state !== "idle";
@@ -44,6 +53,12 @@ export default function OidcExtraParams({ isDisabled, extraParams }: OidcExtraPa
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[fetcher.data.errorCode])
       : undefined;
   const saved = fetcher.state === "idle" && Boolean(fetcher.data?.success);
+
+  // The message below stays where it is drawn; only the fact that one exists
+  // travels up.
+  useEffect(() => {
+    onErrorChange?.(error !== undefined);
+  }, [error, onErrorChange]);
 
   function addRow() {
     setRows((current) => [...current, { id: nextId, name: "", value: "" }]);

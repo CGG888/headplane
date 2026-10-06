@@ -105,9 +105,7 @@ export default function AddAuthKey({
         setIsOpen(open);
       }}
     >
-      <Button className="my-4" onClick={() => setIsOpen(true)}>
-        {t("settings.addKey.create")}
-      </Button>
+      <Button onClick={() => setIsOpen(true)}>{t("settings.addKey.create")}</Button>
       {createdKey ? (
         <DialogPanel variant="unactionable">
           <Title>{t("settings.addKey.createdTitle")}</Title>

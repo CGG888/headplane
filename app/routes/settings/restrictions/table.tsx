@@ -66,7 +66,9 @@ export default function RestrictionList({ type, values, isDisabled }: Restrictio
     // px-1 -mx-1 gives focus rings on buttons room to render without being
     // clipped by overflow-y-auto (which implicitly forces overflow-x).
     <div className="-mx-1 max-h-96 min-h-0 overflow-y-auto px-1">
-      <TableList className="border-0">
+      {/* One short value per row: the list keeps a readable measure so the
+          remove button never sits a screen away from the entry it removes. */}
+      <TableList className="max-w-4xl border-0">
         {values.length > 0 ? (
           values.map((value) => (
             <TableList.Item className="gap-3" key={`${type}-${value}`}>

@@ -13,10 +13,20 @@ import { validateTrustedProxyCidr } from "../trusted-proxies";
 
 interface TrustedProxiesProps {
   isDisabled: boolean;
+  /**
+   * Reports whether this section is showing an error. The card it sits in starts
+   * closed, so the page that owns that card has to hear about a failure the
+   * section renders on its own.
+   */
+  onErrorChange?: (hasError: boolean) => void;
   proxies: string[];
 }
 
-export default function TrustedProxies({ isDisabled, proxies }: TrustedProxiesProps) {
+export default function TrustedProxies({
+  isDisabled,
+  onErrorChange,
+  proxies,
+}: TrustedProxiesProps) {
   const { t } = useI18n();
 
   // Separate fetchers keep a removal from clearing a half-typed entry, and
@@ -47,6 +57,12 @@ export default function TrustedProxies({ isDisabled, proxies }: TrustedProxiesPr
     removeFetcher.data && !removeFetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[removeFetcher.data.errorCode])
       : undefined;
+
+  // The messages above stay where they are drawn; only the fact that one exists
+  // travels up, and only as a value the page can compare.
+  useEffect(() => {
+    onErrorChange?.(Boolean(localError ?? addError ?? removeError));
+  }, [addError, localError, onErrorChange, removeError]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     const proxy = value.trim();

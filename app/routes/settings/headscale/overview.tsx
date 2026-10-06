@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Tags,
 } from "lucide-react";
+import { useState } from "react";
 import { data } from "react-router";
 import type { ShouldRevalidateFunction, ShouldRevalidateFunctionArgs } from "react-router";
 
@@ -446,6 +447,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   } = loaderData;
   const isDisabled = writable ? !access : true;
 
+  // The cards below hold their forms, and a card's children only mount while it
+  // is open. The failures those forms render are therefore reported up here, so
+  // the card itself can still open on one: the flag is a boolean, the message
+  // stays where it was always printed, and a card with nothing to report starts
+  // closed like every other card on the page.
+  const [oidcError, setOidcError] = useState(false);
+  const [trustedProxiesError, setTrustedProxiesError] = useState(false);
+  const [policyError, setPolicyError] = useState(false);
+  const [regionNamesError, setRegionNamesError] = useState(false);
+
   // Which relays clients are handed, shown above the DERP blocks so it is
   // readable without opening any of them.
   const relaySource = classifyDerpRelaySource({
@@ -523,6 +534,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="oidc">
           <SettingsCollapsible
+            hasError={oidcError}
             icon={KeyRound}
             status={{
               tone: oidcConfigured ? "ok" : "warn",
@@ -537,13 +549,19 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }
             title={t("settings.headscale.oidcTitle")}
           >
-            <OidcSettings canTest={access} isDisabled={isDisabled} oidc={oidc} />
+            <OidcSettings
+              canTest={access}
+              isDisabled={isDisabled}
+              oidc={oidc}
+              onErrorChange={setOidcError}
+            />
           </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="trusted-proxies">
           <SettingsCollapsible
             description={t("settings.headscale.trustedProxiesBody")}
+            hasError={trustedProxiesError}
             icon={ShieldCheck}
             status={{
               tone: trustedProxies.length > 0 ? "ok" : "neutral",
@@ -553,13 +571,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("settings.headscale.trustedProxiesTitle")}
           >
-            <TrustedProxies isDisabled={isDisabled} proxies={trustedProxies} />
+            <TrustedProxies
+              isDisabled={isDisabled}
+              onErrorChange={setTrustedProxiesError}
+              proxies={trustedProxies}
+            />
           </SettingsCollapsible>
         </SettingsPanel>
 
         <SettingsPanel value="policy">
           <SettingsCollapsible
             description={t("settings.headscale.policyBody")}
+            hasError={policyError}
             icon={Scale}
             status={{
               tone: policyMode === "database" ? "ok" : "neutral",
@@ -571,7 +594,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             summary={t("settings.headscale.policySummary", { mode: policyMode })}
             title={t("settings.headscale.policyTitle")}
           >
-            <PolicyModeSettings isDisabled={isDisabled} mode={policyMode} path={policyPath} />
+            <PolicyModeSettings
+              isDisabled={isDisabled}
+              mode={policyMode}
+              onErrorChange={setPolicyError}
+              path={policyPath}
+            />
           </SettingsCollapsible>
         </SettingsPanel>
 
@@ -583,7 +611,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 level: advanced.logLevel,
               })}
             </p>
-            <p className="text-sm text-mist-600 dark:text-mist-400">
+            {/* Intro copy keeps a readable measure now that the page is wide. */}
+            <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
               {t("settings.headscale.advancedBody")}
             </p>
           </div>
@@ -591,7 +620,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </SettingsPanel>
 
         <SettingsPanel value="derp">
-          <p className="text-sm text-mist-600 dark:text-mist-400">
+          <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
             {t("settings.headscale.derp.body")}
           </p>
           <DerpSettings
@@ -635,6 +664,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <SettingsPanel value="derp-regions">
           <SettingsCollapsible
             description={t("settings.headscale.derp.regionNamesBody")}
+            hasError={regionNamesError}
             icon={Tags}
             status={{
               tone: Object.keys(derpRegionNames).length > 0 ? "ok" : "neutral",
@@ -644,7 +674,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("settings.headscale.derp.regionNamesTitle")}
           >
-            <DerpRegionNames isDisabled={isDisabled} names={derpRegionNames} />
+            <DerpRegionNames
+              isDisabled={isDisabled}
+              names={derpRegionNames}
+              onErrorChange={setRegionNamesError}
+            />
           </SettingsCollapsible>
         </SettingsPanel>
 
@@ -656,7 +690,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 {t("settings.headscale.overviewDisplayOnly")}
               </SettingsStatus>
             </p>
-            <p className="text-sm text-mist-600 dark:text-mist-400">
+            <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
               {t("settings.headscale.overviewBody")}
             </p>
           </div>

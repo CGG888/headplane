@@ -15,10 +15,20 @@ type PolicyMode = "file" | "database";
 interface PolicyModeProps {
   isDisabled: boolean;
   mode: PolicyMode;
+  /**
+   * Reports whether this section is showing an error. The card it sits in starts
+   * closed, so the page that owns that card has to hear about a rejected save.
+   */
+  onErrorChange?: (hasError: boolean) => void;
   path: string;
 }
 
-export default function PolicyModeSettings({ isDisabled, mode, path }: PolicyModeProps) {
+export default function PolicyModeSettings({
+  isDisabled,
+  mode,
+  onErrorChange,
+  path,
+}: PolicyModeProps) {
   const { t, tr } = useI18n();
   const fetcher = useFetcher<HeadscaleSettingsResult>();
   const [selected, setSelected] = useState<PolicyMode>(mode);
@@ -40,6 +50,12 @@ export default function PolicyModeSettings({ isDisabled, mode, path }: PolicyMod
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[fetcher.data.errorCode])
       : undefined;
   const saved = Boolean(fetcher.data?.success) && !isBusy;
+
+  // The message below stays where it is drawn; only the fact that one exists
+  // travels up, so the page's card can open on it.
+  useEffect(() => {
+    onErrorChange?.(error !== undefined);
+  }, [error, onErrorChange]);
 
   return (
     <section className="flex w-full flex-col">

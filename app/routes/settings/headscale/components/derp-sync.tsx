@@ -153,6 +153,17 @@ export default function DerpSyncSettings({
     echoFetcher.data && !echoFetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[echoFetcher.data.errorCode])
       : undefined;
+  // Check and Run now report where they were started, like every other action on
+  // this card: a rejected request would otherwise leave the two buttons looking
+  // like nothing ever happened.
+  const checkError =
+    checkFetcher.data && !checkFetcher.data.success
+      ? t(HEADSCALE_SETTINGS_ERROR_KEYS[checkFetcher.data.errorCode])
+      : undefined;
+  const runError =
+    runFetcher.data && !runFetcher.data.success
+      ? t(HEADSCALE_SETTINGS_ERROR_KEYS[runFetcher.data.errorCode])
+      : undefined;
 
   // Once an echo save lands, the loader revalidates with the stored (normalized)
   // values, so the form follows the file rather than the text that was typed.
@@ -208,6 +219,11 @@ export default function DerpSyncSettings({
   return (
     <SettingsCollapsible
       description={t("settings.headscale.derp.sync.body")}
+      hasError={
+        Boolean(error ?? echoError ?? checkError ?? runError) ||
+        last?.failure !== undefined ||
+        last?.error !== undefined
+      }
       icon={Wifi}
       status={{
         tone: settings.enabled ? "ok" : "neutral",
@@ -398,6 +414,19 @@ export default function DerpSyncSettings({
               </Button>
             </runFetcher.Form>
           </div>
+
+          {checkError ? (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {checkError}
+            </p>
+          ) : undefined}
+
+          {runError ? (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {runError}
+            </p>
+          ) : undefined}
+
           <p className="text-sm text-mist-600 dark:text-mist-400">
             {t("settings.headscale.derp.sync.checkNote")}
           </p>

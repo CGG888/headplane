@@ -158,6 +158,7 @@ export default function RelayDnsResolver() {
   return (
     <SettingsCollapsible
       description={t("settings.headscale.derp.relayDnsBody")}
+      hasError={Boolean(localError ?? editError) || loadFailed}
       icon={Globe}
       status={{
         tone: servers.length > 0 ? "ok" : "neutral",

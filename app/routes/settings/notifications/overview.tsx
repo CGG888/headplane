@@ -146,24 +146,28 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
           </span>
         </SettingsField>
 
-        <Input
-          description={t("settings.notifications.webhookUrlDescription")}
-          label={t("settings.notifications.webhookUrlLabel")}
-          name="webhook_url"
-          onChange={setWebhookUrl}
-          placeholder="https://example.com/headplane-hook"
-          value={webhookUrl}
-        />
+        {/* The two connection fields pair up on a wide page; the switch keeps
+            the full row because its help text is a sentence, not a label. */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Input
+            description={t("settings.notifications.webhookUrlDescription")}
+            label={t("settings.notifications.webhookUrlLabel")}
+            name="webhook_url"
+            onChange={setWebhookUrl}
+            placeholder="https://example.com/headplane-hook"
+            value={webhookUrl}
+          />
 
-        <Input
-          autoComplete="off"
-          description={t("settings.notifications.secretDescription")}
-          label={t("settings.notifications.secretLabel")}
-          name="secret"
-          onChange={setSecret}
-          type="password"
-          value={secret}
-        />
+          <Input
+            autoComplete="off"
+            description={t("settings.notifications.secretDescription")}
+            label={t("settings.notifications.secretLabel")}
+            name="secret"
+            onChange={setSecret}
+            type="password"
+            value={secret}
+          />
+        </div>
 
         <SettingsActions>
           <Button disabled={saveFetcher.state !== "idle"} type="submit" variant="heavy">
@@ -251,7 +255,7 @@ function EventsSection({ settings }: { settings: AlertSettings }) {
           description={t("settings.notifications.eventsDescription")}
           label={t("settings.notifications.eventsLabel")}
         >
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {ALERT_EVENT_ORDER.map((id) => (
               <label className="flex items-center gap-2 text-sm" key={id}>
                 <input

@@ -16,6 +16,11 @@ import { HEADSCALE_SETTINGS_ERROR_KEYS, type HeadscaleSettingsResult } from "../
 interface DerpRegionNamesProps {
   isDisabled: boolean;
   names: Record<string, string>;
+  /**
+   * Reports whether this section is showing an error. The card it sits in starts
+   * closed, so the page that owns that card has to hear about a rejected entry.
+   */
+  onErrorChange?: (hasError: boolean) => void;
 }
 
 /** The control that removes one manual region name. */
@@ -37,7 +42,11 @@ function RemoveButton({ disabled, label }: { disabled: boolean; label: string })
  * can only see as ids. The mapping is written to Headplane's data directory by
  * the settings action, not to Headscale's config.
  */
-export default function DerpRegionNames({ isDisabled, names }: DerpRegionNamesProps) {
+export default function DerpRegionNames({
+  isDisabled,
+  names,
+  onErrorChange,
+}: DerpRegionNamesProps) {
   const { t } = useI18n();
   const addFetcher = useFetcher<HeadscaleSettingsResult>();
   const removeFetcher = useFetcher<HeadscaleSettingsResult>();
@@ -68,6 +77,12 @@ export default function DerpRegionNames({ isDisabled, names }: DerpRegionNamesPr
     removeFetcher.data && !removeFetcher.data.success
       ? t(HEADSCALE_SETTINGS_ERROR_KEYS[removeFetcher.data.errorCode])
       : undefined;
+
+  // The messages above stay where they are drawn; only the fact that one exists
+  // travels up, and only as a value the page can compare.
+  useEffect(() => {
+    onErrorChange?.(Boolean(localError ?? addError ?? removeError));
+  }, [addError, localError, onErrorChange, removeError]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

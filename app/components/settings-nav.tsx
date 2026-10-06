@@ -12,6 +12,10 @@ import cn from "~/utils/cn";
  * collapsible card so the section looks like a single product rather than seven
  * different pages. The navigation deliberately echoes the top navigation (same
  * pill geometry, icons, indigo focus ring), just with a quieter container.
+ *
+ * The page box is the shell's own `container` width: the settings hub, every
+ * settings page and the machines list all end at the same right edge, under the
+ * header's controls. Long prose is constrained per block, never per page.
  */
 
 export interface SettingsPageProps {
@@ -27,7 +31,7 @@ export interface SettingsPageProps {
 
 export function SettingsPage(props: SettingsPageProps) {
   return (
-    <div className={cn("flex w-full flex-col gap-5 md:max-w-4xl", props.className)}>
+    <div className={cn("flex w-full flex-col gap-5", props.className)}>
       <header className="flex flex-col gap-1">
         {props.breadcrumb ? (
           <nav className="text-sm text-mist-600 dark:text-mist-400">{props.breadcrumb}</nav>

@@ -10,6 +10,7 @@ import cn from "~/utils/cn";
 
 import AddRecord from "../dialogs/add-record";
 import ImportRecords from "../dialogs/import-records";
+import DnsSection from "./dns-section";
 import ExportRecords from "./export-records";
 
 interface Props {
@@ -21,47 +22,49 @@ export default function ManageRecords({ records, isDisabled }: Props) {
   const { t, tr } = useI18n();
 
   return (
-    <div className="flex w-full flex-col sm:w-2/3">
-      <h1 className="mb-4 text-2xl font-medium">{t("dns.records.title")}</h1>
-      <p>
-        {tr("dns.records.body", {
-          a: <Code>A</Code>,
-          aaaa: <Code>AAAA</Code>,
-          link: (
-            <Link external styled to="https://headscale.net/stable/ref/dns">
-              {t("common.learnMore")}
-            </Link>
-          ),
-        })}
-      </p>
-      <div className="mt-4">
-        <TableList className="mb-8">
+    <DnsSection
+      description={tr("dns.records.body", {
+        a: <Code>A</Code>,
+        aaaa: <Code>AAAA</Code>,
+        link: (
+          <Link external styled to="https://headscale.net/stable/ref/dns">
+            {t("common.learnMore")}
+          </Link>
+        ),
+      })}
+      title={t("dns.records.title")}
+    >
+      <div className="flex flex-col gap-4">
+        {/* Type, name and target are columns, so records line up with each
+            other instead of each row floating on its own. */}
+        <TableList className="max-w-4xl">
           {records.length === 0 ? (
             <TableList.Item>
               <p className="mx-auto opacity-50">{t("dns.records.empty")}</p>
             </TableList.Item>
           ) : (
             records.map((record) => (
-              <TableList.Item key={`${record.name}-${record.value}`}>
-                <div className="flex w-full items-center gap-2">
-                  <p
-                    className={cn(
-                      "font-mono text-sm font-bold py-1 px-2 rounded-md text-center",
-                      "bg-mist-100 dark:bg-mist-700/30 min-w-12",
-                    )}
-                  >
-                    {record.type}
-                  </p>
-                  <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-2">
-                    {/* The record name and its target are a hostname and an
-                        address, so both are masked until revealed. The add and
-                        remove controls below are untouched. */}
-                    <MaskedText className="font-mono text-sm" value={record.name} />
-                    <MaskedText
-                      className="font-mono text-sm opacity-70 sm:opacity-100"
-                      value={record.value}
-                    />
-                  </div>
+              <TableList.Item
+                className="gap-2 p-3 sm:grid sm:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3"
+                key={`${record.name}-${record.value}`}
+              >
+                <p
+                  className={cn(
+                    "font-mono text-sm font-bold py-1 px-2 rounded-md text-center",
+                    "bg-mist-100 dark:bg-mist-700/30 min-w-12",
+                  )}
+                >
+                  {record.type}
+                </p>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:contents">
+                  {/* The record name and its target are a hostname and an
+                      address, so both are masked until revealed. The add and
+                      remove controls below are untouched. */}
+                  <MaskedText className="min-w-0 font-mono text-sm" value={record.name} />
+                  <MaskedText
+                    className="min-w-0 font-mono text-sm opacity-70 sm:opacity-100"
+                    value={record.value}
+                  />
                 </div>
                 <Form method="POST">
                   <input name="action_id" type="hidden" value="remove_record" />
@@ -86,6 +89,6 @@ export default function ManageRecords({ records, isDisabled }: Props) {
           <ExportRecords records={records} />
         </div>
       </div>
-    </div>
+    </DnsSection>
   );
 }

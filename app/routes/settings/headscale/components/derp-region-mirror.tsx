@@ -768,6 +768,31 @@ export default function DerpRegionMirror({
   const pathReport =
     pathAction === "manual" ? undefined : pathAction === "save" ? savePathReport : runPathReport;
 
+  // Every failure this card prints, so a collapsed card opens on any of them: the
+  // fetcher results it reports right where each action was started, the source
+  // read behind the table, and the newest run it shows — a run that failed, or a
+  // write that landed but whose reload did not. The refused probe start is not
+  // among them: the card follows the run already in flight instead of printing
+  // that the machine was busy.
+  const cardError =
+    [
+      saveError,
+      checkError,
+      runError,
+      reassignError,
+      namesError,
+      probeError,
+      liveProbe.error,
+      pasteError,
+      clearPasteError,
+      pathError,
+      regionError,
+    ].some((message) => message !== undefined) ||
+    actionRun?.outcome === "failed" ||
+    actionRun?.reload === "failed" ||
+    last?.outcome === "failed" ||
+    last?.reload === "failed";
+
   // The hover hint the operator had to guess at before: which path this card is
   // talking about, and everything Headscale's list holds right now.
   const pathHint = t("settings.headscale.derp.mirror.pathHint", {
@@ -956,6 +981,7 @@ export default function DerpRegionMirror({
   return (
     <SettingsCollapsible
       description={t("settings.headscale.derp.mirror.regionsBody")}
+      hasError={cardError}
       icon={Globe}
       status={{
         tone: pathNeedsAttention
@@ -1703,6 +1729,7 @@ export default function DerpRegionMirror({
 
         <SettingsCollapsible
           description={t("settings.headscale.derp.mirror.lastRunBody")}
+          hasError={last !== undefined && (last.outcome === "failed" || last.reload === "failed")}
           icon={RefreshCw}
           nested
           status={{

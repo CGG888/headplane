@@ -968,16 +968,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <SettingsPage
-      // The dashboard is a grid of cards, not a form: it takes the page width
-      // every other page has. `SettingsPage` caps itself at `md:max-w-4xl` for
-      // the settings forms, so the one class is overridden here (and on the
-      // settings hub) to the shell's own `container` width — the same right
-      // edge the header's controls and the machines list share.
-      className="md:max-w-none"
-      description={t("overview.intro")}
-      title={t("overview.title")}
-    >
+    <SettingsPage description={t("overview.intro")} title={t("overview.title")}>
       {/* Personal, presentation-only: which cards this browser shows, and
           whether the addresses on them stay masked. */}
       <div className="flex flex-wrap justify-end gap-2">

@@ -1,5 +1,5 @@
 import { Eye, FileCode2, Pencil, RotateCcw, Save, Sparkles, X } from "lucide-react";
-import { memo, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
 
 import Button from "~/components/button";
@@ -59,11 +59,41 @@ interface DerpMapFilesProps {
   files: DerpMapFileView[];
   /** True when nothing may be saved (permission, or a read-only config file). */
   isDisabled: boolean;
+  /**
+   * Reports whether any row is showing a failed action. The card these rows sit
+   * in renders them only while it is open, so the page that owns that card has to
+   * hear about a failure before it can open on one.
+   */
+  onErrorChange?: (hasError: boolean) => void;
 }
 
-export default function DerpMapFiles({ paths, files, isDisabled }: DerpMapFilesProps) {
+export default function DerpMapFiles({
+  paths,
+  files,
+  isDisabled,
+  onErrorChange,
+}: DerpMapFilesProps) {
   const { t } = useI18n();
   const byPath = new Map(files.map((file) => [file.path, file]));
+
+  // The rows hold their own forms, so the paths they failed on are collected
+  // here and turned into the one report that travels up. A row that stays failing
+  // contributes the same list, so the report settles instead of repeating.
+  const [failedPaths, setFailedPaths] = useState<readonly string[]>([]);
+
+  const reportRowError = useCallback((path: string, hasError: boolean) => {
+    setFailedPaths((current) => {
+      if (current.includes(path) === hasError) {
+        return current;
+      }
+
+      return hasError ? [...current, path] : current.filter((entry) => entry !== path);
+    });
+  }, []);
+
+  useEffect(() => {
+    onErrorChange?.(failedPaths.length > 0);
+  }, [failedPaths, onErrorChange]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -80,7 +110,13 @@ export default function DerpMapFiles({ paths, files, isDisabled }: DerpMapFilesP
 
       <div className="flex flex-col divide-y divide-mist-200 rounded-lg border border-mist-200 dark:divide-mist-800 dark:border-mist-800">
         {paths.map((path) => (
-          <DerpMapFileRow file={byPath.get(path)} isDisabled={isDisabled} key={path} path={path} />
+          <DerpMapFileRow
+            file={byPath.get(path)}
+            isDisabled={isDisabled}
+            key={path}
+            onErrorChange={reportRowError}
+            path={path}
+          />
         ))}
       </div>
     </div>
@@ -90,12 +126,14 @@ export default function DerpMapFiles({ paths, files, isDisabled }: DerpMapFilesP
 interface DerpMapFileRowProps {
   file: DerpMapFileView | undefined;
   isDisabled: boolean;
+  /** Reports one row's failed actions, keyed by the path it was started on. */
+  onErrorChange?: (path: string, hasError: boolean) => void;
   path: string;
 }
 
 type RowMode = "closed" | "view" | "edit" | "templates";
 
-function DerpMapFileRow({ file, isDisabled, path }: DerpMapFileRowProps) {
+function DerpMapFileRow({ file, isDisabled, onErrorChange, path }: DerpMapFileRowProps) {
   const { t, locale } = useI18n();
   const saveFetcher = useFetcher<HeadscaleSettingsResult>();
   const restoreFetcher = useFetcher<HeadscaleSettingsResult>();
@@ -162,6 +200,17 @@ function DerpMapFileRow({ file, isDisabled, path }: DerpMapFileRowProps) {
   const settled = saveFetcher.state === "idle" ? saveFetcher.data : undefined;
   const saved = settled?.success === true ? settled : undefined;
   const restored = restoreFetcher.state === "idle" && restoreFetcher.data?.success === true;
+
+  // The save, rollback and removal results this row prints are reported by path;
+  // the messages themselves stay where they are drawn, in this row.
+  const rowError =
+    (saveFetcher.data !== undefined && !saveFetcher.data.success) ||
+    restoreError !== undefined ||
+    removeError !== undefined;
+
+  useEffect(() => {
+    onErrorChange?.(path, rowError);
+  }, [onErrorChange, path, rowError]);
 
   // The server is the authority: its issues replace the inline ones, which only
   // exist so a mistake is visible before the save button is pressed.

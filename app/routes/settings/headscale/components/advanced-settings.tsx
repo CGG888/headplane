@@ -177,6 +177,7 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
     <SettingsCollapsibleGroup>
       <SettingsCollapsible
         description={t("settings.headscale.advancedNodeBody")}
+        hasError={Boolean(nodeError)}
         icon={Clock}
         status={{ tone: "neutral", label: nodeExpiry }}
         title={t("settings.headscale.advancedNodeTitle")}
@@ -222,6 +223,7 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
 
       <SettingsCollapsible
         description={t("settings.headscale.advancedHaBody")}
+        hasError={Boolean(haLocalError ?? haError)}
         icon={Activity}
         status={{ tone: "neutral", label: `${haInterval} / ${haTimeout}` }}
         title={t("settings.headscale.advancedHaTitle")}
@@ -273,6 +275,7 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
 
       <SettingsCollapsible
         description={t("settings.headscale.advancedLogBody")}
+        hasError={Boolean(logError)}
         icon={ScrollText}
         status={{ tone: "neutral", label: logLevel }}
         title={t("settings.headscale.advancedLogTitle")}
@@ -321,6 +324,7 @@ export default function AdvancedSettings({ isDisabled, settings }: AdvancedSetti
 
       <SettingsCollapsible
         description={t("settings.headscale.advancedFeaturesBody")}
+        hasError={Boolean(featureError)}
         icon={ToggleRight}
         title={t("settings.headscale.advancedFeaturesTitle")}
       >

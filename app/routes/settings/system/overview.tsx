@@ -475,7 +475,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <SettingsPanel value="diagnostics">
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium">{summarize(t, loaderData.diagnostics)}</p>
-            <p className="text-sm text-mist-600 dark:text-mist-400">
+            <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
               {t("settings.system.checksBody")}
             </p>
           </div>
@@ -489,7 +489,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 ? summarize(t, loaderData.configChecks)
                 : t("settings.system.summaryChecksUnavailable")}
             </p>
-            <p className="text-sm text-mist-600 dark:text-mist-400">
+            <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
               {t("settings.system.configChecks.body")}
             </p>
           </div>
@@ -503,7 +503,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </SettingsPanel>
 
         <SettingsPanel value="metrics">
-          <p className="text-sm text-mist-600 dark:text-mist-400">
+          <p className="max-w-3xl text-sm text-mist-600 dark:text-mist-400">
             {t("settings.system.metrics.body")}
           </p>
           <MetricsPanel metrics={loaderData.metrics} />
@@ -624,7 +624,9 @@ function CheckList({ checks }: { checks: readonly CheckRow[] }) {
   const { t } = useI18n();
 
   return (
-    <ul className="flex flex-col gap-3">
+    // Two check cards per row once there is room: the list is a set of peers,
+    // not a sequence, and each card keeps a readable text measure.
+    <ul className="grid gap-3 xl:grid-cols-2">
       {checks.map((diagnostic) => (
         <li
           className="rounded-lg border border-mist-200 p-4 dark:border-mist-700"

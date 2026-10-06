@@ -198,7 +198,9 @@ function AuditFilterForm({ filters, total }: { filters: AuditFilters; total: num
 
   return (
     <Form className="flex w-full flex-col gap-3" method="get">
-      <div className="flex flex-col gap-3">
+      {/* Three short filters sit side by side on a wide page instead of
+          stacking into one long column. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Input
           defaultValue={filters.actor}
           label={t("settings.audit.filterActor")}

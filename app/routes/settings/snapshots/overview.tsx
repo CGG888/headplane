@@ -150,14 +150,15 @@ function DataBackupSection() {
       icon={DatabaseBackup}
       title={t("settings.snapshots.dataBackup.title")}
     >
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-0.5">
+      {/* What the backup holds and what it leaves out read as two peers. */}
+      <div className="grid gap-4 text-sm lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
           <p className="font-medium">{t("settings.snapshots.dataBackup.contentsTitle")}</p>
-          <p className="opacity-80">{t("settings.snapshots.dataBackup.contents")}</p>
+          <p className="max-w-3xl opacity-80">{t("settings.snapshots.dataBackup.contents")}</p>
         </div>
-        <div className="flex flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
           <p className="font-medium">{t("settings.snapshots.dataBackup.excludesTitle")}</p>
-          <p className="opacity-80">{t("settings.snapshots.dataBackup.excludes")}</p>
+          <p className="max-w-3xl opacity-80">{t("settings.snapshots.dataBackup.excludes")}</p>
         </div>
       </div>
       <SettingsActions>

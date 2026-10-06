@@ -37,11 +37,15 @@ export default function ApiKeyRow({ apiKey, onSelectedChange, selected = false }
           onChange={onSelectedChange}
         />
       ) : null}
-      <div className="w-full">
-        <Attribute isCopyable name={t("settings.apiKeys.prefix")} value={apiKey.prefix} />
-        <Attribute name={t("settings.apiKeys.created")} value={createdAt} />
-        <Attribute name={t("settings.apiKeys.expiration")} value={expiration} />
-        <Attribute name={t("settings.apiKeys.lastSeen")} value={lastSeen} />
+      <div className="w-full min-w-0">
+        {/* Four short fields read as two columns on a wide page, so the values
+            stay close to their labels instead of drifting to the far edge. */}
+        <div className="grid gap-x-8 gap-y-0.5 lg:grid-cols-2">
+          <Attribute isCopyable name={t("settings.apiKeys.prefix")} value={apiKey.prefix} />
+          <Attribute name={t("settings.apiKeys.created")} value={createdAt} />
+          <Attribute name={t("settings.apiKeys.expiration")} value={expiration} />
+          <Attribute name={t("settings.apiKeys.lastSeen")} value={lastSeen} />
+        </div>
         {isExpired ? (
           // Headscale keeps expired keys in its list; say why there is no
           // delete action next to the record it applies to.

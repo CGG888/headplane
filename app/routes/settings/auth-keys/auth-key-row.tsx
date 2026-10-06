@@ -35,23 +35,27 @@ export default function AuthKeyRow({ authKey, user, onSelectedChange, selected =
           onChange={onSelectedChange}
         />
       ) : null}
-      <div className="w-full">
-        <Attribute name={t("settings.authKeyRow.key")} value={authKey.key} />
-        <Attribute name={t("settings.authKeyRow.user")} value={userDisplay} />
-        <Attribute
-          name={t("settings.authKeyRow.reusable")}
-          value={authKey.reusable ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
-        />
-        <Attribute
-          name={t("settings.authKeyRow.ephemeral")}
-          value={authKey.ephemeral ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
-        />
-        <Attribute
-          name={t("settings.authKeyRow.used")}
-          value={authKey.used ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
-        />
-        <Attribute name={t("settings.authKeyRow.created")} value={createdAt} />
-        <Attribute name={t("settings.authKeyRow.expiration")} value={expiration} />
+      <div className="w-full min-w-0">
+        {/* Two field columns on a wide page: each label keeps its own narrow
+            column instead of being spread across the whole row. */}
+        <div className="grid gap-x-8 gap-y-0.5 lg:grid-cols-2">
+          <Attribute name={t("settings.authKeyRow.key")} value={authKey.key} />
+          <Attribute name={t("settings.authKeyRow.user")} value={userDisplay} />
+          <Attribute
+            name={t("settings.authKeyRow.reusable")}
+            value={authKey.reusable ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
+          />
+          <Attribute
+            name={t("settings.authKeyRow.ephemeral")}
+            value={authKey.ephemeral ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
+          />
+          <Attribute
+            name={t("settings.authKeyRow.used")}
+            value={authKey.used ? t("settings.authKeyRow.yes") : t("settings.authKeyRow.no")}
+          />
+          <Attribute name={t("settings.authKeyRow.created")} value={createdAt} />
+          <Attribute name={t("settings.authKeyRow.expiration")} value={expiration} />
+        </div>
         {isExpired ? (
           // Headscale keeps expired and used keys in its list; say why there is
           // no delete action next to the record it applies to.

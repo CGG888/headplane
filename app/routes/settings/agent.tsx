@@ -464,7 +464,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           title={t("settings.agent.runtimeTitle")}
         >
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col">
+            {/* Label/value pairs sit in two columns so a path never pushes its
+                label to the far edge of a wide card. */}
+            <div className="grid gap-x-8 gap-y-0.5 lg:grid-cols-2">
               <Attribute
                 isCopyable
                 name={t("settings.agent.runtimeExecutable")}
