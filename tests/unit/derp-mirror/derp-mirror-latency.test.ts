@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { officialRegionLatencies } from "~/server/derp-mirror/latency";
+import {
+  locallyMeasuredRegionLatencies,
+  officialRegionLatencies,
+  preferredRegionLatencies,
+} from "~/server/derp-mirror/latency";
+import type { DerpMirrorLatency } from "~/server/derp-mirror/types";
 import type { HostInfo } from "~/types";
 import type { AgentHostRecord } from "~/utils/agent-coverage";
 
@@ -42,5 +47,68 @@ describe("measured relay latency per region", () => {
     expect(
       officialRegionLatencies([{ nodeKey: "a", host: {} as HostInfo, updatedAt: null }]),
     ).toEqual({});
+  });
+});
+
+/** One stored region, reduced to the fields these tests vary. */
+function measuredRegion(
+  regionId: number,
+  values: { bestV4?: number; bestV6?: number; nodes?: number[] },
+): DerpMirrorLatency["regions"][number] {
+  return {
+    regionId,
+    regionCode: `r${regionId}`,
+    ...(values.bestV4 === undefined ? {} : { bestV4: values.bestV4 }),
+    ...(values.bestV6 === undefined ? {} : { bestV6: values.bestV6 }),
+    nodes: (values.nodes ?? []).map((latencyMs, index) => ({
+      name: `n${index}`,
+      hostname: `n${index}.example.com`,
+      family: "ipv4" as const,
+      target: `44.1.1.${index + 1}`,
+      latencyMs,
+      method: "stun" as const,
+    })),
+    measuredAt: "2026-01-02T03:04:05.000Z",
+    source: "measured",
+  };
+}
+
+describe("latencies measured on this server", () => {
+  test("reduces each region to its fastest family, in milliseconds", () => {
+    const latency: DerpMirrorLatency = {
+      measuredAt: "2026-01-02T03:04:05.000Z",
+      outcome: "complete",
+      regions: [measuredRegion(20, { bestV4: 30, bestV6: 12 }), measuredRegion(3, { bestV4: 45 })],
+    };
+
+    expect(locallyMeasuredRegionLatencies(latency)).toEqual({ "20": 12, "3": 45 });
+  });
+
+  test("reads the per-node values of a record written without family bests", () => {
+    const latency: DerpMirrorLatency = {
+      measuredAt: "2026-01-02T03:04:05.000Z",
+      outcome: "complete",
+      regions: [measuredRegion(20, { nodes: [30, 12, 44] })],
+    };
+
+    expect(locallyMeasuredRegionLatencies(latency)).toEqual({ "20": 12 });
+  });
+
+  test("reads nothing from a record that has none", () => {
+    expect(locallyMeasuredRegionLatencies(undefined)).toEqual({});
+    expect(
+      locallyMeasuredRegionLatencies({
+        measuredAt: "2026-01-02T03:04:05.000Z",
+        outcome: "empty",
+        regions: [],
+      }),
+    ).toEqual({});
+  });
+
+  test("prefers the local value and keeps the reported one everywhere else", () => {
+    expect(preferredRegionLatencies({ "20": 12 }, { "20": 300, "3": 45 })).toEqual({
+      "20": 12,
+      "3": 45,
+    });
   });
 });

@@ -179,6 +179,42 @@ describe("DERP mirror file", () => {
     expect(read.last).toEqual(RUN);
   });
 
+  test("stores a local measurement alongside the settings it belongs to", async () => {
+    const latency = {
+      measuredAt: "2026-01-02T03:04:05.000Z",
+      outcome: "partial" as const,
+      regions: [
+        {
+          regionId: 20,
+          regionCode: "hkg",
+          bestV4: 12,
+          nodes: [
+            {
+              name: "hkg1",
+              hostname: "hkg1.example.com",
+              family: "ipv4" as const,
+              target: "44.1.1.1",
+              latencyMs: 12,
+              method: "stun" as const,
+            },
+          ],
+          measuredAt: "2026-01-02T03:04:05.000Z",
+          source: "measured" as const,
+        },
+      ],
+    };
+
+    await writeDerpMirrorSettings(dir, { ...DEFAULT_DERP_MIRROR_SETTINGS, latency });
+
+    const settings = await readDerpMirrorSettings(dir);
+    expect(settings.latency).toEqual(latency);
+    // The stored JSON is the settings object itself: no second file, no schema.
+    const raw = JSON.parse(await readFile(derpMirrorPath(dir), "utf8")) as {
+      settings: { latency?: unknown };
+    };
+    expect(raw.settings.latency).toEqual(latency);
+  });
+
   test("a settings save normalizes what it is handed", async () => {
     await writeDerpMirrorSettings(dir, {
       ...DEFAULT_DERP_MIRROR_SETTINGS,

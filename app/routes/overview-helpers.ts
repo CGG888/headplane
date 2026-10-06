@@ -684,6 +684,13 @@ export type DerpNodeSourceGap =
   | "unlisted"
   | "covered";
 
+/**
+ * A short hint a source that *does* list nodes still needs, because the nodes
+ * are not the ones clients receive: `unlisted` is the region filter's own file
+ * before `derp.paths` lists it.
+ */
+export type DerpNodeSourceNote = "unlisted";
+
 /** One node, as the card prints it: a name and the address a client dials. */
 export interface DerpNodeLine {
   name: string;
@@ -709,6 +716,8 @@ export interface DerpNodeSource {
   maps: DerpNodeSourceMap[];
   /** Why the source lists no node, or `undefined` when it lists at least one. */
   gap?: DerpNodeSourceGap;
+  /** Why the nodes it does list are not handed out yet, when that is the case. */
+  note?: DerpNodeSourceNote;
 }
 
 /** Headscale's own embedded relay, as the node card reads it. */
@@ -759,6 +768,11 @@ const DERP_NODE_SOURCE_ORDER: readonly DerpNodeSourceKind[] = [
  * embedded relay, the local files and the filtered file have taken their
  * regions: the regions a client learns from `derp.urls` that this machine does
  * not serve itself.
+ *
+ * A group the configuration does not load — the region filter's own file while
+ * `derp.paths` still leaves it out — keeps its nodes and gains a `note`; its
+ * nodes are counted in `total` but not in `served`, because nothing hands them
+ * to a client yet.
  */
 export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesView {
   const nodes: Record<DerpNodeSourceKind, DerpNodeLine[]> = {
@@ -787,6 +801,9 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
     mirror: 0,
     official: 0,
   };
+  // Sources with a file the configuration does not load: their nodes are real
+  // enough to count, but no client receives them yet.
+  const withheld = new Set<DerpNodeSourceKind>();
   const claimed = new Set<number>();
 
   // Headscale's own relay is one node, and it keeps its region id before any map
@@ -804,6 +821,9 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
   for (const group of input.groups) {
     const kind: DerpNodeSourceKind = group.kind === "remote" ? "official" : group.kind;
     maps[kind].push({ source: group.source, state: group.state });
+    if (group.unlisted === true) {
+      withheld.add(kind);
+    }
 
     for (const region of group.regions) {
       described[kind] += 1;
@@ -829,24 +849,31 @@ export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesVie
       maps[kind],
       input.mirrorEnabled,
     );
+    // A source nobody hands out is not served, but only while it has nodes to
+    // hand out: without any, the honest reason is its `gap`, not this note.
+    const notHandedOut = withheld.has(kind) && list.length > 0;
 
     return {
       kind,
-      served: kind !== "official",
+      served: kind !== "official" && !notHandedOut,
       nodes: list,
       maps: maps[kind],
       ...(gap === undefined ? {} : { gap }),
+      ...(notHandedOut ? { note: "unlisted" as const } : {}),
     };
   });
 
   const served = sources
     .filter((source) => source.served)
     .reduce((total, source) => total + source.nodes.length, 0);
+  // Every node any source describes, served here or not: a node an unlisted
+  // filter file holds is known even though no client receives it yet.
+  const total = sources.reduce((count, source) => count + source.nodes.length, 0);
 
   return {
     sources,
     served,
-    total: served + nodes.official.length,
+    total,
   };
 }
 
@@ -867,8 +894,9 @@ function sourceGap(
     case "embedded":
       return "disabled";
     case "mirror":
-      // Nothing tagged: either the filter is off, or its file is not one of the
-      // maps Headscale loads, which is the one case the operator has to fix.
+      // Nothing tagged: either the filter is off, or it names no file to read.
+      // A file it names is read whether or not `derp.paths` lists it, so an
+      // unlisted one reaches this point with nodes and a `note` instead.
       if (maps.length === 0) {
         return mirrorEnabled ? "unlisted" : "unconfigured";
       }

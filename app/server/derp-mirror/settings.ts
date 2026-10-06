@@ -9,7 +9,16 @@
 
 import { isAbsolute } from "node:path";
 
-import { DERP_MIRROR_INTERVAL_HOURS, type DerpMirrorIntervalHours } from "./types";
+import {
+  DERP_MIRROR_INTERVAL_HOURS,
+  type DerpLatencyNodeReading,
+  type DerpLatencyRegionReading,
+  type DerpMirrorIntervalHours,
+  type DerpMirrorLatency,
+  type DerpMirrorProbeOutcome,
+  type ProbeFamily,
+  type ProbeMethod,
+} from "./types";
 
 /**
  * Where the mirrored map is written when the operator has not chosen a path.
@@ -50,6 +59,13 @@ export interface DerpMirrorSettings {
    * reloads; the switch turns the automatic reload off.
    */
   autoReload: boolean;
+  /**
+   * The latencies this server measured itself, kept alongside the settings it
+   * belongs to (Headplane's own JSON store, not Headscale's configuration). The
+   * numbering prefers these over what the machines reported, which is what makes
+   * the official regions rankable at all on a mirrored setup.
+   */
+  latency?: DerpMirrorLatency;
 }
 
 export const DEFAULT_DERP_MIRROR_SETTINGS: DerpMirrorSettings = {
@@ -205,6 +221,141 @@ function normalizeRankedAt(value: unknown): string | undefined {
   return Number.isFinite(Date.parse(text)) ? text : undefined;
 }
 
+/** Non-empty text of a stored value, or undefined. */
+function readText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+/** One of a fixed set of literals, or undefined. */
+function readOneOf<T extends string>(values: readonly T[], value: unknown): T | undefined {
+  return typeof value === "string" && (values as readonly string[]).includes(value)
+    ? (value as T)
+    : undefined;
+}
+
+const PROBE_OUTCOMES: readonly DerpMirrorProbeOutcome[] = [
+  "complete",
+  "partial",
+  "empty",
+  "cancelled",
+];
+const PROBE_FAMILIES: readonly ProbeFamily[] = ["ipv4", "ipv6"];
+const PROBE_METHODS: readonly ProbeMethod[] = ["stun", "tcp"];
+
+/** A duration worth storing: a finite, non-negative number of milliseconds. */
+function readLatencyMs(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/** One stored node reading, or undefined when it is not one. */
+function normalizeLatencyNode(value: unknown): DerpLatencyNodeReading | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const name = readText(source.name);
+  const hostname = readText(source.hostname);
+  const target = readText(source.target);
+  const family = readOneOf(PROBE_FAMILIES, source.family);
+  const method = readOneOf(PROBE_METHODS, source.method);
+  const latencyMs = readLatencyMs(source.latencyMs);
+  if (
+    name === undefined ||
+    hostname === undefined ||
+    target === undefined ||
+    family === undefined ||
+    method === undefined ||
+    latencyMs === undefined
+  ) {
+    return undefined;
+  }
+
+  return { name, hostname, family, target, latencyMs, method };
+}
+
+/**
+ * One stored region reading, or undefined when it is not one. The source is
+ * forced to `measured`: this store only ever holds what this server probed, and
+ * a hand-edited file must not be able to pass a client-reported value off as
+ * one measured here.
+ */
+function normalizeLatencyRegion(
+  value: unknown,
+  fallbackAt: string,
+): DerpLatencyRegionReading | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const id = normalizeOfficialRegionId(source.regionId);
+  if (id === undefined) {
+    return undefined;
+  }
+
+  const nodes: DerpLatencyNodeReading[] = [];
+  if (Array.isArray(source.nodes)) {
+    for (const entry of source.nodes) {
+      const node = normalizeLatencyNode(entry);
+      if (node !== undefined) {
+        nodes.push(node);
+      }
+    }
+  }
+
+  const bestV4 = readLatencyMs(source.bestV4);
+  const bestV6 = readLatencyMs(source.bestV6);
+  if (nodes.length === 0 && bestV4 === undefined && bestV6 === undefined) {
+    return undefined;
+  }
+
+  const measuredAt = normalizeRankedAt(source.measuredAt) ?? fallbackAt;
+
+  return {
+    regionId: Number(id),
+    regionCode: readText(source.regionCode) ?? "",
+    ...(bestV4 === undefined ? {} : { bestV4 }),
+    ...(bestV6 === undefined ? {} : { bestV6 }),
+    nodes,
+    measuredAt,
+    source: "measured",
+  };
+}
+
+/**
+ * The stored local measurements, or undefined when there is nothing usable.
+ * The run timestamp is the anchor: a record without a readable one is not a
+ * measurement this build can trust or date, so it is dropped entirely and the
+ * numbering falls back to what the machines reported.
+ */
+export function normalizeDerpMirrorLatency(value: unknown): DerpMirrorLatency | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const measuredAt = normalizeRankedAt(source.measuredAt);
+  if (measuredAt === undefined) {
+    return undefined;
+  }
+
+  const regions: DerpLatencyRegionReading[] = [];
+  if (Array.isArray(source.regions)) {
+    for (const entry of source.regions) {
+      const region = normalizeLatencyRegion(entry, measuredAt);
+      if (region !== undefined) {
+        regions.push(region);
+      }
+    }
+  }
+
+  const outcome =
+    readOneOf(PROBE_OUTCOMES, source.outcome) ?? (regions.length > 0 ? "partial" : "empty");
+
+  return { measuredAt, outcome, regions };
+}
+
 /**
  * The target file, kept only when it is absolute. A relative path would resolve
  * against the process working directory — somewhere the operator did not mount —
@@ -227,6 +378,7 @@ export function normalizeDerpMirrorSettings(raw: unknown): DerpMirrorSettings {
       : {};
 
   const rankedAt = normalizeRankedAt(source.assignmentRankedAt);
+  const latency = normalizeDerpMirrorLatency(source.latency);
 
   return {
     enabled: source.enabled === true,
@@ -240,5 +392,6 @@ export function normalizeDerpMirrorSettings(raw: unknown): DerpMirrorSettings {
     // Only an explicit "false" turns the reload off; a document written before
     // the default changed, or one missing the key, gets the default (on).
     autoReload: source.autoReload !== false,
+    ...(latency === undefined ? {} : { latency }),
   };
 }

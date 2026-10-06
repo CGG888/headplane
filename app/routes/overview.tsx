@@ -97,9 +97,11 @@ import {
   declaredDerpAddresses,
   type DeclaredDerpAddress,
   derpNodeSources,
+  type DerpNodeSource,
   type DerpNodeSourceGap,
   type DerpNodeSourceKind,
   type DerpNodeSourceMap,
+  type DerpNodeSourceNote,
   formatByteSize,
   hasIpv6StunWarning,
   readExtraRecordsPath,
@@ -237,13 +239,29 @@ const NODE_SOURCE_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
   official: "overview.derp.nodesSourceOfficial",
 };
 
-/** What one source of the DERP nodes card is for, under its title. */
-const NODE_SOURCE_BODY_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
-  embedded: "overview.derp.nodesSourceEmbeddedBody",
-  local: "overview.derp.nodesSourceLocalBody",
-  mirror: "overview.derp.nodesSourceMirrorBody",
-  official: "overview.derp.nodesSourceOfficialBody",
+/**
+ * The hover text of one source row: what that source is for, kept off the card
+ * body so a row stays a title and its count.
+ */
+const NODE_SOURCE_HINT_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
+  embedded: "overview.derp.nodesSourceEmbeddedHint",
+  local: "overview.derp.nodesSourceLocalHint",
+  mirror: "overview.derp.nodesSourceMirrorHint",
+  official: "overview.derp.nodesSourceOfficialHint",
 };
+
+/** The one short hint a row with nodes still needs, when it needs one. */
+const NODE_SOURCE_NOTE_KEYS: Record<DerpNodeSourceNote, TranslationKey> = {
+  unlisted: "overview.derp.nodesMirrorUnlisted",
+};
+
+/**
+ * The keyboard ring the two scrolling boxes of the DERP nodes card share. Both
+ * boxes take focus so their overflow stays reachable without a pointer, which
+ * is the one thing a bounded height would otherwise hide.
+ */
+const SCROLL_BOX_RING =
+  "focus:outline-hidden focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1 dark:focus:ring-indigo-400/40 dark:focus:ring-offset-mist-900";
 
 type Attempt<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
@@ -491,7 +509,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // The configured maps, held apart by source. This is the same read the region
   // names come from — one pass per local file through the cached reader, one
   // fetch per URL through the shared remote cache — so the node card costs the
-  // page nothing beyond the documents it already reads.
+  // page nothing beyond the documents it already reads. The filter's own file is
+  // read here even while `derp.paths` leaves it out, which is why the switch is
+  // handed over with its path.
   const nodeInventoryLookup = (async () => {
     const mirror = await mirrorSettingsLookup;
     return loadDerpNodeInventory({
@@ -501,6 +521,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       updateFrequency: derp.updateFrequency,
       baseDir: configPath ? dirname(configPath) : undefined,
       mirrorPath: mirror.targetPath,
+      mirrorEnabled: mirror.enabled,
     });
   })();
 
@@ -707,9 +728,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const healthTone: SettingsStatusTone =
     healthTally.fail > 0 ? "error" : healthTally.warning > 0 ? "warn" : "ok";
 
-  // The cards that must stay visible whatever the stored choice says: one that
-  // carries a warning, an alert or a failure. The helper drops them from the
-  // hidden set, so nothing else has to remember to show them again.
+  // The cards whose own content is an alert, so they must stay visible whatever
+  // the stored choice says. The health summary is deliberately absent: it is a
+  // summary, not an alert, and the operator asked to be able to hide it even
+  // while it is not perfectly healthy — a failing check still reaches them
+  // through the notification webhooks. The helper drops the listed cards from
+  // the hidden set, so nothing else has to remember to show them again.
   const alertingCards = alertingOverviewCards({
     "versions-headplane": versions.headplane.updateAvailable,
     "versions-headscale": versions.headscale.updateAvailable,
@@ -725,7 +749,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       service.metrics.state === "unreachable" || service.metrics.state === "invalid",
     "counts-tailnet": counts.nodes === undefined,
     "counts-headplane": counts.auditEntries === undefined || counts.snapshots === undefined,
-    "health-summary": healthTally.fail > 0 || healthTally.warning > 0,
   });
 
   // The card visibility preference belongs to whoever is looking, so the page
@@ -860,7 +883,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
    * error: a relay that is switched off, a source nothing is configured for,
    * files nobody could read, a map that lists no node, a filtered file that is
    * not one of the maps Headscale loads, and an upstream this machine already
-   * covers completely.
+   * covers completely. Each is one short line: the row is a title and a count,
+   * and the reason it needs to state has to fit beside them.
    */
   const nodeSourceGap = (kind: DerpNodeSourceKind, gap: DerpNodeSourceGap) => {
     if (kind === "embedded") {
@@ -890,6 +914,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       default:
         return t("overview.derp.nodesEmpty");
     }
+  };
+
+  /**
+   * The one short hint a closed row shows, or `undefined` when the row and its
+   * count already say everything: why it lists no node, or — for the filter's
+   * file before `derp.paths` lists it — why nobody receives the nodes it does
+   * list.
+   */
+  const nodeSourceHint = (source: DerpNodeSource) => {
+    if (source.gap !== undefined) {
+      return nodeSourceGap(source.kind, source.gap);
+    }
+
+    return source.note === undefined ? undefined : t(NODE_SOURCE_NOTE_KEYS[source.note]);
   };
 
   /** Why one map of a source contributed nothing, in one short sentence. */
@@ -1214,100 +1252,119 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             }}
             title={t("overview.derp.nodesTitle")}
           >
-            {/* One block per source, so the counts read as a list: the embedded
+            {/* One row per source, so the counts read as a list: the embedded
                 relay first, then the two files this machine loads, then the
-                official map that only the clients reach. Each block opens onto
-                the node names, and nothing here resolves a name over DNS. */}
-            {nodeSources.map((source) => {
-              const nodes = capDerpSourceNodes(source.nodes);
+                official map that only the clients reach. The list keeps a
+                bounded height and scrolls in place, which is what keeps this
+                card from growing past its two siblings; the box itself takes
+                focus, so nothing the bound hides is out of reach of a
+                keyboard. Each row is a title, its count and at most one short
+                hint — the explanation of what a source is for is hover text. */}
+            <div
+              aria-label={t("overview.derp.nodesSourcesLabel")}
+              className={cn(
+                "flex max-h-80 flex-col gap-3 overflow-y-auto rounded-lg",
+                SCROLL_BOX_RING,
+              )}
+              role="group"
+              tabIndex={0}
+            >
+              {nodeSources.map((source) => {
+                const nodes = capDerpSourceNodes(source.nodes);
 
-              return (
-                <SettingsCollapsible
-                  key={source.kind}
-                  description={t(NODE_SOURCE_BODY_KEYS[source.kind])}
-                  status={{
-                    tone: source.served ? "neutral" : "warn",
-                    label: t("overview.derp.nodesCount", { count: source.nodes.length }),
-                  }}
-                  summary={
-                    source.gap === undefined ? undefined : nodeSourceGap(source.kind, source.gap)
-                  }
-                  title={
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {nodeSourceLabel(source.kind)}
-                      {source.served ? undefined : (
-                        <SettingsStatus tone="warn">
-                          {t("overview.derp.nodesNotServed")}
-                        </SettingsStatus>
-                      )}
-                    </span>
-                  }
-                >
-                  {source.nodes.length === 0 ? (
-                    <p className="text-sm text-mist-600 dark:text-mist-400">
-                      {source.gap === undefined
-                        ? t("overview.derp.nodesEmpty")
-                        : nodeSourceGap(source.kind, source.gap)}
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col">
-                      {nodes.lines.map((node) => (
-                        <li
-                          key={`${node.name}:${node.address ?? ""}`}
-                          className="flex flex-wrap items-center justify-between gap-2 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60"
-                        >
-                          <span
-                            className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
-                            title={node.name}
-                          >
-                            {node.name}
-                          </span>
-                          {node.address === undefined ? undefined : (
-                            <CopyValue
-                              className="w-auto pointer-coarse:[&>svg]:opacity-100"
-                              copiedMessage={t("common.copied")}
-                              value={node.address}
-                            />
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {nodes.hidden > 0 ? (
-                    <p className="text-xs text-mist-500 dark:text-mist-400">
-                      {t("overview.derp.nodesMore", { count: nodes.hidden })}
-                    </p>
-                  ) : undefined}
-
-                  {/* The maps behind the source, and the reason a map nobody
-                      could read contributed nothing: one short line each, never
-                      an error. */}
-                  {source.maps
-                    .filter((map) => map.state !== "ok")
-                    .map((map) => (
-                      <p className="text-xs text-mist-500 dark:text-mist-400" key={map.source}>
-                        {nodeMapNotice(source.kind, map)}
+                return (
+                  <SettingsCollapsible
+                    key={source.kind}
+                    status={{
+                      tone: source.served ? "neutral" : "warn",
+                      label: t("overview.derp.nodesCount", { count: source.nodes.length }),
+                    }}
+                    summary={nodeSourceHint(source)}
+                    title={
+                      <span
+                        className="flex flex-wrap items-center gap-1.5"
+                        title={t(NODE_SOURCE_HINT_KEYS[source.kind])}
+                      >
+                        {nodeSourceLabel(source.kind)}
+                        {source.served ? undefined : (
+                          <SettingsStatus tone="warn">
+                            {t("overview.derp.nodesNotServed")}
+                          </SettingsStatus>
+                        )}
+                      </span>
+                    }
+                  >
+                    {source.nodes.length === 0 ? (
+                      <p className="text-sm text-mist-600 dark:text-mist-400">
+                        {source.gap === undefined
+                          ? t("overview.derp.nodesEmpty")
+                          : nodeSourceGap(source.kind, source.gap)}
                       </p>
-                    ))}
-                </SettingsCollapsible>
-              );
-            })}
+                    ) : (
+                      /* A source can list dozens of relays, so its own list is
+                         bounded too: an expanded row scrolls instead of
+                         stretching the card it sits in. */
+                      <ul
+                        className={cn(
+                          "flex max-h-56 flex-col overflow-y-auto rounded-lg",
+                          SCROLL_BOX_RING,
+                        )}
+                        tabIndex={0}
+                      >
+                        {nodes.lines.map((node) => (
+                          <li
+                            key={`${node.name}:${node.address ?? ""}`}
+                            className="flex flex-wrap items-center justify-between gap-2 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60"
+                          >
+                            <span
+                              className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
+                              title={node.name}
+                            >
+                              {node.name}
+                            </span>
+                            {node.address === undefined ? undefined : (
+                              <CopyValue
+                                className="w-auto pointer-coarse:[&>svg]:opacity-100"
+                                copiedMessage={t("common.copied")}
+                                value={node.address}
+                              />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {nodes.hidden > 0 ? (
+                      <p className="text-xs text-mist-500 dark:text-mist-400">
+                        {t("overview.derp.nodesMore", { count: nodes.hidden })}
+                      </p>
+                    ) : undefined}
+
+                    {/* The maps behind the source, and the reason a map nobody
+                        could read contributed nothing: one short line each, never
+                        an error. */}
+                    {source.maps
+                      .filter((map) => map.state !== "ok")
+                      .map((map) => (
+                        <p className="text-xs text-mist-500 dark:text-mist-400" key={map.source}>
+                          {nodeMapNotice(source.kind, map)}
+                        </p>
+                      ))}
+                  </SettingsCollapsible>
+                );
+              })}
+            </div>
 
             {/* Where a node is actually defined: Headscale's embedded relay and
                 every file under `derp.paths` are edited in the DERP settings, so
                 this card links there instead of growing a form of its own. */}
             <p className="text-xs text-mist-500 dark:text-mist-400">
-              {tr("overview.derp.nodesAdd", {
-                link: (
-                  <Link
-                    className="font-medium text-indigo-600 dark:text-indigo-400"
-                    to="/settings/headscale"
-                  >
-                    {t("overview.derp.nodesAddLink")}
-                  </Link>
-                ),
-              })}
+              <Link
+                className="font-medium text-indigo-600 dark:text-indigo-400"
+                to="/settings/headscale"
+              >
+                {t("overview.derp.nodesAddLink")}
+              </Link>
             </p>
           </Card>
         </Section>

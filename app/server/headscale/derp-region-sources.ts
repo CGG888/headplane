@@ -133,6 +133,12 @@ export interface DerpMapGroupReading {
   state: DerpMapFileState;
   /** The regions this map alone describes, in the order it listed them. */
   regions: DerpMapRegionDetail[];
+  /**
+   * True for the region mirror's own file when `derp.paths` does not list it:
+   * the file is read and its nodes are real, but clients are not handed it yet.
+   * Absent for every group whose maps the configuration actually loads.
+   */
+  unlisted?: boolean;
 }
 
 /** The configured maps held apart by source, for the Overview node card. */
@@ -146,9 +152,18 @@ export interface DerpNodeInventoryInput extends DerpRegionSourceInput {
   /**
    * The region mirror's target file, as Headplane's own settings hold it. A path
    * that is also listed in `derp.paths` is tagged as the mirror's source instead
-   * of reading as a plain local map.
+   * of reading as a plain local map; a path that is *not* listed is read anyway
+   * and tagged `unlisted`, so a filtered map an operator has not wired up yet
+   * still shows the nodes it holds.
    */
   mirrorPath?: string;
+  /**
+   * Whether the region filter itself is switched on. Only an on filter has a
+   * file worth reading when `derp.paths` does not list one: the settings always
+   * name a default target path, and an off filter must not turn a path nobody
+   * wrote into a source the card reports as unreadable. Absent means off.
+   */
+  mirrorEnabled?: boolean;
 }
 
 const nodeFs: DerpRegionFs = {
@@ -297,12 +312,21 @@ export async function loadDerpRegionInventory(
  * group per `derp.paths` entry, the file the region mirror maintains tagged as
  * its own kind, then one group per `derp.urls` map.
  *
- * This is the *same* read {@link loadDerpRegionInventory} makes — one read per
- * local file (cached by path, size and mtime) and one fetch per URL through the
- * shared remote cache — so a page that needs both pays for the documents once.
- * Nothing here throws: a file this process cannot see, a URL that does not
- * answer and a document that is not a map all become a group with a state that
- * says so.
+ * The mirror's target file is read even when `derp.paths` does not list it, so
+ * the card can show the nodes the filter produced before the operator wires the
+ * file up; that group carries `unlisted: true` and its regions stay out of the
+ * merged local names, because Headscale does not load the file yet. This only
+ * happens while the filter itself is on (`mirrorEnabled`), because the settings
+ * always name a default target path and a filter nobody turned on must not turn
+ * that path into a source. The read goes through the same cached local reader as
+ * every other file, so it costs one stat and at most one parse per change.
+ *
+ * This is otherwise the *same* read {@link loadDerpRegionInventory} makes — one
+ * read per local file (cached by path, size and mtime) and one fetch per URL
+ * through the shared remote cache — so a page that needs both pays for the
+ * documents once. Nothing here throws: a file this process cannot see, a URL
+ * that does not answer and a document that is not a map all become a group with
+ * a state that says so.
  */
 export async function loadDerpNodeInventory(
   input: DerpNodeInventoryInput,
@@ -322,6 +346,26 @@ export async function loadDerpNodeInventory(
       regions: detailRegions(reading),
     });
   });
+
+  // The filter's file is read whether or not `derp.paths` lists it, as long as
+  // the filter is on. It is put after the listed local files and before the
+  // remote maps, which is the order the card claims regions in: a region the
+  // filter's file describes is never credited to the upstream map that repeats
+  // it.
+  if (
+    mirror !== undefined &&
+    input.mirrorEnabled === true &&
+    !read.localPaths.some((path) => samePath(path, mirror))
+  ) {
+    const reading = await readLocalDerpMap(mirror, options.fs ?? nodeFs);
+    groups.push({
+      source: mirror,
+      kind: "mirror",
+      unlisted: true,
+      state: reading.state,
+      regions: detailRegions(reading),
+    });
+  }
 
   read.remoteUrls.forEach((url, index) => {
     const entries = read.remoteReads[index];

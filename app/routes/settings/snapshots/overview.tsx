@@ -65,7 +65,6 @@ export default function Page({ loaderData: { entries, root } }: Route.ComponentP
         <TakeSnapshotSection root={root} />
 
         <SettingsCollapsible
-          defaultOpen
           description={t("settings.snapshots.listBody")}
           icon={Archive}
           status={{
@@ -111,6 +110,7 @@ function TakeSnapshotSection({ root }: { root: string }) {
   return (
     <SettingsCollapsible
       description={t("settings.snapshots.takeBody")}
+      hasError={Boolean(error)}
       icon={Camera}
       status={succeeded ? { tone: "ok", label: t("settings.snapshots.takeSuccess") } : undefined}
       summary={t("settings.snapshots.storedAt", { path: root })}

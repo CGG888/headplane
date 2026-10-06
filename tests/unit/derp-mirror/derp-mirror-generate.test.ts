@@ -170,6 +170,46 @@ describe("mirror region numbering", () => {
     expect(assignRegionNumbers([], {}).assignment).toEqual({});
     expect(assignRegionNumbers(["not-an-id", "-1", "0"], {}).assignment).toEqual({});
   });
+
+  test("prefers a latency this server measured itself over a reported one", () => {
+    // The machines reported Tokyo as far faster (5 ms) than Frankfurt (400 ms),
+    // but this server measured Tokyo itself at 500 ms. The local value wins, so
+    // Frankfurt takes the lower number.
+    const { assignment } = assignRegionNumbers(
+      [HKG, SIN, TOK, FRA],
+      { [TOK]: 5, [FRA]: 400 },
+      undefined,
+      { [TOK]: 500 },
+    );
+
+    expect(assignment[FRA]).toBe(903);
+    expect(assignment[TOK]).toBe(904);
+  });
+
+  test("falls back to the reported value for a region this server did not measure", () => {
+    const { assignment } = assignRegionNumbers(
+      [HKG, SIN, TOK, FRA],
+      { [TOK]: 5, [FRA]: 400 },
+      undefined,
+      { [FRA]: 30 },
+    );
+
+    // Frankfurt is measured here at 30 ms; Tokyo keeps the 5 ms its machines
+    // reported, so it still takes the lower number.
+    expect(assignment[TOK]).toBe(903);
+    expect(assignment[FRA]).toBe(904);
+  });
+
+  test("still ranks an unmeasured region last when only part of the selection was measured", () => {
+    const { assignment } = assignRegionNumbers([HKG, SIN, TOK, FRA, NYC], {}, undefined, {
+      [FRA]: 30,
+      [NYC]: 20,
+    });
+
+    expect(assignment[NYC]).toBe(903);
+    expect(assignment[FRA]).toBe(904);
+    expect(assignment[TOK]).toBe(905);
+  });
 });
 
 describe("chinese region names", () => {

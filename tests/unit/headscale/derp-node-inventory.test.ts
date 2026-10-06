@@ -128,7 +128,11 @@ describe("loadDerpNodeInventory", () => {
     );
 
     expect(inventory.groups.map((group) => group.kind)).toEqual(["local", "mirror"]);
+    // Listed, so the local map row never shows it and it is not read twice.
+    expect(inventory.groups).toHaveLength(2);
+    expect(inventory.groups[1]?.unlisted).toBeUndefined();
     expect(inventory.groups[1]?.regions[0]?.regionId).toBe(911);
+    expect(inventory.groups[0]?.regions.map((region) => region.regionId)).toEqual([901]);
   });
 
   test("resolves a relative mirror path against the configuration directory", async () => {
@@ -149,15 +153,80 @@ describe("loadDerpNodeInventory", () => {
     expect(inventory.groups.map((group) => group.kind)).toEqual(["local", "mirror"]);
   });
 
-  test("a mirror path that is not one of the configured maps adds no group", async () => {
+  test("reads the region filter's file even when derp.paths leaves it out", async () => {
     const path = resolve("/maps/local.yaml");
+    const mirror = resolve("/maps/official-mirror.yaml");
     const inventory = await loadDerpNodeInventory(
-      { paths: [path], urls: [], ...SETTINGS, mirrorPath: resolve("/maps/elsewhere.yaml") },
-      { fs: createFakeFs({ [path]: LOCAL_MAP }) },
+      { paths: [path], urls: [], ...SETTINGS, mirrorPath: mirror, mirrorEnabled: true },
+      { fs: createFakeFs({ [path]: LOCAL_MAP, [mirror]: MIRROR_MAP }) },
     );
 
-    expect(inventory.groups).toHaveLength(1);
-    expect(inventory.groups[0]?.kind).toBe("local");
+    expect(inventory.groups.map((group) => [group.kind, group.unlisted])).toEqual([
+      ["local", undefined],
+      ["mirror", true],
+    ]);
+    expect(inventory.groups[1]?.source).toBe(mirror);
+    // The nodes of the filtered map are read, not collapsed to nothing.
+    expect(inventory.groups[1]?.state).toBe("ok");
+    expect(inventory.groups[1]?.regions[0]?.regionId).toBe(911);
+    expect(inventory.groups[1]?.regions[0]?.nodes[0]?.hostname).toBe("derp-hkg.example.com");
+    // Nothing loads the file yet, so it names no region for the local chain.
+    expect(inventory.local).toEqual({
+      "901": { regionId: 901, code: "ams", name: "Amsterdam" },
+    });
+  });
+
+  test("an unlisted mirror path is left alone while the filter is off", async () => {
+    const path = resolve("/maps/local.yaml");
+    const mirror = resolve("/maps/official-mirror.yaml");
+    const inventory = await loadDerpNodeInventory(
+      { paths: [path], urls: [], ...SETTINGS, mirrorPath: mirror },
+      { fs: createFakeFs({ [path]: LOCAL_MAP, [mirror]: MIRROR_MAP }) },
+    );
+
+    // The settings always name a default target path, so an off filter must not
+    // turn a file nobody maintains into a source the card reports on.
+    expect(inventory.groups.map((group) => [group.kind, group.source])).toEqual([["local", path]]);
+  });
+
+  test("an unlisted mirror file reports why it could not be read", async () => {
+    const path = resolve("/maps/local.yaml");
+    const missing = resolve("/maps/missing-mirror.yaml");
+    const broken = resolve("/maps/broken-mirror.yaml");
+
+    const unreadable = await loadDerpNodeInventory(
+      { paths: [path], urls: [], ...SETTINGS, mirrorPath: missing, mirrorEnabled: true },
+      { fs: createFakeFs({ [path]: LOCAL_MAP }) },
+    );
+    const invalid = await loadDerpNodeInventory(
+      { paths: [path], urls: [], ...SETTINGS, mirrorPath: broken, mirrorEnabled: true },
+      { fs: createFakeFs({ [path]: LOCAL_MAP, [broken]: "not: [a, derp, map" }) },
+    );
+
+    expect(unreadable.groups.map((group) => [group.kind, group.state])).toEqual([
+      ["local", "ok"],
+      ["mirror", "unreadable"],
+    ]);
+    expect(invalid.groups[1]).toMatchObject({ kind: "mirror", unlisted: true, state: "invalid" });
+    expect(invalid.groups[1]?.regions).toEqual([]);
+  });
+
+  test("holds an unlisted mirror file apart from the far maps", async () => {
+    const path = resolve("/maps/local.yaml");
+    const mirror = resolve("/maps/official-mirror.yaml");
+    const url = "https://example.com/public.yaml";
+    const inventory = await loadDerpNodeInventory(
+      { paths: [path], urls: [url], ...SETTINGS, mirrorPath: mirror, mirrorEnabled: true },
+      {
+        fs: createFakeFs({ [path]: LOCAL_MAP, [mirror]: MIRROR_MAP }),
+        fetch: () => Promise.resolve(textResponse(MIRROR_MAP)),
+      },
+    );
+
+    // The filter's file is claimed before any URL, so a remote map that repeats
+    // its region can never take its nodes away from the filter row.
+    expect(inventory.groups.map((group) => group.kind)).toEqual(["local", "mirror", "remote"]);
+    expect(inventory.groups[1]?.regions.map((region) => region.regionId)).toEqual([911]);
   });
 
   test("says why a configured file contributed nothing", async () => {

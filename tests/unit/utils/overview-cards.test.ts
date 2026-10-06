@@ -5,7 +5,9 @@ import {
   browserOverviewCardStorage,
   clearHiddenOverviewCards,
   effectiveHiddenOverviewCards,
+  isAlertOverviewCard,
   isOverviewCardId,
+  OVERVIEW_ALERT_CARD_IDS,
   OVERVIEW_CARDS_STORAGE_KEY,
   OVERVIEW_CARDS_STORAGE_VERSION,
   OVERVIEW_CARD_IDS,
@@ -140,10 +142,21 @@ describe("readHiddenOverviewCards", () => {
 
   test("keeps an alerting card visible even when it is stored as hidden", () => {
     const storage = new FakeStorage({
-      [overviewCardsStorageKey(USER)]: JSON.stringify(["health-summary", "counts-history"]),
+      [overviewCardsStorageKey(USER)]: JSON.stringify(["service-server", "counts-history"]),
     });
 
-    expect(readHiddenOverviewCards(storage, USER, ["health-summary"])).toEqual(["counts-history"]);
+    expect(readHiddenOverviewCards(storage, USER, ["service-server"])).toEqual(["counts-history"]);
+  });
+
+  test("lets the health summary stay hidden while it reports a problem", () => {
+    // The summary is not an alert in its own right: a failing check still
+    // reaches the operator through the notification webhooks, so the operator's
+    // own choice wins here.
+    const storage = new FakeStorage({
+      [overviewCardsStorageKey(USER)]: JSON.stringify(["health-summary"]),
+    });
+
+    expect(readHiddenOverviewCards(storage, USER, ["health-summary"])).toEqual(["health-summary"]);
   });
 });
 
@@ -151,10 +164,20 @@ describe("effectiveHiddenOverviewCards", () => {
   test("drops every card that reports a warning, an alert or a failure", () => {
     expect(
       effectiveHiddenOverviewCards(
-        ["health-summary", "service-server", "derp-nodes"],
-        ["health-summary", "service-server"],
+        ["service-server", "derp-nodes", "counts-tailnet"],
+        ["service-server", "counts-tailnet"],
       ),
     ).toEqual(["derp-nodes"]);
+  });
+
+  test("never protects the health summary, however unhealthy it is", () => {
+    expect(effectiveHiddenOverviewCards(["health-summary"], ["health-summary"])).toEqual([
+      "health-summary",
+    ]);
+    expect(isAlertOverviewCard("health-summary")).toBe(false);
+    expect(isAlertOverviewCard("service-server")).toBe(true);
+    expect(isAlertOverviewCard("counts-history")).toBe(false);
+    expect(new Set(OVERVIEW_ALERT_CARD_IDS).size).toBe(OVERVIEW_ALERT_CARD_IDS.length);
   });
 
   test("changes nothing when no card is alerting", () => {

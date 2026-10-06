@@ -1,7 +1,7 @@
 import { Tabs as BaseTabs } from "@base-ui/react/tabs";
 import { ChevronDown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 
 import cn from "~/utils/cn";
 
@@ -156,7 +156,13 @@ export interface SettingsCollapsibleProps {
   icon?: LucideIcon;
   status?: { tone: SettingsStatusTone; label: React.ReactNode };
   children: React.ReactNode;
-  defaultOpen?: boolean;
+  /**
+   * Opens the card because it is carrying a validation error or a failed action
+   * result, so the problem is visible without a click. This is the only reason a
+   * card may open itself; everything else starts closed. The user can still
+   * close the card by hand afterwards.
+   */
+  hasError?: boolean;
   /** Renders tighter, for blocks nested inside another collapsible. */
   nested?: boolean;
   className?: string;
@@ -166,10 +172,21 @@ export interface SettingsCollapsibleProps {
  * A card that opens and closes in place. Pages with a lot of configuration use
  * one per sub-topic so the page stays scannable without hiding anything behind
  * navigation.
+ *
+ * Cards start closed: the only thing that may open one by itself is `hasError`.
  */
 export function SettingsCollapsible(props: SettingsCollapsibleProps) {
-  const [isOpen, setIsOpen] = useState(props.defaultOpen ?? false);
+  const panelId = useId();
+  const [isOpen, setIsOpen] = useState(props.hasError === true);
   const { icon: Icon } = props;
+
+  // An error that shows up while the card is closed (a failing check, a rejected
+  // action) reveals itself so it cannot be missed.
+  useEffect(() => {
+    if (props.hasError) {
+      setIsOpen(true);
+    }
+  }, [props.hasError]);
 
   return (
     <section
@@ -183,6 +200,7 @@ export function SettingsCollapsible(props: SettingsCollapsibleProps) {
       )}
     >
       <button
+        aria-controls={isOpen ? panelId : undefined}
         aria-expanded={isOpen}
         className={cn(
           "flex w-full items-center gap-3 p-3.5 text-left",
@@ -235,7 +253,10 @@ export function SettingsCollapsible(props: SettingsCollapsibleProps) {
       </button>
 
       {isOpen ? (
-        <div className="flex flex-col gap-4 border-t border-mist-200 p-4 dark:border-mist-800">
+        <div
+          className="flex flex-col gap-4 border-t border-mist-200 p-4 dark:border-mist-800"
+          id={panelId}
+        >
           {props.children}
         </div>
       ) : undefined}

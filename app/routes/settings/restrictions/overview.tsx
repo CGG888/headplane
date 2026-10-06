@@ -122,7 +122,6 @@ export default function Page({ loaderData: { access, writable, settings } }: Rou
           return (
             <SettingsPanel key={type} value={type}>
               <SettingsCollapsible
-                defaultOpen
                 description={t(RESTRICTION_BODY_KEYS[type])}
                 icon={Icon}
                 status={{
@@ -135,7 +134,6 @@ export default function Page({ loaderData: { access, writable, settings } }: Rou
                 <RestrictionList isDisabled={isDisabled} type={type} values={values} />
 
                 <SettingsCollapsible
-                  defaultOpen={values.length === 0}
                   description={t(RESTRICTION_ADD_BODY_KEYS[type])}
                   icon={CirclePlus}
                   title={t(RESTRICTION_ADD_TITLE_KEYS[type])}

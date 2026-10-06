@@ -1,4 +1,4 @@
-import { Globe, Lock, RefreshCw, Search, Sparkles, Tags, Wand2 } from "lucide-react";
+import { Ban, Gauge, Globe, Lock, RefreshCw, Search, Sparkles, Tags, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
@@ -28,12 +28,15 @@ import {
   MIRROR_INTERVAL_HOURS,
   MIRROR_INTERVAL_KEYS,
   MIRROR_LATENCY_NOTICE_KEYS,
+  MIRROR_LATENCY_SOURCE_KEYS,
+  MIRROR_PROBE_OUTCOME_KEYS,
   MIRROR_REASON_KEYS,
   MIRROR_RELOAD_KEYS,
   defaultMirrorSelection,
   fixedRegionIds,
   formatMirrorLatency,
   isDefaultMirrorSelection,
+  isMirrorProbeStale,
   mirrorLatencyNotice,
   mirrorOutcomeKey,
   mirrorRegionLookup,
@@ -44,6 +47,7 @@ import {
   sortMirrorRegions,
   storedRegionNumbers,
   type MirrorNumbering,
+  type MirrorProbeView,
   type MirrorRegionRow,
   type MirrorRun,
   type MirrorSettingsView,
@@ -62,6 +66,15 @@ const OUTCOME_TONES: Record<string, SettingsStatusTone> = {
 
 /** The three speeds the quick filter offers, in milliseconds. */
 const LATENCY_PRESETS = [50, 100, 200] as const;
+
+/**
+ * The keyboard ring the region table's own scroll box carries. The table keeps a
+ * bounded height so a long official list can never stretch or clip the card, and
+ * the box takes focus so the rows that bound hides stay reachable without a
+ * pointer.
+ */
+const REGION_TABLE_RING =
+  "focus:outline-hidden focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1 dark:focus:ring-indigo-400/40 dark:focus:ring-offset-mist-900";
 
 /**
  * Why the official map could not be read, as the sentence the card prints. The
@@ -88,6 +101,8 @@ interface DerpRegionMirrorProps {
   last: MirrorRun | undefined;
   /** The order and the fixed anchors the server's rule produced. */
   numbering: MirrorNumbering;
+  /** The newest latency probe this server ran, and how it ended. */
+  probe: MirrorProbeView;
   /** Why the official map could not be read, when the last read failed. */
   regionError?: RemoteDerpMapFailure;
   /** The cached official map, already reduced to plain values. */
@@ -267,6 +282,7 @@ export default function DerpRegionMirror({
   isDisabled,
   last,
   numbering,
+  probe,
   regionError,
   regions,
   settings,
@@ -278,6 +294,8 @@ export default function DerpRegionMirror({
   const runFetcher = useFetcher<HeadscaleSettingsResult>();
   const reassignFetcher = useFetcher<HeadscaleSettingsResult>();
   const namesFetcher = useFetcher<HeadscaleSettingsResult>();
+  const probeFetcher = useFetcher<HeadscaleSettingsResult>();
+  const cancelFetcher = useFetcher<HeadscaleSettingsResult>();
 
   const fixedIds = useMemo(() => fixedRegionIds(numbering), [numbering]);
   const fixed = useMemo(() => new Set(fixedIds), [fixedIds]);
@@ -363,6 +381,12 @@ export default function DerpRegionMirror({
     () => mirrorLatencyNotice(regions, agentAvailable),
     [agentAvailable, regions],
   );
+  // The one sentence the newest probe leaves behind, if it has one: a run that
+  // found nothing says so plainly instead of leaving measured and reported
+  // values looking alike, and a stopped run says it stopped.
+  const probeNoticeKey =
+    probe.outcome === undefined ? undefined : MIRROR_PROBE_OUTCOME_KEYS[probe.outcome];
+  const probeNotice = probeNoticeKey === undefined ? undefined : t(probeNoticeKey);
   const defaultSelection = useMemo(
     () => isDefaultMirrorSelection(numbering, selected),
     [numbering, selected],
@@ -395,6 +419,8 @@ export default function DerpRegionMirror({
   const runError = errorFor(runFetcher.data);
   const reassignError = errorFor(reassignFetcher.data);
   const namesError = errorFor(namesFetcher.data);
+  const probeError = errorFor(probeFetcher.data);
+  const probing = probeFetcher.state !== "idle";
   const namesAdded =
     namesFetcher.data !== undefined && namesFetcher.data.success
       ? namesFetcher.data.addedRegionNames
@@ -453,6 +479,48 @@ export default function DerpRegionMirror({
 
     namesFetcher.submit(form, { method: "POST" });
   }
+
+  /**
+   * Asks the server to measure the official regions from this machine. This is
+   * the only thing on the page that dials the official relays, and it goes
+   * through a fetcher because the button lives inside the card's one save form,
+   * where nothing may nest a second form.
+   */
+  function probeLatency() {
+    const form = new FormData();
+    form.set("action_id", "probe_derp_latency");
+    probeFetcher.submit(form, { method: "POST" });
+  }
+
+  /** Stops the run in progress; the server keeps what it had gathered. */
+  function stopProbe() {
+    const form = new FormData();
+    form.set("action_id", "cancel_derp_latency_probe");
+    cancelFetcher.submit(form, { method: "POST" });
+  }
+
+  /**
+   * Refreshes only a stale measurement when the card is opened. The card mounts
+   * when the operator opens it, never on a page load, and a run younger than
+   * {@link MIRROR_PROBE_FRESH_MS} is left alone — so opening the card again
+   * does not dial the official relays again. The guard is the loop breaker: a
+   * render after the run finished must not start another one.
+   */
+  const autoProbeRef = useRef(false);
+  useEffect(() => {
+    if (autoProbeRef.current || isDisabled || regions.length === 0) {
+      return;
+    }
+
+    if (!isMirrorProbeStale(probe, Date.now())) {
+      return;
+    }
+
+    autoProbeRef.current = true;
+    const form = new FormData();
+    form.set("action_id", "probe_derp_latency");
+    probeFetcher.submit(form, { method: "POST" });
+  }, [isDisabled, probe, probeFetcher, regions.length]);
 
   const errorBox = (message: string) => (
     <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -540,6 +608,49 @@ export default function DerpRegionMirror({
                       at: new Date(settings.rankedAt).toLocaleString(locale),
                     })}
               </p>
+
+              {/* The one measurement this page can take itself. It never runs on
+                  a page load: this card mounts only once it is opened, and only
+                  a stale measurement is refreshed then. */}
+              <div className="flex flex-col gap-2 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button disabled={isDisabled || probing} onClick={probeLatency} type="button">
+                    <Gauge className="mr-1.5 h-4 w-4" />
+                    {probing
+                      ? t("settings.headscale.derp.mirror.probeRunning")
+                      : t("settings.headscale.derp.mirror.probe")}
+                  </Button>
+                  {probing ? (
+                    <Button onClick={stopProbe} type="button" variant="ghost">
+                      <Ban className="mr-1.5 h-4 w-4" />
+                      {t("settings.headscale.derp.mirror.probeStop")}
+                    </Button>
+                  ) : undefined}
+                  <span className="text-xs text-mist-500 dark:text-mist-400">
+                    {probe.measuredAt === undefined
+                      ? t("settings.headscale.derp.mirror.probeNever")
+                      : t("settings.headscale.derp.mirror.probeMeasuredAt", {
+                          at: new Date(probe.measuredAt).toLocaleString(locale),
+                        })}
+                  </span>
+                </div>
+                <p className="text-xs text-mist-600 dark:text-mist-400">
+                  {t("settings.headscale.derp.mirror.probeNote")}
+                </p>
+                {probeNotice === undefined ? undefined : (
+                  <p
+                    className={cn(
+                      "rounded-lg p-2 text-xs",
+                      probe.outcome === "empty"
+                        ? "bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                        : "bg-mist-100 text-mist-600 dark:bg-mist-800/50 dark:text-mist-300",
+                    )}
+                  >
+                    {probeNotice}
+                  </p>
+                )}
+                {probeError === undefined ? undefined : errorBox(probeError)}
+              </div>
 
               <div className="flex flex-wrap items-end gap-3">
                 <SettingsField
@@ -633,8 +744,21 @@ export default function DerpRegionMirror({
               </div>
               {namesError === undefined ? undefined : errorBox(namesError)}
 
-              <TableList>
-                <TableList.Item className="text-xs font-semibold opacity-70">
+              {/* The official list is Tailscale's and can grow, so the table
+                  keeps a bounded height and scrolls vertically in place instead
+                  of stretching the card: the header row stays pinned, the
+                  numbers the operator watches stay in the first column of the
+                  row they belong to, and the box itself takes focus so nothing
+                  the bound hides is out of reach of a keyboard. The search and
+                  filter row, the selection helpers and the actions all stay
+                  outside this scroll area. */}
+              <TableList
+                aria-label={t("settings.headscale.derp.mirror.regionTableLabel")}
+                className={cn("max-h-96 min-h-0 overflow-y-auto", REGION_TABLE_RING)}
+                role="group"
+                tabIndex={0}
+              >
+                <TableList.Item className="sticky top-0 z-10 bg-white text-xs font-semibold text-mist-600 dark:bg-mist-900 dark:text-mist-400">
                   <span className="w-28">{t("settings.headscale.derp.mirror.columnNumber")}</span>
                   <span className="flex-1">{t("settings.headscale.derp.mirror.columnName")}</span>
                   <span className="w-16">{t("settings.headscale.derp.mirror.columnCode")}</span>
@@ -644,7 +768,7 @@ export default function DerpRegionMirror({
                   <span className="w-14 text-right">
                     {t("settings.headscale.derp.mirror.columnNodes")}
                   </span>
-                  <span className="w-24 text-right">
+                  <span className="w-28 text-right">
                     {t("settings.headscale.derp.mirror.columnLatency")}
                   </span>
                   <span className="w-14 text-right">
@@ -691,13 +815,26 @@ export default function DerpRegionMirror({
                         {region.officialName}
                       </span>
                       <span className="w-14 text-right font-mono text-xs">{region.nodeCount}</span>
-                      <span className="w-24 text-right font-mono text-xs">
+                      <span className="w-28 text-right font-mono text-xs">
                         {latency === undefined ? (
                           <span className="opacity-60">
                             {t("settings.headscale.derp.mirror.latencyUnknown")}
                           </span>
-                        ) : (
+                        ) : region.latencySource === undefined ? (
                           latency
+                        ) : (
+                          // The two sources are never confused: the number is
+                          // labelled with where it came from, and a measurement
+                          // taken here is explained as this server's own path.
+                          <span
+                            className="flex flex-col items-end leading-tight"
+                            title={t(MIRROR_LATENCY_SOURCE_KEYS[region.latencySource])}
+                          >
+                            <span>{latency}</span>
+                            <span className="font-sans text-[10px] opacity-70">
+                              {t(MIRROR_LATENCY_SOURCE_KEYS[region.latencySource])}
+                            </span>
+                          </span>
                         )}
                       </span>
                       <span className="flex w-14 justify-end">

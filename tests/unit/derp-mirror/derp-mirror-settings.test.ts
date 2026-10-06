@@ -123,6 +123,58 @@ describe("DERP mirror settings", () => {
     expect(normalizeDerpMirrorSettings({ enabled: "yes" }).enabled).toBe(false);
     expect(normalizeDerpMirrorSettings({ enabled: true }).enabled).toBe(true);
   });
+
+  test("keeps a stored local measurement, source and all", () => {
+    const latency = normalizeDerpMirrorSettings({
+      latency: {
+        measuredAt: "2026-01-02T03:04:05.000Z",
+        outcome: "partial",
+        regions: [
+          {
+            regionId: 20,
+            regionCode: "hkg",
+            bestV4: 12.5,
+            bestV6: 30,
+            // A hand-edited file cannot pass a reported value off as measured.
+            source: "reported",
+            nodes: [
+              {
+                name: "hkg1",
+                hostname: "hkg1.example.com",
+                family: "ipv4",
+                target: "44.1.1.1",
+                latencyMs: 12.5,
+                method: "stun",
+              },
+            ],
+          },
+        ],
+      },
+    }).latency;
+
+    expect(latency?.measuredAt).toBe("2026-01-02T03:04:05.000Z");
+    expect(latency?.outcome).toBe("partial");
+    expect(latency?.regions).toHaveLength(1);
+    expect(latency?.regions[0]?.regionId).toBe(20);
+    expect(latency?.regions[0]?.bestV4).toBe(12.5);
+    expect(latency?.regions[0]?.source).toBe("measured");
+    expect(latency?.regions[0]?.nodes[0]?.method).toBe("stun");
+  });
+
+  test("drops a measurement that cannot be dated or read, keeping the rest of the settings", () => {
+    expect(normalizeDerpMirrorSettings({ latency: {} }).latency).toBeUndefined();
+    expect(normalizeDerpMirrorSettings({ latency: "soon" }).latency).toBeUndefined();
+    expect(
+      normalizeDerpMirrorSettings({ latency: { measuredAt: "whenever", regions: [] } }).latency,
+    ).toBeUndefined();
+    expect(normalizeDerpMirrorSettings({ enabled: true, latency: 7 }).enabled).toBe(true);
+
+    const empty = normalizeDerpMirrorSettings({
+      latency: { measuredAt: "2026-01-02T03:04:05.000Z", regions: "nonsense" },
+    }).latency;
+    expect(empty?.outcome).toBe("empty");
+    expect(empty?.regions).toEqual([]);
+  });
 });
 
 describe("stored numbering follows the selection", () => {

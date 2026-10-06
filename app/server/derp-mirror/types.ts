@@ -35,6 +35,82 @@ export interface OfficialRegion {
   nodes: OfficialRegionNode[];
 }
 
+/** One address family the latency probe measured on its own. */
+export type ProbeFamily = "ipv4" | "ipv6";
+
+/**
+ * How one latency was measured: a UDP STUN binding round trip on the node's
+ * `stunport` (the path DERP itself uses), or a TCP/TLS handshake on its
+ * `derpport` when UDP gave nothing.
+ */
+export type ProbeMethod = "stun" | "tcp";
+
+/**
+ * Why one probe attempt produced no value. Every failure is a labelled result,
+ * never an exception: `timeout` for a silent node, `unresolved` for an address
+ * that family does not have, `no-stun` for a node with STUN switched off,
+ * `cancelled` for a run the operator stopped, and `error` for everything else.
+ */
+export type ProbeFailure = "timeout" | "unresolved" | "error" | "no-stun" | "cancelled";
+
+/**
+ * How one whole probe run ended: every region with nodes answered (`complete`),
+ * some did not (`partial`), nothing answered at all (`empty`, the honest
+ * "could not probe from this server" case), or the operator stopped it
+ * (`cancelled`).
+ */
+export type DerpMirrorProbeOutcome = "complete" | "partial" | "empty" | "cancelled";
+
+/**
+ * Where a stored latency came from. Only this server's own probe writes a
+ * stored reading, so the only value is `measured`; the agent-reported values
+ * are recomputed from the machines on every render and are never stored here.
+ */
+export type DerpLatencySource = "measured";
+
+/** One node and family as the probe measured it, kept in the stored record. */
+export interface DerpLatencyNodeReading {
+  name: string;
+  hostname: string;
+  family: ProbeFamily;
+  /** The declared address, or the hostname the family resolved, that was dialled. */
+  target: string;
+  latencyMs: number;
+  method: ProbeMethod;
+}
+
+/**
+ * One official region as this server measured it: the best value per family,
+ * the per-node values behind those numbers, when they were taken and where they
+ * came from.
+ */
+export interface DerpLatencyRegionReading {
+  regionId: number;
+  /** The official region code, so the record reads without the map at hand. */
+  regionCode: string;
+  /** The fastest IPv4 measurement, when any node answered on IPv4. */
+  bestV4?: number;
+  /** The fastest IPv6 measurement, when any node answered on IPv6. */
+  bestV6?: number;
+  nodes: DerpLatencyNodeReading[];
+  /** ISO timestamp of the run that produced these values. */
+  measuredAt: string;
+  source: DerpLatencySource;
+}
+
+/**
+ * Every latency this server measured itself, as the region-mirror store keeps
+ * it alongside the other settings. A region nothing answered for simply has no
+ * entry, so the numbering falls back to what the machines reported.
+ */
+export interface DerpMirrorLatency {
+  /** ISO timestamp of the newest run, whatever it found. */
+  measuredAt: string;
+  outcome: DerpMirrorProbeOutcome;
+  /** One entry per region that produced at least one measurement. */
+  regions: DerpLatencyRegionReading[];
+}
+
 /** One node of the generated local map, in Headscale's `derp.paths` format. */
 export interface LocalDerpNode {
   /** `<region number><letter>`, e.g. `901a`. */

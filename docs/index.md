@@ -39,30 +39,21 @@ features:
     icon: "📝"
 ---
 
-## 关于本分支
+## 本分支特色
 
-这里是 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN)，针对自建 NAS
-环境（尤其是 fnOS 飞牛）做了补充。本项目基于上游
+本项目 [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) 面向自建 NAS
+环境（尤其是 fnOS 飞牛），基于上游
 [Headplane](https://github.com/tale/headplane)（作者
-[tale](https://github.com/tale)），上游署名、许可证和原有功能都完整保留。
-
-本分支相对上游新增或改动的内容，都放在单独一页里：
-
-[查看与上游的差异 →](/differences)
-
-## 特色功能
-
-本分支最值得单独一看的四项能力，完整清单见[与上游的差异](/differences)。
+[tale](https://github.com/tale)）构建，上游署名、许可证和原有功能都完整保留；新增或改动
+的内容见[与上游的差异](/differences)。
 
 <div class="feature-grid">
 <div class="feature-card">
 
 ### fnOS 与原生 Headscale 一体化
 
-让容器里的 HeadplaneCN 管好一台原生跑在飞牛上的 Headscale：`pid: host` 使
-`integration.proc` 能发现并给 `headscale serve` 发信号，真正生效的 `config.yaml` 以
-**读写**方式挂载；最容易出错的是 `derp.paths` —— 每个条目都得是**宿主机路径**，且该目录要以
-**完全相同的绝对路径**挂进容器。
+用 `pid: host` 和以读写方式挂载的 `config.yaml`，让容器里的 HeadplaneCN 管好飞牛上
+原生运行的 Headscale。
 
 [fnOS 部署指南 →](/install/fnos)
 
@@ -71,9 +62,7 @@ features:
 
 ### 官方区域节点筛选
 
-只把你想用的官方中继镜像进一份本地地图文件，并统一改号到 **900 段**：**901 永远是香港、
-902 永远是新加坡**，其余从 **903** 起按你的机器实测延迟排列。编号一旦定下就保持稳定，客户端
-不会因为一次延迟采样波动就换中继。
+只镜像你选中的官方中继并统一编号：901 香港、902 新加坡固定不变。
 
 [Headscale 设置 →](/features/headscale-settings)
 
@@ -82,9 +71,7 @@ features:
 
 ### 中继地址自动同步与外部 IPv6 回显
 
-客户端必须访问到的地址由 HeadplaneCN 自己探测并写回：按 6/12/24 小时计划或手动触发，写入前先
-留配置快照、写后记一条审计。可选的外部 IPv6 回显会回答路由器转发或 NAT66 转换之后，互联网
-实际看到的是哪个地址（默认关闭，仅走 IPv6）。
+中继地址按计划或手动探测写回并留快照，外部 IPv6 回显可选。
 
 [Headscale 设置 →](/features/headscale-settings)
 
@@ -93,8 +80,7 @@ features:
 
 ### DERP 地图文件在浏览器里编辑
 
-每个 `derp.paths` 文件都能在浏览器里查看、编辑，或者从带注释的模板直接创建；保存时先按 DERP
-地图结构校验，再给文件留一份快照，改坏了可以一键回滚。
+`derp.paths` 文件可在浏览器里编辑，保存前校验并留快照，可一键回滚。
 
 [Headscale 设置 →](/features/headscale-settings)
 

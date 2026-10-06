@@ -84,9 +84,11 @@ const en = {
     cards: {
       manage: "Manage cards",
       hideCard: "Hide this card",
-      body: "Cards you hide stay listed here so you can bring them back at any time. A card that reports a warning, an alert or a failure always stays visible.",
+      body: "Cards you hide stay listed here so you can bring them back at any time. A card that is an alert in its own right always stays visible.",
       hiddenState: "Hidden",
       protectedState: "Always visible",
+      healthHideableNote:
+        "Hiding the health summary hides the summary only: a failing check is still delivered through the notification webhooks.",
       restoreDefault: "Restore defaults",
     },
     sections: {
@@ -226,31 +228,30 @@ const en = {
       nodesCount: "{count} nodes",
       nodesMore: "+{count} more nodes",
       nodesNotServed: "not served here",
+      nodesSourcesLabel: "Node sources",
       nodesSourceEmbedded: "Embedded relay",
-      nodesSourceEmbeddedBody: "The relay derp.server configures.",
+      nodesSourceEmbeddedHint: "The relay derp.server embeds; clients receive it.",
       nodesSourceLocal: "Local map files",
-      nodesSourceLocalBody: "The maps listed in derp.paths.",
+      nodesSourceLocalHint: "The maps listed in derp.paths; clients receive their nodes.",
       nodesSourceMirror: "Official filter",
-      nodesSourceMirrorBody: "The file the official region filter maintains.",
+      nodesSourceMirrorHint:
+        "The file the official region filter maintains; clients receive it only once derp.paths lists it.",
       nodesSourceOfficial: "Official upstream",
-      nodesSourceOfficialBody: "What derp.urls adds that this machine does not serve.",
-      nodesEmbeddedOff: "The embedded DERP server is off, so it relays nothing.",
-      nodesLocalNone: "No map file is listed in derp.paths.",
-      nodesMirrorOff: "The official region filter is not set up.",
-      nodesMirrorUnlisted:
-        "The filtered map is not one of the files listed in derp.paths, so clients are not handed it.",
-      nodesOfficialNoUrls: "No map URL is configured in derp.urls.",
-      nodesOfficialCovered: "Every region the official map adds is already served above.",
-      nodesUnreadable: "None of the configured maps could be read.",
-      nodesEmpty: "The configured maps list no node.",
+      nodesSourceOfficialHint: "The regions derp.urls adds that this machine does not serve.",
+      nodesEmbeddedOff: "The embedded server is off.",
+      nodesLocalNone: "Nothing in derp.paths.",
+      nodesMirrorOff: "The region filter is off.",
+      nodesMirrorUnlisted: "Not in derp.paths yet.",
+      nodesOfficialNoUrls: "Nothing in derp.urls.",
+      nodesOfficialCovered: "Already served above.",
+      nodesUnreadable: "Unreadable.",
+      nodesEmpty: "No nodes.",
       nodesFileUnreadable:
         "HeadplaneCN cannot read {path}: the map directory needs to be mounted read-write at the same absolute path inside the container.",
       nodesFileInvalid: "{path} is not a DERP map HeadplaneCN can read.",
       nodesFileEmpty: "{path} describes no regions.",
       nodesUrlUnreadable: "The map at {url} could not be read, so its nodes are missing here.",
       nodesUrlEmpty: "The map at {url} describes no regions.",
-      nodesAdd:
-        "Nodes are defined in the DERP settings: the embedded relay, and every file listed in derp.paths. {link}",
       nodesAddLink: "Add a node",
     },
     service: {
@@ -1905,7 +1906,7 @@ const en = {
             "The regions below are Tailscale's official DERP relays: public infrastructure run by Tailscale, not nodes you host yourself. This card mirrors that official map into a local map file and hands it to your clients, renumbering the regions into the 900s so you can keep only the ones you want. Tailscale changes those addresses over time, which is why the mirror refreshes itself.",
           summary: "{regions} official regions · {selected} selected · {file}",
           regionsBody:
-            "Tick the regions clients may use. Latency comes from the HeadplaneCN Agent's measurements across the machines it can see, so a region nothing measured stays unknown.",
+            "Tick the regions clients may use. Latency comes from the HeadplaneCN Agent's measurements across the machines it can see, and from Test latency, which measures the official regions from this server. A region neither source measured stays unknown.",
           regionsEmpty:
             "No official region has been read yet. HeadplaneCN fetches Tailscale's map in the background; check that this server can reach controlplane.tailscale.com.",
           regionsUnreadable: "The official map could not be read: {reason}.",
@@ -1917,12 +1918,27 @@ const en = {
           fetchReasonTooLarge: "the map is larger than HeadplaneCN reads",
           fetchReasonUnreadable: "the answer is not a DERP map",
           agentRequired:
-            "The HeadplaneCN Agent is not running, so no region has a measured latency. Tick regions by hand, or enable the agent to rank them.",
+            "No region has a measurement: the HeadplaneCN Agent is not running, and this server has not tested them. Tick regions by hand, or use Test latency to rank them.",
           numberingNote:
             "901 is always Hong Kong and 902 always Singapore; the rest of the ticked regions are numbered from 903 upward by measured latency, ties going to the lower official id and then to the code. A region that already has a number keeps it when you save — Renumber applies these numbers to every mirrored region.",
           rankingNever:
             "No ranking has been recorded yet, so the numbers below are a fresh ranking.",
           rankingAt: "Ranked from the latest measurements at {at}.",
+          probe: "Test latency",
+          probeRunning: "Testing latency…",
+          probeStop: "Stop",
+          probeNever: "No latency has been measured from this server yet.",
+          probeMeasuredAt: "Measured from this server at {at}.",
+          probeNote:
+            "A measurement taken here reflects this server's own network path: a good proxy for clients nearby, not a guarantee for remote ones.",
+          probePartial:
+            "Some official regions did not answer from this server; those rows keep the values machines reported.",
+          probeEmpty:
+            "Could not probe from this server — UDP 3478 may be blocked. Falling back to the latencies the machines reported.",
+          probeCancelled:
+            "The measurement was stopped before it finished; the rows show whatever it had gathered.",
+          latencySourceMeasured: "measured here",
+          latencySourceReported: "reported by machines",
           selectedSummary: {
             one: "{count} region selected",
             other: "{count} regions selected",
@@ -1946,6 +1962,7 @@ const en = {
             one: "Added {count} region name",
             other: "Added {count} region names",
           },
+          regionTableLabel: "Official region list",
           columnNumber: "Assigned number",
           columnName: "Chinese name",
           columnCode: "Official code",
@@ -1954,7 +1971,8 @@ const en = {
           columnLatency: "Measured latency",
           columnSelect: "Include",
           latencyUnknown: "Not measured",
-          latencyNoMeasurements: "No machine has reported a latency yet.",
+          latencyNoMeasurements:
+            "No machine and no test from this server has measured a latency yet.",
           agentSettingsLink: "Open the Agent settings",
           fixedRegion: "Always mirrored",
           currentNumber: "now {number}",
@@ -2043,6 +2061,9 @@ const en = {
             derpMirrorCheckFailed: "The check could not be completed.",
             derpMirrorRunFailed: "The mirror run could not be completed.",
             derpMirrorReassignFailed: "The regions could not be renumbered.",
+            derpMirrorProbeBusy:
+              "A latency test is already running. Stop it before starting another.",
+            derpMirrorProbeFailed: "The latency test could not be completed.",
             derpMirrorUnavailable: "The region mirror is not available on this server.",
           },
         },

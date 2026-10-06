@@ -368,7 +368,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="status">
           <SettingsCollapsible
-            defaultOpen
             description={!reachable ? t("settings.system.statusUnhealthyBody") : undefined}
             icon={HeartPulse}
             status={{
@@ -403,8 +402,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="process">
           <SettingsCollapsible
-            defaultOpen
             description={t("settings.system.processBody")}
+            hasError={Boolean(error)}
             icon={Power}
             status={{
               tone: !integration ? "neutral" : loaderData.canProcess ? "ok" : "warn",
@@ -606,7 +605,7 @@ function CheckGroups<Id extends string>({
         const counts = countChecks(rows);
         return (
           <SettingsCollapsible
-            defaultOpen={counts.fail > 0}
+            hasError={counts.fail > 0}
             icon={group.icon}
             key={group.id}
             status={{ tone: countsTone(counts), label: countStatus(t, counts) }}

@@ -69,6 +69,8 @@ export type HeadscaleSettingsErrorCode =
   | "derpMirrorCheckFailed"
   | "derpMirrorRunFailed"
   | "derpMirrorReassignFailed"
+  | "derpMirrorProbeBusy"
+  | "derpMirrorProbeFailed"
   | "derpMirrorUnavailable";
 
 export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, TranslationKey> = {
@@ -131,6 +133,8 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpMirrorCheckFailed: "settings.headscale.derp.mirror.errors.derpMirrorCheckFailed",
   derpMirrorRunFailed: "settings.headscale.derp.mirror.errors.derpMirrorRunFailed",
   derpMirrorReassignFailed: "settings.headscale.derp.mirror.errors.derpMirrorReassignFailed",
+  derpMirrorProbeBusy: "settings.headscale.derp.mirror.errors.derpMirrorProbeBusy",
+  derpMirrorProbeFailed: "settings.headscale.derp.mirror.errors.derpMirrorProbeFailed",
   derpMirrorUnavailable: "settings.headscale.derp.mirror.errors.derpMirrorUnavailable",
 };
 

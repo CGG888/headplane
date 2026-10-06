@@ -168,7 +168,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       >
         <SettingsCollapsibleGroup>
           <SettingsCollapsible
-            defaultOpen
             description={t("settings.agent.setupRowBody")}
             icon={BookOpen}
             status={{ tone: "error", label: t("settings.agent.notEnabledTitle") }}
@@ -271,7 +270,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     >
       <SettingsCollapsibleGroup>
         <SettingsCollapsible
-          defaultOpen
           description={t("settings.agent.actionsBody")}
           icon={RefreshCw}
           status={{ tone: statusTone, label: statusText }}
@@ -343,7 +341,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </SettingsCollapsible>
 
         <SettingsCollapsible
-          defaultOpen
           description={t("settings.agent.coverageBody")}
           icon={Activity}
           status={{ tone: coverageTone, label: coverageStatus }}

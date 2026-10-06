@@ -18,11 +18,13 @@ function group(
   source: string,
   state: DerpMapFileState,
   regions: { regionId: number; code?: string; name?: string; nodes?: ReturnType<typeof node>[] }[],
+  unlisted = false,
 ): DerpMapGroupReading {
   return {
     kind,
     source,
     state,
+    ...(unlisted ? { unlisted: true } : {}),
     regions: regions.map((region) => ({
       regionId: region.regionId,
       code: region.code ?? "",
@@ -185,6 +187,97 @@ describe("derpNodeSources", () => {
     });
 
     expect(source(result, "mirror")?.gap).toBe("unlisted");
+    expect(source(result, "mirror")?.note).toBeUndefined();
+  });
+
+  test("counts an unlisted filter file's nodes and says nobody receives them yet", () => {
+    const result = view({
+      embedded: { enabled: false },
+      mirrorEnabled: true,
+      groups: [
+        group(
+          "mirror",
+          "/maps/official-mirror.yaml",
+          "ok",
+          [{ regionId: 911, code: "hkg", nodes: [node("911a", "hkg.example.com")] }],
+          true,
+        ),
+      ],
+    });
+
+    expect(source(result, "mirror")?.nodes).toEqual([
+      { name: "911a", address: "hkg.example.com:443" },
+    ]);
+    // The file holds nodes, so it has no gap: it carries the "not listed yet"
+    // note instead, and this machine does not serve what it describes.
+    expect(source(result, "mirror")?.gap).toBeUndefined();
+    expect(source(result, "mirror")?.note).toBe("unlisted");
+    expect(source(result, "mirror")?.served).toBe(false);
+    expect(result.served).toBe(0);
+    expect(result.total).toBe(1);
+  });
+
+  test("a listed filter file stays with the filter row, never with the local files", () => {
+    const result = view({
+      embedded: { enabled: false },
+      mirrorEnabled: true,
+      groups: [
+        group("local", "/maps/local.yaml", "ok", [
+          { regionId: 901, nodes: [node("901a", "a.example.com")] },
+        ]),
+        group("mirror", "/maps/official-mirror.yaml", "ok", [
+          { regionId: 911, nodes: [node("911a", "hkg.example.com")] },
+        ]),
+      ],
+    });
+
+    expect(source(result, "local")?.nodes.map((line) => line.name)).toEqual(["901a"]);
+    expect(source(result, "mirror")?.nodes.map((line) => line.name)).toEqual(["911a"]);
+    expect(source(result, "mirror")?.note).toBeUndefined();
+    expect(source(result, "mirror")?.served).toBe(true);
+    expect(result.served).toBe(2);
+    expect(result.total).toBe(2);
+  });
+
+  test("an unlisted filter file nobody could read keeps the honest reason", () => {
+    const result = view({
+      embedded: { enabled: false },
+      mirrorEnabled: true,
+      groups: [group("mirror", "/maps/official-mirror.yaml", "unreadable", [], true)],
+    });
+
+    expect(source(result, "mirror")?.nodes).toEqual([]);
+    expect(source(result, "mirror")?.gap).toBe("unreadable");
+    expect(source(result, "mirror")?.note).toBeUndefined();
+  });
+
+  test("a region an unlisted filter file describes is not counted twice", () => {
+    const result = view({
+      embedded: { enabled: false },
+      mirrorEnabled: true,
+      groups: [
+        group(
+          "mirror",
+          "/maps/official-mirror.yaml",
+          "ok",
+          [{ regionId: 911, nodes: [node("911a", "hkg.example.com")] }],
+          true,
+        ),
+        group("remote", "https://example.com/public.yaml", "ok", [
+          { regionId: 911, nodes: [node("911x", "shadow.example.com")] },
+          { regionId: 903, code: "syd", nodes: [node("903a", "syd.example.com")] },
+        ]),
+      ],
+    });
+
+    expect(source(result, "mirror")?.nodes).toEqual([
+      { name: "911a", address: "hkg.example.com:443" },
+    ]);
+    expect(source(result, "official")?.nodes).toEqual([
+      { name: "903a", address: "syd.example.com:443" },
+    ]);
+    expect(result.total).toBe(2);
+    expect(result.served).toBe(0);
   });
 
   test("map files nobody could read, and maps that list nothing, read apart", () => {

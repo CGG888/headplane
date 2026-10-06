@@ -46,7 +46,10 @@ import {
   SINGAPORE_MIRROR_NUMBER,
   SINGAPORE_REGION_ID,
 } from "~/server/derp-mirror/generate";
-import { officialRegionLatencies } from "~/server/derp-mirror/latency";
+import {
+  locallyMeasuredRegionLatencies,
+  officialRegionLatencies,
+} from "~/server/derp-mirror/latency";
 import { chineseRegionName } from "~/server/derp-mirror/names";
 import { OFFICIAL_DERP_MAP_URL } from "~/server/derp-mirror/service.server";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
@@ -78,6 +81,7 @@ import ServerOverview from "./components/server-overview";
 import TrustedProxies from "./components/trusted-proxies";
 import { findFatalOidcKeys } from "./config-warnings";
 import type { MirrorNumbering, MirrorRegionRow } from "./derp-mirror";
+import { mirrorRegionLatency } from "./derp-mirror";
 import {
   classifyDerpRelaySource,
   defaultDerpPrivateKeyPath,
@@ -181,6 +185,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     }
   }
 
+  // The latencies this server probed itself, which is the only source that can
+  // measure Tailscale's official regions on a mirrored setup — a client only
+  // knows the map Headscale handed it. They win over the reported values, and
+  // each row is labelled with the source it actually came from.
+  const measuredLatencies = locallyMeasuredRegionLatencies(mirrorSettings.latency);
+
   let officialRegions: DerpMapRegionDetail[] = [];
   // Why the official map could not be read, so the mirror card can say so
   // instead of rendering an empty table. The first failed attempt wins.
@@ -207,23 +217,31 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     mirrorRegionsError ??= "network";
   }
 
-  const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => ({
-    officialId: region.regionId,
-    code: region.code,
-    officialName: region.name,
-    // The name the mirrored file will carry, so the column and the file agree.
-    chineseName: chineseRegionName(region.code, region.name),
-    nodeCount: region.nodes.length,
-    latencyMs: mirrorLatencies[String(region.regionId)],
-    storedNumber: mirrorSettings.assignment[String(region.regionId)],
-  }));
+  const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => {
+    const latency = mirrorRegionLatency(measuredLatencies, mirrorLatencies, region.regionId);
+
+    return {
+      officialId: region.regionId,
+      code: region.code,
+      officialName: region.name,
+      // The name the mirrored file will carry, so the column and the file agree.
+      chineseName: chineseRegionName(region.code, region.name),
+      nodeCount: region.nodes.length,
+      latencyMs: latency.latencyMs,
+      ...(latency.source === undefined ? {} : { latencySource: latency.source }),
+      storedNumber: mirrorSettings.assignment[String(region.regionId)],
+    };
+  });
 
   // One call to the server's rule over every official region yields the ranking
   // order and the pinned anchors; ticking a subset only filters that order, which
-  // is why the preview matches the numbers a fresh ranking assigns to it.
+  // is why the preview matches the numbers a fresh ranking assigns to it. The
+  // local measurements are handed over separately so the rule can prefer them.
   const ranked = assignRegionNumbers(
     mirrorRegions.map((region) => String(region.officialId)),
     mirrorLatencies,
+    undefined,
+    measuredLatencies,
   );
   const describedIds = new Set(mirrorRegions.map((region) => region.officialId));
   const orderedIds = Object.entries(ranked.assignment)
@@ -276,6 +294,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       regions: mirrorRegions,
       // A stable code, not a message: the card localizes it.
       regionsError: mirrorRegionsError,
+      // The newest local probe, as plain values: when it ran and how it ended,
+      // so the card can show progress, say when a run found nothing, and decide
+      // whether a stale measurement is worth refreshing when it opens.
+      probe: {
+        measuredAt: mirrorSettings.latency?.measuredAt,
+        outcome: mirrorSettings.latency?.outcome,
+      },
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -402,7 +427,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="oidc">
           <SettingsCollapsible
-            defaultOpen
             icon={KeyRound}
             status={{
               tone: oidcConfigured ? "ok" : "warn",
@@ -423,7 +447,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="trusted-proxies">
           <SettingsCollapsible
-            defaultOpen
             description={t("settings.headscale.trustedProxiesBody")}
             icon={ShieldCheck}
             status={{
@@ -440,7 +463,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="policy">
           <SettingsCollapsible
-            defaultOpen
             description={t("settings.headscale.policyBody")}
             icon={Scale}
             status={{
@@ -495,6 +517,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             isDisabled={isDisabled}
             last={mirror.last}
             numbering={mirror.numbering}
+            probe={mirror.probe}
             regionError={mirror.regionsError}
             regions={mirror.regions}
             settings={mirror.settings}
@@ -509,7 +532,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
         <SettingsPanel value="derp-regions">
           <SettingsCollapsible
-            defaultOpen
             description={t("settings.headscale.derp.regionNamesBody")}
             icon={Tags}
             status={{

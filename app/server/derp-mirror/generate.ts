@@ -12,11 +12,14 @@
 // this region reaches first keep the numbers they are known by. 901, 902 and
 // 999 — Headscale's embedded region id — are never given to anything else. The
 // remaining selected regions are ranked into 903+ by measured latency, fastest
-// first, and equal latencies are settled by official region id. That comparison
-// is a total order over distinct ids, so the result never depends on the order
-// the caller listed the selection in. (The official region *code* would be the
-// finer tie-break an operator sees, but this call receives ids and latencies
-// only, so the id decides and the caller's order is the last resort.)
+// first, and equal latencies are settled by official region id. The latencies
+// this server probed itself take precedence over the ones the agent's machines
+// reported, so a mirror can rank the official regions the clients cannot see.
+// That comparison is a total order over distinct ids, so the result never
+// depends on the order the caller listed the selection in. (The official region
+// *code* would be the finer tie-break an operator sees, but this call receives
+// ids and latencies only, so the id decides and the caller's order is the last
+// resort.)
 //
 // The assignment is sticky. A stored assignment that still covers every selected
 // region is returned unchanged and `rankedAt` is left alone, so a scheduled run
@@ -150,6 +153,23 @@ function readLatency(latenciesMs: Record<string, number>, id: string): number | 
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
+/**
+ * The latency one region is ranked by, when it has one: the value this server
+ * measured itself first, the machine-reported value next.
+ *
+ * The local probe is the newer signal and the only one that can see the
+ * official regions a mirrored setup hands out, so it wins wherever it exists; a
+ * region nobody probed here keeps exactly the reported value it had before.
+ */
+function readRankingLatency(
+  reportedMs: Record<string, number>,
+  measuredMs: Record<string, number> | undefined,
+  id: string,
+): number | undefined {
+  const measured = measuredMs === undefined ? undefined : readLatency(measuredMs, id);
+  return measured ?? readLatency(reportedMs, id);
+}
+
 /** Ids in ascending numeric order: the tie-break when latencies are equal. */
 function compareIds(a: string, b: string): number {
   return Number(a) - Number(b) || a.localeCompare(b);
@@ -195,15 +215,21 @@ export interface RegionNumbering {
  *
  * `existing` is the stored assignment; when it covers the whole selection it is
  * returned as it is and the caller keeps its `rankedAt`. Otherwise the covered
- * regions keep their numbers, the new ones are ranked by `latenciesMs` (a region
- * with no sample ranks last) and appended after the highest number in use, and
- * the returned `rankedAt` says when that happened. Every returned number is
- * inside 900-999 and outside the reserved set, and no number is handed out twice.
+ * regions keep their numbers, the new ones are ranked by `measuredMs` first and
+ * `latenciesMs` next (a region with no sample at all ranks last) and appended
+ * after the highest number in use, and the returned `rankedAt` says when that
+ * happened. Every returned number is inside 900-999 and outside the reserved
+ * set, and no number is handed out twice.
+ *
+ * `latenciesMs` are the latencies the Headplane Agent's machines reported;
+ * `measuredMs` are the ones this server probed itself, and a local value wins
+ * over a reported one for the same region.
  */
 export function assignRegionNumbers(
   selectedOfficialIds: string[],
   latenciesMs: Record<string, number>,
   existing?: Record<string, number>,
+  measuredMs?: Record<string, number>,
 ): RegionNumbering {
   const selected = readSelection(selectedOfficialIds);
   const previous = readExisting(existing);
@@ -241,7 +267,11 @@ export function assignRegionNumbers(
 
   const ranked = selected
     .filter((id) => !kept.has(id))
-    .map((id, index) => ({ id, index, latency: readLatency(latenciesMs, id) }))
+    .map((id, index) => ({
+      id,
+      index,
+      latency: readRankingLatency(latenciesMs, measuredMs, id),
+    }))
     .toSorted((a, b) => {
       // Unmeasured regions rank behind measured ones, then by official id. The
       // recorded position is the last resort: `compareIds` is already a total

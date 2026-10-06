@@ -55,6 +55,7 @@ import {
   mirrorMapChanged,
   renderMirrorYaml,
 } from "./generate";
+import { locallyMeasuredRegionLatencies } from "./latency";
 import {
   derpMirrorIntervalMs,
   normalizeDerpMirrorSettings,
@@ -600,7 +601,9 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         });
       }
 
-      // 5. Ranking: the stored numbering is kept unless this is a re-rank.
+      // 5. Ranking: the stored numbering is kept unless this is a re-rank. The
+      //    latencies this server measured itself win over the reported ones, so
+      //    a re-rank uses the same values the region filter's table shows.
       let latencies: Record<string, number> = {};
       try {
         latencies = await loadLatencies();
@@ -612,6 +615,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         mirrored,
         latencies,
         forceRerank ? undefined : current.assignment,
+        locallyMeasuredRegionLatencies(current.latency),
       );
 
       // 6. Render, then validate with the validator the map editor uses: a

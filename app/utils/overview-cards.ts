@@ -95,18 +95,55 @@ export function parseHiddenOverviewCards(raw: string | null | undefined): Overvi
 }
 
 /**
+ * The cards whose *content is the alert*: a rejected API key, a Headscale that
+ * does not answer, an update that is available, a failed address sync, an
+ * unreadable DERP map, a snapshot store nothing can list. Only these are ever
+ * protected from being hidden.
+ *
+ * The health summary is deliberately not one of them. It summarizes the same
+ * checks, so hiding it hides a summary rather than an alert: a failing check
+ * still reaches the operator through the notification webhooks. The operator
+ * asked to be able to hide it even while it is not perfectly healthy, so a
+ * warning or a failure there no longer forces it back onto the page.
+ */
+export const OVERVIEW_ALERT_CARD_IDS = [
+  "versions-headplane",
+  "versions-headscale",
+  "versions-agent",
+  "derp-relay",
+  "derp-nodes",
+  "service-server",
+  "service-metrics",
+  "counts-tailnet",
+  "counts-headplane",
+] as const;
+
+const OVERVIEW_ALERT_CARD_ID_SET: ReadonlySet<string> = new Set(OVERVIEW_ALERT_CARD_IDS);
+
+/**
+ * Whether this card is protected from being hidden when it reports a problem.
+ * The page's own alert flags decide *when* a card alerts; this decides which
+ * cards may ever be protected at all.
+ */
+export function isAlertOverviewCard(id: OverviewCardId): boolean {
+  return OVERVIEW_ALERT_CARD_ID_SET.has(id);
+}
+
+/**
  * The hidden set as it may actually be applied.
  *
- * A card that carries a warning, an alert or a failure is never hidden: it is
- * dropped from the set here, in the one place every reader goes through, so a
- * stored payload — including one written before the card started reporting a
- * problem — can never make an operator miss it.
+ * A card that carries a warning, an alert or a failure is never hidden — unless
+ * its content is not an alert in its own right (see
+ * {@link OVERVIEW_ALERT_CARD_IDS}). It is dropped from the set here, in the one
+ * place every reader goes through, so a stored payload — including one written
+ * before the card started reporting a problem — can never make an operator miss
+ * an actual alert.
  */
 export function effectiveHiddenOverviewCards(
   hidden: readonly OverviewCardId[],
   alerting: readonly OverviewCardId[] = [],
 ): OverviewCardId[] {
-  const protectedIds = new Set(alerting);
+  const protectedIds = new Set(alerting.filter(isAlertOverviewCard));
   return hidden.filter((id) => !protectedIds.has(id));
 }
 

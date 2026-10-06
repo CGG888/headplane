@@ -119,7 +119,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <AuditFiltersSection filters={filters} total={total} />
 
         <SettingsCollapsible
-          defaultOpen
           description={t("settings.audit.listBody")}
           icon={ScrollText}
           status={{

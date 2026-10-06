@@ -39,34 +39,22 @@ features:
     icon: "📝"
 ---
 
-## About this fork
+## What makes this fork different
 
-This is [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN), aimed at
-self-hosted NAS setups (fnOS in particular). This project is based on the
-upstream [Headplane](https://github.com/tale/headplane) project by
-[tale](https://github.com/tale); that credit, its licence and its original
-features are kept here.
-
-Everything this fork adds or changes compared with upstream lives on its own
-page:
-
-[See how this fork differs →](/en/differences)
-
-## What sets it apart
-
-Four things this fork does that are worth a look on their own; the full list
-lives in [differences from upstream](/en/differences).
+This is [`CGG888/headplaneCN`](https://github.com/CGG888/headplaneCN) for
+self-hosted NAS setups (fnOS in particular), based on the upstream
+[Headplane](https://github.com/tale/headplane) project by
+[tale](https://github.com/tale), with that credit, its licence and its original
+features kept intact; see [differences from upstream](/en/differences) for what
+it adds or changes.
 
 <div class="feature-grid">
 <div class="feature-card">
 
 ### fnOS and native Headscale, working as one
 
-Run a containerised HeadplaneCN against a natively installed Headscale: `pid: host`
-lets `integration.proc` discover and signal `headscale serve`, and the
-`config.yaml` that actually takes effect is mounted **read-write**. The usual trap
-is `derp.paths` — every entry has to be a **host path** whose directory is mounted
-into the container **at the same absolute path**.
+Run containerised HeadplaneCN against native fnOS Headscale using `pid: host`
+and a read-write `config.yaml`.
 
 [fnOS installation →](/en/install/fnos)
 
@@ -75,10 +63,8 @@ into the container **at the same absolute path**.
 
 ### Official region filter
 
-Mirror only the official relays you want into one local map file, renumbered into
-the **900s**: **901 is always Hong Kong, 902 always Singapore**, and the rest
-follow from **903** in the order your own machines measure. Numbers stay put once
-assigned, so clients do not switch relays over one noisy latency sample.
+Mirror only the official relays you pick, renumbered stably: 901 Hong Kong,
+902 Singapore.
 
 [Headscale settings →](/en/features/headscale-settings)
 
@@ -87,11 +73,8 @@ assigned, so clients do not switch relays over one noisy latency sample.
 
 ### Relay address auto-sync and external IPv6 echo
 
-The addresses clients have to reach are detected and written back for you — on a
-6/12/24-hour schedule or on demand — after snapshotting the configuration and
-recording an audit entry. An optional external IPv6 echo answers what the internet
-really sees once a router forwards or translates the address (**off by default**,
-IPv6-only).
+Relay addresses are written back on a schedule or on demand; external IPv6 echo
+is optional.
 
 [Headscale settings →](/en/features/headscale-settings)
 
@@ -100,9 +83,8 @@ IPv6-only).
 
 ### DERP map files you edit in the browser
 
-View and edit any `derp.paths` file in the browser, or create one from a commented
-template. Saves are validated against the DERP map schema and snapshotted first,
-so a wrong edit is one click from being rolled back.
+`derp.paths` files are edited in the browser, validated and snapshotted on save
+for one-click rollback.
 
 [Headscale settings →](/en/features/headscale-settings)
 

@@ -128,7 +128,6 @@ export default function Page({ loaderData: { keys } }: Route.ComponentProps) {
         <CreateApiKey />
 
         <SettingsCollapsible
-          defaultOpen
           description={t("settings.apiKeys.listBody")}
           icon={KeyRound}
           status={{

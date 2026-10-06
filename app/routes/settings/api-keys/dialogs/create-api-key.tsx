@@ -35,8 +35,8 @@ export default function CreateApiKey() {
 
   return (
     <SettingsCollapsible
-      defaultOpen
       description={t("settings.apiKeys.createSectionBody")}
+      hasError={Boolean(error)}
       icon={CirclePlus}
       status={createdKey ? { tone: "ok", label: t("settings.apiKeys.createdTitle") } : undefined}
       title={t("settings.apiKeys.createTitle")}

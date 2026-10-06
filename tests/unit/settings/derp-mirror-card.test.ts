@@ -4,7 +4,12 @@ import {
   defaultMirrorSelection,
   fixedRegionIds,
   isDefaultMirrorSelection,
+  isMirrorProbeStale,
+  MIRROR_LATENCY_SOURCE_KEYS,
+  MIRROR_PROBE_FRESH_MS,
+  MIRROR_PROBE_OUTCOME_KEYS,
   mirrorLatencyNotice,
+  mirrorRegionLatency,
   previewRegionNumbers,
   regionsBelowLatency,
   sortMirrorRegions,
@@ -147,5 +152,61 @@ describe("latency filter", () => {
   test("a ceiling drops the regions above it and every unmeasured one", () => {
     expect(regionsBelowLatency(regions, 50).map((region) => region.officialId)).toEqual([5, 7]);
     expect(regionsBelowLatency(regions, 20).map((region) => region.officialId)).toEqual([5]);
+  });
+});
+
+describe("latency sources", () => {
+  test("prefers this server's own measurement and labels it", () => {
+    expect(mirrorRegionLatency({ "20": 12 }, { "20": 300, "3": 45 }, 20)).toEqual({
+      latencyMs: 12,
+      source: "measured",
+    });
+    expect(mirrorRegionLatency({ "20": 12 }, { "3": 45 }, 3)).toEqual({
+      latencyMs: 45,
+      source: "reported",
+    });
+    expect(mirrorRegionLatency({}, {}, 9)).toEqual({});
+  });
+
+  test("gives each source its own wording, so the two cannot be confused", () => {
+    expect(MIRROR_LATENCY_SOURCE_KEYS.measured).toBe(
+      "settings.headscale.derp.mirror.latencySourceMeasured",
+    );
+    expect(MIRROR_LATENCY_SOURCE_KEYS.reported).toBe(
+      "settings.headscale.derp.mirror.latencySourceReported",
+    );
+    expect(MIRROR_LATENCY_SOURCE_KEYS.measured).not.toBe(MIRROR_LATENCY_SOURCE_KEYS.reported);
+  });
+});
+
+describe("probe freshness", () => {
+  const now = Date.parse("2026-01-02T12:00:00.000Z");
+
+  test("nothing measured yet is stale, so opening the card probes", () => {
+    expect(isMirrorProbeStale({}, now)).toBe(true);
+    expect(isMirrorProbeStale({ measuredAt: "whenever" }, now)).toBe(true);
+  });
+
+  test("a recent measurement is fresh and an old one is stale", () => {
+    expect(isMirrorProbeStale({ measuredAt: "2026-01-02T11:55:00.000Z" }, now)).toBe(false);
+    expect(
+      isMirrorProbeStale(
+        { measuredAt: new Date(now - MIRROR_PROBE_FRESH_MS + 1).toISOString() },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isMirrorProbeStale({ measuredAt: new Date(now - MIRROR_PROBE_FRESH_MS).toISOString() }, now),
+    ).toBe(true);
+    expect(isMirrorProbeStale({ measuredAt: "2026-01-02T11:00:00.000Z" }, now)).toBe(true);
+  });
+
+  test("a finished probe says something for every non-clean outcome", () => {
+    expect(MIRROR_PROBE_OUTCOME_KEYS.partial).toBe("settings.headscale.derp.mirror.probePartial");
+    expect(MIRROR_PROBE_OUTCOME_KEYS.empty).toBe("settings.headscale.derp.mirror.probeEmpty");
+    expect(MIRROR_PROBE_OUTCOME_KEYS.cancelled).toBe(
+      "settings.headscale.derp.mirror.probeCancelled",
+    );
+    expect(MIRROR_PROBE_OUTCOME_KEYS.complete).toBeUndefined();
   });
 });

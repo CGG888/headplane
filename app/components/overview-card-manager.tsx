@@ -8,6 +8,7 @@ import cn from "~/utils/cn";
 import {
   browserOverviewCardStorage,
   clearHiddenOverviewCards,
+  isAlertOverviewCard,
   type OverviewCardId,
   OVERVIEW_CARD_IDS,
   readHiddenOverviewCards,
@@ -47,11 +48,24 @@ const CARD_LABEL_KEYS: Record<OverviewCardId, TranslationKey> = {
   "health-summary": "overview.health.title",
 };
 
+/**
+ * The one card that needs a sentence of its own in the panel: the health summary
+ * may be hidden while it is not perfectly healthy, because hiding it hides the
+ * summary, not the alert — a failing check is still delivered through the
+ * notification webhooks. Every other card either says nothing or is protected.
+ */
+const CARD_NOTE_KEYS: Partial<Record<OverviewCardId, TranslationKey>> = {
+  "health-summary": "overview.cards.healthHideableNote",
+};
+
 interface OverviewCardsState {
   /** False until the page binds its scope, so a stray card renders no control. */
   bound: boolean;
   userKey: string;
-  /** Cards that carry a warning, an alert or a failure: never hidden. */
+  /**
+   * The cards that are an active alert right now and may therefore be
+   * protected from being hidden. The health summary never reaches this set.
+   */
   alerting: ReadonlySet<OverviewCardId>;
   hidden: readonly OverviewCardId[];
 }
@@ -102,13 +116,16 @@ function useOverviewCardsState(): OverviewCardsState {
 /**
  * Binds this page's user and alert set to the shared visibility store. The
  * stored set is read here, once, and the protection rule is applied on the way
- * in — so an alerting card is visible no matter what storage says, and its
- * stored preference returns by itself once it stops reporting a problem.
+ * in — so a card that is an alert in its own right (see
+ * {@link ~/utils/overview-cards}, `isAlertOverviewCard`) is visible no matter
+ * what storage says, and its stored preference returns by itself once it stops
+ * reporting a problem. The health summary is filtered out here, alongside the
+ * reader, so its checkbox is never disabled and never shows as protected.
  */
 export function useOverviewCardsScope(userKey: string, alerting: readonly OverviewCardId[]): void {
   // The alert set is rebuilt on every render of the page, so its contents — not
   // the array identity — decide whether the stored set has to be read again.
-  const alertingKey = [...alerting].join(",");
+  const alertingKey = [...alerting].filter(isAlertOverviewCard).join(",");
   const alertingIds = useMemo<ReadonlySet<OverviewCardId>>(
     () => new Set(alertingKey.length === 0 ? [] : (alertingKey.split(",") as OverviewCardId[])),
     [alertingKey],
@@ -260,6 +277,7 @@ export function OverviewCardManager() {
               const isAlerting = alerting.has(id);
               const isHidden = hidden.includes(id);
               const label = t(CARD_LABEL_KEYS[id]);
+              const noteKey = CARD_NOTE_KEYS[id];
 
               return (
                 <li key={id}>
@@ -296,6 +314,11 @@ export function OverviewCardManager() {
                       </span>
                     ) : undefined}
                   </label>
+                  {noteKey === undefined ? undefined : (
+                    <p className="mt-0.5 pl-6 text-xs text-mist-500 dark:text-mist-400">
+                      {t(noteKey)}
+                    </p>
+                  )}
                 </li>
               );
             })}

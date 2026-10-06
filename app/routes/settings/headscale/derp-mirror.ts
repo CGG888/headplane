@@ -21,6 +21,7 @@
 import type { TranslationKey } from "~/i18n";
 import type {
   DerpMirrorOutcome,
+  DerpMirrorProbeOutcome,
   DerpMirrorReason,
   DerpMirrorReload,
   DerpMirrorRun,
@@ -56,11 +57,81 @@ export interface MirrorRegionRow {
   /** The Chinese name the mirrored file carries, exactly as the server prints it. */
   chineseName: string;
   nodeCount: number;
-  /** Lowest latency the agent measured for this region, in milliseconds. */
+  /** Lowest latency for this region, in milliseconds, from either source. */
   latencyMs: number | undefined;
+  /**
+   * Which source that latency came from: a measurement taken on this server, or
+   * the value the machines reported. Absent when the region is unmeasured.
+   */
+  latencySource?: MirrorLatencySource;
   /** The mirrored number the settings already hold for this region. */
   storedNumber: number | undefined;
 }
+
+/**
+ * Where one row's latency came from. The two are never mixed silently: a local
+ * measurement reflects this server's network path, a reported one reflects the
+ * path of whichever machine measured it, and the card labels each row.
+ */
+export type MirrorLatencySource = "measured" | "reported";
+
+/** The label each latency row carries for its source. */
+export const MIRROR_LATENCY_SOURCE_KEYS: Record<MirrorLatencySource, TranslationKey> = {
+  measured: "settings.headscale.derp.mirror.latencySourceMeasured",
+  reported: "settings.headscale.derp.mirror.latencySourceReported",
+};
+
+/** The value and source one region's latency has, from the two sample sets. */
+export function mirrorRegionLatency(
+  measured: Record<string, number>,
+  reported: Record<string, number>,
+  officialId: number,
+): { latencyMs?: number; source?: MirrorLatencySource } {
+  const id = String(officialId);
+  const local = measured[id];
+  if (local !== undefined) {
+    return { latencyMs: local, source: "measured" };
+  }
+
+  const remote = reported[id];
+  return remote === undefined ? {} : { latencyMs: remote, source: "reported" };
+}
+
+/**
+ * The newest local probe, as the card reports it. Plain values only: when it
+ * ran, and how it ended.
+ */
+export interface MirrorProbeView {
+  /** ISO timestamp of the newest run; absent until the first probe finishes. */
+  measuredAt?: string;
+  /** How that run ended; absent until the first probe finishes. */
+  outcome?: DerpMirrorProbeOutcome;
+}
+
+/**
+ * How old a stored measurement may be before opening the card probes again. Ten
+ * minutes keeps a reopened card from dialling the official relays on every
+ * visit while still showing something current to an operator who is looking at
+ * latency.
+ */
+export const MIRROR_PROBE_FRESH_MS = 10 * 60 * 1000;
+
+/** Whether a probe should run on open: nothing measured yet, or a stale run. */
+export function isMirrorProbeStale(probe: MirrorProbeView, now: number): boolean {
+  if (probe.measuredAt === undefined) {
+    return true;
+  }
+
+  const at = Date.parse(probe.measuredAt);
+  return !Number.isFinite(at) || now - at >= MIRROR_PROBE_FRESH_MS;
+}
+
+/** The one sentence a finished probe leaves behind, when it has one to say. */
+export const MIRROR_PROBE_OUTCOME_KEYS: Partial<Record<DerpMirrorProbeOutcome, TranslationKey>> = {
+  partial: "settings.headscale.derp.mirror.probePartial",
+  empty: "settings.headscale.derp.mirror.probeEmpty",
+  cancelled: "settings.headscale.derp.mirror.probeCancelled",
+};
 
 /**
  * The order and the fixed anchors the server's rule produced for the full set of

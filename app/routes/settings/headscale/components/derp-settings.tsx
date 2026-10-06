@@ -284,7 +284,6 @@ export default function DerpSettings({
   return (
     <SettingsCollapsibleGroup>
       <SettingsCollapsible
-        defaultOpen
         description={t("settings.headscale.derp.urlsBody")}
         icon={Map}
         status={relaySourceStatus}

@@ -112,8 +112,8 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
 
   return (
     <SettingsCollapsible
-      defaultOpen
       description={t("settings.notifications.channelBody")}
+      hasError={Boolean(saveError) || testOutcome?.ok === false}
       icon={Webhook}
       status={{
         tone: settings.enabled ? "ok" : "neutral",
@@ -233,6 +233,7 @@ function EventsSection({ settings }: { settings: AlertSettings }) {
   return (
     <SettingsCollapsible
       description={t("settings.notifications.eventsBody")}
+      hasError={Boolean(error)}
       icon={BellRing}
       status={{
         tone: selected.length > 0 ? "ok" : "error",
