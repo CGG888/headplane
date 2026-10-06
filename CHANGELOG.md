@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.9 (October 6, 2026)
+
 ## Changes
 
 - **Every settings card starts closed now**, so opening a settings tab shows you what is available instead of a wall of open panels. A card opens itself only when it is carrying an error or a failed action, and collapsing is local state, so nothing reloads or refetches as you open and close cards.
@@ -7,6 +9,9 @@
 - **The health summary can be hidden** like the other Overview cards. Cards that are themselves an alert stay visible, and a failing health check still reaches you through alert notifications.
 - **Official regions can be tested from this server.** A button in the region filter probes each node with a STUN request over UDP and a TLS fallback, for each address family, cached, cancellable and limited so a page load never probes anything; the numbering order now prefers what was measured here over what machines reported, and every row says which of the two a number came from.
 - **Official regions all have Chinese names** — including São Paulo, Dubai, Honolulu, Nairobi and Nuremberg — and the region list scrolls inside a bounded area with a sticky header, so a long list can neither stretch nor clip the card.
+
+---
+
 # 0.22.8 (October 6, 2026)
 
 ## Changes
