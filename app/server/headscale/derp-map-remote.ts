@@ -4,10 +4,23 @@
  *
  * Headscale fetches those maps itself and never exposes the merged result, so
  * Headplane reads the same URLs to learn which region id belongs to which code
- * and name. Nothing here may fail a page: a timeout, a non-200 answer, a body
- * that is not a DERP map and a body larger than the editor's cap all resolve to
- * "no regions", are logged once at debug level, and are cached for a short
- * window so an unreachable URL cannot be dialled on every render.
+ * and name. Two spellings of the format arrive here: Headscale's local map files
+ * (`regions`, `regionid`) and the wire map Tailscale serves at
+ * `https://controlplane.tailscale.com/derpmap/default` (`Regions`, `RegionID`),
+ * which the shared readers in `~/routes/settings/headscale/derp-map-schema` and
+ * `./derp-map-nodes` both understand. Nothing here may fail a page: a timeout, a
+ * non-200 answer, a body that is not a DERP map and a body larger than the
+ * editor's cap all resolve to "no regions", are logged once at debug level, and
+ * are cached for a short window so an unreachable URL cannot be dialled on every
+ * render. The read also answers *why* it found nothing, as the stable code
+ * {@link RemoteDerpMapFailure} that {@link loadRemoteDerpMapOutcome} returns and
+ * the Region mirror tab localizes; {@link loadRemoteDerpMapDetail} keeps the
+ * narrower "regions or undefined" answer the existing callers use.
+ *
+ * One URL is given a generous deadline — the official map is served over the
+ * public internet — and a transport failure is retried once before it is
+ * remembered, so a single slow or dropped connection does not hide the map for
+ * the failure window.
  *
  * A successful answer is cached for a few hours. `derp.auto_update_enabled`
  * and `derp.update_frequency` only say how often Headscale re-reads the map, so
@@ -18,16 +31,23 @@
 
 import { MAX_DERP_MAP_BYTES } from "~/routes/settings/headscale/derp-map-limits";
 import {
-  readDerpMapRegions,
+  readAnyDerpMapRegions,
   type DerpMapRegionEntry,
 } from "~/routes/settings/headscale/derp-map-schema";
 import { parseDerpUpdateFrequencySeconds } from "~/routes/settings/headscale/derp-settings";
 import log from "~/utils/log";
 
-import { readDerpMapNodes, type DerpMapRegionDetail } from "./derp-map-nodes";
+import { readAnyDerpMapNodes, type DerpMapRegionDetail } from "./derp-map-nodes";
 
 /** How long one URL may take before its map is treated as unreachable. */
-export const DERP_MAP_FETCH_TIMEOUT_MS = 3_000;
+export const DERP_MAP_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * How many times a transport failure is retried before the map is given up on.
+ * A refusal or a timeout is usually transient; an answered status or a body that
+ * is not a map is the server's answer and is never dialled again.
+ */
+export const DERP_MAP_FETCH_RETRIES = 1;
 
 /** How long a fetched map is reused; the maps change rarely. */
 export const DERP_MAP_SUCCESS_TTL_MS = 6 * 60 * 60 * 1000;
@@ -78,10 +98,27 @@ export interface DerpMapResponse {
 /** `fetch`, narrowed to what a DERP map download needs. */
 export type DerpMapFetch = (url: string, init: { signal: AbortSignal }) => Promise<DerpMapResponse>;
 
+/**
+ * Why a remote map could not be read, as a stable code. The UI localizes it, so
+ * no message text crosses this boundary: `timeout` and `network` are transport
+ * failures (and the only two that are retried), `status` is a non-2xx answer,
+ * `too-large` is a body over the editor's cap, and `unreadable` is a body that
+ * is not a DERP map with any usable region.
+ */
+export type RemoteDerpMapFailure = "timeout" | "network" | "status" | "too-large" | "unreadable";
+
+/** One URL's answer: the regions when it could be read, otherwise why not. */
+export interface RemoteDerpMapOutcome {
+  regions?: DerpMapRegionDetail[];
+  reason?: RemoteDerpMapFailure;
+}
+
 export interface RemoteDerpMapOptions {
   /** Injected for tests; defaults to the global `fetch`. */
   fetch?: DerpMapFetch;
   timeoutMs?: number;
+  /** Extra attempts after a transport failure; defaults to one. */
+  retries?: number;
   now?: () => number;
   /** Overrides the success window for tests and callers with their own policy. */
   ttlMs?: number;
@@ -91,14 +128,14 @@ export interface RemoteDerpMapOptions {
 }
 
 interface CacheEntry {
-  /** The parsed regions, or undefined when the last attempt failed. */
-  regions: DerpMapRegionDetail[] | undefined;
+  /** The last answer, with the regions absent and a reason set when it failed. */
+  outcome: RemoteDerpMapOutcome;
   expiresAt: number;
 }
 
 /** One process-wide cache: both DERP cards and the Overview share the fetches. */
 const cache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<DerpMapRegionDetail[] | undefined>>();
+const inFlight = new Map<string, Promise<RemoteDerpMapOutcome>>();
 
 /** Drops every cached answer, so the next lookup dials the URL again. */
 export function clearRemoteDerpMapCache(): void {
@@ -108,6 +145,7 @@ export function clearRemoteDerpMapCache(): void {
 interface ResolvedOptions {
   fetch: DerpMapFetch;
   timeoutMs: number;
+  retries: number;
   now: () => number;
   ttlMs: number;
   failureTtlMs: number;
@@ -122,6 +160,7 @@ function resolveOptions(
   return {
     fetch: options.fetch ?? ((url, init) => fetch(url, init)),
     timeoutMs: options.timeoutMs ?? DERP_MAP_FETCH_TIMEOUT_MS,
+    retries: Math.max(0, options.retries ?? DERP_MAP_FETCH_RETRIES),
     now: options.now ?? Date.now,
     ttlMs: options.ttlMs ?? remoteDerpMapTtlMs(settings),
     failureTtlMs: options.failureTtlMs ?? DERP_MAP_FAILURE_TTL_MS,
@@ -137,15 +176,15 @@ function resolveOptions(
 }
 
 /**
- * Downloads one map under a short deadline and parses its regions with the
+ * Downloads one map once, under the deadline, and parses its regions with the
  * nodes they list. Every failure — a rejected fetch, a timeout, a non-200
- * status, an oversized or unparsable body, a map with no usable regions —
- * resolves to `undefined` instead of throwing.
+ * status, an oversized body, a body that is not a DERP map, a map with no usable
+ * regions — resolves to a reason instead of throwing.
  */
-async function downloadDerpMap(
+async function downloadDerpMapOnce(
   url: string,
   deps: ResolvedOptions,
-): Promise<DerpMapRegionDetail[] | undefined> {
+): Promise<RemoteDerpMapOutcome> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = deps.setTimer(() => {
@@ -157,61 +196,82 @@ async function downloadDerpMap(
     const response = await deps.fetch(url, { signal: controller.signal });
     if (!response.ok) {
       log.debug("config", `DERP map ${url} answered with status ${response.status}`);
-      return undefined;
+      return { reason: "status" };
     }
 
     const body = await response.text();
     if (Buffer.byteLength(body, "utf8") > MAX_DERP_MAP_BYTES) {
       log.debug("config", `DERP map ${url} is larger than the supported size`);
-      return undefined;
+      return { reason: "too-large" };
     }
 
-    // Regions and their names come from the shared reader; the nodes come from
-    // the second, read-only pass that reader deliberately does not make.
-    const regions = readDerpMapRegions(body);
-    const nodes = readDerpMapNodes(body);
+    // Regions, their names and their nodes come from the shared readers, which
+    // understand both the local shape and the wire map Tailscale serves.
+    const regions = readAnyDerpMapRegions(body);
+    const nodes = readAnyDerpMapNodes(body);
     if (!nodes.ok || regions.length === 0) {
       log.debug("config", `DERP map ${url} describes no regions`);
-      return undefined;
+      return { reason: "unreadable" };
     }
 
-    return regions.map((entry) => ({ ...entry, nodes: nodes.nodes.get(entry.regionId) ?? [] }));
+    return {
+      regions: regions.map((entry) => ({ ...entry, nodes: nodes.nodes.get(entry.regionId) ?? [] })),
+    };
   } catch (error) {
-    // A timeout aborts the request, so it lands here as well; the flag keeps
-    // the log line honest about which of the two happened.
+    // A timeout aborts the request, so it lands here as well; the flag keeps the
+    // log line and the reason honest about which of the two happened.
     log.debug(
       "config",
       `Unable to read the DERP map at ${url}${timedOut ? " (timed out)" : ""}: ${String(error)}`,
     );
-    return undefined;
+    return { reason: timedOut ? "timeout" : "network" };
   } finally {
     deps.clearTimer(timer);
   }
 }
 
 /**
- * The regions of one remote map with the nodes they list, cached in-process.
- * Concurrent callers for the same URL share a single request, and a failure is
- * remembered only briefly so a transient network problem does not hide the
- * names for hours.
+ * One map with one retry: a transport failure is dialled again, because a slow
+ * or dropped connection is transient. An answered status or a body that is not a
+ * map is definitive and is returned as it is.
+ */
+async function downloadDerpMap(url: string, deps: ResolvedOptions): Promise<RemoteDerpMapOutcome> {
+  let outcome = await downloadDerpMapOnce(url, deps);
+  for (let attempt = 0; attempt < deps.retries; attempt += 1) {
+    if (outcome.reason !== "timeout" && outcome.reason !== "network") {
+      return outcome;
+    }
+
+    outcome = await downloadDerpMapOnce(url, deps);
+  }
+
+  return outcome;
+}
+
+/**
+ * The regions of one remote map with the nodes they list, cached in-process,
+ * together with the reason the last attempt failed when it did. Concurrent
+ * callers for the same URL share a single request, and a failure is remembered
+ * only briefly so a transient network problem does not hide the names for hours.
  *
  * The returned objects are the cache's own values: callers must treat them as
- * read-only. {@link loadRemoteDerpMap} is the same answer without the nodes.
+ * read-only. {@link loadRemoteDerpMapDetail} is the same answer without the
+ * reason.
  */
-export async function loadRemoteDerpMapDetail(
+export async function loadRemoteDerpMapOutcome(
   url: string,
   settings: DerpMapCacheSettings,
   options: RemoteDerpMapOptions = {},
-): Promise<DerpMapRegionDetail[] | undefined> {
+): Promise<RemoteDerpMapOutcome> {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
-    return undefined;
+    return {};
   }
 
   const deps = resolveOptions(settings, options);
   const cached = cache.get(trimmed);
   if (cached !== undefined && cached.expiresAt > deps.now()) {
-    return cached.regions;
+    return cached.outcome;
   }
 
   if (cached !== undefined) {
@@ -224,12 +284,12 @@ export async function loadRemoteDerpMapDetail(
   }
 
   const started = (async () => {
-    const regions = await downloadDerpMap(trimmed, deps);
+    const outcome = await downloadDerpMap(trimmed, deps);
     cache.set(trimmed, {
-      regions,
-      expiresAt: deps.now() + (regions === undefined ? deps.failureTtlMs : deps.ttlMs),
+      outcome,
+      expiresAt: deps.now() + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
     });
-    return regions;
+    return outcome;
   })();
 
   inFlight.set(trimmed, started);
@@ -240,6 +300,23 @@ export async function loadRemoteDerpMapDetail(
       inFlight.delete(trimmed);
     }
   }
+}
+
+/**
+ * The regions of one remote map with the nodes they list, cached in-process.
+ * `undefined` covers every failure, exactly as before; callers that can show the
+ * operator why use {@link loadRemoteDerpMapOutcome} instead.
+ *
+ * The returned objects are the cache's own values: callers must treat them as
+ * read-only. {@link loadRemoteDerpMap} is the same answer without the nodes.
+ */
+export async function loadRemoteDerpMapDetail(
+  url: string,
+  settings: DerpMapCacheSettings,
+  options: RemoteDerpMapOptions = {},
+): Promise<DerpMapRegionDetail[] | undefined> {
+  const outcome = await loadRemoteDerpMapOutcome(url, settings, options);
+  return outcome.regions;
 }
 
 /**

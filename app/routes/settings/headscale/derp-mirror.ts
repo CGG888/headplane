@@ -1,5 +1,5 @@
 /**
- * Plain values and pure helpers for the official region mirror tab.
+ * Plain values and pure helpers for the official region filter card.
  *
  * The loader reads the cached official map, the mirror settings, the newest run
  * and the agent's per-region measurements, then reduces all of them to the

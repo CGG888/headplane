@@ -1769,15 +1769,21 @@ const zhHans = {
         presetClearMapWarning:
           "去掉公开地图后，内嵌服务器会成为唯一的中继：一旦它不可达，客户端之间就无法通过 DERP 互联。请确保客户端能访问它的 TCP 443（DERP over HTTPS）和 UDP 3478（STUN）。",
         mirror: {
-          title: "区域镜像",
+          title: "官方区域节点筛选",
           intro:
-            "下列区域是 Tailscale 官方的 DERP 中继，属于官方公共基础设施，而不是你自建的节点。本标签页把这份官方地图镜像成本地地图文件交给客户端，并把区域重新编号到 900 段，方便你只保留需要的区域。官方地址会变动，所以镜像会自动刷新。",
-          openDerpTab: "在 DERP 标签页中编辑本地地图文件",
-          regionsTitle: "官方区域",
+            "下列区域是 Tailscale 官方的 DERP 中继，属于官方公共基础设施，而不是你自建的节点。本卡片把这份官方地图镜像成本地地图文件交给客户端，并把区域重新编号到 900 段，方便你只保留需要的区域。官方地址会变动，所以镜像会自动刷新。",
+          summary: "官方区域 {regions} 个 · 已选 {selected} 个 · {file}",
           regionsBody:
             "勾选允许客户端使用的区域。延迟来自 Headplane Agent 对它可见机器的实测数据，没有任何机器测到的区域会显示为未测到。",
           regionsEmpty:
             "还没有读取到官方区域。Headplane 会在后台抓取 Tailscale 的地图；请确认本服务器可以访问 controlplane.tailscale.com。",
+          regionsUnreadable: "无法读取官方地图：{reason}。",
+          regionsRetry: "镜像会在几分钟内重试失败的请求；刷新本页可立即重试。",
+          fetchReasonTimeout: "请求超时",
+          fetchReasonNetwork: "请求无法发出",
+          fetchReasonStatus: "服务器返回了错误状态",
+          fetchReasonTooLarge: "地图超出 Headplane 的读取上限",
+          fetchReasonUnreadable: "返回内容不是 DERP 地图",
           agentRequired:
             "Headplane Agent 未运行，因此没有任何区域有实测延迟。可以手动勾选，或启用 Agent 后再按延迟排序。",
           numberingNote:

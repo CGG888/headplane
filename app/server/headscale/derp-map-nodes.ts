@@ -13,6 +13,12 @@
  * Nothing here reports problems and nothing throws: a document that is not a
  * DERP map reads as `ok: false` with no nodes, and a node without a hostname is
  * skipped because no client could ever dial it.
+ *
+ * Two spellings of the same format are read. Headscale's local map files use
+ * lower-case keys and go through {@link readDerpMapNodes}, unchanged; the wire
+ * map Tailscale serves uses PascalCase keys and goes through
+ * {@link readTailscaleDerpMapNodes}. {@link readAnyDerpMapNodes} dispatches on
+ * whichever the body turns out to be, which is what the remote reader uses.
  */
 
 import { isMap, isScalar, isSeq, parseDocument } from "yaml";
@@ -29,6 +35,12 @@ export interface DerpMapNodeEntry {
   /** `stunport` as declared; 0 is the format's "this node does not answer STUN". */
   stunPort?: number;
   stunOnly: boolean;
+  /**
+   * `canport80` as declared: the wire map spells it `CanPort80` and sets it on
+   * every node that also serves DERP over port 80. Absent when the map does not
+   * state it.
+   */
+  canPort80?: boolean;
   ipv4?: string;
   ipv6?: string;
 }
@@ -70,6 +82,34 @@ function textValue(node: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** A parsed mapping, as the key lookup below needs it. */
+interface KeyedMap {
+  items: readonly { key: unknown; value: unknown }[];
+}
+
+/**
+ * The value a mapping holds under any spelling of `names`, matched without case,
+ * so the lower-case local shape (`hostname`, `ipv4`) and the PascalCase wire map
+ * (`HostName`, `IPv4`) are read by one lookup.
+ */
+function getAny(map: KeyedMap, ...names: readonly string[]): unknown {
+  const wanted = new Set(names.map((name) => name.toLowerCase()));
+
+  for (const pair of map.items) {
+    const key = isScalar(pair.key) ? pair.key.value : undefined;
+    if (typeof key === "string" && wanted.has(key.toLowerCase())) {
+      return pair.value;
+    }
+  }
+
+  return undefined;
+}
+
+/** A boolean as the map states it; a real `true` is the only marker. */
+function booleanValue(node: unknown): boolean | undefined {
+  return isScalar(node) && typeof node.value === "boolean" ? node.value : undefined;
+}
+
 /** A port in its declared range, or undefined for a missing or invalid value. */
 function portValue(node: unknown, min: number): number | undefined {
   const port = integerValue(node);
@@ -90,6 +130,7 @@ function readNode(node: unknown): DerpMapNodeEntry | undefined {
   const derpPort = portValue(node.get("derpport", true), 1);
   const stunPort = portValue(node.get("stunport", true), 0);
   const stunOnly = node.get("stunonly", true);
+  const canPort80 = booleanValue(node.get("canport80", true));
   const ipv4 = textValue(node.get("ipv4", true));
   const ipv6 = textValue(node.get("ipv6", true));
 
@@ -100,6 +141,7 @@ function readNode(node: unknown): DerpMapNodeEntry | undefined {
     ...(stunPort === undefined ? {} : { stunPort }),
     // Only a real `true` marks a node STUN-only; anything else is not a marker.
     stunOnly: isScalar(stunOnly) && stunOnly.value === true,
+    ...(canPort80 === undefined ? {} : { canPort80 }),
     ...(ipv4 === undefined ? {} : { ipv4 }),
     ...(ipv6 === undefined ? {} : { ipv6 }),
   };
@@ -159,4 +201,107 @@ export function readDerpMapNodes(source: string): DerpMapNodesRead {
   }
 
   return { ok: true, nodes };
+}
+
+/** One wire-map node, or undefined when it cannot be dialled at all. */
+function readTailscaleNode(node: unknown): DerpMapNodeEntry | undefined {
+  if (!isMap(node)) {
+    return undefined;
+  }
+
+  const hostname = textValue(getAny(node, "HostName", "hostname"));
+  if (hostname === undefined) {
+    return undefined;
+  }
+
+  const derpPort = portValue(getAny(node, "DERPPort", "derpport"), 1);
+  const stunPort = portValue(getAny(node, "STUNPort", "stunport"), 0);
+  const stunOnly = booleanValue(getAny(node, "STUNOnly", "stunonly"));
+  const canPort80 = booleanValue(getAny(node, "CanPort80", "canport80"));
+  const ipv4 = textValue(getAny(node, "IPv4", "ipv4"));
+  const ipv6 = textValue(getAny(node, "IPv6", "ipv6"));
+
+  return {
+    name: textValue(getAny(node, "Name", "name")) ?? hostname,
+    hostname,
+    ...(derpPort === undefined ? {} : { derpPort }),
+    ...(stunPort === undefined ? {} : { stunPort }),
+    stunOnly: stunOnly === true,
+    ...(canPort80 === undefined ? {} : { canPort80 }),
+    ...(ipv4 === undefined ? {} : { ipv4 }),
+    ...(ipv6 === undefined ? {} : { ipv6 }),
+  };
+}
+
+/** Every node one wire-map region lists. */
+function readTailscaleNodes(node: unknown): DerpMapNodeEntry[] {
+  if (!isSeq(node)) {
+    return [];
+  }
+
+  const nodes: DerpMapNodeEntry[] = [];
+  for (const item of node.items) {
+    const entry = readTailscaleNode(item);
+    if (entry !== undefined) {
+      nodes.push(entry);
+    }
+  }
+
+  return nodes;
+}
+
+/**
+ * The nodes of every region a *wire-format* DERP map describes — the shape
+ * Tailscale serves at `https://controlplane.tailscale.com/derpmap/default`,
+ * with PascalCase keys (`Regions`, `RegionID`, `Nodes`, `HostName`, `IPv4`,
+ * `DERPPort`, `STUNPort`, `STUNOnly`, `CanPort80`). The lookup ignores case, so
+ * the lower-case local spelling reads through this function too.
+ *
+ * The rules are the ones {@link readDerpMapNodes} applies: a duplicate region id
+ * keeps its first region, a node without a hostname is skipped, and a document
+ * that is not a DERP map reads as `ok: false`.
+ */
+export function readTailscaleDerpMapNodes(source: string): DerpMapNodesRead {
+  const nodes = new Map<number, DerpMapNodeEntry[]>();
+  const document = parseDocument(source);
+  if (document.errors.length > 0) {
+    return { ok: false, nodes };
+  }
+
+  const root = document.contents;
+  if (!isMap(root)) {
+    return { ok: false, nodes };
+  }
+
+  const regions = getAny(root, "Regions", "regions");
+  if (!isMap(regions)) {
+    return { ok: false, nodes };
+  }
+
+  for (const pair of regions.items) {
+    const region = pair.value;
+    if (!isMap(region)) {
+      continue;
+    }
+
+    const id = integerValue(getAny(region, "RegionID", "regionid"));
+    if (id === undefined || id < 1 || nodes.has(id)) {
+      continue;
+    }
+
+    nodes.set(id, readTailscaleNodes(getAny(region, "Nodes", "nodes")));
+  }
+
+  return { ok: true, nodes };
+}
+
+/**
+ * The nodes of either shape: the local map file first, so a file the editor
+ * accepts reads exactly as it did before, then the wire map for a body the local
+ * reader found nothing in. A body that is neither reads as `ok: false` with no
+ * nodes, without throwing.
+ */
+export function readAnyDerpMapNodes(source: string): DerpMapNodesRead {
+  const local = readDerpMapNodes(source);
+  return local.ok ? local : readTailscaleDerpMapNodes(source);
 }

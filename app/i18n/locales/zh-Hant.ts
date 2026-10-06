@@ -1770,15 +1770,21 @@ const zhHant = {
         presetClearMapWarning:
           "移除公開地圖後，內嵌伺服器會成為唯一的中繼：一旦它無法連線，用戶端之間就無法透過 DERP 互通。請確認用戶端能存取它的 TCP 443（DERP over HTTPS）與 UDP 3478（STUN）。",
         mirror: {
-          title: "區域鏡像",
+          title: "官方區域節點篩選",
           intro:
-            "下列區域是 Tailscale 官方的 DERP 中繼，屬於官方公共基礎設施，而不是你自建的節點。本分頁會把這份官方地圖鏡像成本機地圖檔案交給用戶端，並把區域重新編號到 900 段，方便你只保留需要的區域。官方位址會變動，所以鏡像會自動重新整理。",
-          openDerpTab: "在 DERP 分頁中編輯本機地圖檔案",
-          regionsTitle: "官方區域",
+            "下列區域是 Tailscale 官方的 DERP 中繼，屬於官方公共基礎設施，而不是你自建的節點。本卡片會把這份官方地圖鏡像成本機地圖檔案交給用戶端，並把區域重新編號到 900 段，方便你只保留需要的區域。官方位址會變動，所以鏡像會自動重新整理。",
+          summary: "官方區域 {regions} 個 · 已選 {selected} 個 · {file}",
           regionsBody:
             "勾選允許用戶端使用的區域。延遲來自 Headplane Agent 對它可見機器的實測資料，沒有任何機器測到的區域會顯示為未測到。",
           regionsEmpty:
             "還沒有讀取到官方區域。Headplane 會在背景抓取 Tailscale 的地圖；請確認本伺服器可以連線到 controlplane.tailscale.com。",
+          regionsUnreadable: "無法讀取官方地圖：{reason}。",
+          regionsRetry: "鏡像會在幾分鐘內重試失敗的請求；重新載入本頁即可立即重試。",
+          fetchReasonTimeout: "請求逾時",
+          fetchReasonNetwork: "請求無法送出",
+          fetchReasonStatus: "伺服器回應了錯誤狀態",
+          fetchReasonTooLarge: "地圖超出 Headplane 的讀取上限",
+          fetchReasonUnreadable: "回應內容不是 DERP 地圖",
           agentRequired:
             "Headplane Agent 未執行，因此沒有任何區域有實測延遲。可以手動勾選，或啟用 Agent 後再依延遲排序。",
           numberingNote:

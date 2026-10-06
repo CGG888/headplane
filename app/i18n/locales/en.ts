@@ -1883,15 +1883,22 @@ const en = {
         presetClearMapWarning:
           "Without the public map, your embedded server becomes the only relay: if it is down or unreachable, clients cannot reach each other over DERP. Make sure clients can reach it on TCP 443 (DERP over HTTPS) and UDP 3478 (STUN).",
         mirror: {
-          title: "Official region mirror",
+          title: "Official region filter",
           intro:
-            "The regions below are Tailscale's official DERP relays: public infrastructure run by Tailscale, not nodes you host yourself. This tab mirrors that official map into a local map file and hands it to your clients, renumbering the regions into the 900s so you can keep only the ones you want. Tailscale changes those addresses over time, which is why the mirror refreshes itself.",
-          openDerpTab: "Edit the local map files in the DERP tab",
-          regionsTitle: "Official regions",
+            "The regions below are Tailscale's official DERP relays: public infrastructure run by Tailscale, not nodes you host yourself. This card mirrors that official map into a local map file and hands it to your clients, renumbering the regions into the 900s so you can keep only the ones you want. Tailscale changes those addresses over time, which is why the mirror refreshes itself.",
+          summary: "{regions} official regions · {selected} selected · {file}",
           regionsBody:
             "Tick the regions clients may use. Latency comes from the Headplane Agent's measurements across the machines it can see, so a region nothing measured stays unknown.",
           regionsEmpty:
             "No official region has been read yet. Headplane fetches Tailscale's map in the background; check that this server can reach controlplane.tailscale.com.",
+          regionsUnreadable: "The official map could not be read: {reason}.",
+          regionsRetry:
+            "A failed fetch is retried within a few minutes; reload this page to try now.",
+          fetchReasonTimeout: "the request timed out",
+          fetchReasonNetwork: "the request could not be made",
+          fetchReasonStatus: "the server answered with an error status",
+          fetchReasonTooLarge: "the map is larger than Headplane reads",
+          fetchReasonUnreadable: "the answer is not a DERP map",
           agentRequired:
             "The Headplane Agent is not running, so no region has a measured latency. Tick regions by hand, or enable the agent to rank them.",
           numberingNote:

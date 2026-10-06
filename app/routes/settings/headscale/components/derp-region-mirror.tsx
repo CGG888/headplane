@@ -1,4 +1,4 @@
-import { Gauge, Link2, Lock, RefreshCw, Search, Sparkles, Wand2 } from "lucide-react";
+import { Globe, Lock, RefreshCw, Search, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
@@ -17,7 +17,9 @@ import Switch from "~/components/switch";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import Title from "~/components/title";
+import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
+import type { RemoteDerpMapFailure } from "~/server/headscale/derp-map-remote";
 import cn from "~/utils/cn";
 
 import {
@@ -55,6 +57,19 @@ const OUTCOME_TONES: Record<string, SettingsStatusTone> = {
 /** The three speeds the quick filter offers, in milliseconds. */
 const LATENCY_PRESETS = [50, 100, 200] as const;
 
+/**
+ * Why the official map could not be read, as the sentence the card prints. The
+ * server sends the stable code, so the wording stays here with the rest of the
+ * card's text.
+ */
+const FETCH_REASON_KEYS: Record<RemoteDerpMapFailure, TranslationKey> = {
+  timeout: "settings.headscale.derp.mirror.fetchReasonTimeout",
+  network: "settings.headscale.derp.mirror.fetchReasonNetwork",
+  status: "settings.headscale.derp.mirror.fetchReasonStatus",
+  "too-large": "settings.headscale.derp.mirror.fetchReasonTooLarge",
+  unreadable: "settings.headscale.derp.mirror.fetchReasonUnreadable",
+};
+
 interface DerpRegionMirrorProps {
   /** False when the Headplane Agent is not running, so nothing is measured. */
   agentEnabled: boolean;
@@ -63,14 +78,14 @@ interface DerpRegionMirrorProps {
   last: MirrorRun | undefined;
   /** The order and the fixed anchors the server's rule produced. */
   numbering: MirrorNumbering;
-  /** Switches the page to the DERP tab, where the local map files are edited. */
-  onOpenDerpTab: () => void;
+  /** Why the official map could not be read, when the last read failed. */
+  regionError?: RemoteDerpMapFailure;
   /** The cached official map, already reduced to plain values. */
   regions: MirrorRegionRow[];
   settings: MirrorSettingsView;
 }
 
-/** Native checkbox, so it works inside the tab's single save form. */
+/** Native checkbox, so it works inside the card's single save form. */
 function RegionCheckbox({
   checked,
   disabled,
@@ -225,10 +240,10 @@ function RunSummary({ last, regions }: { last: MirrorRun; regions: MirrorRegionR
 }
 
 /**
- * The "Official region mirror" tab.
+ * The official region filter card of the DERP tab.
  *
- * The tab explains what these regions are before it shows anything else: they
- * are Tailscale's public relays, not the operator's own nodes, and the tab can
+ * The card explains what these regions are before it shows anything else: they
+ * are Tailscale's public relays, not the operator's own nodes, and the card can
  * mirror only the ones worth keeping into a local map file that Headscale hands
  * to clients. The table ticks a selection, previews the numbers a fresh ranking
  * assigns and persists the whole thing in one save. Check, Update now and
@@ -239,7 +254,7 @@ export default function DerpRegionMirror({
   isDisabled,
   last,
   numbering,
-  onOpenDerpTab,
+  regionError,
   regions,
   settings,
 }: DerpRegionMirrorProps) {
@@ -382,42 +397,56 @@ export default function DerpRegionMirror({
   );
 
   return (
-    <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-500/30 dark:bg-indigo-500/10">
-        <p className="text-sm text-indigo-900 dark:text-indigo-200">
+    <SettingsCollapsible
+      description={t("settings.headscale.derp.mirror.regionsBody")}
+      icon={Globe}
+      status={{
+        tone: regions.length === 0 ? "warn" : selected.size > 0 ? "ok" : "neutral",
+        label: t("settings.headscale.derp.mirror.selectedSummary", { count: selected.size }),
+      }}
+      summary={t("settings.headscale.derp.mirror.summary", {
+        file: settings.targetPath,
+        regions: regions.length,
+        selected: selected.size,
+      })}
+      title={t("settings.headscale.derp.mirror.title")}
+    >
+      <section className="flex w-full flex-col gap-5">
+        <p className="rounded-lg bg-mist-100 p-3 text-sm text-mist-600 dark:bg-mist-800/50 dark:text-mist-300">
           {t("settings.headscale.derp.mirror.intro")}
         </p>
-        <Button className="self-start" onClick={onOpenDerpTab} variant="ghost">
-          <Link2 className="h-4 w-4" />
-          {t("settings.headscale.derp.mirror.openDerpTab")}
-        </Button>
-      </div>
 
-      <saveFetcher.Form className="flex flex-col gap-5" method="post">
-        <input name="action_id" type="hidden" value="save_derp_mirror" />
-        <input name="mirror_enabled" type="hidden" value={enabled ? "true" : "false"} />
-        <input name="mirror_auto_reload" type="hidden" value={autoReload ? "true" : "false"} />
-        <input name="mirror_interval_hours" type="hidden" value={intervalHours} />
-        {[...selected]
-          .toSorted((a, b) => a - b)
-          .map((officialId) => (
-            <input key={officialId} name="mirror_region" type="hidden" value={officialId} />
-          ))}
+        <saveFetcher.Form className="flex flex-col gap-5" method="post">
+          <input name="action_id" type="hidden" value="save_derp_mirror" />
+          <input name="mirror_enabled" type="hidden" value={enabled ? "true" : "false"} />
+          <input name="mirror_auto_reload" type="hidden" value={autoReload ? "true" : "false"} />
+          <input name="mirror_interval_hours" type="hidden" value={intervalHours} />
+          {[...selected]
+            .toSorted((a, b) => a - b)
+            .map((officialId) => (
+              <input key={officialId} name="mirror_region" type="hidden" value={officialId} />
+            ))}
 
-        <SettingsCollapsible
-          defaultOpen
-          description={t("settings.headscale.derp.mirror.regionsBody")}
-          icon={Gauge}
-          status={{
-            tone: regions.length === 0 ? "warn" : selected.size > 0 ? "ok" : "neutral",
-            label: t("settings.headscale.derp.mirror.selectedSummary", { count: selected.size }),
-          }}
-          title={t("settings.headscale.derp.mirror.regionsTitle")}
-        >
           {regions.length === 0 ? (
-            <p className="py-2 text-sm opacity-70">
-              {t("settings.headscale.derp.mirror.regionsEmpty")}
-            </p>
+            <div className="flex flex-col gap-1 py-2">
+              <p
+                className={cn(
+                  "text-sm",
+                  regionError === undefined ? "opacity-70" : "text-amber-700 dark:text-amber-300",
+                )}
+              >
+                {regionError === undefined
+                  ? t("settings.headscale.derp.mirror.regionsEmpty")
+                  : t("settings.headscale.derp.mirror.regionsUnreadable", {
+                      reason: t(FETCH_REASON_KEYS[regionError]),
+                    })}
+              </p>
+              {regionError === undefined ? undefined : (
+                <p className="text-xs text-mist-500 dark:text-mist-400">
+                  {t("settings.headscale.derp.mirror.regionsRetry")}
+                </p>
+              )}
+            </div>
           ) : (
             <>
               {!agentEnabled ? (
@@ -590,192 +619,192 @@ export default function DerpRegionMirror({
               </p>
             </>
           )}
-        </SettingsCollapsible>
 
-        <div className="flex flex-col gap-4 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
-          <div className="flex flex-col gap-0.5">
-            <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-              <RefreshCw className="h-4 w-4" />
-              {t("settings.headscale.derp.mirror.settingsTitle")}
-            </span>
-            <span className="text-sm text-mist-600 dark:text-mist-400">
-              {t("settings.headscale.derp.mirror.settingsBody")}
-            </span>
+          <div className="flex flex-col gap-4 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
+            <div className="flex flex-col gap-0.5">
+              <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                <RefreshCw className="h-4 w-4" />
+                {t("settings.headscale.derp.mirror.settingsTitle")}
+              </span>
+              <span className="text-sm text-mist-600 dark:text-mist-400">
+                {t("settings.headscale.derp.mirror.settingsBody")}
+              </span>
+            </div>
+
+            <SettingsField
+              description={t("settings.headscale.derp.mirror.enabledDescription")}
+              label={t("settings.headscale.derp.mirror.enabledLabel")}
+            >
+              <Switch
+                checked={enabled}
+                disabled={isDisabled || busy}
+                label={t("settings.headscale.derp.mirror.enabledLabel")}
+                onCheckedChange={setEnabled}
+              />
+            </SettingsField>
+
+            <SettingsField
+              description={t("settings.headscale.derp.mirror.pathDescription")}
+              label={t("settings.headscale.derp.mirror.pathLabel")}
+            >
+              <Input
+                disabled={isDisabled || busy}
+                label={t("settings.headscale.derp.mirror.pathLabel")}
+                labelHidden
+                name="mirror_path"
+                onChange={setTargetPath}
+                placeholder={t("settings.headscale.derp.mirror.pathPlaceholder")}
+                value={targetPath}
+              />
+            </SettingsField>
+            <p className="rounded-lg bg-mist-100 p-3 text-sm text-mist-600 dark:bg-mist-800/50 dark:text-mist-300">
+              {t("settings.headscale.derp.mirror.pathNote", { file: MIRROR_FILE_HINT })}
+            </p>
+
+            <SettingsField
+              description={t("settings.headscale.derp.mirror.intervalDescription")}
+              label={t("settings.headscale.derp.mirror.intervalLabel")}
+            >
+              <Select
+                disabled={isDisabled || busy}
+                items={intervalItems}
+                onValueChange={(value) => setIntervalHours(value ?? intervalHours)}
+                value={intervalHours}
+              />
+            </SettingsField>
+
+            <SettingsField
+              description={t("settings.headscale.derp.mirror.autoReloadDescription")}
+              label={t("settings.headscale.derp.mirror.autoReloadLabel")}
+            >
+              <Switch
+                checked={autoReload}
+                disabled={isDisabled || busy}
+                label={t("settings.headscale.derp.mirror.autoReloadLabel")}
+                onCheckedChange={setAutoReload}
+              />
+            </SettingsField>
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+              {t("settings.headscale.derp.mirror.autoReloadWarning")}
+            </p>
           </div>
 
-          <SettingsField
-            description={t("settings.headscale.derp.mirror.enabledDescription")}
-            label={t("settings.headscale.derp.mirror.enabledLabel")}
-          >
-            <Switch
-              checked={enabled}
-              disabled={isDisabled || busy}
-              label={t("settings.headscale.derp.mirror.enabledLabel")}
-              onCheckedChange={setEnabled}
-            />
-          </SettingsField>
+          {saveError === undefined ? undefined : errorBox(saveError)}
 
-          <SettingsField
-            description={t("settings.headscale.derp.mirror.pathDescription")}
-            label={t("settings.headscale.derp.mirror.pathLabel")}
-          >
-            <Input
-              disabled={isDisabled || busy}
-              label={t("settings.headscale.derp.mirror.pathLabel")}
-              labelHidden
-              name="mirror_path"
-              onChange={setTargetPath}
-              placeholder={t("settings.headscale.derp.mirror.pathPlaceholder")}
-              value={targetPath}
-            />
-          </SettingsField>
-          <p className="rounded-lg bg-mist-100 p-3 text-sm text-mist-600 dark:bg-mist-800/50 dark:text-mist-300">
-            {t("settings.headscale.derp.mirror.pathNote", { file: MIRROR_FILE_HINT })}
+          <SettingsActions>
+            {saved ? (
+              <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                {t("settings.headscale.saved")}
+              </span>
+            ) : undefined}
+            <Button disabled={isDisabled || busy} type="submit" variant="heavy">
+              {t("settings.headscale.derp.mirror.save")}
+            </Button>
+          </SettingsActions>
+        </saveFetcher.Form>
+
+        <div className="flex flex-col gap-3 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
+          <p className="text-sm text-mist-600 dark:text-mist-400">
+            {t("settings.headscale.derp.mirror.buttonsBody")}
           </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <checkFetcher.Form className="flex-1" method="post">
+              <input name="action_id" type="hidden" value="check_derp_mirror" />
+              <Button
+                className="w-full"
+                disabled={isDisabled || checking}
+                onClick={() => setResultAction("check")}
+                type="submit"
+              >
+                <Search className="mr-1.5 h-4 w-4" />
+                {checking
+                  ? t("settings.headscale.derp.mirror.checking")
+                  : t("settings.headscale.derp.mirror.check")}
+              </Button>
+            </checkFetcher.Form>
 
-          <SettingsField
-            description={t("settings.headscale.derp.mirror.intervalDescription")}
-            label={t("settings.headscale.derp.mirror.intervalLabel")}
-          >
-            <Select
-              disabled={isDisabled || busy}
-              items={intervalItems}
-              onValueChange={(value) => setIntervalHours(value ?? intervalHours)}
-              value={intervalHours}
-            />
-          </SettingsField>
+            <runFetcher.Form className="flex-1" method="post">
+              <input name="action_id" type="hidden" value="run_derp_mirror" />
+              <Button
+                className="w-full"
+                disabled={isDisabled || running}
+                onClick={() => setResultAction("run")}
+                type="submit"
+                variant="heavy"
+              >
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+                {running
+                  ? t("settings.headscale.derp.mirror.running")
+                  : t("settings.headscale.derp.mirror.runNow")}
+              </Button>
+            </runFetcher.Form>
 
-          <SettingsField
-            description={t("settings.headscale.derp.mirror.autoReloadDescription")}
-            label={t("settings.headscale.derp.mirror.autoReloadLabel")}
-          >
-            <Switch
-              checked={autoReload}
-              disabled={isDisabled || busy}
-              label={t("settings.headscale.derp.mirror.autoReloadLabel")}
-              onCheckedChange={setAutoReload}
-            />
-          </SettingsField>
-          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-            {t("settings.headscale.derp.mirror.autoReloadWarning")}
+            <Dialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
+              <Button disabled={isDisabled || reassigning} type="button">
+                <Wand2 className="mr-1.5 h-4 w-4" />
+                {reassigning
+                  ? t("settings.headscale.derp.mirror.reassigning")
+                  : t("settings.headscale.derp.mirror.reassign")}
+              </Button>
+              <DialogPanel
+                isDisabled={isDisabled || reassigning}
+                onSubmit={(event) => {
+                  // The panel is the only form here; the request goes through the
+                  // fetcher so the result can be reported without leaving the card.
+                  event.preventDefault();
+                  const form = new FormData();
+                  form.set("action_id", "reassign_derp_mirror");
+                  setResultAction("reassign");
+                  reassignFetcher.submit(form, { method: "POST" });
+                }}
+              >
+                <Title>{t("settings.headscale.derp.mirror.reassignTitle")}</Title>
+                <Text className="mb-2">{t("settings.headscale.derp.mirror.reassignBody")}</Text>
+                <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                  {t("settings.headscale.derp.mirror.reassignWarning")}
+                </p>
+                {reassignError === undefined ? undefined : errorBox(reassignError)}
+              </DialogPanel>
+            </Dialog>
+          </div>
+          <p className="text-sm text-mist-600 dark:text-mist-400">
+            {t("settings.headscale.derp.mirror.checkNote")}
           </p>
-        </div>
+          {checkError === undefined ? undefined : errorBox(checkError)}
+          {runError === undefined ? undefined : errorBox(runError)}
 
-        {saveError === undefined ? undefined : errorBox(saveError)}
-
-        <SettingsActions>
-          {saved ? (
-            <span className="text-sm text-emerald-600 dark:text-emerald-400">
-              {t("settings.headscale.saved")}
-            </span>
+          {checking || running || reassigning ? (
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.headscale.derp.mirror.working")}
+            </p>
           ) : undefined}
-          <Button disabled={isDisabled || busy} type="submit" variant="heavy">
-            {t("settings.headscale.derp.mirror.save")}
-          </Button>
-        </SettingsActions>
-      </saveFetcher.Form>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-mist-200 p-3 dark:border-mist-800">
-        <p className="text-sm text-mist-600 dark:text-mist-400">
-          {t("settings.headscale.derp.mirror.buttonsBody")}
-        </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <checkFetcher.Form className="flex-1" method="post">
-            <input name="action_id" type="hidden" value="check_derp_mirror" />
-            <Button
-              className="w-full"
-              disabled={isDisabled || checking}
-              onClick={() => setResultAction("check")}
-              type="submit"
-            >
-              <Search className="mr-1.5 h-4 w-4" />
-              {checking
-                ? t("settings.headscale.derp.mirror.checking")
-                : t("settings.headscale.derp.mirror.check")}
-            </Button>
-          </checkFetcher.Form>
-
-          <runFetcher.Form className="flex-1" method="post">
-            <input name="action_id" type="hidden" value="run_derp_mirror" />
-            <Button
-              className="w-full"
-              disabled={isDisabled || running}
-              onClick={() => setResultAction("run")}
-              type="submit"
-              variant="heavy"
-            >
-              <RefreshCw className="mr-1.5 h-4 w-4" />
-              {running
-                ? t("settings.headscale.derp.mirror.running")
-                : t("settings.headscale.derp.mirror.runNow")}
-            </Button>
-          </runFetcher.Form>
-
-          <Dialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
-            <Button disabled={isDisabled || reassigning} type="button">
-              <Wand2 className="mr-1.5 h-4 w-4" />
-              {reassigning
-                ? t("settings.headscale.derp.mirror.reassigning")
-                : t("settings.headscale.derp.mirror.reassign")}
-            </Button>
-            <DialogPanel
-              isDisabled={isDisabled || reassigning}
-              onSubmit={(event) => {
-                // The panel is the only form here; the request goes through the
-                // fetcher so the result can be reported without leaving the tab.
-                event.preventDefault();
-                const form = new FormData();
-                form.set("action_id", "reassign_derp_mirror");
-                setResultAction("reassign");
-                reassignFetcher.submit(form, { method: "POST" });
-              }}
-            >
-              <Title>{t("settings.headscale.derp.mirror.reassignTitle")}</Title>
-              <Text className="mb-2">{t("settings.headscale.derp.mirror.reassignBody")}</Text>
-              <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                {t("settings.headscale.derp.mirror.reassignWarning")}
-              </p>
-              {reassignError === undefined ? undefined : errorBox(reassignError)}
-            </DialogPanel>
-          </Dialog>
+          {actionRun === undefined ? undefined : <RunSummary last={actionRun} regions={regions} />}
         </div>
-        <p className="text-sm text-mist-600 dark:text-mist-400">
-          {t("settings.headscale.derp.mirror.checkNote")}
-        </p>
-        {checkError === undefined ? undefined : errorBox(checkError)}
-        {runError === undefined ? undefined : errorBox(runError)}
 
-        {checking || running || reassigning ? (
-          <p className="text-sm text-mist-600 dark:text-mist-400">
-            {t("settings.headscale.derp.mirror.working")}
-          </p>
-        ) : undefined}
-
-        {actionRun === undefined ? undefined : <RunSummary last={actionRun} regions={regions} />}
-      </div>
-
-      <SettingsCollapsible
-        description={t("settings.headscale.derp.mirror.lastRunBody")}
-        icon={RefreshCw}
-        nested
-        status={{
-          tone:
-            last === undefined ? "neutral" : (OUTCOME_TONES[mirrorOutcomeKey(last)] ?? "neutral"),
-          label:
-            last === undefined
-              ? t("settings.headscale.derp.mirror.never")
-              : t(mirrorOutcomeKey(last)),
-        }}
-        title={t("settings.headscale.derp.mirror.lastRunTitle")}
-      >
-        {last === undefined ? (
-          <p className="text-sm text-mist-600 dark:text-mist-400">
-            {t("settings.headscale.derp.mirror.never")}
-          </p>
-        ) : (
-          <RunSummary last={last} regions={regions} />
-        )}
-      </SettingsCollapsible>
-    </section>
+        <SettingsCollapsible
+          description={t("settings.headscale.derp.mirror.lastRunBody")}
+          icon={RefreshCw}
+          nested
+          status={{
+            tone:
+              last === undefined ? "neutral" : (OUTCOME_TONES[mirrorOutcomeKey(last)] ?? "neutral"),
+            label:
+              last === undefined
+                ? t("settings.headscale.derp.mirror.never")
+                : t(mirrorOutcomeKey(last)),
+          }}
+          title={t("settings.headscale.derp.mirror.lastRunTitle")}
+        >
+          {last === undefined ? (
+            <p className="text-sm text-mist-600 dark:text-mist-400">
+              {t("settings.headscale.derp.mirror.never")}
+            </p>
+          ) : (
+            <RunSummary last={last} regions={regions} />
+          )}
+        </SettingsCollapsible>
+      </section>
+    </SettingsCollapsible>
   );
 }

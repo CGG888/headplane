@@ -1,7 +1,6 @@
 import { dirname } from "node:path";
 
 import {
-  Globe,
   KeyRound,
   Network,
   Scale,
@@ -10,7 +9,6 @@ import {
   SlidersHorizontal,
   Tags,
 } from "lucide-react";
-import { useState } from "react";
 import { data } from "react-router";
 
 import Code from "~/components/code";
@@ -52,7 +50,10 @@ import { chineseRegionName } from "~/server/derp-mirror/names";
 import { OFFICIAL_DERP_MAP_URL } from "~/server/derp-mirror/service.server";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
-import { loadRemoteDerpMapDetail } from "~/server/headscale/derp-map-remote";
+import {
+  loadRemoteDerpMapOutcome,
+  type RemoteDerpMapFailure,
+} from "~/server/headscale/derp-map-remote";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import {
@@ -166,6 +167,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   let officialRegions: DerpMapRegionDetail[] = [];
+  // Why the official map could not be read, so the mirror card can say so
+  // instead of rendering an empty table. The first failed attempt wins.
+  let mirrorRegionsError: RemoteDerpMapFailure | undefined;
   try {
     const cache = {
       autoUpdateEnabled: derp.autoUpdateEnabled,
@@ -174,14 +178,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     // The service falls back to the official URL when `derp.urls` lists nothing,
     // so the table reads the same source it would mirror.
     for (const url of derp.urls.length > 0 ? derp.urls : [OFFICIAL_DERP_MAP_URL]) {
-      const loaded = await loadRemoteDerpMapDetail(url, cache);
-      if (loaded !== undefined && loaded.length > 0) {
-        officialRegions = loaded;
+      const outcome = await loadRemoteDerpMapOutcome(url, cache);
+      if (outcome.regions !== undefined && outcome.regions.length > 0) {
+        officialRegions = outcome.regions;
+        mirrorRegionsError = undefined;
         break;
       }
+
+      mirrorRegionsError ??= outcome.reason;
     }
   } catch {
     officialRegions = [];
+    mirrorRegionsError ??= "network";
   }
 
   const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => ({
@@ -247,6 +255,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       last: derpMirror.last(),
       numbering: mirrorNumbering,
       regions: mirrorRegions,
+      // A stable code, not a message: the card localizes it.
+      regionsError: mirrorRegionsError,
     },
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
@@ -291,10 +301,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     fatalOidcKeys,
   } = loaderData;
   const isDisabled = writable ? !access : true;
-
-  // The tabs are controlled so the mirror tab can link to the DERP tab, where
-  // the local map files the mirror writes are edited.
-  const [tab, setTab] = useState("oidc");
 
   // Which relays clients are handed, shown above the DERP blocks so it is
   // readable without opening any of them.
@@ -346,7 +352,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       }
       title={t("settings.headscale.title")}
     >
-      <SettingsTabs label={t("settings.headscale.title")} onValueChange={setTab} value={tab}>
+      <SettingsTabs defaultValue="oidc" label={t("settings.headscale.title")}>
         <SettingsTabList>
           <SettingsTab className="shrink-0" icon={KeyRound} value="oidc">
             {t("settings.headscale.oidcTitle")}
@@ -362,9 +368,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={Network} value="derp">
             {t("settings.headscale.derp.title")}
-          </SettingsTab>
-          <SettingsTab className="shrink-0" icon={Globe} value="derp-mirror">
-            {t("settings.headscale.derp.mirror.title")}
           </SettingsTab>
           <SettingsTab className="shrink-0" icon={Tags} value="derp-regions">
             {t("settings.headscale.derp.regionNamesTitle")}
@@ -464,23 +467,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             last={derpSync.last}
             settings={derpSync.settings}
           />
-          <DerpStatus
-            agentEnabled={agentEnabled}
-            embedded={derp.server}
-            regionNames={derpRegionNames}
-            rows={derpRelay}
-          />
-        </SettingsPanel>
-
-        <SettingsPanel value="derp-mirror">
           <DerpRegionMirror
             agentEnabled={agentEnabled}
             isDisabled={isDisabled}
             last={mirror.last}
             numbering={mirror.numbering}
-            onOpenDerpTab={() => setTab("derp")}
+            regionError={mirror.regionsError}
             regions={mirror.regions}
             settings={mirror.settings}
+          />
+          <DerpStatus
+            agentEnabled={agentEnabled}
+            embedded={derp.server}
+            regionNames={derpRegionNames}
+            rows={derpRelay}
           />
         </SettingsPanel>
 

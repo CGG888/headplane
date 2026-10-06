@@ -112,6 +112,33 @@ function textValue(node: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** A parsed mapping, as the key lookup below needs it. */
+interface KeyedMap {
+  items: readonly { key: unknown; value: unknown }[];
+}
+
+/**
+ * The value a mapping holds under any spelling of `names`, matched without case.
+ *
+ * Headscale's local map files spell every key in lower case (`regions`,
+ * `regionid`), while the wire map Tailscale serves spells the same keys in
+ * PascalCase (`Regions`, `RegionID`). One lookup that ignores case therefore
+ * reads both shapes with one code path, and the local reader keeps its exact
+ * `get` calls so nothing about a local file changes.
+ */
+function getAny(map: KeyedMap, ...names: readonly string[]): unknown {
+  const wanted = new Set(names.map((name) => name.toLowerCase()));
+
+  for (const pair of map.items) {
+    const key = scalarValue(pair.key);
+    if (typeof key === "string" && wanted.has(key.toLowerCase())) {
+      return pair.value;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Validates a DERP map file. Returns every problem found (up to
  * `MAX_DERP_MAP_ISSUES`); an empty list means Headscale can load the file.
@@ -281,6 +308,71 @@ export function readDerpMapRegions(source: string): DerpMapRegionEntry[] {
   }
 
   return entries;
+}
+
+/**
+ * Reads the regions out of a *wire-format* DERP map — the shape Tailscale
+ * serves at `https://controlplane.tailscale.com/derpmap/default`, whose keys are
+ * PascalCase (`Regions`, `RegionID`, `RegionCode`, `RegionName`). YAML is a
+ * superset of JSON, so the same parser reads it.
+ *
+ * Everything else is exactly {@link readDerpMapRegions}: a syntax error, a root
+ * that is not a mapping, a regions value that is not a mapping and a region
+ * without a usable id all contribute no entry, a duplicate id keeps its first
+ * occurrence, and two regions sharing a code are kept apart. Only the key
+ * lookup differs, and it ignores case, so the lower-case local spelling is read
+ * by this function too.
+ */
+export function readTailscaleDerpMapRegions(source: string): DerpMapRegionEntry[] {
+  const document = parseDocument(source);
+  if (document.errors.length > 0) {
+    return [];
+  }
+
+  const root = document.contents;
+  if (!isMap(root)) {
+    return [];
+  }
+
+  const regions = getAny(root, "Regions", "regions");
+  if (!isMap(regions)) {
+    return [];
+  }
+
+  const entries: DerpMapRegionEntry[] = [];
+  const seenIds = new Set<number>();
+
+  for (const pair of regions.items) {
+    const region = pair.value;
+    if (!isMap(region)) {
+      continue;
+    }
+
+    const id = integerValue(getAny(region, "RegionID", "regionid"));
+    if (id === undefined || id < 1 || seenIds.has(id)) {
+      continue;
+    }
+
+    seenIds.add(id);
+    entries.push({
+      regionId: id,
+      code: textValue(getAny(region, "RegionCode", "regioncode")) ?? "",
+      name: textValue(getAny(region, "RegionName", "regionname")) ?? "",
+    });
+  }
+
+  return entries;
+}
+
+/**
+ * Reads the regions of either shape: the local map file first, so a file the
+ * editor accepts always reads exactly as it did before, then the wire map for a
+ * body the local reader found nothing in. A body that is neither still reads as
+ * no regions, without throwing.
+ */
+export function readAnyDerpMapRegions(source: string): DerpMapRegionEntry[] {
+  const local = readDerpMapRegions(source);
+  return local.length > 0 ? local : readTailscaleDerpMapRegions(source);
 }
 
 function validateNode(

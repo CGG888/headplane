@@ -178,7 +178,9 @@ describe("loadRemoteDerpMap", () => {
 
     expect(first).toBeUndefined();
     expect(second).toBeUndefined();
-    expect(calls).toHaveLength(1);
+    // The one retry a transport failure gets dials the URL a second time; the
+    // second lookup is then served from the failure cache.
+    expect(calls).toHaveLength(2);
   });
 
   test("a rejected fetch resolves to no regions", async () => {
