@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.16 (October 6, 2026)
+
 ## Changes
 
 - **A pending registration can now be rejected instead of only approved.** The machines list's registration menu gained a separate, destructive "reject registration" item with a confirmation that spells out what happens: the device will not join the tailnet, its pending request disappears, and it stays unregistered until someone registers it again. It takes the registration key (never a node id), so it cannot be confused with approving a device or deleting an existing machine, and it is only offered on a Headscale version that supports it.
@@ -10,6 +12,9 @@
 
 - **The latency list on a machine now aligns.** The region id and its name are separate columns instead of running together, the relay source and the measurement source each sit in their own fixed column as a coloured badge, the number stays right-aligned, and "not measured" reads as such with a dash rather than a blank — with the five-row bound, the coverage summary and the in-use badge unchanged.
 - The audit page labels the new actions (rejecting a registration, deleting a pre-auth key, deleting an API key) instead of printing their raw codes.
+
+---
+
 # 0.22.15 (October 6, 2026)
 
 ## Changes
