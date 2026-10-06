@@ -73,8 +73,7 @@ Mirror only the official relays you pick, renumbered stably: 901 Hong Kong,
 
 ### Relay address auto-sync and external IPv6 echo
 
-Relay addresses are written back on a schedule or on demand; external IPv6 echo
-is optional.
+Relay addresses are written back on a schedule or on demand; optional IPv6 echo.
 
 [Headscale settings →](/en/features/headscale-settings)
 
