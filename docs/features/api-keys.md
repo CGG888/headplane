@@ -1,74 +1,61 @@
 ---
-title: API Keys
-description: Create and revoke Headscale API keys from the Headplane UI.
+title: API 密钥
+description: 在 Headplane 界面里创建与吊销 Headscale API 密钥。
 outline: [2, 3]
 ---
 
-# Headscale API Keys
+# Headscale API 密钥
 
-Headscale's own API is authenticated with an **API key**, the kind that starts
-with `hskey-api-`. Headplane needs one to talk to Headscale, and every other
-tool you point at the API needs one too — which is why the keys live under
-**Settings → API keys** instead of only in the server shell.
+Headscale 自己的 API 用 **API 密钥**鉴权，就是以 `hskey-api-` 开头的那种。Headplane 需要
+一把才能和 Headscale 通信，你指向这个 API 的其他工具同样需要 —— 所以这些密钥放在
+**设置 → API 密钥** 里，而不是只存在于服务器 shell 中。
 
-## Managing keys
+## 管理密钥
 
-| Action     | What happens                                                                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Create** | Pick how long the key should live (days). Headplane asks Headscale for a key that expires at that moment.                                             |
-| **Copy**   | The full key is returned **exactly once**. Copy it straight away — Headscale only ever stores a prefix, so it cannot be shown again.                  |
-| **Expire** | Revokes a key immediately. The prefix in the list is enough; Headplane normalises the masked `hskey-api-…-***` display form before calling Headscale. |
+| 操作       | 结果                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **创建**   | 选择密钥的有效天数。Headplane 向 Headscale 申请一把在该时刻过期的密钥。                                                                            |
+| **复制**   | 完整密钥**只会返回一次**。请立刻复制 —— Headscale 只保存前缀，之后再也无法显示。                                                                  |
+| **过期**   | 立即吊销一把密钥。列表里的前缀就够了；Headplane 会先把 `hskey-api-…-***` 这种掩码显示形式还原，再调用 Headscale。                                   |
 
-The list shows the prefix, when the key was created, when it expires and when it
-was last used. Expired keys are counted next to the status filter, and the
-filter can be switched to **Active** to hide them; selecting several keys and
-choosing **Expire selected** revokes them together.
+列表显示前缀、创建时间、过期时间以及最后一次使用时间。已过期的密钥会单独计数并显示在状态
+筛选旁边，把筛选切到 **有效** 就能隐藏它们；勾选多把密钥再选 **批量过期** 可以一次吊销。
 
-## Keys cannot be deleted
+## 密钥无法删除
 
-Headscale has no delete for API keys — its API only offers
-`POST /api/v1/apikey/expire`, and the CLI equivalent is
-`headscale apikeys expire --prefix <PREFIX>`. So the list never loses a key:
+Headscale 没有删除 API 密钥的功能 —— 它的 API 只提供 `POST /api/v1/apikey/expire`，
+命令行等价于 `headscale apikeys expire --prefix <PREFIX>`。因此列表永远不会少一把密钥：
 
-- **Expiring is the revoke.** It takes effect immediately: the key stops
-  authenticating the moment Headscale records it, and it cannot be undone.
-- **The record stays.** An expired key keeps its place in the list for
-  traceability, and the page marks it as expired instead of offering the expire
-  action again, so you can still see when it was created and when it was last
-  used. Because there is nothing to delete, there is also nothing to clean up.
-- **Rotating** therefore means: create a new key, put it in
-  `headscale.api_key`, restart Headplane, then expire the old key.
+- **过期就是吊销。** 立即生效：Headscale 记录之后该密钥立刻无法通过鉴权，而且不可撤销。
+- **记录会留下。** 已过期的密钥仍留在列表里便于追溯，页面把它标成过期而不再提供过期操作，
+  你依然能看到它的创建时间和最后使用时间。既然没有删除，也就没有需要清理的东西。
+- **轮换**因此是：创建新密钥，写进 `headscale.api_key`，重启 Headplane，再让旧密钥过期。
 
-The **Pre-Auth Keys** page works the same way: pre-auth keys are revoked by
-expiring them, used and expired keys stay in the list, and nothing is deleted.
+**预授权密钥**页的规则相同：预授权密钥通过过期来吊销，已使用和已过期的密钥都留在列表里，
+什么都不会被删除。
 
-::: warning An API key is full admin access
-Headscale has no scopes or roles for API keys: any valid, unexpired key can do
-everything the API allows, including creating further keys. Treat one exactly
-like the root password:
+::: warning API 密钥等于完全管理员权限
+Headscale 的 API 密钥没有作用域或角色：任何有效且未过期的密钥都能做 API 允许的所有事情，
+包括再创建新密钥。请像对待 root 密码一样对待它：
 
-- keep it in a password manager, not in a chat or an issue,
-- prefer short expirations and rotate,
-- expire keys you no longer recognise.
+- 放进密码管理器，不要贴在聊天或 issue 里；
+- 尽量用较短的有效期并定期轮换；
+- 把已经不认识的密钥过期掉。
   :::
 
-## Requirements
+## 前置条件
 
-- The Headplane user needs the **`configure_iam`** capability (`owner`, `admin`
-  and `network_admin` have it).
-- Creating a key talks to Headscale with the API key Headplane is configured
-  with, so that key must still be valid.
+- 当前 Headplane 用户需要 **`configure_iam`** 能力（`owner`、`admin`、`network_admin`
+  默认拥有）。
+- 创建密钥是用 Headplane 配置里的那把密钥去和 Headscale 通信，因此那把密钥必须仍然有效。
 
-::: tip Expiration is mandatory
-Headscale stores whatever `expiration` it is given, and a key with no
-expiration is created with the zero timestamp — which Headscale then treats as
-already expired. Headplane always sends an explicit expiration so this cannot
-happen by accident.
+::: tip 有效期是必填的
+Headscale 会照原样存下传给它的 `expiration`，而不带有效期的密钥会以零时间戳创建 ——
+Headscale 会把它当作已经过期。Headplane 始终显式发送有效期，避免这种情况意外发生。
 :::
 
-## Where the key is used
+## 密钥在哪里使用
 
-`headscale.api_key` in Headplane's own configuration is the key Headplane uses
-for everything: reading nodes and users, writing the policy, and the Headplane
-Agent's automatic pre-auth keys. Rotating it means updating that file and
-restarting Headplane.
+Headplane 自己配置里的 `headscale.api_key` 是它做一切事情所用的密钥：读取节点和用户、
+写入策略，以及 Headplane Agent 自动创建预授权密钥。轮换意味着更新那个文件并重启
+Headplane。

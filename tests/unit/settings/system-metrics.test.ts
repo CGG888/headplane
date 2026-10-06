@@ -328,7 +328,7 @@ describe("headplane self-update notice", () => {
     expect(selfUpdateNotice("0.6.0", latest("v0.6.1"))).toEqual({
       current: "0.6.0",
       latest: "0.6.1",
-      url: "https://github.com/CGG888/headplane/releases/latest",
+      url: "https://github.com/CGG888/headplaneCN/releases/latest",
     });
 
     expect(selfUpdateNotice("0.6.1", latest("v0.6.1"))).toBeUndefined();
@@ -362,7 +362,7 @@ describe("headplane self-update notice", () => {
 
     expect((await checker.latest())?.raw).toBe("v0.6.1");
     expect(HEADPLANE_RELEASES_URL).toBe(
-      "https://api.github.com/repos/CGG888/headplane/releases/latest",
+      "https://api.github.com/repos/CGG888/headplaneCN/releases/latest",
     );
     expect(fetchImpl.mock.calls[0][0]).toBe(HEADPLANE_RELEASES_URL);
   });

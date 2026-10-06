@@ -1,275 +1,241 @@
 ---
-title: Headscale Settings
-description: Edit Headscale's OIDC configuration, trusted proxies, policy mode, node lifetime and DERP settings from Headplane.
+title: Headscale 设置
+description: 在 Headplane 里编辑 Headscale 的 OIDC 配置、可信代理、策略模式、节点有效期与 DERP 设置。
 outline: [2, 3]
 ---
 
-# Headscale Settings
+# Headscale 设置
 
-**Settings → Headscale** edits the parts of Headscale's own `config.yaml` that
-Headplane can safely change for you, instead of leaving you to SSH in.
+**设置 → Headscale** 用来编辑 Headscale 自己 `config.yaml` 里 Headplane 能安全替你改的部分，
+省得你为了改一个值去 SSH。
 
-Every settings page uses the same pill tabs as the top navigation — one tab per
-group — and a group with several sub-topics expands and collapses in place, so
-nothing is buried in one long scroll and nothing is hidden behind a panel.
+每个设置页都用与顶部导航相同的胶囊式标签 —— 一组一个标签 —— 组内若有多个子主题就在原地
+展开收起，因此既不会挤成一条长滚动条，也不会藏进面板后面。
 
-::: warning Requirements
+::: warning 前置条件
 
-- Headscale's configuration file must be mounted **read-write** into Headplane
-  and `headscale.config_path` must point at it. Without it Headplane can neither
-  show nor save these values (see [Network Management](/install/docker#network-management)).
-- To edit the local DERP map files (`derp.paths`) from the DERP tab, the entries
-  have to be paths **on the Headscale host**, and the directory holding them has
-  to be mounted into the container **read-write at that same absolute path**; see
-  [Editing local DERP map files](#editing-local-derp-map-files).
-- Headscale reads most of this at startup, so changes only take effect after the
-  Headscale process restarts. With the process integration enabled Headplane asks
-  it to reload or restart for you.
+- Headscale 的配置文件必须以**读写**方式挂进 Headplane，并且 `headscale.config_path` 要指向
+  它。没有它，Headplane 既不能显示也不能保存这些值（见
+  [网络管理](/install/docker)）。
+- 想在 DERP 标签里编辑本地 DERP 地图文件（`derp.paths`），这些条目必须是 **Headscale 主机上**
+  的路径，而且存放它们的目录要以**读写**方式、按**完全相同的绝对路径**挂进容器；见下文
+  「在线编辑本地 DERP 地图文件」一节。
+- 这些内容大部分是 Headscale 启动时读取的，因此改动要等 Headscale 进程重启后才生效。启用
+  进程集成后，Headplane 会替你请它重载或重启。
 
 :::
 
 ## OIDC
 
-The full single sign-on block:
+完整的单点登录配置段：
 
-| Field                             | Notes                                                                                                                                                                                                                                                                                                                         |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `issuer`                          | The provider's discovery URL. **Headscale treats an empty issuer as "OIDC disabled".**                                                                                                                                                                                                                                        |
-| `client_id`                       | Client registered at the provider.                                                                                                                                                                                                                                                                                            |
-| `client_secret`                   | Write-only here: Headplane shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                                 |
-| `client_secret_path`              | Read the secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave the field empty to remove the key.                                                                                    |
-| `scope`                           | Defaults to `openid`, `profile`, `email`.                                                                                                                                                                                                                                                                                     |
-| `email_verified_required`         | Default `true`. Turn it off only for providers that never send `email_verified`.                                                                                                                                                                                                                                              |
-| `use_expiry_from_token`           | Default `false`. When enabled, OIDC logins use the provider's token expiry and `node.expiry` is ignored for those nodes.                                                                                                                                                                                                      |
-| `only_start_if_oidc_is_available` | Default `true`; when off, Headscale starts even if the provider is unreachable.                                                                                                                                                                                                                                               |
-| `pkce`                            | `enabled` (default `false`) and `method` (`plain` or `S256`, default `S256`).                                                                                                                                                                                                                                                 |
-| `extra_params`                    | Extra parameters sent to the provider's authorization endpoint, for example `domain_hint`, `prompt` or `acr_values`. Edited as key/value rows below the form: both halves are required, keys are trimmed and may not contain whitespace, and duplicate keys are rejected. Saving an empty list removes the key from the file. |
+| 字段                              | 说明                                                                                                                                                                                                                                                       |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuer`                          | 提供方的 discovery URL。**Headscale 把空的 issuer 视为「OIDC 已关闭」。**                                                                                                                                                                                   |
+| `client_id`                       | 在提供方注册的客户端。                                                                                                                                                                                                                                     |
+| `client_secret`                   | 此处只写不读：Headplane 只显示是否已设置密钥，从不显示它的值。保持字段不动即可保留当前密钥。                                                                                                                                                                 |
+| `client_secret_path`              | 从文件读取密钥，而不是内联存放。Headscale 启动时读取该文件，并会展开路径里的环境变量，因此这是存放密钥更安全的位置。清空该字段会移除这个键。                                                                                                               |
+| `scope`                           | 默认为 `openid`、`profile`、`email`。                                                                                                                                                                                                                       |
+| `email_verified_required`         | 默认 `true`。只在提供方从不发送 `email_verified` 时才关掉。                                                                                                                                                                                                 |
+| `use_expiry_from_token`           | 默认 `false`。启用后 OIDC 登录使用提供方 token 的有效期，这些节点不再受 `node.expiry` 约束。                                                                                                                                                                |
+| `only_start_if_oidc_is_available` | 默认 `true`；关闭后即使提供方不可达，Headscale 也会启动。                                                                                                                                                                                                    |
+| `pkce`                            | `enabled`（默认 `false`）与 `method`（`plain` 或 `S256`，默认 `S256`）。                                                                                                                                                                                     |
+| `extra_params`                    | 发给提供方授权端点的额外参数，例如 `domain_hint`、`prompt` 或 `acr_values`。表单下方以键/值行编辑：两半都必填，键会去掉首尾空格且不能含空白字符，重复键会被拒绝。保存一个空列表会把该键从文件里移除。                                                     |
 
-The **allowed domains / users / groups** lists have their own page under
-[Settings → Restrictions](/features/sso#login-restrictions), because they are
-changed far more often than the rest of the block.
+**允许的域 / 用户 / 用户组**列表有自己的一页，见 **设置 → 限制**（该页说明目前只有英文版），
+因为它们比这个配置段的其余部分改动频繁得多。
 
-::: warning Inline secret and secret file together
-Headscale's own example configuration calls `oidc.client_secret` and
-`oidc.client_secret_path` mutually exclusive. When both are present in the file
-the page says so, but the save itself is not blocked — keep only one of the two.
+::: warning 内联密钥与密钥文件同时存在
+Headscale 自己的示例配置把 `oidc.client_secret` 与 `oidc.client_secret_path` 视为互斥。当文件
+里两者都有时，页面会提示，但保存本身不会被阻止 —— 请只保留其中一个。
 :::
 
-::: danger Removed in Headscale 0.29
-`oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are no
-longer supported: Headscale refuses to start when they are present. Node
-lifetime now lives in the top-level `node.expiry`. Headplane warns about these
-keys instead of silently writing around them.
+::: danger 在 Headscale 0.29 中已移除
+`oidc.expiry`、`oidc.strip_email_domain` 和 `oidc.map_legacy_users` 不再受支持：只要它们存在，
+Headscale 就拒绝启动。节点有效期现在位于顶层的 `node.expiry`。Headplane 会对这些键给出警告，
+而不是悄悄绕过它们去写文件。
 :::
 
-## Trusted proxies
+## 可信代理
 
-`trusted_proxies` is a list of CIDRs (for example `127.0.0.1/32`,
-`172.16.0.0/12`). Only connections whose source address falls inside one of
-those ranges have their `True-Client-IP`, `X-Real-IP` and `X-Forwarded-For`
-headers honoured — for everyone else Headscale deletes those headers, so a
-client cannot spoof its own address in the logs and in node registration.
+`trusted_proxies` 是一组 CIDR（例如 `127.0.0.1/32`、`172.16.0.0/12`）。只有当连接来源地址落在
+其中某个范围内时，它的 `True-Client-IP`、`X-Real-IP` 和 `X-Forwarded-For` 头才会被采信 ——
+对其他人，Headscale 会删除这些头，因此客户端无法在日志和节点注册里伪造自己的地址。
 
-Headplane rejects `0.0.0.0/0` and `::/0`: Headscale treats them as a
-configuration error, and trusting every peer would defeat the point.
+Headplane 会拒绝 `0.0.0.0/0` 和 `::/0`：Headscale 把它们当作配置错误，而信任所有对端也就让
+这个设置失去意义。
 
-## Node lifetime, logs and switches
+## 节点有效期、日志与开关
 
-The same page also edits the settings that usually mean editing the file by hand.
-The tab groups them into collapsible cards — node lifecycle, health checks,
-logging and features — so every save button stays with the fields it writes:
+同一页还编辑那些平时只能手改文件的设置。标签把它们分成可折叠的卡片 —— 节点生命周期、健康
+检查、日志和功能开关 —— 因此每个保存按钮都与它写入的字段在一起：
 
-| Setting                             | What it does                                                                                                                  |
+| 设置                                | 作用                                                                                                                          |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `node.expiry`                       | How long a machine's key stays valid by default. `0` means machines never expire. Written as a Go duration (`720h`, `8760h`). |
-| `node.ephemeral.inactivity_timeout` | How long an ephemeral machine may be offline before Headscale removes it (`30m`).                                             |
-| `log.level`                         | `debug`, `info`, `warn` or `error` — `debug` is the first thing to try when behaviour is odd, and it applies after a reload.  |
-| `log.format`                        | `text` for humans, `json` for log shipping.                                                                                   |
-| `taildrop.enabled`                  | Whether machines may send files to each other with Taildrop.                                                                  |
-| `auto_update.enabled`               | Whether machines are told to update themselves by default.                                                                    |
-| `logtail.enabled`                   | Whether node logs are sent to Tailscale's log service. Off keeps everything on your own hardware.                             |
-| `disable_check_updates`             | Stops Headscale from checking for its own updates.                                                                            |
+| `node.expiry`                       | 机器密钥默认的有效时长。`0` 表示永不过期。以 Go duration 书写（`720h`、`8760h`）。                                             |
+| `node.ephemeral.inactivity_timeout` | 临时机器离线多久之后被 Headscale 移除（`30m`）。                                                                               |
+| `log.level`                         | `debug`、`info`、`warn` 或 `error` —— 行为异常时第一个该试的就是 `debug`，重载后生效。                                          |
+| `log.format`                        | `text` 便于人读，`json` 便于日志采集。                                                                                          |
+| `taildrop.enabled`                  | 机器之间是否可以用 Taildrop 互传文件。                                                                                          |
+| `auto_update.enabled`               | 是否默认告知机器自行更新。                                                                                                      |
+| `logtail.enabled`                   | 节点日志是否发送到 Tailscale 的日志服务。关闭可把一切都留在自己的硬件上。                                                       |
+| `disable_check_updates`             | 阻止 Headscale 检查自身更新。                                                                                                   |
 
-Values shown are Headscale's own defaults when a key is absent, so the page
-describes what your server is actually doing rather than only what the file
-happens to say.
+键不存在时显示的是 Headscale 自己的默认值，因此页面描述的是你服务器的实际行为，而不只是
+文件里恰好写了什么。
 
-### HA subnet-router health checks
+### HA 子网路由健康检查
 
-When several nodes advertise the same prefix — an HA subnet router — Headscale
-pings each one and marks it unhealthy once a probe times out. The card edits both
-knobs, with Headscale's own rules enforced before anything is written:
+当多个节点宣告同一个网段 —— 即 HA 子网路由 —— Headscale 会逐个 ping，并在探测超时后把它标成
+不健康。这张卡片编辑两个旋钮，写入前会按 Headscale 自己的规则校验：
 
-| Setting                         | Rules                                                                                                                                                            |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `node.routes.ha.probe_interval` | How often each router is probed. `0` disables probing; any other value must be at least `2s`. Default `10s`.                                                     |
-| `node.routes.ha.probe_timeout`  | How long a probe waits for an answer before the router counts as unhealthy. At least `1s`, and shorter than the interval while probing is enabled. Default `5s`. |
+| 设置                            | 规则                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `node.routes.ha.probe_interval` | 每隔多久探测一次每个路由器。`0` 表示关闭探测；其他值至少为 `2s`。默认 `10s`。                                             |
+| `node.routes.ha.probe_timeout`  | 探测等待多久后把路由器判为不健康。至少 `1s`，且在开启探测时要比间隔短。默认 `5s`。                                        |
 
 ## DERP
 
-Tailscale clients reach each other through DERP relays when a direct connection
-is impossible. Headscale ships with Tailscale's public DERP map, and this section
-edits how that map is used:
+直连不可能时，Tailscale 客户端通过 DERP 中继互相通信。Headscale 自带 Tailscale 的公开 DERP
+地图，这一节编辑这份地图的使用方式：
 
-| Setting                                              | What it does                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                  |
-| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry is a path **on the Headscale host**, and the DERP tab can view and edit it right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                |
-| `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
-| `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
+| 设置                                                 | 作用                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `derp.urls`                                          | 要合并进内置地图的额外 DERP 地图 URL —— 指向你自己托管的自定义地图文件。                                                                                                                                                                              |
+| `derp.paths`                                         | 要合并的本地 DERP 地图文件，用于放在磁盘上的地图。每个条目都是 **Headscale 主机上**的路径，DERP 标签可以就地查看和编辑它（见下文「在线编辑本地 DERP 地图文件」）。                                                                                     |
+| `derp.auto_update_enabled` / `derp.update_frequency` | Headscale 是否从 Tailscale 刷新内置地图，以及多久刷新一次（`3h`）。                                                                                                                                                                                   |
+| `derp.server.*`                                      | 内嵌 DERP 服务器：是否启用，给它一个区域 id（900–999）、代码和名称、一个 STUN 监听地址，以及 Headscale 用来签名该区域的私钥。`verify_clients` 控制客户端是否必须先证明自己属于你的 tailnet 才能使用中继。                                             |
 
-### Editing local DERP map files
+### 在线编辑本地 DERP 地图文件
 
-Each path in `derp.paths` is a map file Headscale merges at startup, and the DERP
-tab edits them in place. Every configured path gets its own row:
+`derp.paths` 里的每个路径都是 Headscale 启动时合并的地图文件，DERP 标签会就地编辑它们。
+每个配置的路径都有自己的行：
 
-| Action                  | What it does                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **View**                | Read-only rendering with a line-number gutter and light YAML colouring. Nothing is written.                                 |
-| **Edit**                | An editor that validates while you type, with the same rules the server enforces before it writes anything.                 |
-| **Save**                | Validates on the server, snapshots the current file, then replaces it atomically (temp file + rename in the same directory). |
-| **Roll back**           | Restores the snapshot taken before the last write, and snapshots the content it replaces first.                             |
-| **Create from example** | Loads one of three fully commented templates into the editor; nothing is written until you save.                            |
+| 操作             | 作用                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| **查看**         | 带行号栏和轻量 YAML 着色的只读渲染。不写入任何内容。                                                        |
+| **编辑**         | 边输入边校验的编辑器，规则与服务端写入前强制执行的完全相同。                                                |
+| **保存**         | 在服务端校验、给当前文件留一份快照，然后原子替换（同目录下的临时文件加改名）。                              |
+| **回滚**         | 恢复上一次写入前的快照，并先为它替换掉的内容再留一份快照。                                                  |
+| **用示例创建**   | 把三份带完整注释的模板之一载入编辑器；在你保存之前不会写入任何内容。                                        |
 
-A row also lists what Headplane found on disk: whether the file exists, is
-readable, is writable, parses, is a valid DERP map, and keeps its region ids and
-codes unique. A path this container cannot see at all is reported as **cannot
-check**, exactly like the rest of the configuration checks, because a missing bind
-mount is not a broken map.
+行里还会列出 Headplane 在磁盘上查到的情况：文件是否存在、是否可读、是否可写、能否解析、是不是
+有效的 DERP 地图、区域 id 与区域代码是否唯一。容器完全看不到的路径会报成 **无法检查**，与其余
+配置检查一致，因为「缺少挂载」并不等于「地图坏了」。
 
-::: danger The path is on the Headscale host, not inside the container
-`derp.paths` is read by **Headscale itself**. When Headscale runs as a host
-process next to a containerised Headplane — the usual NAS setup — every entry has
-to be a path that exists **on that host**. Headplane only sees the same file if
-that directory is mounted into its container at the **identical absolute path**,
-which is also why the DERP tab asks for a path on the Headscale host when you add
-one. A container-only path such as `/etc/headscale/...` looks fine in the UI,
-but Headscale cannot open it, and it refuses to start:
+::: danger 路径是 Headscale 主机上的，不是容器里的
+`derp.paths` 是 **Headscale 自己**读取的。当 Headscale 作为宿主机进程运行在容器化的 Headplane
+旁边 —— 常见的 NAS 部署 —— 每个条目都必须是**那台主机上**存在的路径。只有当该目录以**完全
+相同的绝对路径**挂进 Headplane 容器时，它才能看到同一个文件，这也是 DERP 标签在新增路径时
+要求填写 Headscale 主机路径的原因。像 `/etc/headscale/...` 这样的纯容器路径在界面上看着没问题，
+但 Headscale 打不开它，于是拒绝启动：
 
 ```
 Error: headscale ran into an error and had to shut down:
 getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or directory
 ```
 
-Mount the host directory **read-write, at the same absolute path it has on the
-host**, and list that host path in `derp.paths`:
+请把宿主机目录以**读写方式、按它在宿主机上的绝对路径原样**挂进容器，并在 `derp.paths` 里写这个
+宿主机路径：
 
 ```yaml
-# Headscale's config.yaml — the path as the host sees it
+# Headscale 的 config.yaml —— 宿主机看到的路径
 derp:
   paths:
     - /vol1/@appdata/headscale/derp-maps/home.yaml
 ```
 
 ```yaml
-# Headplane's compose — host directory : the same absolute path in the container
+# Headplane 的 compose —— 宿主机目录 : 容器内完全相同的绝对路径
 volumes:
   - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
 ```
 
-Read-only is not enough for editing: **View** still works, while every save reports
-that the container cannot write the path. Headscale itself has to be able to read
-these files too, because it loads them when it starts.
+只读是不够的：**查看**仍然可用，但每次保存都会提示容器无法写入该路径。Headscale 自己也要能读
+这些文件，因为它启动时就要载入它们。
 
-If this already happened, the recovery is to comment the `paths:` entry out (or
-restore the configuration snapshot Headplane took before the write) and start
-Headscale again — then redo the three steps in the right order: create the
-directory and file **on the host**, mount it into the container at the same path,
-and only then point `derp.paths` at the host path.
+如果这件事已经发生，补救办法是把 `paths:` 里的条目注释掉（或者恢复 Headplane 在写入前留下的
+配置快照）并重新启动 Headscale —— 然后按正确顺序重做三步：**在宿主机上**创建目录和文件，把它
+按相同路径挂进容器，最后才把 `derp.paths` 指向这个宿主机路径。
 :::
 
-Nothing is written unless the path is **already listed in `derp.paths`**: the
-request may only name one of those entries, the path has to be absolute, and a
-`..` segment is refused. Files larger than **256 KiB** are neither loaded into the
-editor nor written.
+只有当路径**已经列在 `derp.paths` 里**时才会写入：请求只能指定其中一个条目，路径必须是绝对的，
+含 `..` 段会被拒绝。大于 **256 KiB** 的文件既不会载入编辑器，也不会被写入。
 
-#### Converting a region from Tailscale's DERP map
+#### 把 Tailscale DERP 地图里的区域转换过来
 
-A local file uses the same field names as Tailscale's own DERP map JSON, in YAML
-and lower case. The JSON map's top-level `Regions` object becomes the YAML
-`regions:` mapping keyed by region id, and the fields are renamed:
+本地文件使用与 Tailscale 自己的 DERP 地图 JSON 相同的字段名，只是改用 YAML 和小写。JSON 地图
+顶层的 `Regions` 对象对应 YAML 的 `regions:` 映射，以区域 id 为键，字段名则按下面的对照改名：
 
-| Tailscale JSON | Local YAML   | Notes                                                                       |
-| -------------- | ------------ | --------------------------------------------------------------------------- |
-| `RegionID`     | `regionid`   | The region's number; it must match the map key and be unique across maps.   |
-| `RegionCode`   | `regioncode` | The short code clients show, for example `ams`.                             |
-| `RegionName`   | `regionname` | The name clients display for the region.                                    |
-| `Nodes`        | `nodes`      | A YAML list, so every node starts with a `-`.                               |
-| `Name`         | `name`       | The node's name, unique inside its region.                                  |
-| `HostName`     | `hostname`   | What clients connect to; it needs an A or AAAA record pointing at the node. |
-| `IPv4`         | `ipv4`       | Optional, a bare address.                                                   |
-| `IPv6`         | `ipv6`       | Optional, a bare address.                                                   |
+| Tailscale JSON | 本地 YAML    | 说明                                                          |
+| -------------- | ------------ | ------------------------------------------------------------- |
+| `RegionID`     | `regionid`   | 区域编号；必须与映射的键一致，并在所有地图中唯一。            |
+| `RegionCode`   | `regioncode` | 客户端显示的短代码，例如 `ams`。                              |
+| `RegionName`   | `regionname` | 客户端显示的区域名称。                                        |
+| `Nodes`        | `nodes`      | 一个 YAML 列表，因此每个节点以 `-` 开头。                     |
+| `Name`         | `name`       | 节点名，在同一区域内唯一。                                    |
+| `HostName`     | `hostname`   | 客户端连接的目标；需要有指向该节点的 A 或 AAAA 记录。         |
+| `IPv4`         | `ipv4`       | 可选，裸地址。                                                |
+| `IPv6`         | `ipv6`       | 可选，裸地址。                                                |
 
-Headplane's readers accept either spelling, so a map it fetches from a URL — the
-official one included — is understood whether it arrives in this wire format or
-in the lower-case shape above.
+Headplane 的读取器两种写法都接受，因此它从 URL 抓到的地图 —— 包括官方地图 —— 无论是以这种
+wire 格式还是上面小写的形状出现，都能被读懂。
 
-`Latitude`, `Longitude` and `CanPort80` are wire-format fields: the JSON map
-carries them, while the local YAML leaves them out and Headscale does not read
-them from it. `derpport` defaults to **443** and `stunport` to **3478** when a node
-omits them, so the minimum a node needs is `name`, `regionid` and `hostname`
-(`stunport: 0` means the node answers no STUN, and `stunonly: true` marks a node
-that helps clients discover their NAT mapping but never relays traffic).
+`Latitude`、`Longitude` 和 `CanPort80` 是 wire 格式字段：JSON 地图会带它们，而本地 YAML 不写，
+Headscale 也不会从本地文件读取它们。节点省略 `derpport` 时默认为 **443**，省略 `stunport` 时
+默认为 **3478**，因此一个节点最少只需要 `name`、`regionid` 和 `hostname`（`stunport: 0` 表示该
+节点不响应 STUN，`stunonly: true` 表示该节点只帮助客户端探测 NAT 映射，从不转发流量）。
 
-::: tip The official regions already arrive through `derp.urls`
-Tailscale's own regions come from Headscale's built-in map and from `derp.urls`, so
-you do **not** have to copy them into a local file. Writing one locally means
-maintaining it yourself: the addresses in your file are the ones clients will use,
-and nothing updates them when Tailscale moves one of its relays.
+::: tip 官方区域本来就通过 `derp.urls` 到来
+Tailscale 自己的区域来自 Headscale 的内置地图和 `derp.urls`，因此你**不必**把它们抄进本地文件。
+在本地写一份意味着由你自己维护：文件里的地址就是客户端会用的地址，而 Tailscale 挪动它的中继时
+没有任何东西会替你更新。
 :::
 
-#### What the editor checks
+#### 编辑器检查什么
 
-| Rule       | Detail                                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| YAML       | The document parses; a syntax error is reported with the line and column the YAML parser gives.                                |
-| Region     | The document is a DERP map (a `regions` mapping), and every region has `regionid`, `regioncode`, `regionname` and `nodes`.     |
-| Uniqueness | Region ids and region codes each appear only once.                                                                            |
-| Node       | Every node has `name`, `regionid` and `hostname`; `derpport` and `stunport` are integers from 1 to 65535 (`stunport` may be 0). |
-| Addresses  | `ipv4`/`ipv6`, when present and non-empty, are valid addresses, and `stunonly` is a boolean.                                   |
-| Size       | No more than 256 KiB, so the container can read and write it comfortably.                                                     |
+| 规则     | 细节                                                                                                                 |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| YAML     | 文档能解析；语法错误会带上 YAML 解析器给出的行列位置。                                                                |
+| 区域     | 文档是一份 DERP 地图（一个 `regions` 映射），每个区域都有 `regionid`、`regioncode`、`regionname` 和 `nodes`。          |
+| 唯一性   | 区域 id 与区域代码各自只能出现一次。                                                                                  |
+| 节点     | 每个节点都有 `name`、`regionid` 和 `hostname`；`derpport` 与 `stunport` 是 1 到 65535 的整数（`stunport` 可以为 0）。 |
+| 地址     | `ipv4`/`ipv6` 存在且非空时必须是合法地址，`stunonly` 必须是布尔值。                                                   |
+| 大小     | 不超过 256 KiB，让容器可以轻松读写。                                                                                  |
 
-Every problem is shown in your language, next to the line it came from. The server
-never sends English prose: it answers with a stable code plus the position, and the
-page words it.
+每个问题都用你的语言显示，并标出它来自哪一行。服务端从不发送英文叙述：它返回稳定的错误码加
+位置，由页面组织措辞。
 
-#### Taking effect
+#### 何时生效
 
-Headscale reads `derp.paths` files **when it starts**, so a saved map is picked up
-after a reload or restart — **Settings → System** has that control when the process
-integration is enabled. Headplane deliberately does not reload Headscale for you
-here: a reload that does not re-read the map would look like it worked.
+Headscale 是**启动时**读取 `derp.paths` 里的文件的，因此保存后的地图要等重载或重启才会被采用
+—— 启用进程集成时，**设置 → 系统**上有那个按钮。Headplane 在这里刻意不替你重载 Headscale：
+一次不会重新读取地图的重载看起来像是成功了。
 
-The file is snapshotted before **every** write, so it appears on
-**Settings → Snapshots** with the reason `DERP map file: <name>` and can be
-restored from there or from the row's **Roll back** button. Rolling back snapshots
-the content it replaces first, so a rollback is itself reversible.
+每次写入之前都会给该文件留一份快照，因此它带着原因 `DERP map file: <名称>` 出现在
+**设置 → 配置快照** 里，可以从那里或该行的 **回滚** 按钮恢复。回滚会先给它替换掉的内容留一份
+快照，所以回滚本身也是可逆的。
 
-### Enabling your own relay in one step
+### 一步启用自建中继
 
-The **preset** button fills the whole embedded-server block for you — region id
-`999`, code `headscale`, the example STUN address, and a private-key path next to
-Headscale's configuration file — and saves it once you confirm. It never
-overwrites a region code or name you already set: those are prefilled so you can
-edit them. Enabling the embedded server publishes a new region to every client,
-so the dialog says so before you commit.
+**预设**按钮会替你填好整个内嵌服务器配置段 —— 区域 id `999`、代码 `headscale`、示例 STUN
+地址，以及 Headscale 配置文件旁边的私钥路径 —— 并在你确认后保存。它绝不会覆盖你已经设置过的
+区域代码或名称：那些只是预填，方便你改。启用内嵌服务器会向每个客户端发布一个新区域，因此
+对话框会在你确认之前说明这一点。
 
-Two details worth knowing:
+两个值得知道的细节：
 
-- The **private key does not have to exist**: Headscale generates it when it is
-  missing, so only the directory it lives in has to be writable by Headscale.
-- `derp.server.ipv4` / `ipv6` are optional but recommended — Headscale's own
-  configuration suggests your server's public addresses for connection
-  stability, especially with exit nodes. Clearing a field removes the key again.
-  [Address auto-sync](#address-auto-sync) can keep both current for you, and a
-  value set by hand is overwritten as soon as a run detects a different one.
+- **私钥不必真的存在**：Headscale 在它缺失时会自行生成，所以只有它所在的目录需要对 Headscale
+  可写。
+- `derp.server.ipv4` / `ipv6` 是可选项但推荐设置 —— Headscale 自己的配置建议填你服务器的公网
+  地址以获得连接稳定性，尤其是配合 exit node 时。清空字段会移除该键。下面的「地址自动同步」
+  可以替你保持两者都是最新的，而手工设置的值会在某次运行探测到不同值时被覆盖。
 
-### Making your own relay the default
+### 把自己的中继设为默认
 
-By default the embedded server is _added_ to Tailscale's public DERP map, so
-clients still have the public regions available and pick between them. To make
-your relay the only one, the preset also offers to clear the public map at the
-same time — it is the `derp.urls: []` setting:
+默认情况下内嵌服务器是**追加**到 Tailscale 公开 DERP 地图上的，因此客户端仍然可以使用公开区域
+并在其间选择。想让它成为唯一的中继，预设也会同时提供清空公开地图的选项 —— 也就是
+`derp.urls: []`：
 
 ```yaml
 derp:
@@ -280,335 +246,264 @@ derp:
     region_name: "GDDG Embedded DERP"
     stun_listen_addr: "0.0.0.0:3478"
     private_key_path: /vol1/@appdata/headscale/derp_server_private.key
-  urls: [] # no fallback relays
+  urls: [] # 不再加载公开中继地图
 ```
 
-The DERP row always states which relay source is in play: _only the embedded
-server_, _embedded plus the public map_, or _only the public map_.
+DERP 那一行始终会说明当前用的是哪种中继来源：*仅内嵌服务器*、*内嵌 + 公开地图*，或*仅公开地图*。
 
-::: warning A single relay is a single point of failure
-With `derp.urls: []` there is nothing to fall back to, which is why Headscale's
-documentation warns about it. Verify the region works first (`tailscale debug
-derp headscale` on a client), and remember clients switch over on reconnect
-rather than instantly.
+::: warning 单个中继就是单点故障
+用 `derp.urls: []` 时没有可回退的中继，这也是 Headscale 文档对此发出警告的原因。请先确认该区域
+可用（在客户端上执行 `tailscale debug derp headscale`），并记住客户端是在重连时切换，而不是
+立刻切换。
 :::
 
-### What has to be reachable
+### 需要放通什么
 
-A self-hosted region is only used if clients can actually reach it:
+自建区域只有在客户端真的能访问时才会被使用：
 
-| Port                                          | Why                                                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **The public port of `server_url`**           | The relay protocol itself; Headscale serves it on the same listener as the control server. |
-| **UDP 3478** (`derp.server.stun_listen_addr`) | STUN, so clients can discover each other through the relay.                                |
+| 端口                                            | 为什么                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| **`server_url` 的对外端口**                     | 中继协议本身；Headscale 让它在与控制服务同一个监听器上提供服务。              |
+| **UDP 3478**（`derp.server.stun_listen_addr`）  | STUN，让客户端可以通过中继发现彼此。                                          |
 
-**Which port is that?** The embedded relay is served on the same HTTPS endpoint
-as Headscale, so clients use whatever `server_url` names: `https://host` means
-**443**, `https://host:8443` means **8443**. Both work — Tailscale's own
-documentation just recommends 443, because clients assume that port in some
-situations. The DERP tab states the value Headplane derives from your
-configuration, and one more from Headscale's documentation: the embedded server
-cannot answer Tailscale's captive-portal check on **tcp/80**, which is a
-documented limitation rather than a misconfiguration.
+**那是哪个端口？** 内嵌中继与 Headscale 共用同一个 HTTPS 端点，因此客户端使用 `server_url`
+写的端口：`https://host` 表示 **443**，`https://host:8443` 表示 **8443**。两者都行 —— Tailscale
+自己的文档只是推荐 443，因为某些情况下客户端会假定该端口。DERP 标签会写出 Headplane 从你的
+配置推导出的值，另有一条来自 Headscale 文档：内嵌服务器无法响应 Tailscale 在 **tcp/80** 上的
+强制门户（captive portal）检测，这是有记录的局限，而不是配置错误。
 
-### Address auto-sync
+### 地址自动同步
 
-Everything that configures the relay addresses lives in one card,
-**Settings → Headscale → DERP → auto-sync**: the schedule, which families it may
-write, the **auto-reload** switch, the **external IPv6 echo** switch and its URL,
-and the detection panel below the form. The
-[Overview](/features/overview#relay-addresses-and-stun) relay card is
-read-only and configures nothing: it shows the resulting IPv4 and IPv6 values
-with a copy button, the STUN row, the resolver the lookups used and a one-line
-last-check status, and links back to this card.
+所有配置中继地址的东西都集中在一张卡片里，**设置 → Headscale → DERP → 自动同步**：刷新计划、
+允许写入哪些地址族、**自动重载**开关、**外部 IPv6 回显**开关及其 URL，以及表单下方的探测面板。
+[功能总览](/features/overview)的中继卡片是只读的，不配置任何东西：它显示最终得到的
+IPv4 与 IPv6 值（带复制按钮）、STUN 行、查询使用的解析器，以及一行最近检查状态，并链回这张
+卡片。
 
-The card has two buttons, and they share one detection pass:
+卡片有两个按钮，它们共用同一次探测：
 
-| Button      | What it does                                                                                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Check**   | Runs both detections and the comparison, then writes nothing at all. It is the safe way to see what a run would do.                                                                      |
-| **Run now** | Runs the same checks and writes only what changed — per family, just the key whose address differs. Headplane snapshots the configuration first and records an audit entry for the write. |
+| 按钮         | 作用                                                                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **检查**     | 执行两个地址族的探测与比较，然后**什么都不写**。这是查看「运行会做什么」的安全方式。                                                     |
+| **立即运行** | 执行同样的检查，只写入发生变化的部分 —— 按地址族，只改地址不同的那个键。Headplane 会先给配置留快照，并为这次写入记一条审计。              |
 
-Neither button waits for the next scheduled run: both detect and report
-immediately.
+两个按钮都不等下一次计划运行：它们立刻探测并报告结果。
 
-**The detected value is authoritative.** When a detected address differs from
-`derp.server.ipv4` or `derp.server.ipv6`, **Run now** — and a scheduled run —
-writes the detected value; it does not ask, and it does not treat what is in the
-file as a preference. A family whose address already matches is left untouched,
-and a detection that fails leaves the configured value exactly as it was. Setting
-either key by hand is still supported: do it when you want an address the
-detection cannot produce, and expect the next run that detects a different value
-to overwrite it.
+**探测到的值就是权威值。** 当探测到的地址与 `derp.server.ipv4` 或 `derp.server.ipv6` 不一致时，
+**立即运行**（以及计划运行）会写入探测到的值；它不会询问，也不把文件里的值当作偏好。地址已经
+一致的地址族保持不动，探测失败的地址族则原样保留已配置的值。手工设置这两个键依然受支持：
+当你需要探测无法产生的地址时就这么做，但要预期下一次探测到不同值的运行会覆盖它。
 
-Headscale only shows clients a new address after a reload, so **the auto-reload
-switch defaults to on** and every run that wrote something triggers the configured
-reload/restart integration. Know what that costs: **a reload briefly interrupts
-every connected client**. A run that changes nothing never reloads, and turning
-auto-reload off leaves the new value in the file with the reload left to you.
+Headscale 只在重载之后才会把新地址展示给客户端，因此**自动重载开关默认开启**，每次写入内容的
+运行都会触发配置好的重载/重启集成。请清楚代价：**一次重载会短暂中断所有已连接的客户端**。没有
+任何变化的运行永不重载；关闭自动重载则把新值留在文件里，重载交给你。
 
-A run that fails — nothing usable detected for a family, a write failure, or a
-reload failure — raises an alert through
-[Alert Notifications](/features/notifications), so a sync that stops working is
-noticed without anyone watching the card. A run that finds nothing to change
-never alerts.
+一次失败的运行 —— 某个地址族没有探测到可用值、写入失败，或重载失败 —— 会通过
+[告警通知](/features/notifications)发出告警，因此停止工作的同步不会没人发现。什么都没
+变化的运行从不告警。
 
-### Where the relay addresses come from
+### 中继地址是从哪里来的
 
-The auto-sync derives one address per family, and the two families are not
-detected the same way. The detection panel in the settings card lists every
-candidate it found, where each one came from, and why it was chosen or skipped.
+自动同步为每个地址族推导一个地址，而两个地址族的探测方式并不相同。设置卡片里的探测面板会列出
+它找到的每个候选、各自的来源，以及为什么被选中或跳过。
 
-| Family   | Detected from                                                                                                                                                                                                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.               |
-| **IPv6** | The **host machine's own global unicast address**: the interface list, plus `/proc/net/if_inet6` for the temporary/privacy flag and `/sys/class/net/.../device` to tell a real NIC from a bridge. A stable address beats one that rotates, and the address the domain's AAAA names wins when it matches. |
+| 地址族   | 探测来源                                                                                                                                                                                                                                                                           |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IPv4** | **`server_url` 主机名的 A 记录**，通过配置的解析器解析。位于 NAT 之后的机器无法知道自己的公网 IPv4，因此 DNS 的答案才是适合公布的。私有、CGNAT、回环和链路本地答案会被拒绝，而不是被写进去。                                                                                        |
+| **IPv6** | **宿主机自己的全局单播地址**：接口列表，加上 `/proc/net/if_inet6` 判断临时/隐私标志、`/sys/class/net/.../device` 区分真实网卡与网桥。稳定地址优先于会轮换的地址，而当域名的 AAAA 与之匹配时，该地址优先。                                                                            |
 
-IPv6 is deliberately different. There is no NAT for it: the machine itself holds
-the public address, and under `network_mode: host` the container shares the host's
-network namespace, so Headplane can read that address directly instead of trusting
-a name. A domain's AAAA can be a temporary privacy address, a prefix rotated since
-the record was written, or a different machine entirely — advertising the wrong
-one makes clients fail intermittently rather than cleanly, which is exactly the
-kind of fault that is hard to attribute afterwards.
+IPv6 刻意不同。它没有 NAT：公网地址就握在机器自己手里，而在 `network_mode: host` 下容器共享宿主
+机的网络命名空间，因此 Headplane 可以直接读到那个地址，而不必相信一个名字。域名的 AAAA 可能是
+临时隐私地址、可能是记录写下之后已经轮换的前缀，也可能完全属于另一台机器 —— 公布错误的那一个会
+让客户端间歇性失败而不是干脆失败，而这恰恰是最难事后归因的故障。
 
-**The optional external IPv6 echo is the authority when a router forwards or
-translates IPv6.** Off by default, because it makes Headplane contact a third
-party, the switch in the settings card asks a public endpoint which address the
-internet actually sees, over IPv6 only. It answers what no local probe can:
-whether the answer matches a local interface, or is an address no interface on
-this machine holds because NAT66 or a forwarding router rewrites it.
+**可选的外部 IPv6 回显在路由器转发或转换 IPv6 时才是权威。** 它默认关闭，因为那会让 Headplane
+去联系第三方；设置卡片里的开关会通过仅 IPv6 的请求询问一个公共端点，互联网实际看到的地址是
+什么。它回答的是任何本地探测都回答不了的问题：答案是否与某个本地接口一致，或者它是不是这台
+机器上任何接口都没有的地址 —— 因为 NAT66 或转发路由器改写了它。
 
-Each address carries the label of the source it came from: **`derp.server`** when
-the key holds a value, **host** when it is the machine's own address, **Internet
-(echo)** when the echo answered, and **DNS-unverified** when the domain's AAAA is
-all Headplane has to go on. When the AAAA does not match the host's address the
-card raises an amber warning, and a copy button copies the address to use.
+每个地址都带着来源标签：键里有值时是 **`derp.server`**，是机器自己的地址时是 **宿主机**，
+回显作答时是 **互联网（回显）**，而域名的 AAAA 是 Headplane 唯一依据时是 **DNS 未验证**。当
+AAAA 与宿主机地址不一致时，卡片会给出琥珀色警告，并有一个复制按钮把该地址复制出来备用。
 
-Two states are named rather than papered over:
+有两种状态会被点明，而不是糊过去：
 
-- **The machine has no public IPv6.** There is no host address to show, so either
-  declare one in `derp.server.ipv6` or fix the domain's DNS; the card says so
-  instead of inventing an address. When the only address the machine does hold is
-  a temporary privacy address that rotates, the settings card says that too — the
-  temporary-address hint is not repeated on the Overview.
-- **No real, device-backed NIC carries a global address.** That — not the
-  presence of `docker0`, `br-*` or `veth*` — is what decides whether the detected
-  addresses can be treated as the host's. A host that runs Docker always has those
-  interfaces, so seeing them is **not** evidence that a container has its own
-  network namespace. The candidates are still listed with the reason, and the DNS
-  answer stays **DNS-unverified** rather than being promoted to a host address.
+- **这台机器没有公网 IPv6。** 没有宿主机地址可显示，因此要么在 `derp.server.ipv6` 里声明一个，
+  要么修域名的 DNS；卡片会这么说，而不是编一个地址出来。当机器唯一的地址是会轮换的临时隐私
+  地址时，设置卡片也会说明 —— 临时地址提示不会在总览页重复出现。
+- **没有任何真实的、由设备支撑的网卡带着全局地址。** 决定「探测到的地址能否当作宿主机地址」
+  的是这一点，而**不是** `docker0`、`br-*`、`veth*` 是否存在。跑 Docker 的宿主机总是有这些
+  接口，所以看到它们**并不**说明容器拥有自己的网络命名空间。候选仍会连同原因一起列出，DNS 的
+  答案仍标为 **DNS 未验证**，而不会被提升为宿主机地址。
 
-### Is the relay actually reachable over IPv6 (or IPv4)?
+### 中继真的能通过 IPv6（或 IPv4）访问吗？
 
-`derp.server.ipv4` and `derp.server.ipv6` are what Headscale **advertises** to
-clients; they are not proof that the names clients use reach those addresses.
-**Check** and **Run now** therefore resolve the host in `server_url` (A and AAAA,
-cached for five minutes) and compare the two:
+`derp.server.ipv4` 与 `derp.server.ipv6` 是 Headscale **公布**给客户端的地址，它们并不证明客户端
+使用的名字能到达这些地址。因此 **检查** 和 **立即运行** 会解析 `server_url` 里的主机
+（A 与 AAAA，缓存五分钟）并比较两者：
 
-| Declared vs resolved                                              | Verdict                                                                                                                                         |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| The declared address is among the records                         | **Matches** — clients reach the relay over that family.                                                                                         |
-| `derp.server.ipv6` is set, but the hostname has no AAAA record    | **Warning** — clients cannot use the relay over IPv6 at all. Add an AAAA record pointing at the machine running the relay, or accept IPv4-only. |
-| `derp.server.ipv4` is set, but no A record matches it             | **Warning** — usually a stale address left behind after the machine's IP changed. Update `derp.server.ipv4` or the hostname's A record.         |
-| `derp.server.ipv6` is empty                                       | **Nothing to compare** — a neutral pass with a note. Running the relay over IPv4 only is a valid choice.                                        |
-| The embedded server is disabled                                   | **Nothing to check** — the relay is not served from this configuration.                                                                         |
-| The lookup timed out, the resolver failed, or `server_url` is bad | **Cannot check** — reported as such rather than as a broken address, so a DNS hiccup never looks like a misconfiguration.                       |
+| 声明值与解析结果                                          | 结论                                                                                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 声明的地址出现在记录中                                    | **一致** —— 客户端可以通过该地址族访问中继。                                                                                                          |
+| 设置了 `derp.server.ipv6`，但主机名没有 AAAA 记录          | **警告** —— 客户端根本无法通过 IPv6 使用该中继。请添加指向运行中继那台机器的 AAAA 记录，或接受仅 IPv4。                                              |
+| 设置了 `derp.server.ipv4`，但没有匹配它的 A 记录           | **警告** —— 通常是机器 IP 变化后残留的旧地址。请更新 `derp.server.ipv4` 或主机名的 A 记录。                                                            |
+| `derp.server.ipv6` 为空                                    | **无可比较** —— 中性通过并附一条说明。只通过 IPv4 运行中继是合法选择。                                                                                |
+| 内嵌服务器已禁用                                           | **无需检查** —— 这份配置不提供中继。                                                                                                                  |
+| 查询超时、解析器失败，或 `server_url` 不合法               | **无法检查** —— 照实报告，而不是当成地址坏了，这样一次 DNS 抖动永远不会看起来像配置错误。                                                            |
 
-The **Overview** relay card reduces this to a single line — the last-check status
-— and links to the settings card, which is where the detection panel and the
-comparison are read in full. Each machine's DERP card still shows the comparison
-under the addresses the hostname resolves to now, and **Settings → System** lists
-it as the two checks _Embedded relay IPv4_ and _Embedded relay IPv6_.
+**总览**页的中继卡片把这些压缩成一行 —— 最近检查状态 —— 并链到设置卡片，那里才能完整读到探测
+面板与比较结果。每台机器的 DERP 卡片仍会在主机名当前解析出的地址下显示比较结论，而
+**设置 → 系统**把它列为 _内嵌中继 IPv4_ 与 _内嵌中继 IPv6_ 两项检查。
 
-A host resolver can legitimately answer with no AAAA for a name that does have one,
-so "no record" is a property of the resolver in front of you, not proof about the
-zone. Compare `dig @1.1.1.1 +short AAAA <host>` with `dig +short AAAA <host>`: if
-the public resolver answers and the local one does not, the name does have a record
-and the host's resolver is hiding it. The relay cards state which resolver produced
-the answer they show — **System resolver** or **Configured: …** — so an empty row
-never leaves you guessing which DNS server was asked.
+宿主机的解析器完全可能对一个确实有 AAAA 的名字回答「没有 AAAA」，所以「没有记录」是眼前这个
+解析器的性质，而不是关于该域的结论。比较 `dig @1.1.1.1 +short AAAA <主机>` 与
+`dig +short AAAA <主机>`：如果公共解析器给出了答案而本地解析器没有，说明这个名字确实有记录，
+只是宿主机的解析器把它藏起来了。中继卡片会说明给出答案的是哪个解析器 —— **系统解析器** 或
+**已配置：…** —— 因此空行永远不会让你猜是问了哪台 DNS 服务器。
 
-### Choosing the resolver for relay lookups
+### 为中继查询选择解析器
 
-Below the embedded-server block, **Relay DNS resolver** lists the DNS servers
-Headplane may use for relay lookups instead of the host's own:
+在内嵌服务器配置段下面，**中继 DNS 解析器**列出 Headplane 可以用于中继查询、而不使用宿主机
+解析器的 DNS 服务器：
 
-- **Empty (the default)** — lookups follow the host's resolver, exactly as
-  Headplane has always done. Nothing changes until you add a server.
-- **One or more servers** — every relay lookup goes through them, in the order
-  listed, up to five. IPv4 and IPv6 literals are accepted, each with an optional
-  port (`1.1.1.1`, `[2606:4700:4700::1111]:53`).
+- **为空（默认）** —— 查询沿用宿主机解析器，与 Headplane 一贯行为完全一致。在你添加服务器之前
+  什么都不会变。
+- **一台或多台服务器** —— 每次中继查询都按列出的顺序走它们，最多五台。接受 IPv4 与 IPv6 字面量，
+  各自可以带端口（`1.1.1.1`、`[2606:4700:4700::1111]:53`）。
 
-The list is Headplane state: it is stored in Headplane's own data directory
-(`relay-dns-servers.json`) and never written into Headscale's configuration, so it
-also works when the configuration file is mounted read-only. It affects relay
-lookups only; everything else Headplane resolves keeps using the host's resolver.
+这份列表是 Headplane 自己的状态：保存在 Headplane 的数据目录（`relay-dns-servers.json`），绝不
+写入 Headscale 的配置，因此在配置文件以只读方式挂载时它依然可用。它只影响中继查询；Headplane
+解析的其他一切都仍走宿主机解析器。
 
-A configured resolver is never silently bypassed: when those servers fail, the
-card reports the failure rather than falling back to the host's resolver, because a
-lookup you pointed somewhere is a lookup you want the truth about.
+配置的解析器绝不会被静默绕过：当这些服务器失败时，卡片报告失败而不是回退到宿主机解析器，
+因为你指定了去向的查询，就该知道真相。
 
-**Re-resolve now** clears the cache and runs the lookup again. Positive and
-negative answers are cached for five minutes, so a name that had no AAAA before you
-changed your DNS keeps reporting "no records" until that cache expires — the button
-is how you check immediately, without restarting Headplane.
+**立即重新解析**会清空缓存并重跑查询。正向与反向答案都缓存五分钟，因此在你改完 DNS 之前没有
+AAAA 的名字会一直报「没有记录」，直到缓存过期 —— 这个按钮就是不必重启 Headplane 也能立刻确认
+的方式。
 
-::: tip The other "IPv6: No" is not about the relay
-A machine's **Client Connectivity → IPv6** value is that machine's own
-connectivity self-test: it describes whether the machine's network has working
-IPv6, and it says nothing about Headscale or about your relay. It cannot be fixed
-on the Headscale side. The [fnOS deployment guide](/install/fnos) has a
-troubleshooting entry for both symptoms, or check that machine's network
-directly.
+::: tip 另一个「IPv6: No」与中继无关
+机器的 **客户端连通性 → IPv6** 是该机器自己的连通性自检：它描述的是那台机器的网络有没有可用的
+IPv6，与 Headscale 或你的中继没有任何关系，也无法在 Headscale 这边修好。
+[fnOS 部署指南](/install/fnos)里有针对这两种症状的排查条目，或者直接检查那台机器的网络。
 :::
 
-### Behind a reverse proxy
+### 位于反向代理之后
 
-Headscale is often served through nginx, Caddy, Traefik or a NAS gateway. The
-embedded relay keeps working only if the proxy passes it through properly:
+Headscale 常常通过 nginx、Caddy、Traefik 或 NAS 网关对外提供服务。只有代理把它正确透传过去，
+内嵌中继才能继续工作：
 
-| Requirement                                  | Why                                                                                                                              |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Forward the **`/derp`** path                 | The relay endpoint lives there; forwarding only the API, `/ts2021` and `/health` leaves DERP unreachable — and it fails quietly. |
-| Allow the **HTTP Upgrade** and do not buffer | DERP runs as an upgraded connection; buffering or stripping `Upgrade` breaks it.                                                 |
-| Present valid **HTTPS** to clients           | Clients verify the certificate of `server_url`.                                                                                  |
-| Let **udp/3478** reach Headscale directly    | STUN cannot pass through an HTTP proxy.                                                                                          |
+| 要求                                       | 原因                                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| 转发 **`/derp`** 路径                      | 中继端点就在那里；只转发 API、`/ts2021` 和 `/health` 会让 DERP 不可达 —— 而且是静默失败。        |
+| 允许 **HTTP Upgrade**，且不要缓冲          | DERP 运行在升级后的连接上；缓冲或剥离 `Upgrade` 都会把它弄坏。                                   |
+| 对客户端提供有效的 **HTTPS**               | 客户端会校验 `server_url` 的证书。                                                               |
+| 让 **udp/3478** 直达 Headscale             | STUN 无法穿过 HTTP 代理。                                                                        |
 
-Clients also have to reach the region's public address, so firewall and NAT rules
-are the usual reason a freshly enabled region never appears in use. The page
-repeats this next to the controls.
+客户端还必须能访问该区域的公网地址，所以防火墙和 NAT 规则通常是刚启用的区域一直没人使用的原因。
+设置页面也会在控件旁边重复这一点。
 
-### Official region filter
+### 官方区域节点筛选
 
-Directly below the [address auto-sync](#address-auto-sync) card, **Official
-region filter** mirrors **Tailscale's official public DERP regions** —
-Tailscale's own relays, not the nodes you host yourself — into a local map file
-that Headscale hands to clients, keeping only the regions you tick and
-renumbering them into the 900s. The card starts collapsed; its summary reads
-`{regions} official regions · {selected} selected · {file}`.
+就在上面「地址自动同步」卡片的下面，**官方区域节点筛选**把 **Tailscale 官方的公开 DERP
+区域** —— Tailscale 自己的中继，不是你自建的节点 —— 镜像成本地地图文件交给 Headscale
+分发给客户端：只保留你勾选的区域，并把它们统一改号到 900 段。卡片默认折叠，摘要形如
+「N 个官方区域 · 已选 M 个 · 文件路径」。
 
-The table lists every official region with the number it would be mirrored as,
-the Chinese name the mirrored file carries, the official code and name, how many
-nodes the region has, the latency the agent measured, and a checkbox. Ticking a
-box only changes the preview: nothing is written until **Save**.
+表格为每个官方区域列出它将被镜像成的编号、镜像文件里携带的中文名、官方代码与官方名称、该区域
+有多少节点、Agent 实测的延迟，以及一个复选框。勾选只改变预览：在你点 **保存** 之前什么都不写。
 
-Numbers are the point of the card:
+编号正是这张卡片的重点：
 
-| Region                 | Number                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| Hong Kong              | **901**, always — its checkbox cannot be cleared                                                       |
-| Singapore              | **902**, always — its checkbox cannot be cleared                                                       |
-| Everything else ticked | **903** and up, fastest measured latency first; equal latencies go to the lower official id, then code |
+| 区域             | 编号                                                                          |
+| ---------------- | ----------------------------------------------------------------------------- |
+| 香港             | **901**，始终如此 —— 它的复选框无法取消                                        |
+| 新加坡           | **902**，始终如此 —— 它的复选框无法取消                                        |
+| 其余勾选的区域   | 从 **903** 起按实测延迟升序；延迟相同则官方 id 小的在前，再相同则比较代码       |
 
-A number is **sticky**: once a region has one it keeps it across later runs, so a
-client's relay choice does not change just because a latency sample moved. Only
-**Renumber** re-ranks the regions and can move a number.
+编号是**粘性的**：某个区域一旦有了编号，后续运行都会保留它，因此客户端的选路不会因为某次延迟
+采样波动而改变。只有 **重新编号** 会重排区域并可能移动编号。
 
-The settings, all written by **Save**:
+这些设置都由 **保存** 写入：
 
-| Setting             | Default                                                    | Notes                                                                                                                                                                                                             |
-| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enable the mirror   | off                                                        | Enabling lets Headplane rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                 |
-| Target file path    | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`  | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                             |
-| Refresh interval    | every 24 hours                                             | 6, 12 or 24 hours.                                                                                                                                                                                                |
-| Reload after writing | on                                                        | When a run actually changed the file, Headplane asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
+| 设置             | 默认值                                                      | 说明                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 启用镜像         | 关闭                                                        | 启用后 Headplane 会改写一份 Headscale 载入的文件，所以必须显式开启。关闭时手工运行仍然可用。                                                                                   |
+| 目标文件路径     | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`   | **Headscale 主机上**的绝对路径，且所在目录要挂进容器。这份文件由该任务维护，**手工修改会被覆盖** —— 请专门给它一个文件。                                                       |
+| 刷新间隔         | 每 24 小时                                                  | 可选 6、12 或 24 小时。                                                                                                                                                        |
+| 写入后自动重载   | 开启                                                        | 当一次运行确实改动了文件时，Headplane 会请已配置的集成重载 Headscale，让客户端无需重启即拿到新地图。**重载会短暂中断已连接的客户端**；关闭它则重载交给你。                        |
 
-Its actions:
+它的几个动作：
 
-| Action         | What it does                                                                                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Save**       | Writes the settings and the selection.                                                                                                                                                                                                                |
-| **Check**      | Fetches the official map, filters and renumbers it, then compares it with the file on disk — **writing nothing**: no snapshot, no reload, no alert, and no change to the stored numbering. It is the safe way to see what a run would do.              |
-| **Update now** | The same pass, writing what changed: snapshot, atomic replace, audit entry, then the reload switch.                                                                                                                                                    |
-| **Renumber**   | The same writing run with the stored numbering dropped first, so every region is ranked again from the latest measurements. Its dialog warns that **clients may briefly drop and re-select their relays** while the new numbers spread through the tailnet. |
+| 动作         | 作用                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **保存**     | 写入设置与勾选结果。                                                                                                                                                     |
+| **检查**     | 抓取官方地图、过滤并编号，再与磁盘上的文件比较 —— **什么都不写**：不留快照、不重载、不发通知，也不改动已存编号。这是查看「运行会做什么」的安全方式。                        |
+| **立即更新** | 同样的流程，但写入真正变化的内容：快照、原子替换、审计记录，然后按重载开关行事。                                                                                          |
+| **重新编号** | 先丢弃已存编号再执行同样的写入运行，于是每个区域都按最新测量重新排名。它的对话框会警告：新编号在 tailnet 中扩散期间，**客户端可能短暂掉线并重选中继**。                  |
 
-The card also offers a sort order, a latency ceiling with quick presets, a
-**Select the regions shown** button and a **Recommended: the fastest three**
-preset; none of them write anything on their own.
+卡片还提供排序方式、带快捷预设的延迟上限、**选中当前显示的区域**按钮，以及**推荐：最快的三个**
+预设；它们自身都不会写入任何内容。
 
-A run that cannot write **leaves the previous file exactly as it was** and names
-the reason in its summary: no region is selected, the official map could not be
-fetched, it describes none of the selected regions, the target path is not
-absolute or contains a `..` segment, the target is not writable, the generated
-map was rejected by the map validator, or the reload failed. A *writing* run that
-failed also raises the
-[DERP address sync failed](/features/notifications#reported-events) notification;
-a check never does.
+无法写入的运行会**把原文件完全保持在写入前的状态**，并在运行摘要里说明原因：没有勾选任何区域、
+官方地图抓取失败、官方地图没有描述任何已选区域、目标路径不是绝对路径或含 `..` 段、目标不可写、
+生成的地图未通过地图校验器，或者重载失败。**写入**运行失败时还会触发
+[DERP 地址同步失败](/features/notifications)通知；检查永远不会。
 
-Measured latency comes from the Headplane Agent, so a region nothing measured
-reads **Not measured** and ranks last. Without the agent the card says so and you
-tick regions by hand.
+实测延迟来自 Headplane Agent，因此没有任何测量的区域显示 **未测量** 并排在最后。没有 Agent 时
+卡片会说明这一点，由你手工勾选区域。
 
-### Region names
+### 区域名称
 
-Headscale only hands Headplane the region **ids** a machine reports — its own
-relay endpoint is not a public DERP map — so an external region shows as `#901`.
-The embedded region gets its name from your configuration automatically, and
-**Settings → Headscale → DERP** has a small editor for naming the others (a
-region id → name mapping kept in Headplane's own data directory, never written
-into Headscale's configuration). Names then appear on the machine details too.
+Headscale 只把机器上报的区域 **id** 交给 Headplane —— 它自己的中继端点不是公开 DERP 地图 ——
+因此外部区域显示为 `#901`。内嵌区域自动从你的配置取得名称，而 **设置 → Headscale → DERP** 有
+一个小编辑器给其余区域命名（区域 id → 名称的映射，保存在 Headplane 自己的数据目录里，绝不写入
+Headscale 的配置）。命名之后，机器详情页也会显示这些名字。
 
-A name is resolved through one chain, most deliberate source first: the manual
-mapping, the map files listed in `derp.paths`, the maps fetched from
-`derp.urls`, then Headscale's own embedded region. A region none of them
-describes keeps its bare `#id`.
+名称解析走一条链，最有意为之的来源优先：手工映射、`derp.paths` 列出的地图文件、从 `derp.urls`
+抓取的地图，最后是 Headscale 自己的内嵌区域。这条链都不认识的区域保持裸 `#id`。
 
-Those maps are read in either spelling of the format. Tailscale serves its
-official map in the wire format (`Regions`, `RegionID`, `HostName`, `IPv4`, …),
-while Headscale's local files use lower-case keys (`regions`, `regionid`,
-`hostname`, `ipv4`); one reader accepts both and normalises them, which is why
-the official regions a machine reports now resolve to their codes and names. The
-fetch has a **10-second deadline** and retries **once** when the connection
-itself fails — a timeout or a refused connection; an answered error status or a
-body that is not a DERP map is definitive and is not retried. A successful answer
-is cached for a few hours and a failure for a few minutes, so an unreachable URL
-is not dialled on every render.
+这些地图两种写法都会被读取。Tailscale 以 wire 格式提供官方地图（`Regions`、`RegionID`、
+`HostName`、`IPv4`…），而 Headscale 的本地文件用小写键（`regions`、`regionid`、`hostname`、
+`ipv4`）；同一个读取器两种都接受并归一化，这正是机器上报的官方区域现在能解析出代码与名称的原因。
+抓取有 **10 秒**超时，并且只在连接本身失败时**重试一次** —— 超时或被拒绝；返回了错误状态码、
+或者正文根本不是 DERP 地图，都属于确定答案，不会重试。成功的结果缓存数小时，失败缓存数分钟，
+因此不可达的 URL 不会在每次渲染时都被拨一次。
 
-Below the form, the page lists which relay region each machine is currently
-using, with the latency it measured. That live view needs the Headplane Agent,
-because the Headscale API does not expose client measurements; without the agent
-the section explains that instead of showing nothing.
+表单下方，页面列出每台机器当前使用的中继区域以及它实测的延迟。这个实时视图需要 Headplane Agent，
+因为 Headscale API 不暴露客户端测量值；没有 Agent 时该区块会解释这一点，而不是空着什么都不显示。
 
-::: tip Running your own relay
-Enable the embedded server when your machines cannot reach Tailscale's public
-DERP servers, or when you would rather relay through your own network. Keep the
-private key file outside the config directory and make sure Headscale can read
-it — the page warns when it cannot.
+::: tip 运行自己的中继
+当机器无法访问 Tailscale 的公开 DERP 服务器，或者你更愿意让自己的网络承载中继流量时，就启用
+内嵌服务器。请把私钥文件放在配置目录之外，并确保 Headscale 能读取它 —— 不能读取时页面会警告。
 :::
 
-## Policy mode
+## 策略模式
 
-| Mode             | Meaning                                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file` (default) | The policy is a HuJSON file that Headscale reads. Its API is **read-only**, so the Access Control editor can only save when Headplane can write that file itself. |
-| `database`       | The policy lives in Headscale's database and is writable through the API — this is what lets the [Access Control editor](/features/acls) save changes.            |
+| 模式               | 含义                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `file`（默认）     | 策略是 Headscale 读取的 HuJSON 文件。它的 API 是**只读**的，因此访问控制编辑器只有在 Headplane 自己能写该文件时才能保存。                |
+| `database`         | 策略存放在 Headscale 数据库中，可以通过 API 写入 —— [访问控制编辑器](/features/acls)能保存改动靠的就是它。                        |
 
-Switching modes **does not copy the policy**:
+切换模式**不会复制策略**：
 
-- `file` → `database`: restart Headscale, then import the file once with
-  `headscale policy set -f <path>` (or save it from the Headplane editor) —
-  until then the database policy is empty, which means _allow all_.
-- `database` → `file`: write the current policy to a file and point
-  `policy.path` at it before restarting, otherwise the policy is empty.
+- `file` → `database`：重启 Headscale，然后用 `headscale policy set -f <路径>` 导入一次文件
+  （或者在 Headplane 编辑器里保存一次）—— 在那之前数据库里的策略是空的，也就是*允许全部*。
+- `database` → `file`：先把当前策略写到文件里，并让 `policy.path` 指向它，再重启，否则策略是空的。
 
-## Configuration overview
+## 配置总览
 
-The **Overview** tab is the other half of the page: the values Headplane reads
-but deliberately never writes, marked **Display only**. A wrong database path or
-IP range could lock you out of the server, and the rest are operational or
-secret file paths that belong in the file on the host. Looking one up no longer
-means opening that file yourself.
+**总览**标签是这一页的另一半：Headplane 会读取、但刻意永不写入的值，标注为**仅显示**。错误的
+数据库路径或 IP 段可能把你锁在服务器外面，其余则是属于宿主机上那份文件的操作性或机密文件路径。
+查一个值不再需要自己打开那个文件。
 
-| Block        | Shown                                                                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Network      | `server_url`, `listen_addr`, `prefixes.v4`, `prefixes.v6` and the allocation strategy (`sequential` when the key is absent).                 |
-| Database     | `database.type` (`sqlite` when the key is absent), `database.sqlite.path` and whether the SQLite write-ahead log is on (`true` when absent). |
-| Listeners    | `metrics_listen_addr`, `grpc_listen_addr`, `grpc_allow_insecure`, `unix_socket`, `unix_socket_permission` and `noise.private_key_path`.      |
-| TLS and ACME | The Let's Encrypt hostname, the ACME email, and the certificate and certificate-key paths.                                                   |
-| Tuning       | Whether a `tuning` block is set at all (any key in it counts), not the individual performance knobs.                                         |
+| 区块          | 显示内容                                                                                                                                             |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 网络          | `server_url`、`listen_addr`、`prefixes.v4`、`prefixes.v6`，以及分配策略（键缺失时为 `sequential`）。                                                  |
+| 数据库        | `database.type`（键缺失时为 `sqlite`）、`database.sqlite.path`，以及 SQLite 预写日志是否开启（缺失时为 `true`）。                                     |
+| 监听器        | `metrics_listen_addr`、`grpc_listen_addr`、`grpc_allow_insecure`、`unix_socket`、`unix_socket_permission` 与 `noise.private_key_path`。                |
+| TLS 与 ACME   | Let's Encrypt 主机名、ACME 邮箱，以及证书与证书密钥路径。                                                                                             |
+| 调优          | 是否设置了 `tuning` 段（其中任意键都算），而不是逐个性能旋钮。                                                                                        |
 
-Anything the file does not set is shown as `—` instead of a guessed value, apart
-from the three Headscale defaults named above — the allocation strategy, the
-database type and the write-ahead log — which are shown as Headscale resolves
-them.
+文件没有设置的内容显示为 `—`，而不是猜一个值，只有上面点名的三个 Headscale 默认值例外 ——
+分配策略、数据库类型和预写日志 —— 它们按 Headscale 实际的解析结果显示。

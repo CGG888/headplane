@@ -8,11 +8,14 @@
  * `app/server`, which is what keeps a socket (and a scheduler) out of the
  * browser bundle.
  *
- * The numbering preview deliberately does not encode the assignment rule: the
- * loader hands over the order and the fixed anchors the server's
- * `assignRegionNumbers` produced, and {@link previewRegionNumbers} only walks
- * that order, skipping the regions that are not ticked. Ticking a different set
- * therefore previews exactly the numbers a fresh ranking of that set assigns.
+ * The numbering preview mirrors the server's `assignRegionNumbers` instead of
+ * inventing a rule of its own: the loader hands over the ranking order, the
+ * pinned anchors and the numbers no region may take, and
+ * {@link previewRegionNumbers} numbers exactly the regions that are ticked
+ * right now — anchors first, then the numbers the stored assignment already
+ * holds for further ticked regions, then the rest in the loader's order. A
+ * number the stored assignment keeps for a region that is no longer ticked is
+ * never shown, and a cleared selection previews no numbers at all.
  */
 
 import type { TranslationKey } from "~/i18n";
@@ -37,6 +40,13 @@ export const MIRROR_FILE_HINT = "official-mirror.yaml";
 
 /** How many regions the "fastest" preset picks. */
 export const MIRROR_RECOMMENDED_COUNT = 3;
+
+/**
+ * The mirrored range, repeated from the server so the preview needs no value
+ * import: every number a mirrored region may carry lives in the 900s.
+ */
+export const MIRROR_NUMBER_MIN = 900;
+export const MIRROR_NUMBER_MAX = 999;
 
 /** One official region, as the table renders it. */
 export interface MirrorRegionRow {
@@ -63,6 +73,12 @@ export interface MirrorNumbering {
   firstFreeNumber: number;
   /** Official region ids in the server's ranking order. */
   order: number[];
+  /**
+   * Numbers no ranked region may ever take: the two anchors and Headscale's
+   * embedded region id. The server keeps them free, so a stored assignment that
+   * uses one of them cannot be kept either.
+   */
+  reserved: number[];
 }
 
 /** How the table is ordered. The preview always follows the server's order. */
@@ -86,36 +102,128 @@ export type MirrorRun = DerpMirrorRun;
 /**
  * The live numbering for a selection.
  *
- * The fixed anchors are the server's, and the free numbers follow the server's
- * ranking order, so this is the assignment a fresh ranking of the ticked regions
- * produces — the client only decides which rows are ticked.
+ * The rule is the server's, mirrored: the pinned anchors are numbered only while
+ * they are ticked, a ticked region the stored assignment already numbers keeps
+ * that number when the server would keep it, and every remaining ticked region
+ * is ranked in the loader's order and appended after the highest number in use.
+ * Nothing is numbered for a region that is not ticked, so clearing the selection
+ * empties the preview immediately and a stored number can never survive a change
+ * that dropped the region it belongs to.
  */
 export function previewRegionNumbers(
   numbering: MirrorNumbering,
   selected: ReadonlySet<number>,
+  stored?: ReadonlyMap<number, number>,
 ): Map<number, number> {
   const numbers = new Map<number, number>();
-  const fixed = new Set<number>();
-
+  const used = new Set<number>(numbering.reserved);
   for (const entry of numbering.fixed) {
-    fixed.add(entry.officialId);
-    numbers.set(entry.officialId, entry.number);
+    used.add(entry.number);
   }
 
-  let next = numbering.firstFreeNumber;
+  const anchors = new Set<number>();
+  for (const entry of numbering.fixed) {
+    anchors.add(entry.officialId);
+    if (selected.has(entry.officialId)) {
+      numbers.set(entry.officialId, entry.number);
+    }
+  }
+
+  // The regions the stored assignment cannot keep a number for, in the order a
+  // fresh ranking puts them: the loader already ranked every region that way.
+  const ranked: number[] = [];
   for (const officialId of numbering.order) {
-    if (fixed.has(officialId) || !selected.has(officialId)) {
+    if (!selected.has(officialId) || anchors.has(officialId)) {
       continue;
     }
 
-    numbers.set(officialId, next);
-    next += 1;
+    const kept = stored?.get(officialId);
+    if (
+      kept !== undefined &&
+      !used.has(kept) &&
+      kept >= MIRROR_NUMBER_MIN &&
+      kept <= MIRROR_NUMBER_MAX
+    ) {
+      numbers.set(officialId, kept);
+      used.add(kept);
+      continue;
+    }
+
+    ranked.push(officialId);
+  }
+
+  let next = numbering.firstFreeNumber;
+  for (const number of numbers.values()) {
+    next = Math.max(next, number + 1);
+  }
+
+  for (const officialId of ranked) {
+    const number = takeFreeMirrorNumber(next, used);
+    if (number === undefined) {
+      break;
+    }
+
+    numbers.set(officialId, number);
+    used.add(number);
+    next = number + 1;
   }
 
   return numbers;
 }
 
-/** Official ids that are always mirrored, whatever the selection says. */
+/**
+ * The first free number from `start` inside the mirrored range, wrapping below
+ * it when the tail is full. This is the server's own scan, so a preview never
+ * claims a number the rule would refuse or hand to another region.
+ */
+function takeFreeMirrorNumber(start: number, used: ReadonlySet<number>): number | undefined {
+  const from = Math.max(start, MIRROR_NUMBER_MIN);
+  for (let number = from; number <= MIRROR_NUMBER_MAX; number += 1) {
+    if (!used.has(number)) {
+      return number;
+    }
+  }
+
+  for (let number = MIRROR_NUMBER_MIN; number < from; number += 1) {
+    if (!used.has(number)) {
+      return number;
+    }
+  }
+
+  return undefined;
+}
+
+/** The numbers the settings already hold, keyed by official region id. */
+export function storedRegionNumbers(regions: readonly MirrorRegionRow[]): Map<number, number> {
+  const stored = new Map<number, number>();
+  for (const region of regions) {
+    if (region.storedNumber !== undefined) {
+      stored.set(region.officialId, region.storedNumber);
+    }
+  }
+
+  return stored;
+}
+
+/** The selection a fresh card starts from: the two pinned anchors. */
+export function defaultMirrorSelection(numbering: MirrorNumbering): Set<number> {
+  return new Set(fixedRegionIds(numbering));
+}
+
+/** True when the selection holds nothing but the pinned anchors. */
+export function isDefaultMirrorSelection(
+  numbering: MirrorNumbering,
+  selected: ReadonlySet<number>,
+): boolean {
+  const anchors = fixedRegionIds(numbering);
+  return selected.size === anchors.length && anchors.every((id) => selected.has(id));
+}
+
+/**
+ * Official ids of the pinned regions. The two anchors cannot be ticked one by
+ * one, so the default selection above is how an operator brings them back after
+ * clearing, and their numbers are never handed to another region.
+ */
 export function fixedRegionIds(numbering: MirrorNumbering): number[] {
   return numbering.fixed.map((entry) => entry.officialId);
 }
@@ -187,6 +295,41 @@ export function formatMirrorLatency(latencyMs: number | undefined): string | und
   }
 
   return `${Math.round(latencyMs)}ms`;
+}
+
+/** Why the latency column has nothing to show, when it has nothing to show. */
+export type MirrorLatencyNotice = "agent-unavailable" | "unmeasured";
+
+/** The one line each empty-latency case prints, in place of a blank column. */
+export const MIRROR_LATENCY_NOTICE_KEYS: Record<MirrorLatencyNotice, TranslationKey> = {
+  "agent-unavailable": "settings.headscale.derp.mirror.agentRequired",
+  unmeasured: "settings.headscale.derp.mirror.latencyNoMeasurements",
+};
+
+/**
+ * The line the card prints when no region has a measurement, and why.
+ *
+ * The only latency Headplane has is the one the Headplane Agent collects from
+ * each machine's own `NetInfo.DERPLatency`, so an empty column always has one of
+ * two causes: the agent is not reporting at all (disabled, unapproved, or its
+ * last sync failed — the operator has to fix that on the Agent settings page),
+ * or it is reporting and simply no machine has measured these regions yet. With
+ * at least one measurement the column explains itself and nothing is printed.
+ */
+export function mirrorLatencyNotice(
+  regions: readonly MirrorRegionRow[],
+  agentAvailable: boolean,
+): MirrorLatencyNotice | undefined {
+  if (regions.length === 0) {
+    return undefined;
+  }
+
+  const measured = regions.some((region) => formatMirrorLatency(region.latencyMs) !== undefined);
+  if (measured) {
+    return undefined;
+  }
+
+  return agentAvailable ? "unmeasured" : "agent-unavailable";
 }
 
 /** Nodes across every region the newest run mirrored. */

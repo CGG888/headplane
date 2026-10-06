@@ -1,61 +1,53 @@
 ---
 title: DNS
-description: Manage MagicDNS, nameservers, search domains and extra records.
+description: 管理 MagicDNS、DNS 服务器、搜索域与额外记录。
 outline: [2, 3]
 ---
 
 # DNS
 
-The DNS page edits the `dns` block of Headscale's configuration:
+DNS 页编辑 Headscale 配置里的 `dns` 段：
 
-| Setting                | What it does                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **MagicDNS**           | Gives every machine a name inside your base domain.                                                                             |
-| **Base domain**        | The domain MagicDNS names live under.                                                                                           |
-| **Nameservers**        | The global resolvers every machine is told to use.                                                                              |
-| **Split DNS**          | Per-domain resolvers, for sending one domain to a different server.                                                             |
-| **Search domains**     | Domains appended to short names.                                                                                                |
-| **Override local DNS** | Whether Headscale's resolvers replace the ones the machine already has.                                                         |
-| **Extra records**      | Static `A` and `AAAA` entries published alongside MagicDNS — handy for pointing a name at a service that is not a Tailnet node. |
+| 设置             | 作用                                                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **MagicDNS**     | 让每台机器在基础域下拥有一个名字。                                                                                      |
+| **基础域**       | MagicDNS 名字所在的域。                                                                                                 |
+| **DNS 服务器**   | 下发给每台机器的全局解析器。                                                                                            |
+| **Split DNS**    | 按域指定解析器，把某个域交给另一台服务器解析。                                                                          |
+| **搜索域**       | 附加到短名称后面的域。                                                                                                  |
+| **覆盖本地 DNS** | Headscale 下发的解析器是否替换机器原有的解析器。                                                                        |
+| **额外记录**     | 与 MagicDNS 一起发布的静态 `A` / `AAAA` 记录 —— 适合把某个名字指向并非 Tailnet 节点的服务。                            |
 
-Editing requires Headscale's configuration file to be mounted read-write, the
-same as the other settings pages.
+与其他设置页一样，编辑要求 Headscale 的配置文件以读写方式挂载。
 
-## Importing and exporting records
+## 导入与导出记录
 
-The record list can be exported to a JSON file and imported back, which is the
-quick way to move a set of records between machines or to keep them in version
-control:
+记录列表可以导出为 JSON 文件，也可以再导入回来，这是在机器之间搬记录、或者把记录纳入
+版本管理的快捷方式：
 
 ```json
 [
-  { "name": "nas.example.com", "type": "A", "value": "192.168.1.10" },
+  { "name": "nas.example.com", "type": "A", "value": "192.0.2.10" },
   { "name": "nas.example.com", "type": "AAAA", "value": "fd00::10" }
 ]
 ```
 
-Importing shows a preview first and asks whether to **replace** the current
-records or **append** to them. Validation is strict — it has to be an array of
-objects with string `name`, `type` and `value`, the type must be one the UI
-offers (`A` or `AAAA`), and any problem names the offending entry so it can be
-fixed. Exact duplicates are skipped rather than added twice.
+导入会先显示预览，然后询问是**替换**当前记录还是**追加**到后面。校验很严格 —— 必须是
+对象数组，`name`、`type`、`value` 都是字符串，类型必须是界面提供的（`A` 或 `AAAA`），
+任何问题都会指名出错的条目，方便修正。完全重复的条目会被跳过，而不是重复添加。
 
-::: warning One record per name and type
-Headplane writes records through Headscale's configuration helpers, which keep a
-single record for each `name` + `type` pair. Two different values for the same
-name therefore cannot both be imported, and the import says so instead of
-silently dropping one; add the second value in Headscale's configuration file
-itself if you need round-robin answers.
+::: warning 一个名字加类型只能有一条记录
+Headplane 通过 Headscale 的配置助手写记录，每个 `name` + `type` 组合只会保留一条。因此
+同一个名字的两个不同取值无法同时导入，导入会明确说明，而不是悄悄丢掉一条；如果你需要
+轮询应答，请在 Headscale 配置文件里自行添加第二个值。
 :::
 
-::: tip Extra records or Split DNS?
-Use **extra records** when you want a name to resolve to a fixed address, and
-**split DNS** when an entire domain should be resolved by another DNS server.
+::: tip 额外记录还是 Split DNS？
+想让某个名字解析到固定地址，用**额外记录**；想让整个域交给另一台 DNS 服务器解析，用
+**Split DNS**。
 :::
 
-::: warning Inline records and a records file
-Headscale accepts both `dns.extra_records` (inline) and `dns.extra_records_path`
-(a JSON file). When both are set, the file wins and the inline records are
-ignored; the system status page flags that combination so it does not surprise
-you later.
+::: warning 内联记录与记录文件
+Headscale 同时接受 `dns.extra_records`（内联）和 `dns.extra_records_path`（JSON 文件）。
+两者都设置时文件优先，内联记录被忽略；系统状态页会把这种组合标出来，免得以后才发现。
 :::

@@ -56,7 +56,7 @@ export function isSshErrorPayload(value: unknown): value is SshErrorPayload {
   );
 }
 
-const DOCS_BASE = "https://headplane.net/features/ssh";
+const DOCS_BASE = "https://cgg888.github.io/headplaneCN/en/features/ssh";
 
 export function SSHErrorBoundary({
   code,

@@ -2,8 +2,10 @@ import { dirname } from "node:path";
 
 import { data } from "react-router";
 
+import { AUDIT_ACTIONS, auditActorOf, type AuditService } from "~/server/audit";
 import {
   appConfigContext,
+  auditContext,
   authContext,
   derpMirrorContext,
   derpSyncContext,
@@ -20,12 +22,17 @@ import {
 import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
+  DERP_REGION_NAMES_SNAPSHOT_REASON,
+  mergeMissingDerpRegionNames,
   readDerpRegionNames,
   removeDerpRegionName,
   setDerpRegionName,
   writeDerpRegionNames,
+  type DerpRegionNameEntry,
 } from "~/server/headscale/derp-region-names";
 import { clearHostEchoCache, parseHostEchoUrl, writeHostEchoSettings } from "~/server/host-echo";
+import { snapshotBeforeMutation } from "~/server/snapshots/service.server";
+import type { Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
 
 import type { Route } from "./+types/overview";
@@ -722,6 +729,43 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       return success();
     }
 
+    case "add_mirror_region_names": {
+      // One click from the region filter: every region the operator has ticked
+      // is written into the manual name mapping under the number it is mirrored
+      // as, because that is the id those regions carry once the mirrored map is
+      // the one Headscale hands to clients. The card sends the Chinese names it
+      // already shows, and the store only ever fills gaps, so an operator's own
+      // name is never overwritten and a second click adds nothing.
+      const dataPath = context.get(appConfigContext)?.server.data_path;
+      if (!dataPath) {
+        return failure("derpRegionMapWriteFailed");
+      }
+
+      const current = await readDerpRegionNames(dataPath);
+      const merged = mergeMissingDerpRegionNames(current, readMirrorRegionNameEntries(formData));
+
+      if (merged.added > 0) {
+        // A mutation on this page takes the usual snapshot first (fail-soft),
+        // then writes through the store's own API and records the change.
+        await snapshotBeforeMutation(
+          context.get(snapshotContext),
+          DERP_REGION_NAMES_SNAPSHOT_REASON,
+        );
+
+        const written = await writeDerpRegionNames(dataPath, merged.names);
+        if (!written) {
+          return failure("derpRegionMapWriteFailed");
+        }
+
+        await recordMirrorRegionNames(context.get(auditContext), principal, dataPath, merged.added);
+      }
+
+      return data({
+        success: true,
+        addedRegionNames: merged.added,
+      } satisfies HeadscaleSettingsSuccess);
+    }
+
     case "save_derp_mirror": {
       // The mirror's own settings live in Headplane's data directory; only the
       // map file a run writes lives where Headscale reads it. The stored
@@ -880,6 +924,50 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
 function readField(formData: FormData, name: string): string {
   return formData.get(name)?.toString().trim() ?? "";
+}
+
+/**
+ * The mirrored region names a submission asks for: the number a region is
+ * mirrored as and the name the filter card shows for it, paired by position.
+ * Unusable pairs are skipped one by one — a malformed entry must not cost the
+ * rest of the batch, and the store refuses whatever survives validation anyway.
+ */
+function readMirrorRegionNameEntries(formData: FormData): DerpRegionNameEntry[] {
+  const numbers = formData.getAll("mirror_region_number");
+  const names = formData.getAll("mirror_region_name");
+  const entries: DerpRegionNameEntry[] = [];
+
+  for (let index = 0; index < Math.min(numbers.length, names.length); index += 1) {
+    const regionId = parseDerpRegionMapId(numbers[index]?.toString() ?? "");
+    const name = (names[index]?.toString() ?? "").trim();
+    if (regionId === undefined || name.length === 0) {
+      continue;
+    }
+
+    entries.push({ regionId, name });
+  }
+
+  return entries;
+}
+
+/** Records a bulk region-name insertion; a failure here never breaks the write. */
+async function recordMirrorRegionNames(
+  audit: AuditService | undefined,
+  principal: Principal,
+  target: string,
+  added: number,
+): Promise<void> {
+  try {
+    await audit?.record({
+      ...auditActorOf(principal),
+      action: AUDIT_ACTIONS.derpRegionMirror,
+      target,
+      detail: `${added} region name(s) added`,
+      result: "success",
+    });
+  } catch {
+    // The audit log must never fail the change it describes.
+  }
 }
 
 /**

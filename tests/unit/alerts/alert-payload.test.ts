@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { buildAlertPayload, buildTestAlertPayload } from "~/server/alerts/payload";
-import type { AlertEvent } from "~/server/alerts/types";
+import { ALERT_EVENT_IDS, type AlertEvent } from "~/server/alerts/types";
 
 const AT = "2026-01-01T00:00:00.000Z";
 
@@ -26,7 +26,7 @@ describe("buildAlertPayload", () => {
       event: "headscaleUnreachable",
       title: "Headscale is unreachable",
       severity: "critical",
-      summary: "Headplane could not reach the Headscale API.",
+      summary: "HeadplaneCN could not reach the Headscale API.",
       details: {},
       timestamp: AT,
       version: "0.19.0",
@@ -56,6 +56,31 @@ describe("buildAlertPayload", () => {
     expect(payload.version).toBe("1.2.3");
     expect(payload.timestamp).toBe(AT);
   });
+
+  test("words the recovery with the product brand", () => {
+    const payload = buildAlertPayload(
+      event({ id: "headscaleRecovered", severity: "info" }),
+      "0.19.0",
+    );
+
+    expect(payload.summary).toBe("HeadplaneCN can reach the Headscale API again.");
+  });
+
+  test("never sends the old brand in any human-readable string", () => {
+    // The payload is machine-readable, but its titles and summaries are read by
+    // whoever the webhook lands in, so every event names the product HeadplaneCN.
+    for (const id of ALERT_EVENT_IDS) {
+      const payload = buildAlertPayload(
+        { id, severity: "info", at: AT, target: "node-a", threshold: 7 },
+        "1.0.0",
+      );
+      expect(JSON.stringify(payload), id).not.toMatch(/Headplane(?!CN)/);
+    }
+
+    expect(JSON.stringify(buildTestAlertPayload("1.0.0", new Date(AT)))).not.toMatch(
+      /Headplane(?!CN)/,
+    );
+  });
 });
 
 describe("buildTestAlertPayload", () => {
@@ -67,7 +92,7 @@ describe("buildTestAlertPayload", () => {
       event: "test",
       title: "Test notification",
       severity: "info",
-      summary: "This is a test notification from Headplane.",
+      summary: "This is a test notification from HeadplaneCN.",
       details: {},
       timestamp: AT,
       version: "0.19.0",

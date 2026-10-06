@@ -15,7 +15,7 @@ import {
 import { isNewerVersion } from "./diagnostics";
 
 /** Where an operator goes to read the release notes of the newer build. */
-export const HEADPLANE_RELEASES_PAGE = "https://github.com/CGG888/headplane/releases/latest";
+export const HEADPLANE_RELEASES_PAGE = "https://github.com/CGG888/headplaneCN/releases/latest";
 
 export interface SelfUpdateNotice {
   /** The version this build reports, from the `__VERSION__` build global. */

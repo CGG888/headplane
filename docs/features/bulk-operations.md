@@ -1,47 +1,39 @@
 ---
-title: Bulk Machine Operations
-description: Select many machines and change their tags, expiry or owner in one go.
+title: 批量机器操作
+description: 一次选中多台机器，统一修改标签、有效期或所有者。
 outline: [2, 3]
 ---
 
-# Bulk Machine Operations
+# 批量机器操作
 
-Managing a tailnet one machine at a time gets old quickly. The machines page
-lets you tick any number of rows — or the whole filtered list — and act on all of
-them at once.
+一台一台地管理 tailnet 很快就让人受不了。机器页允许你勾选任意多行 —— 或者整个筛选结果
+—— 然后一次性对它们执行操作。
 
-## Selecting machines
+## 选择机器
 
-A checkbox column appears on the machines page for anyone who can write
-machines. The header checkbox selects **every row that currently passes your
-filters and search**, which is the behaviour you want after narrowing the list
-down to, say, every machine without a tag.
+能写入机器的用户会在机器页看到复选框列。表头的复选框会选中**当前通过筛选与搜索的每一行**，
+这正是把列表收窄到「所有没有标签的机器」之后想要的行为。
 
-## What you can do in bulk
+## 可以批量做什么
 
-| Action           | Notes                                                                                                                                                    |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Set tags**     | Replaces the tags on every selected machine. Tags must already exist in the Access Control policy (`tagOwners`), otherwise Headscale rejects the update. |
-| **Set expiry**   | The same three choices as a single machine: never expires, the default expiry, or a specific date and time.                                              |
-| **Change owner** | Only offered when Headscale lets a node's owner change (Headscale 0.28+ locks the owner after registration).                                             |
-| **Delete**       | Removes the machines from Headscale. The devices have to register again to come back, so this is the one to use carefully.                               |
+| 操作           | 说明                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **设置标签**   | 替换所选机器上的标签。标签必须已存在于访问控制策略（`tagOwners`）中，否则 Headscale 会拒绝更新。                                                  |
+| **设置有效期** | 与单台机器相同的三个选项：永不过期、默认有效期，或指定日期时间。                                                                                   |
+| **更改所有者** | 只有当 Headscale 允许更改节点所有者时才会出现（Headscale 0.28+ 在注册后锁定所有者）。                                                             |
+| **删除**       | 从 Headscale 中移除这些机器。设备必须重新注册才能回来，因此这一步要格外小心。                                                                      |
 
-## Partial failures
+## 部分失败
 
-Bulk actions are applied one machine at a time, so one rejected machine does not
-abort the rest. When something fails you get a summary of how many machines were
-updated and how many failed, and the failures are logged server-side with the
-Headscale error for the affected machine.
+批量操作是一台一台执行的，所以某台机器被拒绝不会中断其余机器。出现失败时你会看到一份汇总：
+多少台更新成功、多少台失败，失败项会带着该机器的 Headscale 报错记入服务端日志。
 
-::: tip Bulk operations and the policy
-Because tags are validated against the policy, a bulk tag change is a quick way
-to notice that a tag was never declared: Headscale answers `tags not in policy`
-and the UI reports it instead of silently doing nothing.
+::: tip 批量操作与策略
+正因为标签要按策略校验，批量打标签是发现「某个标签从未声明」的快捷方式：Headscale 会返回
+`tags not in policy`，界面会据此报错，而不是悄悄什么都不做。
 :::
 
-::: warning Deleting machines
-Deleting a machine removes it from Headscale immediately. Its key is gone, so
-the device needs to re-authenticate (`tailscale up`) before it shows up again.
-When the Headplane Agent is enabled, nodes come back with fresh details on the
-next sync.
+::: warning 删除机器
+删除机器会立刻把它从 Headscale 移除。它的密钥随之消失，设备必须重新认证（`tailscale up`）
+才会再次出现。启用 Headplane Agent 时，节点会在下一次同步时带回新的详情。
 :::

@@ -7,16 +7,29 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { defaultDerpPrivateKeyPath } from "~/routes/settings/headscale/derp-settings";
 import {
   appConfigContext,
+  auditContext,
   authContext,
   headscaleConfigContext,
   headscaleContext,
   integrationContext,
+  snapshotContext,
 } from "~/server/context";
-import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
+import {
+  DERP_REGION_NAMES_SNAPSHOT_REASON,
+  readDerpRegionNames,
+  writeDerpRegionNames,
+} from "~/server/headscale/derp-region-names";
 
-function mockFormData(entries: Record<string, string>): FormData {
+function mockFormData(entries: Record<string, string | string[]>): FormData {
   const formData = new FormData();
   for (const [key, value] of Object.entries(entries)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        formData.append(key, entry);
+      }
+      continue;
+    }
+
     formData.set(key, value);
   }
   return formData;
@@ -40,6 +53,10 @@ interface SubmitOptions {
   paths?: string[];
   ipv4?: string;
   ipv6?: string;
+  /** The snapshot service the action takes its usual pre-mutation snapshot with. */
+  snapshots?: { take: (reason: string) => Promise<unknown> };
+  /** The audit log the action records a change in. */
+  audit?: { record: (input: unknown) => Promise<unknown> };
 }
 
 const onConfigChange = vi.fn().mockResolvedValue(undefined);
@@ -48,7 +65,24 @@ function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.f
   return {
     get: (context: unknown) => {
       if (context === authContext) {
-        return { require: () => Promise.resolve({ id: 1 }), can: () => options.allowed ?? true };
+        return {
+          require: () =>
+            Promise.resolve({
+              kind: "oidc",
+              sessionId: "session-1",
+              user: { id: "1", subject: "tester", role: "admin", headscaleUserId: undefined },
+              profile: { name: "Tester", email: "tester@example.com" },
+            }),
+          can: () => options.allowed ?? true,
+        };
+      }
+
+      if (context === snapshotContext) {
+        return options.snapshots;
+      }
+
+      if (context === auditContext) {
+        return options.audit;
       }
 
       if (context === headscaleConfigContext) {
@@ -99,7 +133,7 @@ function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.f
   };
 }
 
-async function submit(entries: Record<string, string>, options: SubmitOptions = {}) {
+async function submit(entries: Record<string, string | string[]>, options: SubmitOptions = {}) {
   const { headscaleSettingsAction } = await import("~/routes/settings/headscale/actions");
 
   const patch = vi.fn().mockResolvedValue(undefined);
@@ -436,6 +470,119 @@ describe("DERP region name actions", () => {
       { action_id: "add_derp_region_name", derp_region_id: "901", derp_region_name: "Amsterdam" },
       { dataPath: "" },
     );
+
+    expect(statusOf(result)).toBe(400);
+    expect(errorCodeOf(result)).toBe("derpRegionMapWriteFailed");
+  });
+});
+
+describe("mirror region name action", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "headplane-mirror-names-action-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const SELECTED = {
+    action_id: "add_mirror_region_names",
+    mirror_region_number: ["901", "902", "903"],
+    mirror_region_name: ["香港", "新加坡", "东京"],
+  };
+
+  test("writes the ticked regions under the numbers they are mirrored as", async () => {
+    const { result } = await submit(SELECTED, { dataPath: dir });
+
+    expect(statusOf(result)).toBe(200);
+    expect((result.data as { addedRegionNames: number }).addedRegionNames).toBe(3);
+    expect(await readDerpRegionNames(dir)).toEqual({
+      "901": "香港",
+      "902": "新加坡",
+      "903": "东京",
+    });
+  });
+
+  test("is idempotent and never overwrites a name the operator set", async () => {
+    await writeDerpRegionNames(dir, { "901": "My own name" });
+
+    const first = await submit(SELECTED, { dataPath: dir });
+    expect((first.result.data as { addedRegionNames: number }).addedRegionNames).toBe(2);
+    expect(await readDerpRegionNames(dir)).toEqual({
+      "901": "My own name",
+      "902": "新加坡",
+      "903": "东京",
+    });
+
+    const second = await submit(SELECTED, { dataPath: dir });
+    expect((second.result.data as { addedRegionNames: number }).addedRegionNames).toBe(0);
+    expect(await readDerpRegionNames(dir)).toEqual({
+      "901": "My own name",
+      "902": "新加坡",
+      "903": "东京",
+    });
+  });
+
+  test("ignores malformed pairs instead of failing the batch", async () => {
+    const { result } = await submit(
+      {
+        action_id: "add_mirror_region_names",
+        mirror_region_number: ["not-a-number", "902", "903"],
+        mirror_region_name: ["Named", "新加坡", "   "],
+      },
+      { dataPath: dir },
+    );
+
+    expect(statusOf(result)).toBe(200);
+    expect((result.data as { addedRegionNames: number }).addedRegionNames).toBe(1);
+    expect(await readDerpRegionNames(dir)).toEqual({ "902": "新加坡" });
+  });
+
+  test("adds nothing when no region is ticked", async () => {
+    const { result } = await submit({ action_id: "add_mirror_region_names" }, { dataPath: dir });
+
+    expect(statusOf(result)).toBe(200);
+    expect((result.data as { addedRegionNames: number }).addedRegionNames).toBe(0);
+    expect(await readDerpRegionNames(dir)).toEqual({});
+  });
+
+  test("takes the usual snapshot and records the change", async () => {
+    const take = vi.fn().mockResolvedValue({ id: "snapshot-1" });
+    const record = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = await submit(SELECTED, {
+      dataPath: dir,
+      snapshots: { take },
+      audit: { record },
+    });
+
+    expect(statusOf(result)).toBe(200);
+    expect(take).toHaveBeenCalledWith(DERP_REGION_NAMES_SNAPSHOT_REASON);
+    expect(record).toHaveBeenCalledOnce();
+    expect(record.mock.calls[0][0]).toMatchObject({
+      actor: "Tester",
+      actorType: "user",
+      action: "derp.region_mirror",
+      result: "success",
+    });
+    expect((record.mock.calls[0][0] as { detail: string }).detail).toContain("3");
+  });
+
+  test("still writes when the snapshot service is unavailable", async () => {
+    const { result } = await submit(SELECTED, { dataPath: dir, snapshots: undefined });
+
+    expect(statusOf(result)).toBe(200);
+    expect(await readDerpRegionNames(dir)).toEqual({
+      "901": "香港",
+      "902": "新加坡",
+      "903": "东京",
+    });
+  });
+
+  test("reports a write failure when the data directory is missing", async () => {
+    const { result } = await submit(SELECTED, { dataPath: "" });
 
     expect(statusOf(result)).toBe(400);
     expect(errorCodeOf(result)).toBe("derpRegionMapWriteFailed");

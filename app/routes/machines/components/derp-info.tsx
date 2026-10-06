@@ -4,50 +4,41 @@ import Link from "~/components/link";
 import { SettingsStatus } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import {
-  type RelayAddressFamily,
-  type RelayAddressVerdict,
-  type RelayHostView,
-  type RelayResolution,
-} from "~/server/relay-dns";
+import type { DerpNodeSourceKind } from "~/routes/overview-helpers";
+import { type RelayAddressVerdict, type RelayHostView } from "~/server/relay-dns";
 import type { HostInfo } from "~/types";
-import cn from "~/utils/cn";
 
 import {
   buildDerpInfo,
+  buildMachineRelayUse,
   embeddedDerpRegion,
-  formatDerpLatency,
   resolveDerpRegionLabel,
   type DerpEmbeddedServer,
   type DerpRegionLabel,
   type DerpRegionLabelSources,
   type DerpRegionNameData,
+  type MachineRelayUse,
 } from "../derp-info";
 import { type RelayAddressLine, type RelayFamilyReason } from "../relay-verdicts";
 import MachineAttribute from "./attribute";
 import CopyValue from "./copy-value";
 import MachineCard from "./machine-card";
-import RelayResolver from "./relay-resolver";
 
 interface DerpInfoProps {
   /** Whether the Headplane Agent feature is enabled at all. */
   agentEnabled: boolean;
-  /** Whether this viewer may re-resolve the relay hostname; see the relay DNS settings. */
-  canRefresh: boolean;
   /** Region names the loader resolved: the manual mapping and the configured maps. */
   regions: DerpRegionNameData;
+  /** Which configured source serves each region, prepared by the loader. */
+  relaySources: Readonly<Record<string, DerpNodeSourceKind>>;
   /** Headscale's embedded DERP configuration, when it could be read. */
   server: DerpEmbeddedServer | undefined;
   /** The agent's host info for this machine, when it reported any. */
   stats: HostInfo | undefined;
   /** The host and port clients dial, derived from Headscale's server_url. */
   relay: RelayHostView | undefined;
-  /** The relay hostname's A and AAAA records, when the lookup ran. */
-  relayResolution: RelayResolution | undefined;
   /** Per-family address lines, prepared by the loader. */
   relayLines: readonly RelayAddressLine[];
-  /** Whether an empty family is only the host's own resolver speaking. */
-  relaySuggestsConfigured: boolean;
 }
 
 /** `#999 · headscale (embedded DERP)` so the operator sees their own relay. */
@@ -75,74 +66,62 @@ const RELAY_VERDICT_KEYS: Record<RelayAddressVerdict, TranslationKey> = {
   literal: "machines.detail.derp.relayVerdictLiteral",
 };
 
-/** The one-line fix for a declared address clients cannot actually reach. */
-const RELAY_FIX_KEYS: Record<
-  RelayAddressFamily,
-  Partial<Record<RelayAddressVerdict, TranslationKey>>
-> = {
-  ipv4: {
-    "declared-but-not-resolved": "machines.detail.derp.relayFixIpv4",
-    "no-records": "machines.detail.derp.relayFixIpv4",
-  },
-  ipv6: {
-    "declared-but-not-resolved": "machines.detail.derp.relayFixIpv6",
-    "no-records": "machines.detail.derp.relayFixIpv6NoRecords",
-  },
+/** Which configured source serves a relay, worded like the Overview node card. */
+const RELAY_SOURCE_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
+  embedded: "machines.detail.derp.relaySourceEmbedded",
+  local: "machines.detail.derp.relaySourceLocal",
+  mirror: "machines.detail.derp.relaySourceMirror",
+  official: "machines.detail.derp.relaySourceOfficial",
 };
-
-/**
- * The verdict printed under one address line: only what the address cannot say
- * itself, so a family the lookup merely confirmed is never announced twice.
- *
- * The verdict is prepared by the loader, so the client bundle never imports the
- * server relay module that decides it. `host` is the resolved hostname, so a
- * hint can quote the exact `dig` command an operator has to run instead of
- * describing it.
- */
-function RelayVerdict({ line, host }: { line: RelayAddressLine; host?: string }) {
-  const { t } = useI18n();
-  if (line.verdict === undefined || line.addresses.length === 0) {
-    return undefined;
-  }
-
-  const verdict = line.verdict;
-  const fix = RELAY_FIX_KEYS[line.family][verdict];
-  const needsAttention = verdict === "declared-but-not-resolved" || verdict === "no-records";
-  const address = line.addresses[0] ?? "";
-
-  return (
-    <span
-      className={cn(
-        "text-xs",
-        needsAttention ? "text-amber-700 dark:text-amber-300" : "text-mist-500 dark:text-mist-400",
-      )}
-    >
-      {t(RELAY_VERDICT_KEYS[verdict], { address })}
-      {fix ? ` · ${t(fix, { host: host ?? "", address })}` : undefined}
-    </span>
-  );
-}
 
 export default function DerpInfo({
   agentEnabled,
-  canRefresh,
   regions,
+  relaySources,
   server,
   stats,
   relay,
-  relayResolution,
   relayLines,
-  relaySuggestsConfigured,
 }: DerpInfoProps) {
   const { t } = useI18n();
   const unknown = t("machines.detail.derp.unknown");
   const embedded = embeddedDerpRegion(server);
   const sources: DerpRegionLabelSources = { ...regions, embedded };
   const view = buildDerpInfo(stats, server, unknown, regions);
+  const usage = buildMachineRelayUse(stats, view, relaySources);
+  const embeddedMarker = t("machines.detail.derp.embeddedMarker");
 
-  const latency = view.latencies.rows
-    .map((row) => `${row.label} · ${formatDerpLatency(row.seconds)}`)
-    .join("\n");
+  // The verdict of a declared address is hover text now, never a sentence under
+  // the row: the address is what the row is for, and a value the lookup could
+  // not confirm still has to read as the address the configuration declares.
+  const addressTitle = (line: RelayAddressLine) =>
+    line.verdict === undefined || line.addresses.length === 0
+      ? undefined
+      : t(RELAY_VERDICT_KEYS[line.verdict], { address: line.addresses[0] ?? "" });
+
+  const sourceBadge = (source: DerpNodeSourceKind | undefined) =>
+    source === undefined ? undefined : (
+      <SettingsStatus tone={source === "official" ? "warn" : "neutral"}>
+        {t(RELAY_SOURCE_KEYS[source])}
+      </SettingsStatus>
+    );
+
+  /** The badges of one relay row: what serves it, and whether it is the used one. */
+  const relayBadges = (row: MachineRelayUse) => {
+    const source = sourceBadge(row.source);
+    if (source === undefined && !row.inUse) {
+      return undefined;
+    }
+
+    return (
+      <>
+        {row.inUse ? (
+          <SettingsStatus tone="ok">{t("machines.detail.derp.relayInUse")}</SettingsStatus>
+        ) : undefined}
+        {source}
+      </>
+    );
+  };
 
   // Both families are one line each, exactly as the loader prepared them: the
   // address `derp.server` declares when it sets one, the lookup's own answer
@@ -205,6 +184,7 @@ export default function DerpInfo({
                         copiedMessage={t("common.copied")}
                         key={address}
                         reveal="always"
+                        title={addressTitle(line)}
                         value={address}
                       />
                     ))
@@ -213,16 +193,9 @@ export default function DerpInfo({
                       {emptyLine(line)}
                     </span>
                   )}
-                  <RelayVerdict host={relayResolution?.host} line={line} />
                 </div>
               ))}
             </div>
-            <RelayResolver
-              canRefresh={canRefresh}
-              className="mt-1"
-              resolution={relayResolution}
-              suggestsConfigured={relaySuggestsConfigured}
-            />
           </div>
         ) : (
           <p className="text-sm text-mist-500 dark:text-mist-400">
@@ -251,20 +224,51 @@ export default function DerpInfo({
           <div className="mt-1">
             <dl className="flex flex-col">
               <MachineAttribute
+                badges={relayBadges(usage.home)}
                 name={t("machines.detail.derp.homeRegion")}
-                value={markedLabel(view.home, t("machines.detail.derp.embeddedMarker"))}
+                value={markedLabel(view.home, embeddedMarker)}
               />
               <MachineAttribute
+                badges={relayBadges(usage.preferred)}
                 name={t("machines.detail.derp.preferredRegion")}
-                value={markedLabel(view.preferred, t("machines.detail.derp.embeddedMarker"))}
+                value={markedLabel(view.preferred, embeddedMarker)}
               />
-              <MachineAttribute
-                isCode
-                name={t("machines.detail.derp.latency")}
-                value={
-                  view.latencies.rows.length === 0 ? t("machines.detail.derp.noLatency") : latency
-                }
-              />
+              <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-3 py-1.5 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
+                <dt className="text-mist-600 dark:text-mist-400">
+                  {t("machines.detail.derp.latency")}
+                </dt>
+                <dd className="min-w-0">
+                  {usage.latencies.length === 0 ? (
+                    <span className="text-mist-500 dark:text-mist-400">
+                      {t("machines.detail.derp.noLatency")}
+                    </span>
+                  ) : (
+                    <ul className="flex flex-col gap-0.5">
+                      {usage.latencies.map((row) => (
+                        <li
+                          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+                          key={row.key}
+                        >
+                          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span
+                              className="min-w-0 truncate text-mist-900 dark:text-mist-50"
+                              title={row.label}
+                            >
+                              {row.label}
+                            </span>
+                            {relayBadges(row)}
+                          </span>
+                          {row.latency === undefined ? undefined : (
+                            <span className="font-mono text-xs text-mist-500 tabular-nums dark:text-mist-400">
+                              {row.latency}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
+              </div>
             </dl>
             {view.latencies.hidden > 0 ? (
               <p className="mt-1 text-sm text-mist-500 dark:text-mist-400">

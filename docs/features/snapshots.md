@@ -1,47 +1,41 @@
 ---
-title: Snapshots
-description: Automatic backups of Headscale's configuration, with one-click restore.
+title: 配置快照
+description: Headscale 配置的自动备份，一键恢复。
 outline: [2, 3]
 ---
 
-# Snapshots
+# 配置快照
 
-Headplane writes to Headscale's `config.yaml` for you — DNS, OIDC, policy mode,
-DERP, logs. **Settings → Snapshots** keeps a copy of the file from before each
-of those writes, so a change you regret is one click away from being undone.
+Headplane 会替你写 Headscale 的 `config.yaml` —— DNS、OIDC、策略模式、DERP、日志。
+**设置 → 配置快照**在每次写入之前留一份该文件的副本，所以一次后悔的改动只差一次点击就能
+撤销。
 
-## What a snapshot contains
+## 快照里有什么
 
-| File                            | When                         |
+| 文件                            | 何时包含                     |
 | ------------------------------- | ---------------------------- |
-| Headscale's `config.yaml`       | Every snapshot               |
-| The policy file (`policy.path`) | When `policy.mode` is `file` |
+| Headscale 的 `config.yaml`      | 每个快照都包含               |
+| 策略文件（`policy.path`）       | 当 `policy.mode` 为 `file` 时 |
 
-Each snapshot is a directory under `server.data_path/snapshots/`, named with its
-timestamp and the reason it was taken (`settings`, `dns`, `manual`, …), together
-with a small index that the page reads.
+每个快照是 `server.data_path/snapshots/` 下的一个目录，目录名由时间戳和产生它的原因
+（`settings`、`dns`、`manual` 等）组成，并附带一份页面读取的小索引。
 
-::: tip Mount the data directory
-Snapshots live under `server.data_path` (default `/var/lib/headplane/`). Without
-a volume mount there, they disappear when the container is recreated — exactly
-when you would want them.
+::: tip 把数据目录挂出来
+快照放在 `server.data_path`（默认 `/var/lib/headplane/`）下。那里没有卷挂载时，容器一重建
+它们就没了 —— 而那正是你最需要它们的时候。
 :::
 
-## Taking and restoring
+## 创建与恢复
 
-- **Take a snapshot** manually before you do something ambitious.
-- **Download** any file in a snapshot to keep it somewhere else.
-- **Restore** writes the recorded file(s) back to the configured paths, asks
-  Headscale to reload or restart through the configured integration, and records
-  an audit entry. It refuses to write anywhere other than the paths Headscale's
-  configuration actually points at.
+- 在做有风险的操作之前，手动**创建快照**。
+- **下载**快照里的任意文件，另存到别处。
+- **恢复**会把记录下来的文件写回配置中的路径，通过已配置的集成请 Headscale 重载或重启，
+  并记一条审计。除了 Headscale 配置实际指向的路径，它拒绝写到任何其他地方。
 
-Restoring is destructive in the sense that it replaces the current file, so the
-page asks for confirmation and requires the `configure_iam` capability. A
-restart is often needed for the restored configuration to take effect.
+恢复会替换当前文件，因此页面会要求确认，并要求 `configure_iam` 能力。恢复后的配置通常
+还需要一次重启才能生效。
 
-::: danger Not a database backup
-Snapshots cover Headscale's **configuration**, not its database. Back up
-`db.sqlite` (or your Postgres database) separately — stop Headscale and copy the
-file, or use SQLite's `.backup`, so the copy is consistent.
+::: danger 不是数据库备份
+快照覆盖的是 Headscale 的**配置**，不是它的数据库。请单独备份 `db.sqlite`（或你的
+Postgres 数据库）—— 停掉 Headscale 再复制文件，或者用 SQLite 的 `.backup`，保证副本一致。
 :::

@@ -8,6 +8,7 @@ import {
   normalizeMirrorNumber,
   normalizeOfficialRegionIds,
   parseDerpMirrorIntervalHours,
+  pruneAssignmentToSelection,
 } from "~/server/derp-mirror/settings";
 
 describe("DERP mirror settings", () => {
@@ -121,5 +122,27 @@ describe("DERP mirror settings", () => {
     expect(normalizeDerpMirrorSettings({ autoReload: "no" }).autoReload).toBe(true);
     expect(normalizeDerpMirrorSettings({ enabled: "yes" }).enabled).toBe(false);
     expect(normalizeDerpMirrorSettings({ enabled: true }).enabled).toBe(true);
+  });
+});
+
+describe("stored numbering follows the selection", () => {
+  const assignment = { "20": 901, "3": 902, "9": 903, "7": 904 };
+
+  test("keeps every entry of a region that is still selected", () => {
+    expect(pruneAssignmentToSelection(assignment, ["20", "3", "9", "7"])).toEqual(assignment);
+  });
+
+  test("drops the entries of the regions the selection no longer has", () => {
+    expect(pruneAssignmentToSelection(assignment, ["20", "9"])).toEqual({ "20": 901, "9": 903 });
+  });
+
+  test("a cleared selection leaves no stored number at all", () => {
+    expect(pruneAssignmentToSelection(assignment, [])).toEqual({});
+  });
+
+  test("keeps only usable entries, so a junk document cannot survive a save", () => {
+    expect(pruneAssignmentToSelection({ "20": 901, "3": 5000, nope: 903 }, ["20", "3"])).toEqual({
+      "20": 901,
+    });
   });
 });

@@ -28,8 +28,8 @@ const zhHans = {
     offline: "离线",
   },
   header: {
-    logoAlt: "Headplane 标志",
-    brand: "Headplane 控制台",
+    logoAlt: "HeadplaneCN 标志",
+    brand: "HeadplaneCN 控制台",
     tabs: {
       overview: "概览",
       machines: "机器",
@@ -60,7 +60,8 @@ const zhHans = {
     about:
       "Headplane 是免费的开源软件（原项目见 {upstream}），欢迎使用与支持开发；本仓库是它的修改版，代码与问题反馈见 {fork}。",
     upstreamLink: "原项目",
-    forkLink: "CGG888/headplane",
+    forkLink: "CGG888/headplaneCN",
+    sponsorLink: "赞助本项目",
     debug: "调试",
     showServerUrl: "显示服务器地址",
     hideServerUrl: "隐藏服务器地址",
@@ -74,9 +75,17 @@ const zhHans = {
   overview: {
     title: "概览",
     intro:
-      "本 Headplane 实例运行的版本、Headscale 的配置情况，以及是否有需要注意的问题。只读页面。",
+      "本 HeadplaneCN 实例运行的版本、Headscale 的配置情况，以及是否有需要注意的问题。只读页面。",
     unavailable: "—",
     unavailableReason: "—（{reason}）",
+    cards: {
+      manage: "管理卡片",
+      hideCard: "隐藏此卡片",
+      body: "隐藏的卡片仍会列在这里，随时可以恢复显示。带有警告、警报或故障的卡片始终显示。",
+      hiddenState: "已隐藏",
+      protectedState: "始终显示",
+      restoreDefault: "恢复默认",
+    },
     sections: {
       versions: "版本",
       derp: "DERP",
@@ -101,7 +110,7 @@ const zhHans = {
       releaseUnknown: "无版本信息",
     },
     reason: {
-      agentDisabled: "Headplane Agent 未启用",
+      agentDisabled: "HeadplaneCN Agent 未启用",
       apiUnavailable: "无法读取 Headscale API",
       configUnreadable: "Headscale 配置文件不可读",
       notConfigured: "未配置",
@@ -109,11 +118,11 @@ const zhHans = {
       unsupported: "当前 Headscale 版本不支持",
     },
     versions: {
-      headplaneTitle: "Headplane",
-      headplaneBody: "本 Headplane 构建，以及它能查到的最新版本。",
+      headplaneTitle: "HeadplaneCN",
+      headplaneBody: "本 HeadplaneCN 构建，以及它能查到的最新版本。",
       headscaleTitle: "Headscale",
-      headscaleBody: "Headplane 所连接的 Headscale 服务器。",
-      agentTitle: "Headplane Agent",
+      headscaleBody: "HeadplaneCN 所连接的 Headscale 服务器。",
+      agentTitle: "HeadplaneCN Agent",
       agentBody: "同机运行的 Agent，用于上报 Headscale API 未提供的详情。",
       running: "运行版本",
       latest: "最新版本",
@@ -122,7 +131,8 @@ const zhHans = {
       agentLastSync: "上次同步",
       agentNodes: "上报节点数",
       agentError: "上次同步错误",
-      agentDisabledBody: "Headplane Agent 未运行，因此不会收集节点详情。可在“设置 → Agent”中启用。",
+      agentDisabledBody:
+        "HeadplaneCN Agent 未运行，因此不会收集节点详情。可在“设置 → Agent”中启用。",
     },
     derp: {
       regionTitle: "内嵌区域",
@@ -162,7 +172,7 @@ const zhHans = {
       relayFixIpv4: "把 A 记录指向该机器当前的地址，或清空 derp.server.ipv4",
       relayFixIpv6: "为该主机名添加 AAAA 记录，或接受仅 IPv4",
       relayFixIpv6NoRecords:
-        "主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 Headplane 即可清除",
+        "主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 HeadplaneCN 即可清除",
       relayReasonNoRecords: "DNS 查询没有返回记录",
       relayReasonTimeout: "DNS 查询超时",
       relayReasonResolverError: "DNS 查询失败",
@@ -194,40 +204,45 @@ const zhHans = {
       ipv6MismatchBody:
         "域名的 AAAA 记录是 {dns}，但这台机器持有 {host}。该记录可能指向另一台机器，或是临时的隐私地址——请改用宿主机地址。",
       ipv6HostCopy: "复制宿主机地址",
-      ipv6UnverifiedNote: "域名的 DNS 答案，Headplane 无法与这台机器自身的地址核对。",
+      ipv6UnverifiedNote: "域名的 DNS 答案，HeadplaneCN 无法与这台机器自身的地址核对。",
       stun: "STUN 监听地址",
       ipv6StunTitle: "STUN 仅监听 IPv4",
       ipv6StunBody:
         "已配置 derp.server.ipv6 为 {ipv6}，但 STUN 监听在 {stun}。Go 会把 0.0.0.0 这类 IPv4 地址只绑定到 IPv4，因此没有 IPv4 协议栈的客户端无法连上 STUN。请改用双栈或 IPv6 监听地址，例如 [::]:3478。",
-      mapsTitle: "本地 DERP 节点",
-      mapsBody: "已配置的 DERP 映射所描述的中继区域，以及每个区域的来源。",
-      mapsSummary: "{regions} 个区域 · {nodes} 个节点",
-      mapsDetailTitle: "配置映射中的区域",
-      mapsDetailBody: "每个区域一块，直接列出它中继的节点。",
-      mapsNoMaps: "尚未配置任何 DERP 映射文件或网址，因此这里没有可描述的区域。",
-      mapsEmpty: "已配置的 DERP 映射没有描述任何区域。",
-      mapsFileUnreadable:
-        "Headplane 无法读取 {path}：映射目录需要以相同的绝对路径读写挂载到容器内。",
-      mapsFileInvalid: "{path} 不是 Headplane 能读取的 DERP 映射。",
-      mapsFileEmpty: "{path} 没有描述任何区域。",
-      mapsRemoteUnavailable: "至少有一个 DERP 映射网址无法读取，其区域在此缺失。",
-      mapsResolveTruncated: "这里只解析前 {count} 个节点主机名。",
-      mapsRegionNodes: "{count} 个节点",
-      mapsMoreRegions: "还有 {count} 个区域",
-      mapsMoreNodes: "还有 {count} 个节点",
-      mapsRegionNoNodes: "该区域没有列出节点。",
-      mapsSourceManual: "手动名称",
-      mapsSourceLocal: "本地文件",
-      mapsSourceRemote: "映射网址",
-      mapsStun: "STUN",
-      mapsStunNone: "不提供",
-      mapsStunOnly: "仅 STUN",
-      mapsDefault: "默认",
-      mapsDeclared: "映射",
+      nodesTitle: "DERP 节点",
+      nodesBody: "这份配置描述的全部 DERP 节点，按来源分行列出。",
+      nodesSummary: "本机提供 {served} 个 · 共 {total} 个",
+      nodesCount: "{count} 个节点",
+      nodesMore: "还有 {count} 个节点",
+      nodesNotServed: "本机不提供",
+      nodesSourceEmbedded: "内嵌中继",
+      nodesSourceEmbeddedBody: "derp.server 配置的中继。",
+      nodesSourceLocal: "本地地图文件",
+      nodesSourceLocalBody: "derp.paths 列出的地图文件。",
+      nodesSourceMirror: "官方筛选",
+      nodesSourceMirrorBody: "官方区域筛选任务维护的文件。",
+      nodesSourceOfficial: "官方全量",
+      nodesSourceOfficialBody: "derp.urls 带来的、本机不提供的区域。",
+      nodesEmbeddedOff: "内嵌 DERP 服务器未启用，因此没有中继任何节点。",
+      nodesLocalNone: "derp.paths 中没有列出任何地图文件。",
+      nodesMirrorOff: "尚未配置官方区域筛选。",
+      nodesMirrorUnlisted: "筛选出的地图不在 derp.paths 列出的文件里，客户端不会收到它。",
+      nodesOfficialNoUrls: "derp.urls 中没有配置任何地图网址。",
+      nodesOfficialCovered: "官方地图带来的区域都已在上方提供。",
+      nodesUnreadable: "所有已配置的地图都无法读取。",
+      nodesEmpty: "已配置的地图没有列出任何节点。",
+      nodesFileUnreadable:
+        "HeadplaneCN 无法读取 {path}：映射目录需要以相同的绝对路径读写挂载到容器内。",
+      nodesFileInvalid: "{path} 不是 HeadplaneCN 能读取的 DERP 映射。",
+      nodesFileEmpty: "{path} 没有描述任何区域。",
+      nodesUrlUnreadable: "无法读取 {url} 上的地图，其节点在此缺失。",
+      nodesUrlEmpty: "{url} 上的地图没有描述任何区域。",
+      nodesAdd: "节点在 DERP 设置中定义：内嵌中继，以及 derp.paths 列出的每个文件。{link}",
+      nodesAddLink: "添加节点",
     },
     service: {
       title: "Headscale 服务器",
-      serverBody: "Headplane 访问 Headscale 的方式，以及当前生效的访问控制模式。",
+      serverBody: "HeadplaneCN 访问 Headscale 的方式，以及当前生效的访问控制模式。",
       url: "地址",
       baseDomain: "基础域名",
       policyMode: "策略模式",
@@ -254,8 +269,8 @@ const zhHans = {
     counts: {
       tailnetTitle: "Tailnet",
       tailnetBody: "Headscale 当前上报的 Tailnet 数据。",
-      headplaneTitle: "Headplane 数据",
-      headplaneBody: "Headplane 在本机保存的记录。",
+      headplaneTitle: "HeadplaneCN 数据",
+      headplaneBody: "HeadplaneCN 在本机保存的记录。",
       nodes: "节点",
       nodesSplit: "{online} 在线 · {offline} 离线",
       nodesValue: "{total}（在线 {online}，离线 {offline}）",
@@ -444,7 +459,7 @@ const zhHans = {
       natPmpTooltip: "由机器自行上报：该机器是否通过 NAT-PMP 从路由器获得端口映射。",
       derp: {
         title: "DERP 中继",
-        body: "中继地址、内嵌 DERP 区域，以及此机器使用的中继；机器数据由 Headplane Agent 提供。",
+        body: "中继地址、内嵌 DERP 区域，以及此机器使用的中继；机器数据由 HeadplaneCN Agent 提供。",
         relayAddressTitle: "客户端连接的中继",
         relayIpv4: "IPv4",
         relayIpv6: "IPv6",
@@ -455,10 +470,6 @@ const zhHans = {
         relayVerdictUnavailable: "未检查：DNS 查询未完成",
         relayVerdictHostMissing: "未检查：server_url 没有可用的主机名",
         relayVerdictLiteral: "该端点本身就是 IP 地址，无需解析",
-        relayFixIpv4: "把 A 记录指向该机器当前的地址，或清空 derp.server.ipv4",
-        relayFixIpv6: "为该主机名添加 AAAA 记录，或接受仅 IPv4",
-        relayFixIpv6NoRecords:
-          "主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 Headplane 即可清除",
         relayResolvedUnavailable: "未解析",
         relayReasonNoRecords: "DNS 查询没有返回记录",
         relayReasonTimeout: "DNS 查询超时",
@@ -467,8 +478,13 @@ const zhHans = {
         relayReasonInvalidHost: "该主机名不是可用的 DNS 名称",
         relayUnavailable: "无法读取 Headscale 的 server_url，因此不知道客户端连接的中继地址。",
         relayMachineTitle: "此机器使用的中继",
+        relayInUse: "使用中",
+        relaySourceEmbedded: "内嵌中继",
+        relaySourceLocal: "本地地图文件",
+        relaySourceMirror: "官方筛选",
+        relaySourceOfficial: "官方全量",
         agentRequired:
-          "实时中继数据需要 Headplane Agent。启用 Agent 后，Headplane 才能读取此机器的归属区域、首选区域和 DERP 延迟。",
+          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取此机器的归属区域、首选区域和 DERP 延迟。",
         empty: "此机器还没有上报 DERP 中继信息。",
         homeRegion: "归属区域",
         preferredRegion: "首选区域",
@@ -633,17 +649,17 @@ const zhHans = {
       expiringSoonTooltip: "此机器的密钥即将过期。请在此之前重新认证或停用密钥过期，以保持连接。",
       tailscaleSsh: "Tailscale SSH",
       tailscaleSshTooltip:
-        "此机器发布了 Tailscale SSH，可以使用你的 Tailscale 账号以及 Headplane Web 界面进行 SSH 认证。",
-      agent: "Headplane Agent",
-      agentTooltip: "此机器正在运行 Headplane Agent，因此可以在 Web 界面中提供主机信息。",
+        "此机器发布了 Tailscale SSH，可以使用你的 Tailscale 账号以及 HeadplaneCN Web 界面进行 SSH 认证。",
+      agent: "HeadplaneCN Agent",
+      agentTooltip: "此机器正在运行 HeadplaneCN Agent，因此可以在 Web 界面中提供主机信息。",
     },
   },
   users: {
     list: {
       title: "用户",
       subtitle: "管理网络中的用户及其权限。",
-      headplaneSection: "Headplane 用户",
-      empty: "还没有用户登录过 Headplane。",
+      headplaneSection: "HeadplaneCN 用户",
+      empty: "还没有用户登录过 HeadplaneCN。",
       columnUser: "用户",
       columnRole: "角色",
       columnLastLogin: "最后登录",
@@ -651,7 +667,7 @@ const zhHans = {
       columnCreatedAt: "创建时间",
       actions: "操作",
       unlinkedSection: "未关联的 Headscale 用户",
-      unlinkedBody: "这些 Headscale 用户尚未关联到 Headplane 账号，无法通过 Headplane 管理。",
+      unlinkedBody: "这些 Headscale 用户尚未关联到 HeadplaneCN 账号，无法通过 HeadplaneCN 管理。",
       apiError: "无法连接 Headscale API，Headscale 用户数据与机器信息暂不可用。",
     },
     row: {
@@ -688,9 +704,9 @@ const zhHans = {
     create: {
       addUser: "添加用户",
       title: "创建 Headscale 用户",
-      body: "这会在 Headscale 中创建一个新用户。在用户登录并自动关联到 Headplane 账号之前，该用户会显示在“未关联的 Headscale 用户”区域。",
+      body: "这会在 Headscale 中创建一个新用户。在用户登录并自动关联到 HeadplaneCN 账号之前，该用户会显示在“未关联的 Headscale 用户”区域。",
       bodyOidc:
-        "这会在 Headscale 中创建一个新用户。在用户通过 OIDC 提供方登录并自动关联到 Headplane 账号之前，该用户会显示在“未关联的 Headscale 用户”区域。",
+        "这会在 Headscale 中创建一个新用户。在用户通过 OIDC 提供方登录并自动关联到 HeadplaneCN 账号之前，该用户会显示在“未关联的 Headscale 用户”区域。",
       username: "用户名",
       usernameRule:
         "用户名至少 2 个字符，必须以字母开头，只能包含字母、数字、点、短横线和下划线，最多一个 @，且 @ 不能是最后一个字符。",
@@ -714,7 +730,7 @@ const zhHans = {
     },
     changeRole: {
       title: "变更 {name} 的角色？",
-      body: "角色决定用户可以访问 Headplane 中的哪些内容。每个角色授予一组特定的权限。",
+      body: "角色决定用户可以访问 HeadplaneCN 中的哪些内容。每个角色授予一组特定的权限。",
       ownerNotice: "Tailnet 所有者无法被变更。",
       label: "角色",
     },
@@ -737,7 +753,7 @@ const zhHans = {
     },
     transfer: {
       title: "将所有权转移给 {name}？",
-      body: "这会使 {name} 成为此 Headplane 实例的新所有者，你将被降级为管理员。此操作难以撤销。",
+      body: "这会使 {name} 成为此 HeadplaneCN 实例的新所有者，你将被降级为管理员。此操作难以撤销。",
       notice: "只有所有者可以转移所有权。转移后你将无法再管理所有权。",
     },
     menu: {
@@ -815,7 +831,7 @@ const zhHans = {
       actions: "要解决此问题，可以采取以下两种方式：",
       createFile: "在 Headscale 配置中指定的路径创建 ACL 策略文件。",
       switchDatabase:
-        "或者，通过修改 Headscale 配置改用 {database} 模式存储 ACL。这样 Headplane 就能直接通过 Web 界面管理 ACL 策略。",
+        "或者，通过修改 Headscale 配置改用 {database} 模式存储 ACL。这样 HeadplaneCN 就能直接通过 Web 界面管理 ACL 策略。",
     },
     common: {
       sources: "来源",
@@ -847,7 +863,7 @@ const zhHans = {
       actionLabel: "动作",
       actionAccept: "接受 — 立即允许会话",
       actionCheck: "检查 — 需要定期重新认证",
-      actionUnknown: "{action} — Headplane 无法识别",
+      actionUnknown: "{action} — HeadplaneCN 无法识别",
       sourcesDescription: "允许打开 SSH 会话的对象。",
       sourcesPlaceholder: "group:ops",
       destinationsDescription: "接受 SSH 会话的节点。",
@@ -972,7 +988,7 @@ const zhHans = {
     },
     unsupported: {
       title: "不支持的策略区块",
-      body: "该策略定义了 {sections}，Headscale 并不支持。保存策略时，Headplane 会原样保留这些区块。",
+      body: "该策略定义了 {sections}，Headscale 并不支持。保存策略时，HeadplaneCN 会原样保留这些区块。",
     },
     autoApprovers: {
       title: "自动批准",
@@ -1108,7 +1124,7 @@ const zhHans = {
         invalidValue: "第 {position} 条记录的值必须是非空字符串。",
         tooManyRecords: "记录过多：文件中有 {count} 条，最多允许 {max} 条。",
         conflictingRecord:
-          "第 {position} 条与另一条记录的名称与类型相同但值不同。Headplane 对同一「名称+类型」只保留一条记录，请把多出来的值写进 Headscale 配置文件。",
+          "第 {position} 条与另一条记录的名称与类型相同但值不同。HeadplaneCN 对同一「名称+类型」只保留一条记录，请把多出来的值写进 Headscale 配置文件。",
       },
     },
     domains: {
@@ -1121,9 +1137,9 @@ const zhHans = {
   settings: {
     overview: {
       title: "设置",
-      intro: "在这里管理 Headscale 的密钥与认证配置，以及 Headplane 的 Agent、操作日志与快照。",
+      intro: "在这里管理 Headscale 的密钥与认证配置，以及 HeadplaneCN 的 Agent、操作日志与快照。",
       headscaleSection: "Headscale",
-      headplaneSection: "Headplane",
+      headplaneSection: "HeadplaneCN",
       preAuthTitle: "预授权密钥",
       preAuthBody:
         "Headscale 完整支持预认证密钥，方便快速向 Tailnet 添加设备。想了解如何使用预认证密钥，请参阅{link}",
@@ -1133,23 +1149,23 @@ const zhHans = {
       apiKeysBody:
         "API 密钥用于让工具和集成通过 Headscale API 进行认证。完整密钥只在创建时显示一次。",
       manageApiKeys: "管理 API 密钥",
-      agentTitle: "Headplane Agent",
-      agentBody: "Headplane Agent 会从你的 Tailnet 同步系统版本、连接情况等节点信息。",
+      agentTitle: "HeadplaneCN Agent",
+      agentBody: "HeadplaneCN Agent 会从你的 Tailnet 同步系统版本、连接情况等节点信息。",
       agentSettings: "Agent 设置",
       restrictionsTitle: "认证限制",
       restrictionsBody:
-        "Headscale 支持限制 OIDC 认证，只允许特定的邮箱域名、组或用户进行认证。这可以把 Tailnet 的访问限制在特定用户或组内，Headplane 在认证时也会遵循这些设置。{link}",
+        "Headscale 支持限制 OIDC 认证，只允许特定的邮箱域名、组或用户进行认证。这可以把 Tailnet 的访问限制在特定用户或组内，HeadplaneCN 在认证时也会遵循这些设置。{link}",
       manageRestrictions: "管理限制",
       headscaleTitle: "Headscale 设置",
       headscaleBody:
-        "编辑 Headscale 自身配置文件中 Headplane 可以安全修改的部分：OpenID Connect、可信代理，以及访问控制策略的存放位置。",
+        "编辑 Headscale 自身配置文件中 HeadplaneCN 可以安全修改的部分：OpenID Connect、可信代理，以及访问控制策略的存放位置。",
       manageHeadscale: "管理 Headscale 设置",
       systemTitle: "系统状态",
       systemBody:
-        "查看 Headplane 所管理的 Headscale 服务器是否健康、运行哪个版本，以及是否有新版本可用。",
+        "查看 HeadplaneCN 所管理的 Headscale 服务器是否健康、运行哪个版本，以及是否有新版本可用。",
       systemStatus: "查看系统状态",
       auditTitle: "操作日志",
-      auditBody: "查看谁通过 Headplane 改动了什么，可按操作者、操作类型和时间范围筛选。",
+      auditBody: "查看谁通过 HeadplaneCN 改动了什么，可按操作者、操作类型和时间范围筛选。",
       manageAudit: "查看操作日志",
       snapshotsTitle: "配置快照",
       snapshotsBody: "在配置被修改前先复制一份，出问题时可以下载或恢复之前的版本。",
@@ -1162,12 +1178,12 @@ const zhHans = {
     system: {
       breadcrumb: "系统状态",
       title: "系统状态",
-      body: "Headplane 所管理的 Headscale 服务器的健康状况、版本与配置检查。",
+      body: "HeadplaneCN 所管理的 Headscale 服务器的健康状况、版本与配置检查。",
       statusTitle: "健康状况",
       statusHealthy: "Headscale 可访问",
       statusUnhealthy: "Headscale 无法访问",
       statusUnhealthyBody:
-        "Headplane 无法连接 Headscale API。请先启动 Headscale，然后重新加载本页。",
+        "HeadplaneCN 无法连接 Headscale API。请先启动 Headscale，然后重新加载本页。",
       versionLabel: "运行版本",
       updateBadge: "有新版本",
       updateBody: "Headscale {latest} 已发布，本服务器运行的是 {current}。",
@@ -1186,7 +1202,7 @@ const zhHans = {
       summaryProcessNone: "未配置集成",
       checksFailedTitle: "失败的检查：{count}",
       processTitle: "进程控制",
-      processBody: "Headplane 可以通过已配置的集成来重新加载或重启 Headscale。",
+      processBody: "HeadplaneCN 可以通过已配置的集成来重新加载或重启 Headscale。",
       processReload: "重新加载配置",
       processRestart: "重启 Headscale",
       processPending: "处理中…",
@@ -1194,77 +1210,77 @@ const zhHans = {
       processRestrictedTitle: "只读访问",
       processUnavailableTitle: "未启用集成",
       processUnavailableBody:
-        "只有在启用 Docker、Kubernetes 或原生(/proc)集成后，Headplane 才能重新加载或重启 Headscale。设置方法请参阅{link}。",
+        "只有在启用 Docker、Kubernetes 或原生(/proc)集成后，HeadplaneCN 才能重新加载或重启 Headscale。设置方法请参阅{link}。",
       processUnavailableLink: "文档",
       processSemanticsReload:
         "{name}会向 Headscale 进程发送 SIGHUP，在不中断连接的情况下重新加载配置。",
       processSemanticsRestart: "{name}会重启 Headscale 容器或 Pod。",
       errors: {
         invalidAction: "请求无效，请重新加载本页后重试。",
-        notAvailable: "未启用集成，Headplane 无法重新加载或重启 Headscale。",
-        failed: "集成无法连接 Headscale，详情请查看 Headplane 日志。",
+        notAvailable: "未启用集成，HeadplaneCN 无法重新加载或重启 Headscale。",
+        failed: "集成无法连接 Headscale，详情请查看 HeadplaneCN 日志。",
       },
       checks: {
         reachable: {
           title: "Headscale 可访问",
-          pass: "/health 端点有响应，Headplane 可以与 Headscale API 通信。",
-          fail: "/health 端点无响应。请确认 Headscale 正在运行，并检查 Headplane 配置中的地址是否正确。",
+          pass: "/health 端点有响应，HeadplaneCN 可以与 Headscale API 通信。",
+          fail: "/health 端点无响应。请确认 Headscale 正在运行，并检查 HeadplaneCN 配置中的地址是否正确。",
         },
         apiKey: {
           title: "API 密钥有效",
           pass: "Headscale API 已接受配置的 API 密钥。",
           invalid:
-            "Headscale 拒绝了配置的 API 密钥，说明它无效或已过期。请生成新密钥并更新 Headplane 配置。",
+            "Headscale 拒绝了配置的 API 密钥，说明它无效或已过期。请生成新密钥并更新 HeadplaneCN 配置。",
           unknown:
-            "由于请求因其他原因失败，Headplane 无法检查 API 密钥。详情请查看 Headplane 日志。",
+            "由于请求因其他原因失败，HeadplaneCN 无法检查 API 密钥。详情请查看 HeadplaneCN 日志。",
         },
         version: {
           title: "Headscale 版本",
-          pass: "Headscale {version} 支持 Headplane 提供的全部功能。",
+          pass: "Headscale {version} 支持 HeadplaneCN 提供的全部功能。",
           recommended:
             "Headscale {version} 可以正常使用，但建议升级到 {recommended} 或更高版本：0.29 测试版至 0.29.1 的浏览器 SSH 无法使用。",
           tooOld:
-            "Headscale {version} 低于 {minimum}，Headplane Agent 与浏览器 SSH 等功能将无法使用。",
+            "Headscale {version} 低于 {minimum}，HeadplaneCN Agent 与浏览器 SSH 等功能将无法使用。",
         },
         policyMode: {
           title: "访问控制策略模式",
           pass: "Headscale 将策略存储在数据库中，因此访问控制编辑器可以通过 API 保存。",
-          file: "Headscale 从文件读取策略，因此访问控制编辑器无法通过 API 保存。如需在 Headplane 中编辑策略，请切换到数据库模式。",
-          unknown: "Headplane 无法读取 Headscale 的配置文件，因此无法确定策略模式。",
+          file: "Headscale 从文件读取策略，因此访问控制编辑器无法通过 API 保存。如需在 HeadplaneCN 中编辑策略，请切换到数据库模式。",
+          unknown: "HeadplaneCN 无法读取 Headscale 的配置文件，因此无法确定策略模式。",
         },
         oidc: {
           title: "已配置 OIDC",
           pass: "Headscale 已配置 OIDC 提供商，浏览器 SSH 与单点登录都需要它。",
           missing: "Headscale 尚未配置 OIDC 提供商，浏览器 SSH 与单点登录在配置之前不可用。",
-          unknown: "Headplane 无法读取 Headscale 的配置文件，因此无法确定是否已配置 OIDC。",
+          unknown: "HeadplaneCN 无法读取 Headscale 的配置文件，因此无法确定是否已配置 OIDC。",
         },
         trustedProxies: {
           title: "可信代理",
-          pass: "Headplane 未检测到反向代理，或 Headscale 已信任其前方的代理。",
+          pass: "HeadplaneCN 未检测到反向代理，或 Headscale 已信任其前方的代理。",
           missing:
-            "Headplane 似乎位于反向代理之后，但 Headscale 未配置 trusted_proxies。在添加代理地址段之前，客户端地址与部分登录流程可能不正确。",
+            "HeadplaneCN 似乎位于反向代理之后，但 Headscale 未配置 trusted_proxies。在添加代理地址段之前，客户端地址与部分登录流程可能不正确。",
         },
         configAccess: {
           title: "Headscale 配置文件",
-          pass: "Headplane 可以读写 Headscale 的配置文件。",
+          pass: "HeadplaneCN 可以读写 Headscale 的配置文件。",
           readOnly:
-            "Headplane 可以读取但无法写入 Headscale 的配置文件。如需从 Headplane 修改这些设置，请以可写方式挂载该文件。",
+            "HeadplaneCN 可以读取但无法写入 Headscale 的配置文件。如需从 HeadplaneCN 修改这些设置，请以可写方式挂载该文件。",
           unreadable:
-            "Headplane 无法读取 Headscale 的配置文件。请检查 headscale.config_path 设置与文件权限。",
+            "HeadplaneCN 无法读取 Headscale 的配置文件。请检查 headscale.config_path 设置与文件权限。",
         },
         integration: {
           title: "已启用集成",
-          pass: "已启用{name}，Headplane 可以为你重新加载或重启 Headscale。",
+          pass: "已启用{name}，HeadplaneCN 可以为你重新加载或重启 Headscale。",
           missing:
-            "未启用集成，Headplane 无法为你重新加载或重启 Headscale。请启用 Docker、Kubernetes 或原生(/proc)集成。",
+            "未启用集成，HeadplaneCN 无法为你重新加载或重启 Headscale。请启用 Docker、Kubernetes 或原生(/proc)集成。",
         },
       },
       configChecks: {
         title: "配置文件检查",
         body: "这些检查会像 headscale configtest 一样读取 Headscale 自己的 config.yaml 以及它引用的文件。请在重启 Headscale 之前修正文件中的问题。",
-        unavailable: "Headplane 无法读取 Headscale 的配置文件，因此无法进行配置检查。",
+        unavailable: "HeadplaneCN 无法读取 Headscale 的配置文件，因此无法进行配置检查。",
         pathUnavailable:
-          "无法检查 {path}：该路径在当前进程中不可见，通常是运行 Headplane 的容器没有挂载该目录。挂载后即可自动检查。",
+          "无法检查 {path}：该路径在当前进程中不可见，通常是运行 HeadplaneCN 的容器没有挂载该目录。挂载后即可自动检查。",
         oidcKeys: {
           title: "不受支持的 OIDC 键",
           pass: "配置中没有 Headscale 0.29 拒绝启动的任何 OIDC 键。",
@@ -1292,7 +1308,7 @@ const zhHans = {
           missingFile: "{path} 尚不存在。Headscale 会在首次启动时创建 SQLite 数据库。",
           missingDir: "目录 {path} 不存在，Headscale 无法在其中创建 SQLite 数据库。",
           readOnlyDir:
-            "Headplane 无法写入 {path}（通常是只读挂载），因此无法判断 Headscale 是否可写。只读挂载属正常配置；除非 Headscale 自身报无法写入数据库，否则无需处理。",
+            "HeadplaneCN 无法写入 {path}（通常是只读挂载），因此无法判断 Headscale 是否可写。只读挂载属正常配置；除非 Headscale 自身报无法写入数据库，否则无需处理。",
         },
         policy: {
           title: "访问控制策略文件",
@@ -1308,7 +1324,7 @@ const zhHans = {
           title: "DNS 记录",
           pass: "只配置了一个额外的 DNS 记录来源。",
           conflict:
-            "同时设置了 dns.extra_records 和 dns.extra_records_path。Headplane 会读取 {path} 的 JSON 文件并忽略内联记录，而 Headscale 必须在这两个来源中选择一个。",
+            "同时设置了 dns.extra_records 和 dns.extra_records_path。HeadplaneCN 会读取 {path} 的 JSON 文件并忽略内联记录，而 Headscale 必须在这两个来源中选择一个。",
           review: "查看 DNS 记录",
         },
         oidc: {
@@ -1331,9 +1347,9 @@ const zhHans = {
             "{path} 处的 Noise 私钥尚不存在，数据库也尚未创建，因此 Headscale 会在首次启动时生成它。",
         },
         relayUnavailable:
-          "无法检查 {host}：DNS 查询未完成，因此 Headplane 无法判断客户端实际能连到哪些地址。查询结果（包括否定的结果）会缓存五分钟，可稍后刷新本页重试。",
+          "无法检查 {host}：DNS 查询未完成，因此 HeadplaneCN 无法判断客户端实际能连到哪些地址。查询结果（包括否定的结果）会缓存五分钟，可稍后刷新本页重试。",
         relayHostUnusable:
-          "无法检查中继地址：server_url 不是可用的 http(s) URL，因此 Headplane 不知道客户端连接哪个主机。",
+          "无法检查中继地址：server_url 不是可用的 http(s) URL，因此 HeadplaneCN 不知道客户端连接哪个主机。",
         derpIpv4: {
           title: "内嵌中继 IPv4",
           disabled: "Headscale 的内嵌 DERP 服务器未启用，无需检查中继地址。",
@@ -1354,7 +1370,7 @@ const zhHans = {
           mismatch:
             "derp.server.ipv6 声明了 {address}，但 {host} 并未解析到它，客户端无法通过 IPv6 使用该地址上的中继。请为该主机名添加指向运行中继机器的 AAAA 记录，或接受仅 IPv4。",
           missingRecord:
-            "derp.server.ipv6 声明了 {address}，但 {host} 完全没有 AAAA 记录，客户端无法通过 IPv6 使用中继。请为该主机名添加指向运行中继机器的 AAAA 记录，或接受仅 IPv4。主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 Headplane 即可清除。",
+            "derp.server.ipv6 声明了 {address}，但 {host} 完全没有 AAAA 记录，客户端无法通过 IPv6 使用中继。请为该主机名添加指向运行中继机器的 AAAA 记录，或接受仅 IPv4。主机解析器可能在该名称确有 AAAA 记录时仍返回空结果：用 `dig @1.1.1.1 +short AAAA {host}` 与 `dig +short AAAA {host}` 对照即可确认；若前者有结果，请把该主机的 DNS 指向能返回 AAAA 的解析器。否定结果会缓存五分钟，重启 HeadplaneCN 即可清除。",
         },
         derpMap: {
           exists: { title: "DERP 地图文件存在（{path}）" },
@@ -1367,8 +1383,8 @@ const zhHans = {
         },
       },
       selfUpdate: {
-        title: "Headplane 有新版本",
-        body: "Headplane {latest} 已发布。本实例报告的版本是 {current}，即构建时写入的 __VERSION__；自行构建并报告自身版本的实例不会收到此提醒。{link}",
+        title: "HeadplaneCN 有新版本",
+        body: "HeadplaneCN {latest} 已发布。本实例报告的版本是 {current}，即构建时写入的 __VERSION__；自行构建并报告自身版本的实例不会收到此提醒。{link}",
         link: "查看发布说明",
       },
       metrics: {
@@ -1378,11 +1394,11 @@ const zhHans = {
         disabled:
           "Headscale 配置中未设置 metrics_listen_addr，因此指标监听器处于停用状态。设置该地址并重启 Headscale 后即可在此查看指标。",
         invalid:
-          "Headplane 无法解析 metrics_listen_addr 的值“{value}”。请使用 host:port 格式，例如 127.0.0.1:9090。",
-        unknown: "Headplane 无法读取 Headscale 的配置文件，因此无法确定指标监听地址。",
+          "HeadplaneCN 无法解析 metrics_listen_addr 的值“{value}”。请使用 host:port 格式，例如 127.0.0.1:9090。",
+        unknown: "HeadplaneCN 无法读取 Headscale 的配置文件，因此无法确定指标监听地址。",
         unreachableTitle: "指标监听器无法访问",
         unreachable:
-          "Headplane 无法读取 {url}。指标监听器必须能被 Headplane 自身访问；Headscale 当前监听的是 {address}。",
+          "HeadplaneCN 无法读取 {url}。指标监听器必须能被 HeadplaneCN 自身访问；Headscale 当前监听的是 {address}。",
         groups: {
           nodes: "节点",
           users: "用户",
@@ -1395,7 +1411,7 @@ const zhHans = {
         uptimeValue: "{days}天{hours}小时{minutes}分",
         seriesLabel: "{count} 个序列",
         rawTitle: "原始指标",
-        rawDescription: "Headplane 收到的原始 exposition 文本。",
+        rawDescription: "HeadplaneCN 收到的原始 exposition 文本。",
         rawTruncated: "仅显示前 {chars} 个字符。",
       },
       tabsLabel: "系统状态分区",
@@ -1420,7 +1436,7 @@ const zhHans = {
       body: "这些设置会直接写入 Headscale 的 config.yaml，修改后需要重启 Headscale 才会生效。",
       notWritableTitle: "配置已锁定",
       notWritableBody:
-        "只有当 Headscale 配置文件以可写方式挂载时，Headplane 才能修改这些设置。请以可写权限把 {file} 挂载到 Headplane 容器，然后重启 Headplane。",
+        "只有当 Headscale 配置文件以可写方式挂载时，HeadplaneCN 才能修改这些设置。请以可写权限把 {file} 挂载到 HeadplaneCN 容器，然后重启 HeadplaneCN。",
       readOnlyTitle: "只读访问",
       oidcTitle: "OpenID Connect",
       oidcBody: "通过身份提供方登录。允许的邮箱域名、组和用户在{link}页面管理。",
@@ -1490,7 +1506,7 @@ const zhHans = {
       advancedLogBody: "Headscale 服务端自身的日志输出。修改后需要重启 Headscale 才会生效。",
       logLevelLabel: "日志级别",
       logLevelDescription:
-        "Headplane 只能保存 debug、info、warn 和 error。Headscale 的默认值是 info。",
+        "HeadplaneCN 只能保存 debug、info、warn 和 error。Headscale 的默认值是 info。",
       logFormatLabel: "日志格式",
       logFormatDescription: "text 为便于阅读的文本，json 为结构化输出。Headscale 的默认值是 text。",
       saveLogSettings: "保存日志设置",
@@ -1578,7 +1594,7 @@ const zhHans = {
       selfTestJwksOk: "文档声明的 JWKS 可访问。",
       selfTestScopesMissingOpenid: "请求的 scope 不包含 openid，提供方不会返回 ID 令牌。",
       selfTestScopesMissingClaims:
-        "请求的 scope 不包含 {scopes}。缺少 email 时提供方不会返回可用于 allowed_domains 的已验证地址；缺少 profile 时 Headplane 无法显示名称与头像。",
+        "请求的 scope 不包含 {scopes}。缺少 email 时提供方不会返回可用于 allowed_domains 的已验证地址；缺少 profile 时 HeadplaneCN 无法显示名称与头像。",
       selfTestScopesOk: "请求的 scope 包含 openid、email 与 profile。",
       selfTestPkceDisabled: "配置中已关闭 PKCE，不会发送 code challenge。",
       selfTestPkceMismatch:
@@ -1596,7 +1612,7 @@ const zhHans = {
         "allowed_domains、allowed_groups 与 allowed_users 都未设置，提供方验证通过的任意账号都可以登录。",
       selfTestAccessOk: "登录范围由 {lists} 限制。",
       selfTestCallbackUnknown:
-        "Headplane 未配置 server.base_url，无法显示需要在提供方注册的回调地址。",
+        "HeadplaneCN 未配置 server.base_url，无法显示需要在提供方注册的回调地址。",
       selfTestCallbackOk: "请在身份提供方注册此重定向地址：{url}",
       clientSecretPathLabel: "客户端密钥文件路径",
       clientSecretPathDescription:
@@ -1607,7 +1623,7 @@ const zhHans = {
       overviewTab: "概览",
       overviewTitle: "配置概览",
       overviewBody:
-        "以下内容直接读取自 Headscale 配置文件，仅供查看。Headplane 会有意不写入这些设置：数据库路径或 IP 网段填错可能导致你无法登录服务器，其余则是运维或密钥文件路径。",
+        "以下内容直接读取自 Headscale 配置文件，仅供查看。HeadplaneCN 会有意不写入这些设置：数据库路径或 IP 网段填错可能导致你无法登录服务器，其余则是运维或密钥文件路径。",
       overviewDisplayOnly: "仅供查看",
       overviewUnset: "—",
       overviewNetworkTitle: "网络",
@@ -1639,9 +1655,9 @@ const zhHans = {
         body: "Headscale 从哪里取得下发给客户端的 DERP 中继地图、多久刷新一次，以及是否自行运行内嵌 DERP 服务器。下方列出各机器的中继使用情况。",
         statusTitle: "DERP 中继",
         statusBody:
-          "每台机器通过 Headscale 的 DERP 中继连接的位置。实时中继数据来自 Headplane Agent。",
+          "每台机器通过 Headscale 的 DERP 中继连接的位置。实时中继数据来自 HeadplaneCN Agent。",
         statusAgentRequired:
-          "实时中继数据需要 Headplane Agent。启用 Agent 后，Headplane 才能读取每台机器的归属区域、首选区域和 DERP 延迟。",
+          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取每台机器的归属区域、首选区域和 DERP 延迟。",
         statusEmpty: "还没有机器上报 DERP 中继信息。",
         machine: "机器",
         homeRegion: "归属区域",
@@ -1712,7 +1728,7 @@ const zhHans = {
         keyConfigured: "已为内嵌服务器配置私钥路径。",
         keyMissing: "还没有为内嵌服务器配置 derp.server.private_key_path。",
         serverKeyWarning:
-          "Headplane 只保存 derp.server.private_key_path 中的路径，私钥文件本身不需要预先存在。Headscale 启动时会在该路径生成密钥，因此目录必须对 Headscale 可写，已存在的文件也必须可被其读取。",
+          "HeadplaneCN 只保存 derp.server.private_key_path 中的路径，私钥文件本身不需要预先存在。Headscale 启动时会在该路径生成密钥，因此目录必须对 Headscale 可写，已存在的文件也必须可被其读取。",
         saveServer: "保存内嵌服务器设置",
         presetButton: "一键配置内嵌服务器",
         presetTitle: "启用内嵌 DERP 服务器",
@@ -1735,13 +1751,13 @@ const zhHans = {
           "客户端连接的是该区域的公网地址，因此这些端口必须能穿过防火墙或 NAT。这也是自建区域始终无人使用的最常见原因。",
         regionNamesTitle: "区域名称",
         regionNamesBody:
-          "Headscale 不提供 DERP 地图接口，因此外部区域只有 ID。可以为 Headplane 无法解析的区域填写名称；该映射保存在 Headplane 的数据目录中，而不是 Headscale 配置里。",
+          "Headscale 不提供 DERP 地图接口，因此外部区域只有 ID。可以为 HeadplaneCN 无法解析的区域填写名称；该映射保存在 HeadplaneCN 的数据目录中，而不是 Headscale 配置里。",
         regionNamesEmpty: "还没有配置手动区域名称。",
         regionNameIdLabel: "区域 ID",
         regionNameIdDescription: "Tailscale 上报的区域数字 ID，例如 901。",
         regionNameIdPlaceholder: "901",
         regionNameValueLabel: "区域名称",
-        regionNameValueDescription: "在 Headplane 中显示在该区域 ID 旁边的名称。",
+        regionNameValueDescription: "在 HeadplaneCN 中显示在该区域 ID 旁边的名称。",
         regionNameValuePlaceholder: "阿姆斯特丹",
         addRegionName: "添加区域名称",
         removeRegionName: "移除",
@@ -1774,18 +1790,18 @@ const zhHans = {
             "下列区域是 Tailscale 官方的 DERP 中继，属于官方公共基础设施，而不是你自建的节点。本卡片把这份官方地图镜像成本地地图文件交给客户端，并把区域重新编号到 900 段，方便你只保留需要的区域。官方地址会变动，所以镜像会自动刷新。",
           summary: "官方区域 {regions} 个 · 已选 {selected} 个 · {file}",
           regionsBody:
-            "勾选允许客户端使用的区域。延迟来自 Headplane Agent 对它可见机器的实测数据，没有任何机器测到的区域会显示为未测到。",
+            "勾选允许客户端使用的区域。延迟来自 HeadplaneCN Agent 对它可见机器的实测数据，没有任何机器测到的区域会显示为未测到。",
           regionsEmpty:
-            "还没有读取到官方区域。Headplane 会在后台抓取 Tailscale 的地图；请确认本服务器可以访问 controlplane.tailscale.com。",
+            "还没有读取到官方区域。HeadplaneCN 会在后台抓取 Tailscale 的地图；请确认本服务器可以访问 controlplane.tailscale.com。",
           regionsUnreadable: "无法读取官方地图：{reason}。",
           regionsRetry: "镜像会在几分钟内重试失败的请求；刷新本页可立即重试。",
           fetchReasonTimeout: "请求超时",
           fetchReasonNetwork: "请求无法发出",
           fetchReasonStatus: "服务器返回了错误状态",
-          fetchReasonTooLarge: "地图超出 Headplane 的读取上限",
+          fetchReasonTooLarge: "地图超出 HeadplaneCN 的读取上限",
           fetchReasonUnreadable: "返回内容不是 DERP 地图",
           agentRequired:
-            "Headplane Agent 未运行，因此没有任何区域有实测延迟。可以手动勾选，或启用 Agent 后再按延迟排序。",
+            "HeadplaneCN Agent 未运行，因此没有任何区域有实测延迟。可以手动勾选，或启用 Agent 后再按延迟排序。",
           numberingNote:
             "901 固定为香港、902 固定为新加坡；其余勾选的区域按实测延迟从 903 依次编号，延迟相同时先按官方编号、再按官方 code 排序。已经分配过编号的区域在保存时保持不变——点击“重新编号”才会把这些编号应用到所有已镜像区域。",
           rankingNever: "还没有记录过编号排序，下面显示的是全新排序。",
@@ -1805,6 +1821,14 @@ const zhHans = {
           selectFiltered: "勾选筛选结果",
           selectRegion: "镜像 {code} 区域",
           recommended: "推荐：最快的三个",
+          selectionClear: "清除选择",
+          selectionDefault: "默认选择（香港 901 + 新加坡 902）",
+          addRegionNames: "一键加入区域名称",
+          addingRegionNames: "正在加入区域名称…",
+          namesAdded: {
+            one: "已加入 {count} 个区域名称",
+            other: "已加入 {count} 个区域名称",
+          },
           columnNumber: "将分配编号",
           columnName: "中文名",
           columnCode: "官方 code",
@@ -1813,6 +1837,8 @@ const zhHans = {
           columnLatency: "实测延迟",
           columnSelect: "勾选",
           latencyUnknown: "未测到",
+          latencyNoMeasurements: "还没有任何机器报告延迟。",
+          agentSettingsLink: "打开 Agent 设置",
           fixedRegion: "始终镜像",
           currentNumber: "当前 {number}",
           selectionNote: "勾选只会改变这里的预览，保存之前不会写入任何内容。",
@@ -1895,7 +1921,7 @@ const zhHans = {
         },
         relayDnsTitle: "中继 DNS 解析服务器",
         relayDnsBody:
-          "Headplane 会自己解析中继主机名，中继卡片才能显示客户端实际连到的地址。宿主机的解析器可能过滤 AAAA 记录，让本来存在的 IPv6 地址看起来不存在，因此可以在这里指定自己的 DNS 服务器。留空即跟随宿主机的解析器，与之前完全一致；这里配置的服务器只用于中继解析。",
+          "HeadplaneCN 会自己解析中继主机名，中继卡片才能显示客户端实际连到的地址。宿主机的解析器可能过滤 AAAA 记录，让本来存在的 IPv6 地址看起来不存在，因此可以在这里指定自己的 DNS 服务器。留空即跟随宿主机的解析器，与之前完全一致；这里配置的服务器只用于中继解析。",
         relayDnsSummary: {
           one: "{count} 台 DNS 服务器",
           other: "{count} 台 DNS 服务器",
@@ -1909,10 +1935,10 @@ const zhHans = {
         relayDnsAddServer: "添加 DNS 服务器",
         relayDnsRemoveServer: "删除",
         relayDnsStorageNote:
-          "保存在 Headplane 自己的数据目录（relay-dns-servers.json），不会写入 Headscale 配置。",
+          "保存在 HeadplaneCN 自己的数据目录（relay-dns-servers.json），不会写入 Headscale 配置。",
         relayDnsLookupTitle: "中继解析",
         relayDnsLookupBody:
-          "这就是中继卡片针对 server_url 主机名显示的解析结果。没有记录的答案会缓存五分钟，请用「重新解析」立即重查，不必等缓存过期或重启 Headplane。",
+          "这就是中继卡片针对 server_url 主机名显示的解析结果。没有记录的答案会缓存五分钟，请用「重新解析」立即重查，不必等缓存过期或重启 HeadplaneCN。",
         relayDnsReResolve: "重新解析",
         relayDnsReResolving: "正在重新解析…",
         relayDnsResolverSystem: "系统解析器",
@@ -1925,7 +1951,7 @@ const zhHans = {
         relayDnsSettingsLink: "编辑中继 DNS 设置",
         mapsMountTitle: "在线编辑需要读写挂载",
         mapsMountBody:
-          "Headplane 通过你给它的挂载读写这些文件。建议只把存放 DERP 地图的目录以读写方式挂进容器，Headscale 的其余数据目录不要一起挂进来：",
+          "HeadplaneCN 通过你给它的挂载读写这些文件。建议只把存放 DERP 地图的目录以读写方式挂进容器，Headscale 的其余数据目录不要一起挂进来：",
         mapsMountNote:
           "目录以只读方式挂载时，查看仍然可用，但保存会提示容器无法写入该路径。Headscale 自身也必须能读取这些文件，因为它是在启动时加载它们的。",
         mapsView: "查看",
@@ -1953,7 +1979,7 @@ const zhHans = {
           "Headscale 主机上的绝对路径。Headscale 与本容器都必须能读取它，请参考上面的挂载说明。",
         sync: {
           title: "地址自动同步",
-          body: "让 derp.server.ipv4 与 derp.server.ipv6 始终指向客户端可访问的地址。Headplane 会按计划检查，仅在地址确实变化时才写入 Headscale 配置文件。",
+          body: "让 derp.server.ipv4 与 derp.server.ipv6 始终指向客户端可访问的地址。HeadplaneCN 会按计划检查，仅在地址确实变化时才写入 Headscale 配置文件。",
           note: "IPv4 取自 server_url 的 A 记录，因为位于 NAT 之后的机器无法得知自己的公网地址；IPv6 取自本机自身的全局单播地址，启用下方外部回显时则取自回显结果。未能获得可用地址时会完全保留原有配置值。",
           overrideNote:
             "检测到的地址始终优先。当它与 derp.server.ipv4 或 derp.server.ipv6 不一致时，运行会写入它——按地址族各写一个键，且只写真正发生变化的那一个——并在此之前创建快照、记录审计条目。",
@@ -2012,7 +2038,7 @@ const zhHans = {
           skipNoRecords: "{family}：该主机名没有对应类型的记录。",
           skipNotPublic: "{family}：该地址不是公网地址。",
           skipNoHostAddress: "{family}：本机没有全局单播地址。",
-          skipNamespace: "{family}：Headplane 无法看到主机的网络命名空间。",
+          skipNamespace: "{family}：HeadplaneCN 无法看到主机的网络命名空间。",
           skipConfigNotWritable: "Headscale 配置文件不可写，因此没有写入任何内容。",
           detectionTitle: "检测候选地址",
           detectionSummary: "{count} 个候选地址",
@@ -2042,7 +2068,7 @@ const zhHans = {
             "向公共端点查询互联网看到的 IPv6 地址。这才是客户端真正可访问的地址，因此只要它给出应答，就优先于本机持有的任何地址。",
           echoEnabledLabel: "使用外部 IPv6 回显",
           echoEnabledDescription:
-            "默认关闭。开启后，Headplane 每次运行或检查都会向下方的端点发出一次 IPv6 请求。",
+            "默认关闭。开启后，HeadplaneCN 每次运行或检查都会向下方的端点发出一次 IPv6 请求。",
           echoUrlLabel: "回显端点",
           echoUrlDescription: "优先查询的端点。它无应答时会依次尝试内置的备用端点。",
           echoNote:
@@ -2095,7 +2121,7 @@ const zhHans = {
           },
           writable: {
             pass: "文件可写。",
-            fail: "Headplane 无法写入该路径或其所在目录。",
+            fail: "HeadplaneCN 无法写入该路径或其所在目录。",
           },
           size: {
             pass: "未超过 {limit} KiB 的编辑上限。",
@@ -2184,14 +2210,14 @@ const zhHans = {
         invalidDerpRegionMapName: "请为该区域填写名称。",
         derpRegionMapNotFound: "该区域 ID 没有手动名称。",
         derpRegionMapWriteFailed:
-          "Headplane 无法写入区域名称映射。请检查其数据目录是否可写后重试。",
+          "HeadplaneCN 无法写入区域名称映射。请检查其数据目录是否可写后重试。",
         derpPathsRequired:
           "启用内嵌服务器且不自动添加区域时，Headscale 要求至少配置一个 DERP 地图路径。",
         invalidDerpSyncInterval: "请选择 6、12 或 24 小时作为检查间隔。",
         invalidDerpSyncFamilies: "请选择同步可以更新的地址族。",
-        derpSyncSaveFailed: "同步设置无法保存。请确认 Headplane 可以写入其数据目录。",
+        derpSyncSaveFailed: "同步设置无法保存。请确认 HeadplaneCN 可以写入其数据目录。",
         invalidHostEchoUrl: "请输入 IPv6 回显端点的绝对 http 或 https URL。",
-        hostEchoSaveFailed: "回显设置无法写入 Headplane 的数据目录。",
+        hostEchoSaveFailed: "回显设置无法写入 HeadplaneCN 的数据目录。",
         invalidOidcExtraParams: "每个额外参数都需要不含空格的名称和值，请删除空行或填写完整。",
         duplicateOidcExtraParam: "同一个参数名出现了多次，每个名称只能保留一行。",
         invalidHaProbeInterval: "请输入不小于 2s 的时长（例如 10s），或填 0 停用 HA 探测。",
@@ -2202,23 +2228,24 @@ const zhHans = {
         duplicateRelayDnsServer: "该 DNS 服务器已在列表中。",
         relayDnsServerLimit: "列表最多保存 {count} 台 DNS 服务器，请先删除一台再添加。",
         relayDnsServerNotFound: "该 DNS 服务器不在列表中。",
-        relayDnsWriteFailed: "Headplane 无法写入中继 DNS 服务器。请检查其数据目录是否可写后重试。",
+        relayDnsWriteFailed:
+          "HeadplaneCN 无法写入中继 DNS 服务器。请检查其数据目录是否可写后重试。",
         invalidDerpMapPath:
           "请按 derp.paths 里原样的绝对路径填写；相对路径或包含 .. 的路径不能在线编辑。",
         derpMapPathNotConfigured: "该路径不在 derp.paths 中。请先把它加进列表，再来编辑文件。",
-        derpMapTooLarge: "这份 DERP 地图超过 256 KiB，Headplane 不会载入或写入它。",
+        derpMapTooLarge: "这份 DERP 地图超过 256 KiB，HeadplaneCN 不会载入或写入它。",
         derpMapInvalid: "该文件不是有效的 DERP 地图，请先修复保存按钮上方列出的问题。",
         derpMapUnavailable:
-          "Headplane 看不到该路径，因此无法写入。请把存放 DERP 地图文件的目录挂进容器（参考上面的挂载说明）。",
+          "HeadplaneCN 看不到该路径，因此无法写入。请把存放 DERP 地图文件的目录挂进容器（参考上面的挂载说明）。",
         derpMapNotWritable:
-          "Headplane 无法写入该路径。请把 DERP 地图目录以读写方式挂载，并确认容器对文件本身有写权限。",
+          "HeadplaneCN 无法写入该路径。请把 DERP 地图目录以读写方式挂载，并确认容器对文件本身有写权限。",
         derpMapWriteFailed:
-          "Headplane 无法写入该 DERP 地图文件。请检查容器权限与剩余磁盘空间后重试。",
-        derpMapNoSnapshot: "该文件还没有被 Headplane 编辑过，因此没有可回滚的快照。",
+          "HeadplaneCN 无法写入该 DERP 地图文件。请检查容器权限与剩余磁盘空间后重试。",
+        derpMapNoSnapshot: "该文件还没有被 HeadplaneCN 编辑过，因此没有可回滚的快照。",
       },
     },
     agent: {
-      title: "Headplane Agent",
+      title: "HeadplaneCN Agent",
       notEnabledTitle: "Agent 未启用",
       notEnabledBody: "{reason}。想了解如何配置 Agent，请参阅{link}",
       documentation: "文档",
@@ -2235,7 +2262,7 @@ const zhHans = {
       syncErrorTitle: "同步错误",
       apiKeyRejectedTitle: "Headscale 拒绝了配置中的 API Key",
       apiKeyRejectedBody:
-        "Agent 使用的是 Headplane 配置文件里的 headscale.api_key（不是你登录时用的那把），Headscale 返回 401 Unauthorized。请到 {link} 新建一把密钥，写入配置文件后重启 Headplane。",
+        "Agent 使用的是 HeadplaneCN 配置文件里的 headscale.api_key（不是你登录时用的那把），Headscale 返回 401 Unauthorized。请到 {link} 新建一把密钥，写入配置文件后重启 HeadplaneCN。",
       apiKeysLink: "设置 → API 密钥",
       syncing: "同步中…",
       syncNow: "立即同步",
@@ -2243,9 +2270,9 @@ const zhHans = {
       actionsBody: "同步 Agent、批准待处理的注册，或查看配置步骤。",
       syncBody: "立即从 Headscale 获取最新的节点信息。",
       approveTitle: "注册批准",
-      approveBody: "Headplane 会尝试自动批准注册。如果 Agent 仍在等待，请打开{link}自行批准。",
+      approveBody: "HeadplaneCN 会尝试自动批准注册。如果 Agent 仍在等待，请打开{link}自行批准。",
       setupTitle: "Agent 配置",
-      setupRowBody: "如何安装 Agent 并将其连接到 Headplane。",
+      setupRowBody: "如何安装 Agent 并将其连接到 HeadplaneCN。",
       setupBody:
         "Agent 运行在 Headscale 服务器上，并使用 headscale.api_key 登录。配置与排查问题请参阅{link}。",
       lastSyncedAt: "上次同步于：",
@@ -2298,7 +2325,7 @@ const zhHans = {
       runtimeExecutable: "可执行文件路径",
       runtimeWorkDir: "工作目录",
       runtimeCacheTtl: "缓存有效期",
-      runtimeCacheTtlBody: "Headplane 的节点详情来自这份缓存，代理每 {interval} 重新填充一次。",
+      runtimeCacheTtlBody: "HeadplaneCN 的节点详情来自这份缓存，代理每 {interval} 重新填充一次。",
       runtimeTtlUnset: "代理将使用内置的同步间隔。",
       runtimeNetns: "Tailscale netns",
       runtimeOn: "已开启",
@@ -2443,7 +2470,7 @@ const zhHans = {
         "你没有编辑认证限制设置所需的权限。请联系管理员申请权限，或让管理员修改这些设置。",
       lockedTitle: "配置已锁定",
       lockedBody:
-        "Headscale 配置文件无法通过 Web 界面编辑。请确认已正确授予 Headplane 对该文件的写入权限。",
+        "Headscale 配置文件无法通过 Web 界面编辑。请确认已正确授予 HeadplaneCN 对该文件的写入权限。",
       title: "认证限制",
       permittedDomains: "允许的域名",
       permittedGroups: "允许的组",
@@ -2489,9 +2516,9 @@ const zhHans = {
     audit: {
       breadcrumb: "操作日志",
       title: "操作日志",
-      body: "这里记录通过 Headplane 进行的每一项变更，最新的在最前。",
+      body: "这里记录通过 HeadplaneCN 进行的每一项变更，最新的在最前。",
       listTitle: "已记录的操作",
-      listBody: "最新的在最前。打开任一操作可查看 Headplane 记录的完整信息。",
+      listBody: "最新的在最前。打开任一操作可查看 HeadplaneCN 记录的完整信息。",
       retentionTitle: "保留策略",
       retentionBody: "只保留最新的 {count} 条操作记录，更早的记录会被自动删除。",
       showingCount: "显示 {total} 条中的 {shown} 条",
@@ -2535,7 +2562,7 @@ const zhHans = {
       summaryActor: "操作者：{actor}",
       summaryAction: "操作：{action}",
       entryTitle: "操作详情",
-      entryDescription: "Headplane 为此操作记录的全部信息。",
+      entryDescription: "HeadplaneCN 为此操作记录的全部信息。",
       detailAction: "操作",
       detailResult: "结果",
       detailTime: "时间",
@@ -2561,7 +2588,7 @@ const zhHans = {
       summaryFiles: "文件：{files}",
       breadcrumb: "配置快照",
       title: "配置快照",
-      body: "Headplane 在修改 Headscale 配置文件（以及使用文件模式时的策略文件）之前会先复制一份。快照可以下载，也可以随时恢复。",
+      body: "HeadplaneCN 在修改 Headscale 配置文件（以及使用文件模式时的策略文件）之前会先复制一份。快照可以下载，也可以随时恢复。",
       listTitle: "已保存的快照",
       listBody: "可下载副本，或恢复某份快照以覆盖当前配置。",
       summaryStored: "{count} 份快照 · {size}",
@@ -2587,22 +2614,22 @@ const zhHans = {
         notFound: "该快照或文件已不存在。",
         unexpectedPath: "该快照不属于当前配置的文件，因此没有执行恢复。",
         noTargets: "未配置 Headscale 配置文件，没有可快照的内容。",
-        unavailable: "无法使用快照目录，请检查 Headplane 是否有权写入其数据目录。",
+        unavailable: "无法使用快照目录，请检查 HeadplaneCN 是否有权写入其数据目录。",
         copyFailed: "无法读取任何配置文件。",
       },
       dataBackup: {
-        title: "下载 Headplane 数据",
-        body: "配置快照覆盖 Headscale 的配置文件与策略文件，并可在本页恢复；这里下载的则是 Headplane 自身：在 Headplane 继续运行时，为其数据库生成一份一致性副本。",
+        title: "下载 HeadplaneCN 数据",
+        body: "配置快照覆盖 Headscale 的配置文件与策略文件，并可在本页恢复；这里下载的则是 HeadplaneCN 自身：在 HeadplaneCN 继续运行时，为其数据库生成一份一致性副本。",
         contentsTitle: "副本包含的内容",
         contents:
-          "Headplane 自己的数据库：本地用户及其会话、审计日志，以及 Headplane Agent 上报的主机信息。",
+          "HeadplaneCN 自己的数据库：本地用户及其会话、审计日志，以及 HeadplaneCN Agent 上报的主机信息。",
         excludesTitle: "副本不包含的内容",
         excludes:
-          "密钥仍保留在 config.yaml 中：cookie_secret 和 headscale.api_key 从不会写入数据库。Headplane 存放在数据库之外的文件，例如快照元数据、通知设置与投递历史、节点历史，同样不在副本中。",
+          "密钥仍保留在 config.yaml 中：cookie_secret 和 headscale.api_key 从不会写入数据库。HeadplaneCN 存放在数据库之外的文件，例如快照元数据、通知设置与投递历史、节点历史，同样不在副本中。",
         noRestore: "没有一键恢复功能。请妥善保存该文件，需要时手动放回原位。",
         download: "下载数据备份",
         errors: {
-          copyFailed: "无法复制 Headplane 的数据库，请查看服务器日志后重试。",
+          copyFailed: "无法复制 HeadplaneCN 的数据库，请查看服务器日志后重试。",
           unavailable: "无法把备份写入临时文件，请检查服务器的临时目录是否有可用空间。",
         },
       },
@@ -2610,7 +2637,7 @@ const zhHans = {
     notifications: {
       breadcrumb: "告警通知",
       title: "告警通知",
-      body: "Headplane 会按设定的间隔检查 Headscale，并在状态变化时发送 Webhook：Headscale 无法访问、节点离线、API 密钥即将过期，或配置检查开始失败。",
+      body: "HeadplaneCN 会按设定的间隔检查 Headscale，并在状态变化时发送 Webhook：Headscale 无法访问、节点离线、API 密钥即将过期，或配置检查开始失败。",
       statusEnabled: "已启用",
       statusDisabled: "已禁用",
       statusNever: "还没有投递记录",
@@ -2622,7 +2649,7 @@ const zhHans = {
       channelBody: "通知以 JSON POST 请求发送到单个端点。",
       channelSummaryEmpty: "尚未配置 Webhook",
       enabledLabel: "启用通知",
-      enabledDescription: "禁用时 Headplane 仍会检测变化，但不发送任何内容。",
+      enabledDescription: "禁用时 HeadplaneCN 仍会检测变化，但不发送任何内容。",
       enabledOn: "开启",
       enabledOff: "关闭",
       webhookUrlLabel: "Webhook 地址",
@@ -2643,7 +2670,7 @@ const zhHans = {
       eventsLabel: "事件",
       eventsDescription: "未勾选的事件仍会被检测，但不会发送。",
       intervalLabel: "检查间隔（秒）",
-      intervalDescription: "Headplane 多久检查一次变化。",
+      intervalDescription: "HeadplaneCN 多久检查一次变化。",
       cooldownLabel: "冷却时间（秒）",
       cooldownDescription: "同一状况再次上报前的最短间隔。",
       expiryLabel: "API 密钥预警窗口（天）",
@@ -2672,7 +2699,7 @@ const zhHans = {
         invalidExpiry: "API 密钥预警窗口超出允许范围。",
         noEvents: "请至少选择一个要上报的事件。",
         notConfigured: "启用或测试通知前，请先填写 Webhook 地址。",
-        writeFailed: "无法将设置写入 Headplane 的数据目录。",
+        writeFailed: "无法将设置写入 HeadplaneCN 的数据目录。",
       },
     },
   },
@@ -2697,15 +2724,15 @@ const zhHans = {
       usernameLabel: "用户名",
       connect: "连接",
     },
-    docs: "Headplane SSH 文档",
+    docs: "HeadplaneCN SSH 文档",
     errors: {
       wasmMissing: {
         title: "浏览器 SSH 不可用",
-        message: "此版本的 Headplane 未包含浏览器 SSH 支持。",
+        message: "此版本的 HeadplaneCN 未包含浏览器 SSH 支持。",
       },
       agentRequired: {
-        title: "浏览器 SSH 需要 Headplane Agent",
-        message: "只有在启用 Headplane Agent 集成后才能使用浏览器 SSH。",
+        title: "浏览器 SSH 需要 HeadplaneCN Agent",
+        message: "只有在启用 HeadplaneCN Agent 集成后才能使用浏览器 SSH。",
       },
       oidcRequired: {
         title: "浏览器 SSH 需要 OIDC 认证",
@@ -2730,7 +2757,7 @@ const zhHans = {
     noAccess: "需要访问管理面板？请联系管理员申请权限。",
     link: {
       title: "关联你的 Headscale 账号",
-      body: "Headplane 无法自动将你的 SSO 身份匹配到已有的 Headscale 用户。请在下方列表中选择你的用户以关联账号并继续。",
+      body: "HeadplaneCN 无法自动将你的 SSO 身份匹配到已有的 Headscale 用户。请在下方列表中选择你的用户以关联账号并继续。",
       selectPlaceholder: "选择用户…",
       button: "关联并继续",
       footer:
@@ -2747,14 +2774,14 @@ const zhHans = {
     unavailableBody: "由于无法连接 Headscale 服务器，此页面无法加载。连接恢复后即可正常访问。",
   },
   login: {
-    welcome: "欢迎使用 Headplane",
-    apiKeyDescription: "请输入 API 密钥以登录 Headplane。你可以在终端中运行 {command} 生成密钥。",
+    welcome: "欢迎使用 HeadplaneCN",
+    apiKeyDescription: "请输入 API 密钥以登录 HeadplaneCN。你可以在终端中运行 {command} 生成密钥。",
     apiKeyLabel: "API 密钥",
     signIn: "登录",
     sso: "单点登录",
     cookieWarning: {
       title: "配置问题",
-      body: "Headplane 配置为使用安全 Cookie，但当前站点通过不安全的连接访问，登录将无法正常工作。{link}",
+      body: "HeadplaneCN 配置为使用安全 Cookie，但当前站点通过不安全的连接访问，登录将无法正常工作。{link}",
     },
     logout: {
       title: "你已退出登录",
@@ -2771,11 +2798,11 @@ const zhHans = {
     },
     oidcNotice: {
       title: "配置问题",
-      noQuery: "SSO 提供方未能携带必要参数正确跳转回 Headplane。请确认 SSO 提供方配置正确。",
+      noQuery: "SSO 提供方未能携带必要参数正确跳转回 HeadplaneCN。请确认 SSO 提供方配置正确。",
       noSession:
-        "由于会话数据缺失或无效，无法完成 SSO 登录。请确认 Headplane 的 Cookie 配置正确，且浏览器允许使用 Cookie。",
+        "由于会话数据缺失或无效，无法完成 SSO 登录。请确认 HeadplaneCN 的 Cookie 配置正确，且浏览器允许使用 Cookie。",
       noSub: "SSO 提供方未返回有效的用户标识。请确认 SSO 提供方已正确配置以提供 {claim} 声明。",
-      authFailed: "SSO 提供方认证失败，请稍后重试。Headplane 日志中可能有更多信息。",
+      authFailed: "SSO 提供方认证失败，请稍后重试。HeadplaneCN 日志中可能有更多信息。",
       unknown: "OIDC 认证过程中发生未知错误，请稍后重试。",
     },
     oidcConfig: {
@@ -2787,12 +2814,12 @@ const zhHans = {
       invalidApiKey: "用于 OIDC 认证的 API 密钥无效。请确认 {config} 是有效的 API 密钥。",
       missingEndpoints: "OIDC 提供方缺少必需的端点。请确认发现 URL 正确，或在配置中手动指定端点。",
       discoveryFailed: "无法连接到 OIDC 提供方以完成发现流程。SSO 将在下次登录时重试。",
-      unknown: "发生未知的 OIDC 配置错误。请查看 Headplane 日志以获取更多信息。",
+      unknown: "发生未知的 OIDC 配置错误。请查看 HeadplaneCN 日志以获取更多信息。",
     },
   },
   errors: {
     headscaleConfigNotWritable:
-      "Headplane 无法写入 Headscale 配置文件。请以可写方式挂载该文件并重启 Headplane。",
+      "HeadplaneCN 无法写入 Headscale 配置文件。请以可写方式挂载该文件并重启 HeadplaneCN。",
     policyNotWritable:
       "Headscale 当前以文件模式（policy.mode: file）读取 ACL 策略，因此无法通过 API 保存。请让管理员把 Headscale 改为 database 策略模式，或直接编辑策略文件。",
     generic: {
@@ -2809,16 +2836,16 @@ const zhHans = {
         "与 Headscale API 通信时发生错误。服务器返回状态码 {status}，表明服务端出现问题。请检查 Headscale 服务器状态后重试。",
       invalidTitle: "Headscale API 返回了无效响应",
       invalidBody: "Headscale API 返回了意外的响应。",
-      invalidAuth: "该状态码表明认证失败。请检查你的 API 密钥与 Headplane 配置。",
+      invalidAuth: "该状态码表明认证失败。请检查你的 API 密钥与 HeadplaneCN 配置。",
       invalidOther: "你可能正在使用不受支持的 Headscale 版本，或者这是程序缺陷。",
       requestUrl: "请求地址：",
       statusCodeLabel: "状态码：",
       connectionTitle: "无法连接 Headscale API",
       connectionBody:
-        "Headplane 无法访问 Headscale API。请检查网络与配置，确保 Headplane 可以正常连接。",
+        "HeadplaneCN 无法访问 Headscale API。请检查网络与配置，确保 HeadplaneCN 可以正常连接。",
       unexpectedTitle: "意外错误",
       unexpectedBody: "发生了意外错误，很可能是程序缺陷。请携带下方信息在 {link} 仓库提交 issue。",
-      unexpectedLink: "Headplane GitHub",
+      unexpectedLink: "HeadplaneCN GitHub",
       details: "错误详情",
     },
     permission: {
@@ -2835,7 +2862,7 @@ const zhHans = {
     },
     staleShell: {
       title: "页面版本已过期",
-      body: "此页面打开期间 Headplane 已更新，浏览器仍在使用旧版页面，因此无法加载它所需的文件。重新加载即可获取当前版本。",
+      body: "此页面打开期间 HeadplaneCN 已更新，浏览器仍在使用旧版页面，因此无法加载它所需的文件。重新加载即可获取当前版本。",
       hint: "如果反复出现此提示，请使用硬刷新（Windows/Linux 为 Ctrl+Shift+R，macOS 为 Cmd+Shift+R）绕过反向代理缓存。",
       reload: "重新加载",
     },

@@ -20,12 +20,19 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { data } from "react-router";
+import { data, unstable_useRoute as useRoute } from "react-router";
 
 import Button from "~/components/button";
 import Code from "~/components/code";
 import { ErrorBanner } from "~/components/error-banner";
 import Link from "~/components/link";
+import {
+  OverviewCardHideButton,
+  OverviewCardManager,
+  useOverviewCardVisible,
+  useOverviewCardsScope,
+  useOverviewCardsVisible,
+} from "~/components/overview-card-manager";
 import {
   SettingsCollapsible,
   SettingsPage,
@@ -43,6 +50,7 @@ import {
   appConfigContext,
   auditContext,
   authContext,
+  derpMirrorContext,
   derpSyncContext,
   headscaleConfigContext,
   headscaleContext,
@@ -58,7 +66,7 @@ import type { HeadscaleClient } from "~/server/headscale/api";
 import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
 import { formatServerVersion } from "~/server/headscale/api/server-version";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
-import { loadDerpRegionInventory } from "~/server/headscale/derp-region-sources";
+import { loadDerpNodeInventory } from "~/server/headscale/derp-region-sources";
 import { computeFleetTrend, type FleetTrend } from "~/server/history/timeline";
 import {
   loadHostIpv6Addresses,
@@ -72,27 +80,26 @@ import {
   loadSharedRelayResolution,
   type RelayAddressFamily,
   type RelayAddressVerdict,
-  type RelayResolution,
 } from "~/server/relay-dns";
 import { Capabilities } from "~/server/web/roles";
 import type { Key, Machine, PreAuthKey, User } from "~/types";
 import cn from "~/utils/cn";
 import { copyToClipboard } from "~/utils/copy";
+import { alertingOverviewCards, type OverviewCardId } from "~/utils/overview-cards";
 import toast from "~/utils/toast";
 
 import type { Route } from "./+types/overview";
 import {
   type CheckStatus,
   type CheckTally,
-  capDerpNodeLines,
-  capDerpRegionLines,
+  capDerpSourceNodes,
   countNodeStatus,
   declaredDerpAddresses,
   type DeclaredDerpAddress,
-  DERP_NODE_RESOLVE_LIMIT,
-  type DerpNodeSummary,
-  derpRegionSummaries,
-  type DerpRegionSummary,
+  derpNodeSources,
+  type DerpNodeSourceGap,
+  type DerpNodeSourceKind,
+  type DerpNodeSourceMap,
   formatByteSize,
   hasIpv6StunWarning,
   readExtraRecordsPath,
@@ -222,6 +229,22 @@ const SYNC_STATUS_KEYS: Record<DerpSyncOutcome, TranslationKey> = {
   failed: "overview.derp.syncFailedAt",
 };
 
+/** Where a node of the DERP nodes card comes from, as its row is titled. */
+const NODE_SOURCE_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
+  embedded: "overview.derp.nodesSourceEmbedded",
+  local: "overview.derp.nodesSourceLocal",
+  mirror: "overview.derp.nodesSourceMirror",
+  official: "overview.derp.nodesSourceOfficial",
+};
+
+/** What one source of the DERP nodes card is for, under its title. */
+const NODE_SOURCE_BODY_KEYS: Record<DerpNodeSourceKind, TranslationKey> = {
+  embedded: "overview.derp.nodesSourceEmbeddedBody",
+  local: "overview.derp.nodesSourceLocalBody",
+  mirror: "overview.derp.nodesSourceMirrorBody",
+  official: "overview.derp.nodesSourceOfficialBody",
+};
+
 type Attempt<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
 async function attempt<T>(run: () => Promise<T>): Promise<Attempt<T>> {
@@ -263,6 +286,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const appConfig = context.get(appConfigContext);
   const audit = context.get(auditContext);
   const auth = context.get(authContext);
+  const derpMirror = context.get(derpMirrorContext);
   const derpSync = context.get(derpSyncContext);
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
@@ -450,18 +474,52 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     return settings.enabled ? await loadHostEcho(settings) : { reason: "disabled", attempted: [] };
   })();
 
-  const [relayResolution, regionNames, mapInventory, hostAddresses, hostEcho] = await Promise.all([
-    loadSharedRelayResolution(relayEndpoint?.host),
-    readDerpRegionNames(dataPath),
-    loadDerpRegionInventory({
+  // Headplane's own DERP state, read once and in the same batch: the region
+  // filter's target path is what tells its file apart from a plain local map
+  // file, and the address sync's newest run is one line on the relay card. Only
+  // a run that actually changed an address reaches it; a check that found
+  // nothing to do stays on the settings page, where the schedule is configured.
+  const mirrorSettingsLookup = (async () => {
+    await derpMirror.ready();
+    return derpMirror.settings();
+  })();
+  const syncRunLookup = (async () => {
+    await derpSync.ready();
+    return derpSync.last();
+  })();
+
+  // The configured maps, held apart by source. This is the same read the region
+  // names come from — one pass per local file through the cached reader, one
+  // fetch per URL through the shared remote cache — so the node card costs the
+  // page nothing beyond the documents it already reads.
+  const nodeInventoryLookup = (async () => {
+    const mirror = await mirrorSettingsLookup;
+    return loadDerpNodeInventory({
       paths: derp.paths,
       urls: derp.urls,
       autoUpdateEnabled: derp.autoUpdateEnabled,
       updateFrequency: derp.updateFrequency,
       baseDir: configPath ? dirname(configPath) : undefined,
-    }),
+      mirrorPath: mirror.targetPath,
+    });
+  })();
+
+  const [
+    relayResolution,
+    regionNames,
+    nodeInventory,
+    hostAddresses,
+    hostEcho,
+    mirrorSettings,
+    syncRun,
+  ] = await Promise.all([
+    loadSharedRelayResolution(relayEndpoint?.host),
+    readDerpRegionNames(dataPath),
+    nodeInventoryLookup,
     hostAddressLookup,
     hostEchoLookup,
+    mirrorSettingsLookup,
+    syncRunLookup,
   ]);
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
   // The echo answer is only worth reporting when it is a real one: a disabled
@@ -496,33 +554,25 @@ export async function loader({ request, context }: Route.LoaderArgs) {
               }),
         });
 
-  // Every hostname the configured maps list, resolved through the shared relay
-  // cache the address block above already uses: one batch, at most
-  // DERP_NODE_RESOLVE_LIMIT distinct names, so a map with dozens of nodes cannot
-  // turn one render into dozens of DNS queries. A name that fails, or one the
-  // limit left out, simply has no resolved address — the same "not resolved"
-  // line an empty family under the address block reads as.
-  const nodeHostnames = [
-    ...new Set(
-      mapInventory.regions
-        .flatMap((region) => region.nodes.map((node) => node.hostname.trim().toLowerCase()))
-        .filter((hostname) => hostname.length > 0),
-    ),
-  ];
-  const resolvedHostnames = nodeHostnames.slice(0, DERP_NODE_RESOLVE_LIMIT);
-  const nodeResolutions: Record<string, RelayResolution | undefined> = Object.fromEntries(
-    await Promise.all(
-      resolvedHostnames.map(
-        async (hostname) => [hostname, await loadSharedRelayResolution(hostname)] as const,
-      ),
-    ),
-  );
-
-  // The embedded-DERP address sync's newest run. Only a run that actually
-  // changed an address reaches the relay card: a check that found nothing to do
-  // stays on the settings page, where the schedule is configured.
-  await derpSync.ready();
-  const syncRun = derpSync.last();
+  // Every node the configuration describes, grouped by the source that
+  // describes it: the embedded relay, the `derp.paths` files, the file the
+  // official-region filter maintains, and the regions a configured `derp.urls`
+  // map adds that this machine does not serve itself. The counts are the real
+  // ones — a region an earlier source described is not counted twice — and no
+  // name is resolved over DNS here: the card prints the addresses the maps
+  // declare, so a map with dozens of nodes cannot turn one render into dozens of
+  // lookups.
+  const nodeSources = derpNodeSources({
+    embedded: {
+      enabled: derp.server.enabled,
+      regionId: derp.server.regionId,
+      code: derp.server.regionCode,
+      name: derp.server.regionName,
+      ...(relayView.host?.endpoint === undefined ? {} : { endpoint: relayView.host.endpoint }),
+    },
+    groups: nodeInventory.groups,
+    mirrorEnabled: mirrorSettings.enabled,
+  });
 
   return {
     versions: {
@@ -546,19 +596,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       region: configuredDerpRegion(derp.server),
       regions: {
         manual: regionNames,
-        local: mapInventory.local,
-        remote: mapInventory.remote,
+        local: nodeInventory.local,
+        remote: nodeInventory.remote,
       },
-      // What the configured maps actually describe, so an operator can read a
-      // local map file without opening the settings page. Plain values only:
-      // the card formats them and never imports a module that reads a file.
-      maps: {
-        regions: mapInventory.regions,
-        files: mapInventory.files,
-        remoteUnavailable: mapInventory.remoteUnavailable,
-        resolutions: nodeResolutions,
-        unresolved: nodeHostnames.length - resolvedHostnames.length,
-      },
+      // What the configured maps, the embedded relay and the official map add up
+      // to, one entry per source, derived here so the card only formats values.
+      // Plain values only: the card never imports a module that reads a file.
+      nodes: nodeSources,
       relaySource: classifyDerpRelaySource({
         serverEnabled: derp.server.enabled,
         urls: derp.urls,
@@ -629,6 +673,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr, locale } = useI18n();
   const { versions, derp, service, counts, health, history } = loaderData;
+  const layout = useRoute("layout/app");
   const trendSummary = history.trend ? summarizeFleetTrend(history.trend) : undefined;
 
   const reason = {
@@ -661,6 +706,32 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const healthTally = health.diagnostics;
   const healthTone: SettingsStatusTone =
     healthTally.fail > 0 ? "error" : healthTally.warning > 0 ? "warn" : "ok";
+
+  // The cards that must stay visible whatever the stored choice says: one that
+  // carries a warning, an alert or a failure. The helper drops them from the
+  // hidden set, so nothing else has to remember to show them again.
+  const alertingCards = alertingOverviewCards({
+    "versions-headplane": versions.headplane.updateAvailable,
+    "versions-headscale": versions.headscale.updateAvailable,
+    "versions-agent": versions.agent.error !== undefined,
+    "derp-relay":
+      derp.ipv6StunWarning ||
+      derp.sync?.outcome === "failed" ||
+      derp.relay.ipv6?.contradiction !== undefined ||
+      derp.relay.ipv6?.mismatch === true,
+    "derp-nodes": derp.nodes.sources.some((source) => source.gap === "unreadable"),
+    "service-server": !service.reachable,
+    "service-metrics":
+      service.metrics.state === "unreachable" || service.metrics.state === "invalid",
+    "counts-tailnet": counts.nodes === undefined,
+    "counts-headplane": counts.auditEntries === undefined || counts.snapshots === undefined,
+    "health-summary": healthTally.fail > 0 || healthTally.warning > 0,
+  });
+
+  // The card visibility preference belongs to whoever is looking, so the page
+  // has to say who that is: the app layout reports the identity the header
+  // shows. Binding it here reads the stored choice once, after mount.
+  useOverviewCardsScope(layout?.loaderData?.user.subject ?? "", alertingCards);
 
   const enabled = t("overview.status.enabled");
   const disabled = t("overview.status.disabled");
@@ -776,39 +847,67 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ? t("overview.derp.ipv6NoneBody")
       : relayReason(selection.state ?? "unavailable");
 
-  // The configured maps as the box lists them; the labels go through the same
-  // chain the region row above uses, so both cards word a region identically.
-  const mapRegions = derpRegionSummaries({
-    regions: derp.maps.regions,
-    manual: derp.regions.manual,
-    embedded: derp.region,
-    resolutions: derp.maps.resolutions,
-    unknown: t("machines.detail.derp.unknown"),
-  });
-  const mapNodeCount = mapRegions.reduce((total, region) => total + region.nodeCount, 0);
-  // What the collapsed box lists: the first few regions by name, then a count.
-  const mapRegionLines = capDerpRegionLines(mapRegions);
-  const hasMapSources = derp.pathCount > 0 || derp.urlCount > 0;
+  // The node inventory the loader derived, as one row per source. The card only
+  // formats these values: the counts came from the configuration this render
+  // read, and no row claims a node the configuration does not describe.
+  const nodeSources = derp.nodes.sources;
 
-  /** Where a region's name came from: the operator, or the first map that has it. */
-  const mapSourceLabel = (region: DerpRegionSummary) =>
-    region.nameSource === "manual"
-      ? t("overview.derp.mapsSourceManual")
-      : t(
-          region.map.kind === "local"
-            ? "overview.derp.mapsSourceLocal"
-            : "overview.derp.mapsSourceRemote",
-        );
+  /** The name of one source, as the card's rows and the empty copy read it. */
+  const nodeSourceLabel = (kind: DerpNodeSourceKind) => t(NODE_SOURCE_KEYS[kind]);
 
-  /** Why a configured map file contributed nothing, in one short sentence. */
-  const mapFileNotice = (state: "ok" | "unreadable" | "invalid" | "empty", path: string) => {
-    switch (state) {
+  /**
+   * Why a source with no node reads as it does. Every one is a reason, never an
+   * error: a relay that is switched off, a source nothing is configured for,
+   * files nobody could read, a map that lists no node, a filtered file that is
+   * not one of the maps Headscale loads, and an upstream this machine already
+   * covers completely.
+   */
+  const nodeSourceGap = (kind: DerpNodeSourceKind, gap: DerpNodeSourceGap) => {
+    if (kind === "embedded") {
+      return t("overview.derp.nodesEmbeddedOff");
+    }
+
+    if (kind === "mirror") {
+      if (gap === "unlisted") {
+        return t("overview.derp.nodesMirrorUnlisted");
+      }
+      if (gap === "unconfigured") {
+        return t("overview.derp.nodesMirrorOff");
+      }
+    }
+
+    if (kind === "official" && gap === "covered") {
+      return t("overview.derp.nodesOfficialCovered");
+    }
+
+    switch (gap) {
+      case "unconfigured":
+        return kind === "official"
+          ? t("overview.derp.nodesOfficialNoUrls")
+          : t("overview.derp.nodesLocalNone");
       case "unreadable":
-        return t("overview.derp.mapsFileUnreadable", { path });
-      case "invalid":
-        return t("overview.derp.mapsFileInvalid", { path });
+        return t("overview.derp.nodesUnreadable");
       default:
-        return t("overview.derp.mapsFileEmpty", { path });
+        return t("overview.derp.nodesEmpty");
+    }
+  };
+
+  /** Why one map of a source contributed nothing, in one short sentence. */
+  const nodeMapNotice = (kind: DerpNodeSourceKind, map: DerpNodeSourceMap) => {
+    // A URL that could not be read is a fetch, not a mount: the two read as
+    // different sentences because the fix is different.
+    const remote = kind === "official";
+    switch (map.state) {
+      case "unreadable":
+        return remote
+          ? t("overview.derp.nodesUrlUnreadable", { url: map.source })
+          : t("overview.derp.nodesFileUnreadable", { path: map.source });
+      case "invalid":
+        return t("overview.derp.nodesFileInvalid", { path: map.source });
+      default:
+        return remote
+          ? t("overview.derp.nodesUrlEmpty", { url: map.source })
+          : t("overview.derp.nodesFileEmpty", { path: map.source });
     }
   };
 
@@ -818,9 +917,17 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       description={t("overview.intro")}
       title={t("overview.title")}
     >
+      {/* Personal, presentation-only: which cards this browser shows. */}
+      <div className="flex justify-end">
+        <OverviewCardManager />
+      </div>
       <div className="flex flex-col gap-6">
-        <Section title={t("overview.sections.versions")}>
+        <Section
+          cardIds={["versions-headplane", "versions-headscale", "versions-agent"]}
+          title={t("overview.sections.versions")}
+        >
           <Card
+            cardId="versions-headplane"
             description={t("overview.versions.headplaneBody")}
             icon={LayoutDashboard}
             status={releaseStatus(versions.headplane.latest, versions.headplane.updateAvailable)}
@@ -842,6 +949,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="versions-headscale"
             description={t("overview.versions.headscaleBody")}
             icon={Server}
             status={releaseStatus(versions.headscale.latest, versions.headscale.updateAvailable)}
@@ -863,6 +971,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="versions-agent"
             description={t("overview.versions.agentBody")}
             icon={Bot}
             status={{
@@ -903,8 +1012,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
         </Section>
 
-        <Section title={t("overview.sections.derp")}>
+        <Section
+          cardIds={["derp-region", "derp-relay", "derp-nodes"]}
+          title={t("overview.sections.derp")}
+        >
           <Card
+            cardId="derp-region"
             description={t("overview.derp.regionBody")}
             icon={Network}
             status={{
@@ -953,6 +1066,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="derp-relay"
             description={t("overview.derp.publicBody")}
             icon={Radar}
             status={
@@ -1088,117 +1202,122 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
-            description={t("overview.derp.mapsBody")}
+            cardId="derp-nodes"
+            description={t("overview.derp.nodesBody")}
             icon={MapPinned}
             status={{
               tone: "neutral",
-              label:
-                mapRegions.length > 0
-                  ? t("overview.derp.mapsSummary", {
-                      regions: mapRegions.length,
-                      nodes: mapNodeCount,
-                    })
-                  : t("overview.derp.none"),
+              label: t("overview.derp.nodesSummary", {
+                served: derp.nodes.served,
+                total: derp.nodes.total,
+              }),
             }}
-            title={t("overview.derp.mapsTitle")}
+            title={t("overview.derp.nodesTitle")}
           >
-            {mapRegions.length === 0 ? (
-              <p className="text-sm text-mist-600 dark:text-mist-400">
-                {hasMapSources ? t("overview.derp.mapsEmpty") : t("overview.derp.mapsNoMaps")}
-              </p>
-            ) : (
-              <SettingsCollapsible
-                description={t("overview.derp.mapsDetailBody")}
-                summary={
-                  // The collapsed row names its regions instead of only counting
-                  // them, so a reader does not have to expand the box to learn
-                  // what is inside. It caps the list, because the box keeps the
-                  // geometry of its siblings and must not grow without bound.
-                  <span className="flex flex-col gap-0.5">
-                    {mapRegionLines.lines.map((region) => (
-                      <span className="flex flex-wrap items-center gap-1.5" key={region.regionId}>
-                        <span className="truncate" title={region.label}>
-                          {region.label}
-                        </span>
-                        <span className="whitespace-nowrap">
-                          {t("overview.derp.mapsRegionNodes", { count: region.nodeCount })}
-                        </span>
-                        <SettingsStatus tone="neutral">{mapSourceLabel(region)}</SettingsStatus>
-                      </span>
+            {/* One block per source, so the counts read as a list: the embedded
+                relay first, then the two files this machine loads, then the
+                official map that only the clients reach. Each block opens onto
+                the node names, and nothing here resolves a name over DNS. */}
+            {nodeSources.map((source) => {
+              const nodes = capDerpSourceNodes(source.nodes);
+
+              return (
+                <SettingsCollapsible
+                  key={source.kind}
+                  description={t(NODE_SOURCE_BODY_KEYS[source.kind])}
+                  status={{
+                    tone: source.served ? "neutral" : "warn",
+                    label: t("overview.derp.nodesCount", { count: source.nodes.length }),
+                  }}
+                  summary={
+                    source.gap === undefined ? undefined : nodeSourceGap(source.kind, source.gap)
+                  }
+                  title={
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {nodeSourceLabel(source.kind)}
+                      {source.served ? undefined : (
+                        <SettingsStatus tone="warn">
+                          {t("overview.derp.nodesNotServed")}
+                        </SettingsStatus>
+                      )}
+                    </span>
+                  }
+                >
+                  {source.nodes.length === 0 ? (
+                    <p className="text-sm text-mist-600 dark:text-mist-400">
+                      {source.gap === undefined
+                        ? t("overview.derp.nodesEmpty")
+                        : nodeSourceGap(source.kind, source.gap)}
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col">
+                      {nodes.lines.map((node) => (
+                        <li
+                          key={`${node.name}:${node.address ?? ""}`}
+                          className="flex flex-wrap items-center justify-between gap-2 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60"
+                        >
+                          <span
+                            className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
+                            title={node.name}
+                          >
+                            {node.name}
+                          </span>
+                          {node.address === undefined ? undefined : (
+                            <CopyValue
+                              className="w-auto pointer-coarse:[&>svg]:opacity-100"
+                              copiedMessage={t("common.copied")}
+                              value={node.address}
+                            />
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {nodes.hidden > 0 ? (
+                    <p className="text-xs text-mist-500 dark:text-mist-400">
+                      {t("overview.derp.nodesMore", { count: nodes.hidden })}
+                    </p>
+                  ) : undefined}
+
+                  {/* The maps behind the source, and the reason a map nobody
+                      could read contributed nothing: one short line each, never
+                      an error. */}
+                  {source.maps
+                    .filter((map) => map.state !== "ok")
+                    .map((map) => (
+                      <p className="text-xs text-mist-500 dark:text-mist-400" key={map.source}>
+                        {nodeMapNotice(source.kind, map)}
+                      </p>
                     ))}
-                    {mapRegionLines.hidden > 0 ? (
-                      <span className="text-mist-500 dark:text-mist-400">
-                        {t("overview.derp.mapsMoreRegions", { count: mapRegionLines.hidden })}
-                      </span>
-                    ) : undefined}
-                  </span>
-                }
-                title={t("overview.derp.mapsDetailTitle")}
-              >
-                {/* Flat: each region and its nodes are inline, so one
-                    expansion shows the relays instead of two nested ones. */}
-                <ul className="flex flex-col gap-4">
-                  {mapRegions.map((region) => {
-                    const nodes = capDerpNodeLines(region.nodes);
+                </SettingsCollapsible>
+              );
+            })}
 
-                    return (
-                      <li className="flex flex-col gap-1" key={region.regionId}>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-sm font-medium text-mist-900 dark:text-mist-50">
-                            {region.label}
-                          </span>
-                          <span className="text-xs text-mist-500 dark:text-mist-400">
-                            {t("overview.derp.mapsRegionNodes", { count: region.nodeCount })}
-                          </span>
-                          <SettingsStatus tone="neutral">{mapSourceLabel(region)}</SettingsStatus>
-                        </div>
-                        {region.nodes.length === 0 ? (
-                          <p className="text-sm text-mist-600 dark:text-mist-400">
-                            {t("overview.derp.mapsRegionNoNodes")}
-                          </p>
-                        ) : (
-                          <ul className="flex flex-col">
-                            {nodes.lines.map((node) => (
-                              <DerpMapNode key={`${node.name}:${node.endpoint}`} node={node} />
-                            ))}
-                          </ul>
-                        )}
-                        {nodes.hidden > 0 ? (
-                          <p className="text-xs text-mist-500 dark:text-mist-400">
-                            {t("overview.derp.mapsMoreNodes", { count: nodes.hidden })}
-                          </p>
-                        ) : undefined}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </SettingsCollapsible>
-            )}
-
-            {derp.maps.files
-              .filter((file) => file.state !== "ok")
-              .map((file) => (
-                <p className="text-xs text-mist-500 dark:text-mist-400" key={file.path}>
-                  {mapFileNotice(file.state, file.path)}
-                </p>
-              ))}
-
-            {derp.maps.remoteUnavailable ? (
-              <p className="text-xs text-mist-500 dark:text-mist-400">
-                {t("overview.derp.mapsRemoteUnavailable")}
-              </p>
-            ) : undefined}
-
-            {derp.maps.unresolved > 0 ? (
-              <p className="text-xs text-mist-500 dark:text-mist-400">
-                {t("overview.derp.mapsResolveTruncated", { count: derp.maps.unresolved })}
-              </p>
-            ) : undefined}
+            {/* Where a node is actually defined: Headscale's embedded relay and
+                every file under `derp.paths` are edited in the DERP settings, so
+                this card links there instead of growing a form of its own. */}
+            <p className="text-xs text-mist-500 dark:text-mist-400">
+              {tr("overview.derp.nodesAdd", {
+                link: (
+                  <Link
+                    className="font-medium text-indigo-600 dark:text-indigo-400"
+                    to="/settings/headscale"
+                  >
+                    {t("overview.derp.nodesAddLink")}
+                  </Link>
+                ),
+              })}
+            </p>
           </Card>
         </Section>
 
-        <Section title={t("overview.sections.service")}>
+        <Section
+          cardIds={["service-server", "service-dns", "service-metrics"]}
+          title={t("overview.sections.service")}
+        >
           <Card
+            cardId="service-server"
             description={t("overview.service.serverBody")}
             icon={Cable}
             status={{
@@ -1228,6 +1347,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="service-dns"
             description={t("overview.service.dnsBody")}
             icon={Globe}
             status={{
@@ -1257,6 +1377,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="service-metrics"
             description={t("overview.service.metricsBody")}
             icon={Activity}
             status={{
@@ -1286,8 +1407,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
         </Section>
 
-        <Section title={t("overview.sections.counts")}>
+        <Section
+          cardIds={["counts-tailnet", "counts-headplane", "counts-history"]}
+          title={t("overview.sections.counts")}
+        >
           <Card
+            cardId="counts-tailnet"
             description={t("overview.counts.tailnetBody")}
             icon={Users}
             title={t("overview.counts.tailnetTitle")}
@@ -1325,6 +1450,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="counts-headplane"
             description={t("overview.counts.headplaneBody")}
             icon={Camera}
             title={t("overview.counts.headplaneTitle")}
@@ -1351,6 +1477,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
 
           <Card
+            cardId="counts-history"
             description={t("overview.history.body")}
             icon={TrendingUp}
             title={t("overview.history.title")}
@@ -1391,8 +1518,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </Card>
         </Section>
 
-        <Section title={t("overview.sections.health")}>
+        <Section cardIds={["health-summary"]} title={t("overview.sections.health")}>
           <Card
+            cardId="health-summary"
             description={t("overview.health.body")}
             icon={HeartPulse}
             status={{
@@ -1429,8 +1557,25 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   );
 }
 
-/** Groups related dashboard cards under one small heading. */
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * Groups related dashboard cards under one small heading. The group owns the
+ * heading's visibility too: hiding every card in it takes the heading with it
+ * rather than leaving an empty section behind.
+ */
+function Section({
+  title,
+  cardIds,
+  children,
+}: {
+  title: string;
+  cardIds: OverviewCardId[];
+  children: ReactNode;
+}) {
+  const visible = useOverviewCardsVisible(cardIds);
+  if (!visible) {
+    return undefined;
+  }
+
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-mist-500 dark:text-mist-400">{title}</h2>
@@ -1442,6 +1587,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 interface CardProps {
   icon: LucideIcon;
   title: string;
+  /** Which hideable card this is, so the manager and the header control agree. */
+  cardId: OverviewCardId;
   /** One line on what the card's facts describe. */
   description: string;
   status?: { tone: SettingsStatusTone; label: string };
@@ -1452,8 +1599,16 @@ interface CardProps {
  * A card in the dashboard grid. It keeps the settings card geometry (radius,
  * border, padding, icon tile) but has no hover state of its own: only the links
  * and controls that point at another page are navigation targets.
+ *
+ * A hidden card renders nothing at all, so the grid closes the gap instead of
+ * leaving a hole; hiding is presentation only and never touches the loader.
  */
-function Card({ icon: Icon, title, description, status, children }: CardProps) {
+function Card({ cardId, icon: Icon, title, description, status, children }: CardProps) {
+  const visible = useOverviewCardVisible(cardId);
+  if (!visible) {
+    return undefined;
+  }
+
   return (
     <section
       className={cn(
@@ -1480,6 +1635,7 @@ function Card({ icon: Icon, title, description, status, children }: CardProps) {
           </span>
           <span className="text-sm text-mist-600 dark:text-mist-400">{description}</span>
         </span>
+        <OverviewCardHideButton cardId={cardId} />
       </header>
 
       {children}
@@ -1656,130 +1812,6 @@ function RelayAddresses({ addresses }: { addresses: readonly string[] }) {
           value={address}
         />
       ))}
-    </span>
-  );
-}
-
-/**
- * One node of a configured DERP map, as flat definition rows: the name and the
- * endpoint a client dials, the STUN port the map puts on it, and the addresses
- * it declares next to the ones DNS returns for the same hostname. Nothing here
- * opens: the region it belongs to is already inline, so a node adds rows rather
- * than another collapsible.
- */
-function DerpMapNode({ node }: { node: DerpNodeSummary }) {
-  const { t } = useI18n();
-
-  return (
-    <li className="flex flex-col border-t border-mist-100 py-2 first:border-t-0 first:pt-0 last:pb-0 dark:border-mist-800/60">
-      <Facts>
-        <Fact
-          label={node.name}
-          source={
-            node.stunOnly
-              ? { tone: "neutral" as const, label: t("overview.derp.mapsStunOnly") }
-              : undefined
-          }
-        >
-          <span className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-            <CopyValue
-              className="w-auto pointer-coarse:[&>svg]:opacity-100"
-              copiedMessage={t("common.copied")}
-              value={node.endpoint}
-            />
-            {node.portDefaulted ? (
-              <span className="text-xs text-mist-500 dark:text-mist-400">
-                {t("overview.derp.mapsDefault")}
-              </span>
-            ) : undefined}
-          </span>
-        </Fact>
-        <Fact label={t("overview.derp.mapsStun")}>
-          {node.stunEndpoint === undefined ? (
-            <span className="text-xs text-mist-500 dark:text-mist-400">
-              {t("overview.derp.mapsStunNone")}
-            </span>
-          ) : (
-            <span className="flex flex-wrap items-center justify-end gap-1.5">
-              <CopyValue
-                className="w-auto pointer-coarse:[&>svg]:opacity-100"
-                copiedMessage={t("common.copied")}
-                value={node.stunEndpoint}
-              />
-              {node.stunPortDefaulted ? (
-                <span className="text-xs text-mist-500 dark:text-mist-400">
-                  {t("overview.derp.mapsDefault")}
-                </span>
-              ) : undefined}
-            </span>
-          )}
-        </Fact>
-        <Fact label={t("overview.derp.relayIpv4")}>
-          <DerpMapAddress
-            declared={node.ipv4}
-            display={node.resolved.ipv4}
-            reason={node.resolved.ipv4Reason}
-          />
-        </Fact>
-        <Fact label={t("overview.derp.relayIpv6")}>
-          <DerpMapAddress
-            declared={node.ipv6}
-            display={node.resolved.ipv6}
-            reason={node.resolved.ipv6Reason}
-          />
-        </Fact>
-      </Facts>
-    </li>
-  );
-}
-
-/**
- * One address family of a node: what the map declares, marked as such, then
- * every record the shared lookup returned. With neither, the resolver's own
- * reason stands where the addresses would be — never an empty row.
- */
-function DerpMapAddress({
-  declared,
-  display,
-  reason,
-}: {
-  declared?: string;
-  display?: string;
-  reason?: RelayReason;
-}) {
-  const { t } = useI18n();
-  const resolved = (display ?? "").split("\n").filter((address) => address.length > 0);
-  const missing = (
-    <span className="text-xs text-mist-500 dark:text-mist-400">
-      {t(RELAY_REASON_KEYS[reason ?? "unavailable"])}
-    </span>
-  );
-
-  if (declared === undefined && resolved.length === 0) {
-    return missing;
-  }
-
-  return (
-    <span className="flex flex-col gap-0.5 sm:items-end">
-      {declared === undefined ? undefined : (
-        <span className="flex flex-wrap items-center gap-1.5">
-          <CopyValue
-            className="w-auto pointer-coarse:[&>svg]:opacity-100"
-            copiedMessage={t("common.copied")}
-            value={declared}
-          />
-          <SettingsStatus tone="neutral">{t("overview.derp.mapsDeclared")}</SettingsStatus>
-        </span>
-      )}
-      {resolved.map((address) => (
-        <CopyValue
-          key={address}
-          className="w-auto pointer-coarse:[&>svg]:opacity-100"
-          copiedMessage={t("common.copied")}
-          value={address}
-        />
-      ))}
-      {resolved.length === 0 ? missing : undefined}
     </span>
   );
 }

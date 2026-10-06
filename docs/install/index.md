@@ -1,56 +1,57 @@
 ---
-title: Installation
-description: Get started with Headplane.
+title: 安装
+description: 开始使用 Headplane。
 outline: [2, 3]
 ---
 
-# Installation
+# 安装
 
-Headplane is designed to be deployed within several different environments to
-ensure that it can seamlessly integrate into your existing infrastructure. First
-set up your configuration file and then pick the installation method that best
-suits your needs.
+Headplane 可以部署在多种环境里，方便它无缝融入你现有的基础设施。请先准备好配置文件，再选择
+最适合你的安装方式。
 
-## Configuration
+## 配置
 
-Headplane requires a configuration file to operate. A
-[sample file](https://github.com/tale/headplane/blob/main/config.example.yaml)
-is available to use as a starting point. Some of the important fields include:
+Headplane 需要一份配置文件才能运行。可以使用
+[示例文件](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)作为起点。其中几个
+重要字段：
 
-| Field                      | Description                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **`headscale.url`**        | Point to your Headscale server (e.g., `http://headscale.example.com` or `http://headscale:8080` in Docker). |
-| **`server.cookie_secret`** | Used to encrypt cookies. You can generate a random string using a command like `openssl rand -base64 24`.   |
-| **`server.data_path`**     | Just a path to keep in mind, especially if you're using Docker.                                             |
+| 字段                       | 说明                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| **`headscale.url`**        | 指向你的 Headscale 服务器（例如 `http://headscale.example.com`，在 Docker 里是 `http://headscale:8080`）。 |
+| **`server.cookie_secret`** | 用于加密 cookie。可以用 `openssl rand -base64 24` 这类命令生成随机串。                            |
+| **`server.data_path`**     | 只是一个要记住的路径，尤其是使用 Docker 时。                                                      |
 
-The configuration file is rather complicated and has many more options. Refer to
-the [Configuration](../configuration/index.md) guide for a detailed explanation of all
-the available options, as well as guidance on securely setting up your values
-through secret path options and environment variables.
+配置文件的选项远不止这些，也复杂得多。关于所有可用选项的详细说明，以及如何通过密钥文件路径选项
+和环境变量安全地设置这些值，请参考[配置](../configuration/index.md)指南。
 
-## Deployment Methods
+## 部署方式
 
-Headplane can be deployed in several different ways, each with its own set of
-advantages and trade-offs. Choose the method that best fits your needs:
+Headplane 有多种部署方式，各有优缺点。请选择最适合你的那一种：
 
-### [Docker](./docker.md): Fast and easy deployment using Docker
+### [Docker](/install/docker)：用 Docker 快速、简单地部署
 
-- Recommended for most users due to its simplicity and ease of use.
-- Allows for advanced features like network management and remote web SSH.
-- Requires Docker and Docker Compose to be installed.
+- 因为简单易用，推荐大多数用户选择。
+- 支持网络管理、浏览器远程 SSH 等高级功能。
+- 需要安装 Docker 与 Docker Compose。
 
 ---
 
-### [Native Mode](./native-mode.md): Direct installation on a server
+### [原生模式](/install/native-mode)：直接安装在服务器上
 
-- Suitable for users who prefer not to use Docker.
-- Allows for advanced features like network management and remote web SSH.
-- Requires manual setup of dependencies and environment.
+- 适合不想使用 Docker 的用户。
+- 同样支持网络管理、浏览器远程 SSH 等高级功能。
+- 需要手动准备依赖与运行环境。
 
 ---
 
-### [Limited Mode](./limited-mode.md): Quick and easy deployment with minimal features
+### [受限模式](/install/limited-mode)：功能最少、最省事的部署
 
-- Ideal for testing or simple environments and not intended for production use.
-- Lacks any advanced functionality or integrations such as network management
-  or remote web SSH.
+- 适合测试或简单环境，不适用于生产。
+- 没有任何高级功能或集成，例如网络管理或浏览器远程 SSH。
+
+---
+
+### [fnOS（飞牛）](/install/fnos)：在飞牛 NAS 上部署
+
+- 面向以 fnOS 应用源原生运行 Headscale、再用 Docker 运行 Headplane 的 NAS 部署方式。
+- 包含可直接使用的配置文件、反向代理要点与逐条排查方法。

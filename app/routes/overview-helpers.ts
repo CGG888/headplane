@@ -19,6 +19,8 @@ import {
   formatDerpPublicEndpoint,
 } from "~/routes/settings/headscale/derp-settings";
 import { parseIpv4, parseIpv6 } from "~/routes/settings/headscale/trusted-proxies";
+// Type-only for the same reason: `derp-region-sources` reads the filesystem.
+import type { DerpMapFileState, DerpMapGroupReading } from "~/server/headscale/derp-region-sources";
 import type { FleetTrend } from "~/server/history/timeline";
 // Type-only on purpose: `host-addresses` reads files and this module is part of
 // the client bundle, so nothing may survive the type erasure here.
@@ -612,9 +614,9 @@ function capLines<T>(items: readonly T[], limit: number): CappedLines<T> {
 }
 
 /**
- * Most regions the collapsed "Local DERP nodes" box lists before it summarises
- * the rest. The box names its regions while it is closed, so the cap is what
- * keeps a map with dozens of regions from turning one card into a wall.
+ * Most regions a DERP map box lists before it summarises the rest. The regions
+ * are named while such a box is closed, so the cap is what keeps a map with
+ * dozens of regions from turning one card into a wall.
  */
 export const DERP_MAP_REGION_LINE_LIMIT = 6;
 
@@ -653,6 +655,296 @@ export function capDerpNodeLines(
   nodes: readonly DerpNodeSummary[],
   limit = DERP_MAP_NODE_LINE_LIMIT,
 ): DerpNodeLines {
+  return capLines(nodes, limit);
+}
+
+// MARK: DERP node sources
+
+/**
+ * Where one node the Overview node card lists comes from.
+ *
+ * `embedded` is Headscale's own relay, `local` the files listed in `derp.paths`,
+ * `mirror` the file the official-region filter maintains, and `official` the
+ * regions a configured `derp.urls` map advertises that this machine does not
+ * serve itself.
+ */
+export type DerpNodeSourceKind = "embedded" | "local" | "mirror" | "official";
+
+/**
+ * Why a source has no node to list. Every one is a reason the card states, never
+ * a failure: a switched-off relay, nothing configured, files nobody could read,
+ * a map that lists no node, a mirrored file that is not loaded, or an upstream
+ * whose every region is already served above.
+ */
+export type DerpNodeSourceGap =
+  | "disabled"
+  | "unconfigured"
+  | "unreadable"
+  | "empty"
+  | "unlisted"
+  | "covered";
+
+/** One node, as the card prints it: a name and the address a client dials. */
+export interface DerpNodeLine {
+  name: string;
+  /** `hostname:derpport`, absent only for a map node with no hostname. */
+  address?: string;
+}
+
+/** One map behind a source, and what reading it produced. */
+export interface DerpNodeSourceMap {
+  /** The resolved path, or the URL, the map was read from. */
+  source: string;
+  state: DerpMapFileState;
+}
+
+/** One source of nodes, with the maps behind it and everything it contributes. */
+export interface DerpNodeSource {
+  kind: DerpNodeSourceKind;
+  /** True when this machine hands these nodes to its clients. */
+  served: boolean;
+  /** Every node of this source; a region an earlier source described is not counted twice. */
+  nodes: DerpNodeLine[];
+  /** The maps behind the source, in the order they are configured. */
+  maps: DerpNodeSourceMap[];
+  /** Why the source lists no node, or `undefined` when it lists at least one. */
+  gap?: DerpNodeSourceGap;
+}
+
+/** Headscale's own embedded relay, as the node card reads it. */
+export interface EmbeddedDerpNodeInput {
+  /** `derp.server.enabled`. */
+  enabled: boolean;
+  /** `derp.server.region_id`, 999 unless the configuration says otherwise. */
+  regionId: number;
+  code?: string;
+  name?: string;
+  /** The `host:port` clients dial for this relay, when `server_url` yields one. */
+  endpoint?: string;
+}
+
+export interface DerpNodeSourcesInput {
+  embedded: EmbeddedDerpNodeInput;
+  /** Every configured map, in configuration order: `derp.paths`, then `derp.urls`. */
+  groups: readonly DerpMapGroupReading[];
+  /** True when the official-region filter is switched on. */
+  mirrorEnabled: boolean;
+}
+
+export interface DerpNodeSourcesView {
+  /** One entry per source, in the order the card lists them. */
+  sources: DerpNodeSource[];
+  /** Nodes this machine serves: the embedded relay, the files and the filter. */
+  served: number;
+  /** Every node the configuration describes, official upstream included. */
+  total: number;
+}
+
+/** The order the card lists the sources in, and the order a region is claimed. */
+const DERP_NODE_SOURCE_ORDER: readonly DerpNodeSourceKind[] = [
+  "embedded",
+  "local",
+  "mirror",
+  "official",
+];
+
+/**
+ * Every DERP node Headplane can derive from the configuration, grouped by the
+ * source that describes it.
+ *
+ * Nothing here is invented: the embedded relay contributes its one configured
+ * node, a map contributes the nodes it lists, and a region an earlier source
+ * already described is not counted a second time — which is exactly how
+ * Headscale merges the maps. The official upstream is what is left after the
+ * embedded relay, the local files and the filtered file have taken their
+ * regions: the regions a client learns from `derp.urls` that this machine does
+ * not serve itself.
+ */
+export function derpNodeSources(input: DerpNodeSourcesInput): DerpNodeSourcesView {
+  const nodes: Record<DerpNodeSourceKind, DerpNodeLine[]> = {
+    embedded: [],
+    local: [],
+    mirror: [],
+    official: [],
+  };
+  const maps: Record<DerpNodeSourceKind, DerpNodeSourceMap[]> = {
+    embedded: [],
+    local: [],
+    mirror: [],
+    official: [],
+  };
+  const regions: Record<DerpNodeSourceKind, number> = {
+    embedded: 0,
+    local: 0,
+    mirror: 0,
+    official: 0,
+  };
+  // Every region a source describes, claimed or not: a source whose regions are
+  // all served above is "covered", not "empty".
+  const described: Record<DerpNodeSourceKind, number> = {
+    embedded: 0,
+    local: 0,
+    mirror: 0,
+    official: 0,
+  };
+  const claimed = new Set<number>();
+
+  // Headscale's own relay is one node, and it keeps its region id before any map
+  // can claim it: `derp.server` is the map's own region, not a merge candidate.
+  if (input.embedded.enabled) {
+    claimed.add(input.embedded.regionId);
+    regions.embedded += 1;
+    described.embedded += 1;
+    nodes.embedded.push({
+      name: embeddedRegionLabel(input.embedded),
+      ...(input.embedded.endpoint === undefined ? {} : { address: input.embedded.endpoint }),
+    });
+  }
+
+  for (const group of input.groups) {
+    const kind: DerpNodeSourceKind = group.kind === "remote" ? "official" : group.kind;
+    maps[kind].push({ source: group.source, state: group.state });
+
+    for (const region of group.regions) {
+      described[kind] += 1;
+      if (claimed.has(region.regionId)) {
+        continue;
+      }
+
+      claimed.add(region.regionId);
+      regions[kind] += 1;
+      for (const node of region.nodes) {
+        nodes[kind].push(derpNodeLine(node));
+      }
+    }
+  }
+
+  const sources = DERP_NODE_SOURCE_ORDER.map((kind): DerpNodeSource => {
+    const list = nodes[kind];
+    const gap = sourceGap(
+      kind,
+      list.length,
+      regions[kind],
+      described[kind],
+      maps[kind],
+      input.mirrorEnabled,
+    );
+
+    return {
+      kind,
+      served: kind !== "official",
+      nodes: list,
+      maps: maps[kind],
+      ...(gap === undefined ? {} : { gap }),
+    };
+  });
+
+  const served = sources
+    .filter((source) => source.served)
+    .reduce((total, source) => total + source.nodes.length, 0);
+
+  return {
+    sources,
+    served,
+    total: served + nodes.official.length,
+  };
+}
+
+/** Why a source lists no node, or `undefined` when it lists at least one. */
+function sourceGap(
+  kind: DerpNodeSourceKind,
+  nodeCount: number,
+  regionCount: number,
+  describedCount: number,
+  maps: readonly DerpNodeSourceMap[],
+  mirrorEnabled: boolean,
+): DerpNodeSourceGap | undefined {
+  if (nodeCount > 0) {
+    return undefined;
+  }
+
+  switch (kind) {
+    case "embedded":
+      return "disabled";
+    case "mirror":
+      // Nothing tagged: either the filter is off, or its file is not one of the
+      // maps Headscale loads, which is the one case the operator has to fix.
+      if (maps.length === 0) {
+        return mirrorEnabled ? "unlisted" : "unconfigured";
+      }
+      break;
+    case "local":
+    case "official":
+      if (maps.length === 0) {
+        return "unconfigured";
+      }
+      break;
+  }
+
+  // A map read to the end is not an unreadable one, even when it turned out to
+  // describe no region at all.
+  if (!maps.some((map) => map.state === "ok" || map.state === "empty")) {
+    return "unreadable";
+  }
+
+  // An upstream that described regions and contributed none is covered by what
+  // this machine already serves; a map that described nothing is simply empty.
+  if (kind === "official" && describedCount > 0 && regionCount === 0) {
+    return "covered";
+  }
+
+  return "empty";
+}
+
+/** `hostname:derpport`, the address one map node is dialled at. */
+function derpNodeLine(node: { name: string; hostname: string; derpPort?: number }): DerpNodeLine {
+  const name = node.name.trim();
+  const hostname = node.hostname.trim();
+
+  return {
+    name: name.length > 0 ? name : hostname,
+    ...(hostname.length === 0 ? {} : { address: `${hostname}:${derpNodeDerpPort(node).port}` }),
+  };
+}
+
+/**
+ * `#999 · headscale · Headscale Embedded DERP` for the embedded relay, the shape
+ * the shared region-label chain prints (`~/routes/machines/derp-info`), dropping
+ * a name that only repeats its code.
+ */
+function embeddedRegionLabel(embedded: EmbeddedDerpNodeInput): string {
+  const parts = [`#${embedded.regionId}`];
+  const code = (embedded.code ?? "").trim();
+  const name = (embedded.name ?? "").trim();
+
+  if (code.length > 0) {
+    parts.push(code);
+  }
+  if (name.length > 0 && name !== code) {
+    parts.push(name);
+  }
+
+  return parts.join(" · ");
+}
+
+/**
+ * Most node names one source prints inline. A configured official map lists
+ * hundreds of relays, so a source ends with one "+N more" line rather than
+ * growing without bound.
+ */
+export const DERP_SOURCE_NODE_LINE_LIMIT = 24;
+
+/** The node names one source prints, and how many it left out. */
+export type DerpSourceNodeLines = CappedLines<DerpNodeLine>;
+
+/**
+ * The first `limit` nodes of one source, plus a count of the rest. The map's own
+ * order is kept, because that is how the file lists its relays.
+ */
+export function capDerpSourceNodes(
+  nodes: readonly DerpNodeLine[],
+  limit = DERP_SOURCE_NODE_LINE_LIMIT,
+): DerpSourceNodeLines {
   return capLines(nodes, limit);
 }
 

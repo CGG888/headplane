@@ -1,77 +1,69 @@
 ---
-title: Machines
-description: The machine list, the filters, and every card on a machine's detail page.
+title: 机器管理
+description: 机器列表、筛选，以及每台机器详情页上的所有卡片。
 outline: [2, 3]
 ---
 
-# Machines
+# 机器管理
 
-**Machines** is the tailnet's inventory: one row per registered machine, and a
-detail page that gathers everything Headplane knows about a single one.
+**机器**页就是 tailnet 的资产清单：每台已注册的机器一行，另外还有一页把 Headplane 知道的
+单台机器信息集中起来。
 
-## The machine list
+## 机器列表
 
-| Column          | Shown                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| Machine name    | The name Headplane shows, with its owner beneath it; a machine owned by a tag says `tag:…` instead |
-| Addresses       | The machine's Tailscale IPv4 address, and its IPv6 address when it has one                        |
-| Version         | The Tailscale version the machine reports — only with the [Headplane Agent](/features/agent)      |
-| Status          | Online or offline                                                                                 |
-| Last seen       | When the control server last heard from the machine                                               |
+| 列       | 显示内容                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------- |
+| 机器名   | Headplane 显示的名字，下方是它的所有者；由标签拥有的机器显示为 `tag:…`                        |
+| 地址     | 机器在 Tailnet 内的 IPv4 地址，有 IPv6 时一并显示                                             |
+| 版本     | 机器上报的 Tailscale 版本 —— 仅在启用 [Headplane Agent](/features/agent) 时          |
+| 状态     | 在线或离线                                                                                   |
+| 最后出现 | 控制服务器最后一次收到该机器消息的时间                                                       |
 
-The list is searchable, sortable on nearly every column, and filterable by user,
-ACL tag, status and advertised route. Filters combine, and a clear-filters button
-appears as soon as one is active.
+列表支持搜索，几乎每一列都能排序，并且可以按用户、ACL 标签、状态和宣告的路由筛选。多个筛选
+条件会叠加，只要有任一条件生效就会出现清除筛选按钮。
 
-Anyone who can write machines also gets a checkbox column, which turns the list
-into the selection [bulk operations](/features/bulk-operations) act on.
+能写入机器的用户还会看到复选框列，它把列表变成 [批量操作](/features/bulk-operations)
+的作用对象。
 
-## The machine detail page
+## 机器详情页
 
-A card per topic, each one degrading on its own when its source is unavailable:
+每个主题一张卡片，数据源不可用时各自降级：
 
-| Card                    | Contents                                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Availability**        | Whether the machine was online over the last 24 hours, sampled every few minutes, as an uptime percentage and a timeline; says so rather than guessing when nothing has been recorded yet |
-| **Machine Details**     | Creator, machine name, OS hostname, OS, Tailscale version, ID, node key, creation time, last seen, key expiry and domain                                        |
-| **Addresses**           | Tailscale IPv4 and IPv6, the short and full MagicDNS names, and the endpoints the machine reported                                                              |
-| **DERP Relays**         | The relay address clients reach, the embedded region, and the relays this machine uses                                                                          |
-| **Subnets & Routing**   | The routes the machine advertises, which of them are approved, and whether it may act as an exit node                                                           |
-| **ACL tags**            | The tags the machine carries; a tag nothing in the policy owns is flagged                                                                                       |
-| **Client Connectivity** | The machine's own connectivity self-test: varying NAT, hairpinning, IPv6, UDP, UPnP, PCP and NAT-PMP                                                           |
-| **Danger zone**         | Expire the machine's key, or remove the machine from the tailnet                                                                                                |
+| 卡片           | 内容                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **可用性**     | 机器最近 24 小时是否在线（每几分钟采样一次），以在线率百分比和时间线呈现；还没有记录时直接说明，而不是猜一个值                                          |
+| **机器详情**   | 创建者、机器名、系统主机名、操作系统、Tailscale 版本、ID、节点密钥、创建时间、最后出现、密钥有效期与域名                                                |
+| **地址**       | Tailnet 内的 IPv4 与 IPv6、MagicDNS 短名与完整域名，以及机器上报的 endpoints                                                                          |
+| **DERP 中继**  | 客户端可达的中继地址、内嵌区域，以及该机器正在使用的中继                                                                                              |
+| **子网与路由** | 机器宣告的路由、其中哪些已批准，以及它是否可以作为 exit node                                                                                          |
+| **ACL 标签**   | 机器携带的标签；策略里没有任何 `tagOwners` 声明的标签会被标出                                                                                         |
+| **客户端连通性** | 机器自己的连通性自检：NAT 是否多变、hairpinning、IPv6、UDP、UPnP、PCP 与 NAT-PMP                                                                     |
+| **危险区域**   | 让机器密钥过期，或把机器从 tailnet 中移除                                                                                                             |
 
-The rest of a machine's actions live in the row menu: open an SSH session, rename
-it, turn key expiry on or off, edit its routes and tags, and move it to another
-owner. Both the card and the menu act on the machine the page is about, so there
-is no confirmation-free bulk path here.
+机器其余的操作在行菜单里：打开 SSH 会话、重命名、开关密钥有效期、编辑路由与标签，以及把
+它改派给另一个所有者。卡片和菜单作用的都是当前页面的这台机器，因此这里没有「无需确认」的
+批量路径。
 
-The rows that describe the machine itself — its OS, Tailscale version, client
-connectivity and relays — come from the Headplane Agent, because the Headscale
-API does not carry them. Without the agent those cards say it is needed instead
-of showing an empty table.
+描述机器本身的那几行 —— 操作系统、Tailscale 版本、客户端连通性和中继 —— 来自 Headplane
+Agent，因为 Headscale API 不携带这些信息。没有 Agent 时这些卡片会说明需要它，而不是显示
+空表。
 
-## The DERP Relays card
+## DERP 中继卡片
 
-**Relay clients reach** is read-only: the endpoint derived from `server_url`,
-then the **IPv4** and **IPv6** addresses `derp.server` declares, each with a copy
-button, the verdict against what the hostname actually resolves to, and the
-resolver the lookup used. Those addresses are the same values the
-[Headscale settings](/features/headscale-settings#address-auto-sync) card
-manages; this card configures nothing and links back to it.
+**客户端可达的中继**是只读的：由 `server_url` 推导出的端点，然后是 `derp.server` 声明的
+**IPv4** 与 **IPv6** 地址，每个都带复制按钮、与主机名实际解析结果的比对结论，以及本次查询
+使用的解析器。这些地址与
+[Headscale 设置](/features/headscale-settings)卡片管理的是同一批值；这张卡片不配置
+任何东西，只链回去。
 
-**Relays this machine uses** lists the home and preferred region and the latency
-it measured to each region, fastest first. Region names come from the same chain
-the settings page describes — the manual region-name mapping, the `derp.paths`
-maps, the `derp.urls` maps, then Headscale's embedded region — and a region
-nothing describes is shown by ID. The agent keys its samples by region **and**
-address family (`<regionID>-v4`, `<regionID>-v6`), so a region measured over both
-appears once with its fastest sample. See
-[Headplane Agent](/features/agent#the-relay-card-on-a-machine) for the details.
+**该机器使用的中继**列出 home 与 preferred 区域，以及它到各区域实测的延迟，最快的在前。
+区域名来自设置页描述的同一套解析链 —— 手工区域名映射、`derp.paths` 地图、`derp.urls` 地图，
+最后是 Headscale 的内嵌区域 —— 都不认识的区域直接显示 ID。Agent 按区域**与**地址族记录样本
+（`<regionID>-v4`、`<regionID>-v6`），因此同时用两个地址族测量过的区域只出现一次并显示最快
+的样本。细节见 [Headplane Agent](/features/agent)。
 
-::: tip An "IPv6: No" row is about that machine, not about your relay
-The IPv6 value in **Client Connectivity** is the machine's own self-test: whether
-its network has working IPv6 at all. It tells you nothing about Headscale or the
-DERP server, and it cannot be fixed from Headplane. The
-[fnOS guide](/install/fnos) has a troubleshooting entry for it.
+::: tip 「IPv6: No」说的是那台机器，不是你的中继
+**客户端连通性**里的 IPv6 取值是机器自己的自检：它的网络到底有没有可用的 IPv6。它与
+Headscale 或 DERP 服务器无关，也无法从 Headplane 这边修好。[fnOS 部署指南](/install/fnos)
+里有对应这条症状的排查条目。
 :::

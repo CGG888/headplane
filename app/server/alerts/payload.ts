@@ -22,11 +22,11 @@ export interface AlertPayload {
 const EVENT_TEXT: Record<AlertHistoryEventId, { title: string; summary: string }> = {
   headscaleUnreachable: {
     title: "Headscale is unreachable",
-    summary: "Headplane could not reach the Headscale API.",
+    summary: "HeadplaneCN could not reach the Headscale API.",
   },
   headscaleRecovered: {
     title: "Headscale is reachable again",
-    summary: "Headplane can reach the Headscale API again.",
+    summary: "HeadplaneCN can reach the Headscale API again.",
   },
   nodeOffline: {
     title: "Node went offline",
@@ -50,7 +50,7 @@ const EVENT_TEXT: Record<AlertHistoryEventId, { title: string; summary: string }
   },
   test: {
     title: "Test notification",
-    summary: "This is a test notification from Headplane.",
+    summary: "This is a test notification from HeadplaneCN.",
   },
 };
 

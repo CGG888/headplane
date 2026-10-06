@@ -1,58 +1,51 @@
 ---
-title: Users
-description: Headplane accounts, their roles, linked Headscale users and ACL groups.
+title: 用户
+description: Headplane 账户、它们的角色、关联的 Headscale 用户与 ACL 用户组。
 outline: [2, 3]
 ---
 
-# Users
+# 用户
 
-**Users** separates two things that are easy to confuse: the accounts that sign
-in to Headplane, and the users that exist in Headscale.
+**用户**页把两件容易混淆的事分开：登录 Headplane 的账户，以及 Headscale 里存在的用户。
 
-## Headplane users
+## Headplane 用户
 
-The first section lists every account that has signed in to Headplane, with its
-role, its last login, whether it is linked to a Headscale user, and the machines
-that link gives it.
+第一段列出每个登录过 Headplane 的账户，包含它的角色、最后登录时间、是否已关联某个
+Headscale 用户，以及该关联带给它的机器。
 
-Accounts are created by signing in. The banner at the top of the page says where
-they come from — **Users are managed through your OIDC provider** with a link to
-it, or, when OIDC is not configured, that they are managed locally, next to a
-shortcut to the [OIDC settings](/features/headscale-settings#oidc). The first
-account to sign in becomes the owner.
+账户是通过登录创建的。页面顶部的横幅会说明它们来自哪里 —— **用户通过你的 OIDC 提供商管理**
+并附上链接，或者在没有配置 OIDC 时说明是本地管理，旁边给出
+[OIDC 设置](/features/headscale-settings)的快捷入口。第一个登录的账户会成为所有者。
 
-| Role              | What it can do                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------- |
-| **Owner**         | Everything, including transferring ownership. There is exactly one.                             |
-| **Admin**         | The admin console, plus network, machine and user settings.                                     |
-| **Network Admin** | The admin console, ACLs and network settings; no machines and no users.                         |
-| **IT Admin**      | The admin console, machines and users; no ACLs and no network settings.                         |
-| **Auditor**       | The admin console, read-only.                                                                   |
-| **Viewer**        | Machines and users, and their own auth keys; no admin console.                                  |
-| **Member**        | No admin console.                                                                               |
+| 角色             | 能做什么                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| **所有者**       | 一切操作，包括移交所有权。有且只有一个。                        |
+| **管理员**       | 管理控制台，以及网络、机器和用户设置。                          |
+| **网络管理员**   | 管理控制台、ACL 与网络设置；不能管理机器和用户。                |
+| **IT 管理员**    | 管理控制台、机器和用户；不能管理 ACL 和网络设置。               |
+| **审计员**       | 管理控制台，只读。                                             |
+| **查看者**       | 机器和用户，以及自己的认证密钥；没有管理控制台。                |
+| **成员**         | 没有管理控制台。                                               |
 
-## What you can do to an account
+## 可以对账户做什么
 
-| Action                | Notes                                                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Change role**       | Moves the account between the roles above. The owner's role cannot be reassigned.                                                        |
-| **Rename**            | Changes the account name. ACL policies that refer to the user by name are **not** updated.                                                |
-| **Link a Headscale user** | Connects the account to a Headscale user, which is what decides whose machines it manages. An account can be re-linked later.        |
-| **Edit ACL groups**   | Adds or removes the user in the policy's `groups`. Groups live in the ACL policy, so this needs `policy.mode: database`; a policy that contains comments has them dropped when it is rewritten. |
-| **Transfer ownership** | Owner only. The owner becomes an admin and the target becomes the owner.                                                                  |
-| **Delete**            | Refused while the linked Headscale user still has machines — re-assign or delete those first. A user authenticated through OIDC is recreated the next time they sign in. |
+| 操作               | 说明                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **更改角色**       | 在上述角色之间切换。所有者的角色不能被改派。                                                                                            |
+| **重命名**         | 修改账户名。按用户名引用该用户的 ACL 策略**不会**被同步更新。                                                                             |
+| **关联 Headscale 用户** | 把账户关联到某个 Headscale 用户，这决定了它管理谁的机器。之后可以重新关联。                                                        |
+| **编辑 ACL 用户组** | 在策略的 `groups` 里加入或移除该用户。用户组存放在 ACL 策略中，因此需要 `policy.mode: database`；含注释的策略在被重写时会丢失注释。      |
+| **移交所有权**     | 仅所有者可用。原所有者降为管理员，目标账户成为所有者。                                                                                    |
+| **删除**           | 当关联的 Headscale 用户还有机器时会被拒绝 —— 请先改派或删除这些机器。通过 OIDC 认证的用户会在下次登录时被重新创建。                     |
 
-## Unlinked Headscale users
+## 未关联的 Headscale 用户
 
-The second section lists the Headscale users no Headplane account has claimed.
-They cannot be managed through Headplane until an account links to them, which is
-what the **Link Headscale user** action on a Headplane account is for.
+第二段列出还没有被任何 Headplane 账户认领的 Headscale 用户。在某个账户关联它们之前，这些
+用户无法通过 Headplane 管理 —— 这正是 Headplane 账户上 **关联 Headscale 用户** 操作的用途。
 
-**Add user** creates a **Headscale** user, not a Headplane account: the new user
-appears in this section and is linked automatically once it signs in through your
-OIDC provider. A username has to be at least two characters, start with a letter
-and use only letters, numbers, dots, dashes and underscores.
+**添加用户**创建的是 **Headscale** 用户，而不是 Headplane 账户：新用户会出现在这一段里，
+并在通过 OIDC 提供商登录后自动完成关联。用户名至少两个字符、必须以字母开头，并且只能使用
+字母、数字、点、短横线和下划线。
 
-When the Headscale API cannot be read, the page says so and the Headscale user
-data — and the machines each account manages — is unavailable rather than shown
-empty.
+当 Headscale API 读不到时，页面会说明这一点，Headscale 用户数据 —— 以及每个账户管理的
+机器 —— 显示为不可用，而不是显示成空。

@@ -1,5 +1,5 @@
 import { Check, Copy, Info } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import Tooltip from "~/components/tooltip";
 import { useI18n } from "~/i18n/provider";
@@ -14,6 +14,11 @@ export interface MachineAttributeProps {
   isCopyable?: boolean;
   /** Renders the value in a monospace face; used for keys, IDs and addresses. */
   isCode?: boolean;
+  /**
+   * Small chips shown at the end of the row, e.g. which source serves a relay
+   * and whether it is the one in use. The value keeps its own width.
+   */
+  badges?: ReactNode;
 }
 
 /**
@@ -27,6 +32,7 @@ export default function MachineAttribute({
   tooltip,
   isCopyable,
   isCode,
+  badges,
 }: MachineAttributeProps) {
   const { t } = useI18n();
   const [isCopied, setIsCopied] = useState(false);
@@ -55,11 +61,11 @@ export default function MachineAttribute({
           </Tooltip>
         ) : undefined}
       </dt>
-      <dd className="min-w-0">
+      <dd className="flex min-w-0 items-center gap-x-1.5">
         {isCopyable ? (
           <button
             className={cn(
-              "group/copy flex w-full min-w-0 items-center gap-x-1.5 rounded-md px-1.5 py-1 text-left",
+              "group/copy flex min-w-0 flex-1 items-center gap-x-1.5 rounded-md px-1.5 py-1 text-left",
               "transition-colors hover:bg-mist-100/70 dark:hover:bg-mist-800/70",
               "focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:outline-hidden",
               "dark:focus-visible:ring-indigo-400/40",
@@ -76,10 +82,13 @@ export default function MachineAttribute({
             )}
           </button>
         ) : (
-          <div className="min-w-0 px-1.5 py-1" title={value}>
+          <div className="min-w-0 flex-1 px-1.5 py-1" title={value}>
             <AttributeValue isCode={isCode} value={value} />
           </div>
         )}
+        {badges ? (
+          <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">{badges}</span>
+        ) : undefined}
       </dd>
     </div>
   );

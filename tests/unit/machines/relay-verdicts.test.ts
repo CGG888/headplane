@@ -1,10 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import {
-  relayFamilyVerdicts,
-  relayResolutionBlamesSystemResolver,
-} from "~/routes/machines/relay-verdicts";
-import type { RelayAddressComparison, RelayResolution } from "~/server/relay-dns";
+import { relayFamilyVerdicts } from "~/routes/machines/relay-verdicts";
+import type { RelayAddressComparison } from "~/server/relay-dns";
 
 function comparison(
   family: RelayAddressComparison["family"],
@@ -18,14 +15,6 @@ function comparison(
     ...(declared === undefined ? {} : { declared }),
   };
 }
-
-const systemAnswer: RelayResolution = {
-  host: "derp.example.com",
-  kind: "hostname",
-  ipv4: ["198.51.100.7"],
-  ipv6: [],
-  resolver: "system",
-};
 
 describe("relayFamilyVerdicts", () => {
   test("keeps every verdict a declaration can be compared against", () => {
@@ -61,33 +50,5 @@ describe("relayFamilyVerdicts", () => {
 
   test("an unread resolution is no verdict at all", () => {
     expect(relayFamilyVerdicts([])).toEqual([]);
-  });
-});
-
-describe("relayResolutionBlamesSystemResolver", () => {
-  test("is true when the host's own resolver left a family empty", () => {
-    expect(relayResolutionBlamesSystemResolver(systemAnswer)).toBe(true);
-    expect(
-      relayResolutionBlamesSystemResolver({ ...systemAnswer, ipv4: [], ipv6: ["2001:db8::7"] }),
-    ).toBe(true);
-  });
-
-  test("is false when a configured resolver or a full answer is in play", () => {
-    expect(relayResolutionBlamesSystemResolver(undefined)).toBe(false);
-    // A literal endpoint never ran a lookup, so no resolver can be blamed.
-    expect(
-      relayResolutionBlamesSystemResolver({
-        host: "[2001:db8::1]",
-        kind: "literal",
-        ipv4: [],
-        ipv6: [],
-      }),
-    ).toBe(false);
-    expect(relayResolutionBlamesSystemResolver({ ...systemAnswer, resolver: "configured" })).toBe(
-      false,
-    );
-    expect(relayResolutionBlamesSystemResolver({ ...systemAnswer, ipv6: ["2001:db8::7"] })).toBe(
-      false,
-    );
   });
 });

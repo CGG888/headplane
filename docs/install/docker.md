@@ -1,34 +1,32 @@
 ---
 title: Docker
-description: Install Headplane with Docker.
+description: 用 Docker 安装 Headplane。
 outline: [2, 3]
 ---
 
-# Docker Installation
+# Docker 安装
 
 ::: tip
-If you are not looking to deploy with Docker, follow the
-[**Native Mode**](./native-mode.md) deployment guide.
+如果你不想用 Docker 部署，请参考[**原生模式**](/install/native-mode)部署指南。
 :::
 
-The recommended way to deploy Headplane is through Docker. This method is quick,
-easy, and works in most environments. It requires that Headscale is also running
-with Docker.
+部署 Headplane 最推荐的方式是 Docker。它快捷、简单，在大多数环境里都能用，前提是 Headscale
+也运行在 Docker 中。
 
-## Prerequisites
+## 前置条件
 
-- Docker and Docker Compose
-- Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for Headplane.
+- Docker 与 Docker Compose
+- 已安装并运行 Headscale 0.27.0 或更新版本
+- 一份[填写完成的 Headplane 配置文件](./index.md)。
 
-## Installation
+## 安装
 
-Running Headplane in with Docker is as simple as applying 1 compose file:
+用 Docker 运行 Headplane，只需要应用一个 compose 文件：
 
 ```yaml
 services:
   headplane:
-    image: ghcr.io/tale/headplane:latest
+    image: ghcr.io/cgg888/headplanecn:latest
     container_name: headplane
     restart: unless-stopped
     ports:
@@ -38,24 +36,21 @@ services:
       - "./headplane-data:/var/lib/headplane"
 ```
 
-It's important to mount your configuration file and also provide a persistent
-storage location for Headplane to store its own data. You can also change the
-port mapping if you want to run it on a different port.
+挂载配置文件、并给 Headplane 提供一个持久化存储位置来保存自己的数据，这两点很重要。想换端口
+运行，改端口映射即可。
 
-## Health Checks
+## 健康检查
 
-The Docker image includes a built-in healthcheck that verifies the Headplane
-server is running and responding. Docker will automatically monitor the
-container and report its health status. No additional configuration is required.
+Docker 镜像内置了健康检查，用来确认 Headplane 服务正在运行并响应。Docker 会自动监视容器并
+报告它的健康状态，不需要额外配置。
 
-The healthcheck binary is located at `/bin/hp_healthcheck` inside the container.
-If you need to override the default healthcheck behavior, you can do so in your
-`compose.yaml`:
+健康检查二进制文件位于容器内的 `/bin/hp_healthcheck`。需要覆盖默认健康检查行为时，可以在
+`compose.yaml` 里这样写：
 
 ```yaml
 services:
   headplane:
-    image: ghcr.io/tale/headplane:latest
+    image: ghcr.io/cgg888/headplanecn:latest
     healthcheck:
       test: ["CMD", "/bin/hp_healthcheck"]
       interval: 30s
@@ -64,77 +59,70 @@ services:
       retries: 3
 ```
 
-## Accessing Headplane
+## 访问 Headplane
 
-After starting the container, you can access the Headplane web interface by
-navigating to `http://localhost:3000/admin` in your web browser (replace
-`localhost` with your server's IP address or domain name if not running locally).
+容器启动后，在浏览器里打开 `http://localhost:3000/admin` 就能访问 Headplane 界面（如果不是
+在本机运行，把 `localhost` 换成服务器的 IP 地址或域名）。
 
-In order to log in, you'll need to supply a Headscale API key. You can create
-one by running the following command within your Headscale environment:
+登录需要提供一把 Headscale API 密钥。可以在 Headscale 环境里执行下面的命令创建：
 
 ```bash
-# You may want to tweak the expiration duration as needed
+# 按需调整有效期
 headscale apikeys create --expiration 90d
 ```
 
-## Enabling advanced features
+## 启用高级功能
 
-You've technically completed the installation, but read on if you would like
-to enable advanced features like the ability to edit network settings from the
-UI or remote SSH from the browser.
+到这里安装其实已经完成，但如果你想启用「在界面上编辑网络设置」或「从浏览器远程 SSH」这类高级
+功能，请继续往下读。
 
-### Network Management
+### 网络管理
 
-Network management allows you to configure Tailnet settings such as DNS servers,
-custom A records, the tailnet domain name, and MagicDNS from the Headplane UI.
+网络管理让你可以在 Headplane 界面里配置 Tailnet 设置，例如 DNS 服务器、自定义 A 记录、tailnet
+域名和 MagicDNS。
 
-#### Prerequisites
+#### 前置条件
 
-Network management (and other configurable Headscale features) requires that
-Headplane and Headscale both run together in the same Docker machine. This is
-because Headplane needs the following permissions:
+网络管理（以及其他可配置的 Headscale 功能）要求 Headplane 与 Headscale 运行在同一台 Docker
+主机上，因为 Headplane 需要以下权限：
 
-- Access to read and write the Head**scale** configuration file through a shared
-  volume used by both Headscale and Headplane.
-- Access to the Docker socket (usually `/var/run/docker.sock`, you may also use
-  a proxy such as [Tecnativa/docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy)).
+- 通过 Headscale 与 Headplane 共用的卷，读写 Head**scale** 的配置文件。
+- 访问 Docker socket（通常是 `/var/run/docker.sock`，也可以使用
+  [Tecnativa/docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) 这类代理）。
 
-Headplane negotiates the Docker API version with the daemon at startup. It
-targets API version `1.44` and falls back to whatever the daemon serves, down
-to a floor of `1.24` (Docker Engine 1.12+). This covers all modern Docker
-installations as well as Podman's Docker-compatible socket.
+Headplane 启动时会与守护进程协商 Docker API 版本。它目标是 API 版本 `1.44`，并回退到守护进程
+提供的版本，下限为 `1.24`（Docker Engine 1.12+）。这覆盖了所有现代 Docker 安装，以及 Podman
+的 Docker 兼容 socket。
 
-#### Configuration
+#### 配置
 
-First you'll need to run both Headscale and Headplane in the same Docker
-environment. Here is an example `compose.yaml` file that accomplishes this:
+首先要把 Headscale 和 Headplane 跑在同一个 Docker 环境里。下面是一份能做到这点的
+`compose.yaml` 示例：
 
 ```yaml
 services:
   headplane:
-    image: ghcr.io/tale/headplane:latest
+    image: ghcr.io/cgg888/headplanecn:latest
     container_name: headplane
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
-      # Same as before
+      # 与前面相同
       - "/path/to/your/config.yaml:/etc/headplane/config.yaml"
       - "/path/to/data/storage:/var/lib/headplane"
 
-      # A shared path to the Headscale config file. It is important that the
-      # path you mount this on matches `headscale.config_path` in your
-      # Headplane config.yaml file.
+      # 指向 Headscale 配置文件的共享路径。重要的是挂载路径必须与
+      # Headplane 的 config.yaml 里 `headscale.config_path` 完全一致。
       - "/path/to/headscale/config.yaml:/etc/headscale/config.yaml"
 
-      # If you are using dns.extra_records_path in Headscale (recommended),
-      # also mount that file here so Headplane can read and write it. If the
-      # in-container path differs from Headscale's dns.extra_records_path,
-      # set `headscale.dns_records_path` in your Headplane config.yaml file.
+      # 如果你在 Headscale 里使用 dns.extra_records_path（推荐），
+      # 也把这个文件挂进来，让 Headplane 能读写它。若容器内路径与
+      # Headscale 的 dns.extra_records_path 不同，请在 Headplane 的
+      # config.yaml 里设置 `headscale.dns_records_path`。
       - "/path/to/headscale/dns_records.json:/etc/headscale/dns_records.json"
 
-      # Read-only access to the Docker socket (or a proxy)
+      # 对 Docker socket 的只读访问（或使用代理）
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   headscale:
     image: headscale/headscale:0.27.1
@@ -142,13 +130,13 @@ services:
     restart: unless-stopped
     command: serve
     labels:
-      # This label is absolutely necessary to help Headplane find Headscale.
+      # 这个标签对 Headplane 找到 Headscale 是绝对必要的。
       me.tale.headplane.target: headscale
     ports:
       - "8080:8080"
     volumes:
-      # Notice how these are on the exact same path as the host for both
-      # Headscale and Headplane! This is very important.
+      # 注意这些路径对 Headscale 和 Headplane 都是宿主机上的同一路径！
+      # 这一点非常重要。
       - "/path/to/headscale/config.yaml:/etc/headscale/config.yaml"
       - "/path/to/headscale/dns_records.json:/etc/headscale/dns_records.json"
 
@@ -156,77 +144,63 @@ services:
 ```
 
 ::: info
-With some effort, you can technically run Headscale and Headplane in separate
-Docker hosts and remotely connect to a Docker daemon. This is an advanced setup
-that is not covered in this documentation. Refer to the
-[example configuration](https://github.com/tale/headplane/blob/main/config.example.yaml)
-for more details on setting it up.
+理论上，你也可以花点功夫把 Headscale 和 Headplane 跑在分开的 Docker 主机上，并远程连接 Docker
+守护进程。这是高级用法，本文档不涉及。更多细节请参考
+[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。
 :::
 
-You'll also need to enable a few fields in your Headplane configuration file:
+还需要在 Headplane 配置文件里启用几个字段：
 
-| Field                            | Description                                                                                                                    |
+| 字段                             | 说明                                                                                                                           |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.docker.enabled`** | Set to `true` to enable Docker integration.                                                                                    |
-| **`headscale.config_path`**      | Path to your Head**scale** configuration file within the container (e.g., `/etc/headscale/config.yaml`).                       |
-| `headscale.dns_records_path`     | _Optional_. Refer to the [example configuration](https://github.com/tale/headplane/blob/main/config.example.yaml) for details. |
+| **`integration.docker.enabled`** | 设为 `true` 以启用 Docker 集成。                                                                                                |
+| **`headscale.config_path`**      | 容器内 Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                                                      |
+| `headscale.dns_records_path`     | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。                                  |
 
-With these settings in place, restart Headplane. You should now see additional
-options in the UI navbar such as "DNS" and "Settings" where you can manage your
-Tailnet configuration.
+设置好这些之后重启 Headplane。你应该会在界面导航栏里看到「DNS」和「设置」这样的新入口，可以在
+那里管理 Tailnet 配置。
 
-### Remote Web SSH
+### 浏览器远程 SSH
 
-Remote Web SSH allows you to open a terminal session to your Tailscale nodes
-directly from the Headplane web interface via
-[Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh). This feature
-requires that Tailscale SSH is running on your nodes (done via
-`tailscale up --ssh`).
+浏览器远程 SSH 让你可以直接从 Headplane 界面、通过
+[Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh) 打开到 Tailscale 节点的终端会话。
+该功能要求节点上启用了 Tailscale SSH（通过 `tailscale up --ssh` 完成）。
 
-This feature uses the [Headplane Agent](../features/agent.md) to facilitate the
-SSH connections. Refer to the [Agent documentation](../features/agent.md) for
-setup instructions.
+该功能使用 [Headplane Agent](/features/agent) 来建立 SSH 连接，设置方法见
+[Agent 文档](/features/agent)。
 
-### Single Sign-On (SSO)
+### 单点登录（SSO）
 
-Single Sign-On (SSO) authentication allows users to log in to Headplane using
-external identity providers such as Google, GitHub, or any provider that
-supports OpenID Connect (OIDC).
+单点登录（SSO）认证让用户可以使用外部身份提供商登录 Headplane，例如 Google、GitHub，或任何
+支持 OpenID Connect（OIDC）的提供方。
 
-To get started with SSO, refer to the [SSO documentation](../features/sso.md)
-for detailed setup instructions.
+要开始使用 SSO，请参考 SSO 文档里的详细设置说明（该页目前只有英文版，可在导航栏的语言菜单里切换到 English 查看）。
 
-## Reverse Proxying
+## 反向代理
 
-You _should_ run Headplane behind a reverse proxy such as Nginx or Caddy in
-production. Additionally, putting Headscale beind the reverse proxy allows
-you to access both services via the same domain and TLS certificate.
+生产环境**应该**把 Headplane 放在 Nginx 或 Caddy 这类反向代理后面。此外，把 Headscale 也放到
+反向代理后面，可以让两个服务共用同一个域名和 TLS 证书。
 
-#### Configuration
+#### 配置
 
-Headscale supports integrating with
-[several reverse proxies](https://headscale.net/stable/ref/integration/reverse-proxy/)
-such as Nginx, Caddy, Apache, etc. Deploying Headplane is as simple as adding
-a handler to route any requests to `/admin` to the Headplane service. Refer
-to the Traefik example below for a reference configuration. A similar setup via
-Nginx without Docker is available in the
-[Native Mode](./native-mode.md#reverse-proxying) installation documentation.
+Headscale 支持与 [多种反向代理](https://headscale.net/stable/ref/integration/reverse-proxy/)
+集成，例如 Nginx、Caddy、Apache 等。部署 Headplane 只需要加一条把 `/admin` 的请求路由到
+Headplane 服务的规则。参考配置见下面的 Traefik 示例；不用 Docker 的类似配置见
+[原生模式](/install/native-mode)安装文档。
 
-#### Example Traefik Configuration
+#### Traefik 配置示例
 
-The following configuration will set up Traefik to proxy all Headscale requests
-on `headscale.example.com` and serve the Headplane UI under the `/admin` path.
-This is identical to how Tailscale's own admin console is served.
+下面的配置让 Traefik 代理 `headscale.example.com` 上所有 Headscale 请求，并在 `/admin` 路径下
+提供 Headplane 界面。这与 Tailscale 自己的管理控制台的提供方式完全一致。
 
-Keep in mind this won't work on its own as you'll need to configure Traefik
-and TLS certificates as needed. This is just a snippet to show how to configure
-the routing for Headplane and Headscale.
+请注意这份配置本身并不能直接工作，你还需要按需配置 Traefik 与 TLS 证书。这里只是一个片段，
+用来说明如何为 Headplane 和 Headscale 配置路由。
 
 ```yaml
 services:
-  # Same as before
+  # 与前面相同
   headplane:
-    image: ghcr.io/tale/headplane:latest
+    image: ghcr.io/cgg888/headplanecn:latest
     container_name: headplane
     restart: unless-stopped
     ports:
@@ -238,7 +212,7 @@ services:
       - "/path/to/headscale/dns_records.json:/etc/headscale/dns_records.json"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     labels:
-      # Expose the admin UI at /admin
+      # 在 /admin 下暴露管理界面
       - "traefik.enable=true"
       - "traefik.http.routers.headplane.rule=Host(`headscale.example.com`) && PathPrefix(`/admin`)"
       - "traefik.http.routers.headplane.entrypoints=websecure"
@@ -257,13 +231,13 @@ services:
     labels:
       - "me.tale.headplane.target=headscale"
 
-      # Traefik labels to expose Headscale at headscale.example.com
+      # 把 Headscale 暴露在 headscale.example.com 的 Traefik 标签
       - "traefik.enable=true"
       - "traefik.http.routers.headscale.rule=Host(`headscale.example.com`)"
       - "traefik.http.routers.headscale.entrypoints=websecure"
       - "traefik.http.routers.headscale.tls=true"
 
-      # This middleware is essential to ensuring Headplane works correctly
+      # 这个中间件对 Headplane 正常工作至关重要
       - "traefik.http.routers.headscale.middlewares=cors"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT"
@@ -271,7 +245,7 @@ services:
       - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=100"
       - "traefik.http.middlewares.cors.headers.addvaryheader=true"
 
-      # If you would optionally like to automatically redirect / to /admin
+      # 可选：自动把 / 重定向到 /admin
       - "traefik.http.routers.rewrite.rule=Host(`headscale.example.com`) && Path(`/`)"
       - "traefik.http.routers.rewrite.service=headscale"
       - "traefik.http.routers.rewrite.middlewares=rewrite"
@@ -285,7 +259,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # Example volumes/setup, please configure Traefik as needed
+      # 示例挂载与设置，请按需配置 Traefik
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/path/to/certs/storage:/certs"
 ```

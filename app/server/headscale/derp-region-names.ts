@@ -20,6 +20,12 @@ import log from "~/utils/log";
 /** File under Headplane's `server.data_path`. */
 export const DERP_REGION_NAMES_FILE = "derp-region-names.json";
 
+/**
+ * Why a snapshot is taken before a bulk insertion. Stored verbatim in the
+ * snapshot metadata, so the value must stay stable.
+ */
+export const DERP_REGION_NAMES_SNAPSHOT_REASON = "derp-region-names";
+
 /** Region id (as a decimal string) to operator-supplied display name. */
 export type DerpRegionNames = Record<string, string>;
 
@@ -119,6 +125,49 @@ export function removeDerpRegionName(
   const next = { ...names };
   delete next[id];
   return next;
+}
+
+/** One id -> name pair a bulk insertion may add. */
+export interface DerpRegionNameEntry {
+  regionId: number | string;
+  name: string;
+}
+
+/** How a bulk insertion changed the mapping. */
+export interface DerpRegionNameMerge {
+  names: DerpRegionNames;
+  /** Entries that were missing and are part of `names` now. */
+  added: number;
+}
+
+/**
+ * Adds the entries the mapping does not already hold, and reports how many were
+ * added.
+ *
+ * The mapping is the operator's own, so an id that already has a name is never
+ * touched — the function only fills gaps, which makes it idempotent: running it
+ * twice adds nothing the second time. Unusable entries (a non-numeric id, a
+ * blank name) are skipped individually rather than failing the batch.
+ */
+export function mergeMissingDerpRegionNames(
+  names: DerpRegionNames,
+  entries: readonly DerpRegionNameEntry[],
+): DerpRegionNameMerge {
+  const merged: DerpRegionNames = { ...names };
+  let added = 0;
+
+  for (const entry of entries) {
+    const id = normalizeRegionId(String(entry.regionId));
+    const name = entry.name.trim();
+    if (id === undefined || name.length === 0 || id in merged) {
+      continue;
+    }
+
+    merged[id] = name;
+    added += 1;
+  }
+
+  return { names: merged, added };
 }
 
 /** The manual name for a region id, or undefined when there is none. */

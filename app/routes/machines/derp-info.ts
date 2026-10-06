@@ -13,6 +13,10 @@
  * receives plain values and never imports a server module.
  */
 
+import type { DerpNodeSourceKind } from "~/routes/overview-helpers";
+// Type-only: `derp-region-sources` reads the filesystem, and this module is part
+// of the client bundle, so nothing may survive the type erasure here.
+import type { DerpMapGroupReading } from "~/server/headscale/derp-region-sources";
 import type { HostInfo } from "~/types";
 
 /** Measured regions the machine page lists before summarising the rest. */
@@ -456,4 +460,123 @@ function readRegionId(value: unknown): number | undefined {
   // The agent sends these as JSON numbers, but a re-serialised payload can hand
   // an id over as a string; an id that arrived is still an id to name.
   return typeof value === "string" ? parseDerpRegionKey(value).regionId : undefined;
+}
+
+// MARK: Relays this machine uses
+
+/**
+ * Which configured source serves each region, in the order the Overview "DERP
+ * nodes" card claims regions: Headscale's embedded relay first, then every
+ * configured map as the configuration lists it — a `derp.paths` file (or the
+ * region mirror's own file), then a `derp.urls` map. A region an earlier source
+ * already described is not claimed twice, which is exactly how Headscale merges
+ * the maps.
+ *
+ * `derpNodeSources` in `~/routes/overview-helpers` groups the same claim into
+ * node lists for the Overview card; a relay row only needs the kind that serves
+ * it, so this keys the answer by region id.
+ */
+export function relayRegionSources(
+  groups: readonly DerpMapGroupReading[],
+  embedded: DerpRegionInfo | undefined,
+): Record<string, DerpNodeSourceKind> {
+  const sources: Record<string, DerpNodeSourceKind> = {};
+  if (embedded !== undefined) {
+    sources[String(embedded.regionId)] = "embedded";
+  }
+
+  for (const group of groups) {
+    const kind: DerpNodeSourceKind = group.kind === "remote" ? "official" : group.kind;
+    for (const region of group.regions) {
+      const id = String(region.regionId);
+      if (!Object.hasOwn(sources, id)) {
+        sources[id] = kind;
+      }
+    }
+  }
+
+  return sources;
+}
+
+/** One relay a machine uses, as the card prints its row. */
+export interface MachineRelayUse {
+  /** Stable identity of the row: `id:901`, or the agent's own key for a legacy sample. */
+  key: string;
+  /** `#901 · ams · Amsterdam`, from the one label chain. */
+  label: string;
+  /** The region id the agent's key names, when it names one. */
+  regionId?: number;
+  /** The measured round trip, already formatted, when the machine measured it. */
+  latency?: string;
+  /** True for the region the agent reports as the one this machine uses. */
+  inUse: boolean;
+  /** Which configured source describes this region, when one does. */
+  source?: DerpNodeSourceKind;
+}
+
+export interface MachineRelayUseView {
+  /** The region the agent reports as this machine's home. */
+  home: MachineRelayUse;
+  /** The region the agent reports as the one it currently uses. */
+  preferred: MachineRelayUse;
+  /** Every measured region, fastest first, as the card's latency rows. */
+  latencies: MachineRelayUse[];
+}
+
+/** The source serving one region, or nothing when no source describes it. */
+function sourceOf(
+  sources: Readonly<Record<string, DerpNodeSourceKind>>,
+  regionId: number | undefined,
+): { source?: DerpNodeSourceKind } {
+  if (regionId === undefined) {
+    return {};
+  }
+
+  const source = sources[String(regionId)];
+  return source === undefined ? {} : { source };
+}
+
+/**
+ * The relays this machine uses, as rows: the agent's home and preferred regions,
+ * plus every region it measured, each carrying the source that serves it and
+ * whether it is the one currently in use.
+ *
+ * The labels come from {@link buildDerpInfo}'s view, so a row words its region
+ * exactly like every other row, and "in use" is the agent's own `PreferredDERP`
+ * — nothing is inferred from latency or from the configuration. `key` is the
+ * row's identity: the region id when the agent's key names one, and the agent's
+ * own key for a legacy `host:port` sample no map can name.
+ */
+export function buildMachineRelayUse(
+  info: HostInfo | undefined,
+  view: DerpInfoView,
+  relaySources: Readonly<Record<string, DerpNodeSourceKind>> = {},
+): MachineRelayUseView {
+  const homeId = readRegionId(info?.HomeDERP);
+  const preferredId = readRegionId(info?.NetInfo?.PreferredDERP);
+
+  const regionRow = (
+    regionId: number | undefined,
+    label: string,
+    fallbackKey: string,
+  ): MachineRelayUse => ({
+    key: regionId === undefined ? fallbackKey : `id:${regionId}`,
+    label,
+    ...(regionId === undefined ? {} : { regionId }),
+    inUse: regionId !== undefined && regionId === preferredId,
+    ...sourceOf(relaySources, regionId),
+  });
+
+  return {
+    home: regionRow(homeId, view.home.label, "key:home"),
+    preferred: regionRow(preferredId, view.preferred.label, "key:preferred"),
+    latencies: view.latencies.rows.map((row): MachineRelayUse => ({
+      key: regionIdentity(parseDerpRegionKey(row.region)),
+      label: row.label,
+      ...(row.regionId === undefined ? {} : { regionId: row.regionId }),
+      latency: formatDerpLatency(row.seconds),
+      inUse: preferredId !== undefined && row.regionId === preferredId,
+      ...sourceOf(relaySources, row.regionId),
+    })),
+  };
 }

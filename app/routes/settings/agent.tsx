@@ -148,7 +148,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const isSyncing = fetcher.state !== "idle";
 
   const documentationLink = (
-    <Link external styled to="https://headplane.net/features/agent">
+    <Link external styled to="https://cgg888.github.io/headplaneCN/features/agent">
       {t("settings.agent.documentation")}
     </Link>
   );

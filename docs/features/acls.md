@@ -1,19 +1,17 @@
 ---
-title: Access Control
-description: Edit the Headscale ACL policy, tags and groups from the Headplane UI.
+title: 访问控制
+description: 在 Headplane 界面里编辑 Headscale 的 ACL 策略、标签与用户组。
 ---
 
-# Access Control
+# 访问控制
 
-Headscale stores its Access Control List (ACL) as a single HuJSON policy. The
-**Access Control** page in Headplane exposes that policy in two ways: a
-structured editor for the parts most people change day to day, and the raw file
-editor for everything else.
+Headscale 把它的访问控制列表（ACL）保存为一份 HuJSON 策略。Headplane 的**访问控制**页
+用两种方式暴露这份策略：针对日常最常改动部分的结构化编辑器，以及应对其余内容的原始文件
+编辑器。
 
-## Requirements
+## 前置条件
 
-The policy can only be written through the web UI when Headscale runs in
-database policy mode:
+只有当 Headscale 运行在 database 策略模式时，策略才能通过网页写入：
 
 ```yaml
 # Headscale config.yaml
@@ -21,125 +19,99 @@ policy:
   mode: database
 ```
 
-In `file` mode the policy lives in a file that only Headscale reads, so its API
-refuses the write. Headplane cannot tell which mode Headscale uses without being
-able to read Headscale's configuration, so the editor stays usable and the save
-is rejected with an explanation of how to switch modes or edit the file
-directly. Editing also requires the `write_policy` capability, which the
-`owner`, `admin` and `network_admin` roles have.
+在 `file` 模式下，策略保存在只有 Headscale 会读取的文件里，因此它的 API 会拒绝写入。
+Headplane 在无法读取 Headscale 配置时不会去猜模式，所以编辑器始终可用，但保存会被拒绝，
+并给出如何切换模式或直接改文件的说明。编辑同时还需要 `write_policy` 能力，`owner`、
+`admin` 和 `network_admin` 角色默认拥有。
 
-## Rules
+## 规则
 
-The **Rules** tab renders the policy as three lists:
+**规则**标签把策略渲染成三个列表：
 
-- **Access rules** — the `acls` section. Each rule allows traffic from a set of
-  sources to a set of destinations. Destinations include a port range, for
-  example `tag:web:80,443`. A destination entered without one gets `:*`
-  appended, since Headscale rejects a destination that has no port.
-- **SSH rules** — the `ssh` section, including `check` mode and its check
-  period.
-- **Hosts** — the `hosts` section, which names an IP address or CIDR range so
-  rules can reference it.
+- **访问规则** —— `acls` 段。每条规则允许一组来源访问一组目标。目标里包含端口范围，
+  例如 `tag:web:80,443`。没写端口的目标会被补上 `:*`，因为 Headscale 不接受没有端口的
+  目标。
+- **SSH 规则** —— `ssh` 段，包括 `check` 模式及其检查周期。
+- **主机** —— `hosts` 段，为 IP 地址或 CIDR 段起名，供规则引用。
 
-Adding or editing an entry opens a dialog where sources and destinations are
-built from chips. Every group, tag, host and Headscale user already known to
-your tailnet is offered as a one-click suggestion, so rules can be written
-without memorising the syntax.
+新增或编辑条目会打开对话框，来源与目标用标签块拼装。你的 tailnet 已知的每个用户组、标签、
+主机和 Headscale 用户都会作为一键候选出现，不必记语法也能写出规则。
 
-## Tags and groups
+## 标签与用户组
 
-The **Tags & Groups** tab manages the `groups` and `tagOwners` sections.
+**标签与用户组**标签管理 `groups` 与 `tagOwners` 两段。
 
-- **Groups** bundle Headscale users so rules can refer to a team. Members are
-  written as `username@`, which is how Headscale references users in a policy.
-- **Tags** identify machines by role rather than by owner. Each tag lists the
-  users and groups allowed to assign it. The list also shows which machines
-  currently carry the tag.
+- **用户组**把 Headscale 用户打包，方便规则引用一个团队。成员写作 `username@`，这正是
+  Headscale 在策略里引用用户的方式。
+- **标签**按角色而不是按所有者标识机器。每个标签列出允许给它打标签的用户和用户组，列表
+  同时显示当前哪些机器带着这个标签。
 
-Tags must exist under `tagOwners` before they mean anything: assigning an
-undeclared tag to a machine is allowed by Headscale, but no rule will ever match
-it. The tag dialog on the **Machines** page flags such tags with a warning and
-links back here.
+标签必须先出现在 `tagOwners` 里才有意义：给机器打一个未声明的标签，Headscale 会接受，
+但任何规则都不会匹配到它。**机器**页的标签对话框会把这类标签标出警告，并链回这里。
 
-Group membership can also be edited from the **Users** page: the row menu has an
-**Edit groups** entry, and the groups a user belongs to are shown under their
-name. Both surfaces write to the same `groups` section of the policy.
+用户组也可以在**用户**页编辑：行菜单里有 **编辑用户组**，用户名下方也会显示它所属的组。
+两个入口写入的是策略里同一个 `groups` 段。
 
-## Grants, auto-approvers and node attributes
+## Grants、自动批准与节点属性
 
-Beyond ACL rules, the structured editor also covers the sections Headscale uses
-for its newer policy features:
+除了 ACL 规则，结构化编辑器还覆盖 Headscale 新策略特性使用的几个段：
 
-- **Grants** — the syntax Headscale recommends over `acls`. A grant is a
-  `src` → `dst` pair plus the `ip` it allows, written the way Headscale parses
-  it: `*`, a port (`443`), a list or range (`80,443`, `1000-2000`) or a protocol
-  and port (`tcp:443`, `udp:*`). An empty `ip` is only valid when the grant
-  carries an `app` field, which the editor keeps untouched but does not build.
-- **Auto-approvers** — subnet routes advertised by the listed users, groups or
-  tags are approved without an admin clicking anything, and the same list
-  controls who may advertise an exit node.
-- **Node attributes** — `nodeAttrs` grants a capability to a set of targets, for
-  example Taildrive (`drive:share`, `drive:access`), NextDNS
-  (`nextdns:<profile>`), MagicDNS AAAA records (`magicdns-aaaa`) or
-  `randomize-client-port`. Targets accept users, groups, tags, hosts, prefixes
-  and the `autogroup:*` values, exactly like an ACL source.
+- **Grants** —— Headscale 推荐用来替代 `acls` 的写法。一个 grant 由 `src` → `dst` 加上它
+  允许的 `ip` 组成，写法与 Headscale 的解析一致：`*`、单个端口（`443`）、列表或范围
+  （`80,443`、`1000-2000`），或者协议加端口（`tcp:443`、`udp:*`）。只有当 grant 带 `app`
+  字段时 `ip` 才允许为空；编辑器会原样保留这个字段，但不会帮你构造它。
+- **自动批准** —— 列表中的用户、组或标签宣告的子网路由无需管理员点击即被批准，同一份
+  列表也决定谁可以宣告 exit node。
+- **节点属性** —— `nodeAttrs` 把某项能力授予一组目标，例如 Taildrive（`drive:share`、
+  `drive:access`）、NextDNS（`nextdns:<profile>`）、MagicDNS AAAA 记录（`magicdns-aaaa`）
+  或 `randomize-client-port`。目标同样接受用户、组、标签、主机、前缀以及 `autogroup:*`，
+  与 ACL 来源完全一致。
 
-### Application grants and connectors
+### 应用 grant 与连接器
 
-A grant can also carry an **`app`** — an application served by connector nodes
-instead of an open port range, which is the one case where a grant needs no `ip`
-— and a **`via`** list naming the sources allowed to reach it. Both are edited in
-the same grant dialog.
+grant 还可以带一个 **`app`** —— 由连接器节点提供的应用，而不是开放的端口范围，这也是
+唯一一种 grant 不需要 `ip` 的情况 —— 以及一个 **`via`** 列表，指名哪些来源可以访问它。
+两者在同一个 grant 对话框里编辑。
 
-Headscale stores `app` as a capability map, so a policy written elsewhere can
-hold keys the editor does not know; only the entry the editor writes (`name`
-plus its `connectors`) is touched, and everything else in the map is kept as it
-was. A grant whose `app` came from somewhere else therefore survives a save
-untouched.
+Headscale 把 `app` 存成能力映射，因此别处写好的策略可能含有编辑器不认识的键；保存时只会
+改动编辑器负责的那一项（`name` 及其 `connectors`），映射里其余内容原样保留。也就是说，
+`app` 来自别处的 grant 保存后依然完好。
 
-### Tailnet-wide options
+### Tailnet 级选项
 
-`randomizeClientPort` is a policy-level option that makes machines pick a random
-source port for outgoing connections. It is a switch on the same page; if your
-policy never had the key, Headplane leaves it that way rather than inventing one.
+`randomizeClientPort` 是策略级选项，让机器为出站连接随机选择源端口。同一页上有对应开关；
+如果你的策略从来没有这个键，Headplane 也不会替你造一个。
 
-Anything Headplane does not model inside these sections — a future key inside
-`autoApprovers`, an unknown field inside a grant — is preserved verbatim when a
-policy is saved.
+这些段里 Headplane 没有建模的内容 —— `autoApprovers` 里未来新增的键、grant 里不认识的
+字段 —— 在保存策略时都会逐字保留。
 
-::: warning `postures` and `ipSets` are Tailscale features
-Headscale does not implement them. If a policy contains either section the
-editor shows a warning and keeps the section exactly as written, so nothing is
-lost, but do not expect the rules to have any effect.
+::: warning `postures` 与 `ipSets` 是 Tailscale 的功能
+Headscale 并未实现它们。如果策略里含这两段，编辑器会给出警告并原样保留，什么都不会丢，
+但别指望这些规则真的生效。
 :::
 
-## Validating before saving
+## 保存前校验
 
-Headscale can validate a policy without storing it, and the editor uses that:
-saving runs the policy through Headscale's own parser first, so a rule with a
-typo is reported — in Headscale's own words — instead of being written and
-silently ignored. A **validate** button does the same check on demand, which is
-worth doing before a large rewrite.
+Headscale 可以在不存储的前提下校验策略，编辑器用的就是这个接口：保存时先让策略过一遍
+Headscale 自己的解析器，因此写错的规则会以 Headscale 的原话报出来，而不是写进去之后被
+静默忽略。**校验**按钮可以随时做同样的检查，大改之前值得点一次。
 
-If Headscale cannot run the check at all (an older release, an unreachable
-server), Headplane saves exactly as it always did rather than blocking you.
+如果 Headscale 完全无法执行校验（版本过旧、服务器不可达），Headplane 会像以前一样直接
+保存，而不是把你拦下来。
 
-## Editing the file directly
+## 直接编辑文件
 
-The **Edit file** tab is the original CodeMirror editor over the raw policy, and
-**Preview changes** shows a diff against the saved version. The structured
-editors write into the same buffer, so a change made visually shows up in the
-file editor and in the diff before it is saved.
+**编辑文件**标签是覆盖在原始策略上的 CodeMirror 编辑器，**预览变更**显示与已保存版本的
+差异。结构化编辑器写入的是同一个缓冲区，所以可视化改动在保存前就能在文件编辑器和差异里
+看到。
 
-Nothing is sent to Headscale until **Save** is pressed.
+在你按下 **保存** 之前，不会有任何内容发给 Headscale。
 
-::: warning Comments are not preserved
-HuJSON allows comments and trailing commas. Headplane reads them, but the
-structured editors regenerate the policy text, which drops comments. The Rules
-and Tags & Groups tabs show a notice when the loaded policy contains comments —
-use the file editor if you want to keep them.
+::: warning 注释不会被保留
+HuJSON 允许注释和行尾逗号。Headplane 能读它们，但结构化编辑器会重新生成策略文本，注释
+因此丢失。当载入的策略含有注释时，「规则」和「标签与用户组」标签会给出提示 —— 想保留
+注释就用文件编辑器。
 :::
 
-Unknown top-level keys such as `autoApprovers` and `nodeAttrs` are preserved
-untouched, so using the visual editor never silently drops parts of a policy
-that Headplane does not model.
+`autoApprovers`、`nodeAttrs` 这类 Headplane 没有建模的顶层键都会被原样保留，所以用可视化
+编辑器不会悄悄丢掉策略的一部分。

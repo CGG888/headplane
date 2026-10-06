@@ -3,46 +3,168 @@ import { defineConfig } from "vitepress";
 // GitHub Pages project site: https://cgg888.github.io/headplaneCN/
 const base = "/headplaneCN/";
 
-// Simplified Chinese navigation. Mirrors the English sidebar order; only the
-// pages translated under `docs/zh-Hans` are listed so no entry points at a
-// page that does not exist.
+// Simplified Chinese is the default locale and is served from the site root,
+// so every path below is a root path and never points into `/en/`. The entries
+// mirror `enNav`/`enSidebar` one-for-one: same groups, same pages, same order.
 const zhHansNav = [
-  { text: "首页", link: "/zh-Hans/" },
-  { text: "安装", link: "/zh-Hans/install" },
-  { text: "功能", link: "/zh-Hans/features/overview" },
-  { text: "English", link: "/" },
+  { text: "首页", link: "/" },
+  { text: "赞助", link: "/sponsor" },
+  { text: "更新日志", link: "/CHANGELOG" },
 ];
 
 const zhHansSidebar = [
   {
     text: "开始使用",
     items: [
+      { text: "什么是 Headplane？", link: "/introduction" },
       {
         text: "安装",
-        link: "/zh-Hans/install",
-        items: [{ text: "fnOS（飞牛）", link: "/zh-Hans/install/fnos" }],
+        link: "/install",
+        items: [
+          { text: "受限模式", link: "/install/limited-mode" },
+          { text: "原生模式", link: "/install/native-mode" },
+          { text: "Docker", link: "/install/docker" },
+          { text: "fnOS（飞牛）", link: "/install/fnos" },
+        ],
       },
+      {
+        text: "配置",
+        link: "/configuration",
+        items: [
+          { text: "常见问题", link: "/configuration/common-issues" },
+          { text: "TLS 与证书", link: "/configuration/tls" },
+          {
+            text: "敏感值",
+            link: "/configuration#敏感值",
+          },
+        ],
+      },
+      { text: "Nix", link: "/Nix" },
+      { text: "NixOS", link: "/NixOS-options" },
       {
         text: "功能",
         items: [
-          { text: "功能总览", link: "/zh-Hans/features/overview" },
-          { text: "告警通知", link: "/zh-Hans/features/notifications" },
-          { text: "访问控制", link: "/zh-Hans/features/acls" },
-          { text: "API 密钥", link: "/zh-Hans/features/api-keys" },
-          { text: "批量操作", link: "/zh-Hans/features/bulk-operations" },
-          { text: "DNS", link: "/zh-Hans/features/dns" },
-          { text: "Headscale 设置", link: "/zh-Hans/features/headscale-settings" },
-          { text: "系统状态", link: "/zh-Hans/features/system-status" },
-          { text: "操作审计", link: "/zh-Hans/features/audit" },
-          { text: "配置快照", link: "/zh-Hans/features/snapshots" },
-          { text: "Headplane Agent", link: "/zh-Hans/features/agent" },
-          { text: "机器管理", link: "/zh-Hans/features/machines" },
-          { text: "多语言", link: "/zh-Hans/features/languages" },
+          { text: "功能总览", link: "/features/overview" },
+          { text: "告警通知", link: "/features/notifications" },
+          {
+            text: "单点登录（SSO）",
+            link: "/features/sso",
+            items: [{ text: "代理认证", link: "/features/proxy-auth" }],
+          },
+          { text: "访问控制", link: "/features/acls" },
+          { text: "API 密钥", link: "/features/api-keys" },
+          { text: "批量操作", link: "/features/bulk-operations" },
+          { text: "DNS", link: "/features/dns" },
+          { text: "Headscale 设置", link: "/features/headscale-settings" },
+          { text: "系统状态", link: "/features/system-status" },
+          { text: "操作审计", link: "/features/audit" },
+          { text: "配置快照", link: "/features/snapshots" },
+          { text: "Headplane Agent", link: "/features/agent" },
+          { text: "浏览器 SSH", link: "/features/ssh" },
+          { text: "多语言", link: "/features/languages" },
+        ],
+      },
+      {
+        text: "开发",
+        collapsed: true,
+        items: [
+          { text: "架构", link: "/development/architecture" },
+          { text: "贡献指南", link: "/CONTRIBUTING" },
+          { text: "安全", link: "/SECURITY" },
         ],
       },
     ],
   },
+  {
+    text: "支持",
+    items: [{ text: "赞助", link: "/sponsor" }],
+  },
 ];
+
+// English mirrors the same structure under `/en/`; no entry leaves the prefix.
+const enNav = [
+  { text: "Home", link: "/en/" },
+  { text: "Sponsor", link: "/en/sponsor" },
+  { text: "Changelog", link: "/en/CHANGELOG" },
+];
+
+const enSidebar = [
+  {
+    text: "Getting Started",
+    items: [
+      { text: "What is Headplane?", link: "/en/introduction" },
+      {
+        text: "Installation",
+        link: "/en/install",
+        items: [
+          { text: "Limited Mode", link: "/en/install/limited-mode" },
+          { text: "Native Mode", link: "/en/install/native-mode" },
+          { text: "Docker", link: "/en/install/docker" },
+          { text: "fnOS (飞牛)", link: "/en/install/fnos" },
+        ],
+      },
+      {
+        text: "Configuration",
+        link: "/en/configuration",
+        items: [
+          { text: "Common Issues", link: "/en/configuration/common-issues" },
+          { text: "TLS & Certificates", link: "/en/configuration/tls" },
+          {
+            text: "Sensitive Values",
+            link: "/en/configuration#sensitive-values",
+          },
+        ],
+      },
+      { text: "Nix", link: "/en/Nix" },
+      { text: "NixOS", link: "/en/NixOS-options" },
+      {
+        text: "Features",
+        items: [
+          { text: "Overview", link: "/en/features/overview" },
+          { text: "Alert Notifications", link: "/en/features/notifications" },
+          {
+            text: "Single Sign-On (SSO)",
+            link: "/en/features/sso",
+            items: [{ text: "Proxy Authentication", link: "/en/features/proxy-auth" }],
+          },
+          { text: "Access Control", link: "/en/features/acls" },
+          { text: "API Keys", link: "/en/features/api-keys" },
+          { text: "Bulk Operations", link: "/en/features/bulk-operations" },
+          { text: "DNS", link: "/en/features/dns" },
+          { text: "Headscale Settings", link: "/en/features/headscale-settings" },
+          { text: "System Status", link: "/en/features/system-status" },
+          { text: "Audit Log", link: "/en/features/audit" },
+          { text: "Snapshots", link: "/en/features/snapshots" },
+          { text: "Headplane Agent", link: "/en/features/agent" },
+          { text: "Browser SSH", link: "/en/features/ssh" },
+          { text: "Languages", link: "/en/features/languages" },
+        ],
+      },
+      {
+        text: "Development",
+        collapsed: true,
+        items: [
+          { text: "Architecture", link: "/en/development/architecture" },
+          { text: "Contributing", link: "/en/CONTRIBUTING" },
+          { text: "Security", link: "/en/SECURITY" },
+        ],
+      },
+    ],
+  },
+  {
+    text: "Support",
+    items: [{ text: "Sponsor", link: "/en/sponsor" }],
+  },
+];
+
+// Deep-link target for "edit this page"; `:path` already carries the locale
+// directory, so the same pattern serves both locales.
+const editLinkPattern = "https://github.com/CGG888/headplaneCN/edit/main/docs/:path";
+
+const lastUpdatedFormat = {
+  dateStyle: "full",
+  timeStyle: "medium",
+} as const;
 
 export default defineConfig({
   vite: {
@@ -50,9 +172,11 @@ export default defineConfig({
       __HEADPLANE_BETA_DOCS__: JSON.stringify(process.env.HEADPLANE_BETA_DOCS === "true"),
     },
   },
-  title: "Headplane",
-  description: "The missing dashboard for Headscale",
+  title: "HeadplaneCN 中文文档",
+  description: "Headscale 的 Web 管理界面",
   base,
+  // One hostname covers every locale; the plugin derives the per-page
+  // `hreflang` alternates from `locales` itself.
   sitemap: {
     hostname: "https://cgg888.github.io/headplaneCN/",
   },
@@ -60,112 +184,101 @@ export default defineConfig({
   // Head tags are not rewritten with `base`, so prefix asset paths by hand.
   head: [["link", { rel: "icon", href: `${base}logo.svg` }]],
   locales: {
+    // The default locale: Simplified Chinese at the site root.
     root: {
-      label: "English",
-      lang: "en",
-      link: "/",
-    },
-    "zh-Hans": {
       label: "简体中文",
       lang: "zh-Hans",
-      link: "/zh-Hans/",
-      title: "Headplane 中文文档",
+      title: "HeadplaneCN 中文文档",
       description: "Headscale 的 Web 管理界面",
       themeConfig: {
         nav: zhHansNav,
         sidebar: zhHansSidebar,
-        lastUpdated: {
-          text: "最后更新",
+        search: {
+          provider: "local",
+          options: {
+            translations: {
+              button: {
+                buttonText: "搜索",
+                buttonAriaLabel: "搜索文档",
+              },
+              modal: {
+                displayDetails: "显示详细列表",
+                resetButtonTitle: "清除搜索条件",
+                backButtonTitle: "关闭搜索",
+                noResultsText: "没有找到相关结果：",
+                footer: {
+                  selectText: "选择",
+                  selectKeyAriaLabel: "回车键",
+                  navigateText: "切换",
+                  navigateUpKeyAriaLabel: "上箭头",
+                  navigateDownKeyAriaLabel: "下箭头",
+                  closeText: "关闭",
+                  closeKeyAriaLabel: "Esc",
+                },
+              },
+            },
+          },
         },
       },
     },
+    en: {
+      label: "English",
+      lang: "en",
+      link: "/en/",
+      title: "HeadplaneCN",
+      description: "The missing dashboard for Headscale",
+      themeConfig: {
+        nav: enNav,
+        sidebar: enSidebar,
+        outline: { label: "On this page" },
+        docFooter: { prev: "Previous page", next: "Next page" },
+        editLink: {
+          pattern: editLinkPattern,
+          text: "Edit this page on GitHub",
+        },
+        lastUpdated: {
+          text: "Updated at",
+          formatOptions: lastUpdatedFormat,
+        },
+        darkModeSwitchLabel: "Appearance",
+        lightModeSwitchTitle: "Switch to light theme",
+        darkModeSwitchTitle: "Switch to dark theme",
+        sidebarMenuLabel: "Menu",
+        returnToTopLabel: "Return to top",
+        langMenuLabel: "Change language",
+        skipToContentLabel: "Skip to content",
+      },
+    },
   },
+  // Chinese-first defaults for the root locale; the `en` locale overrides the
+  // UI strings it needs to.
   themeConfig: {
     logo: "/logo.svg",
-    nav: [
-      { text: "Home", link: "/" },
-      { text: "Changelog", link: "/CHANGELOG" },
-    ],
     search: {
       provider: "local",
     },
-    sidebar: [
-      {
-        text: "Getting Started",
-        items: [
-          { text: "What is Headplane?", link: "/introduction" },
-          {
-            text: "Installation",
-            link: "/install",
-            items: [
-              { text: "Limited Mode", link: "/install/limited-mode" },
-              { text: "Native Mode", link: "/install/native-mode" },
-              { text: "Docker", link: "/install/docker" },
-              { text: "fnOS (飞牛)", link: "/install/fnos" },
-            ],
-          },
-          {
-            text: "Configuration",
-            link: "/configuration",
-            items: [
-              { text: "Common Issues", link: "/configuration/common-issues" },
-              { text: "TLS & Certificates", link: "/configuration/tls" },
-              {
-                text: "Sensitive Values",
-                link: "/configuration#sensitive-values",
-              },
-            ],
-          },
-          { text: "Nix", link: "/Nix" },
-          { text: "NixOS", link: "/NixOS-options" },
-          {
-            text: "Features",
-            items: [
-              { text: "Overview", link: "/features/overview" },
-              { text: "Alert Notifications", link: "/features/notifications" },
-              {
-                text: "Single Sign-On (SSO)",
-                link: "/features/sso",
-                items: [{ text: "Proxy Authentication", link: "/features/proxy-auth" }],
-              },
-              { text: "Access Control", link: "/features/acls" },
-              { text: "API Keys", link: "/features/api-keys" },
-              { text: "Bulk Operations", link: "/features/bulk-operations" },
-              { text: "DNS", link: "/features/dns" },
-              { text: "Headscale Settings", link: "/features/headscale-settings" },
-              { text: "System Status", link: "/features/system-status" },
-              { text: "Audit Log", link: "/features/audit" },
-              { text: "Snapshots", link: "/features/snapshots" },
-              { text: "Headplane Agent", link: "/features/agent" },
-              { text: "Browser SSH", link: "/features/ssh" },
-              { text: "Languages", link: "/features/languages" },
-            ],
-          },
-          {
-            text: "Development",
-            collapsed: true,
-            items: [
-              { text: "Architecture", link: "/development/architecture" },
-              { text: "Contributing", link: "/CONTRIBUTING" },
-              { text: "Security", link: "/SECURITY" },
-            ],
-          },
-        ],
-      },
-    ],
+    outline: { label: "本页目录" },
+    docFooter: { prev: "上一页", next: "下一页" },
+    editLink: {
+      pattern: editLinkPattern,
+      text: "在 GitHub 上编辑此页",
+    },
+    lastUpdated: {
+      text: "最后更新",
+      formatOptions: lastUpdatedFormat,
+    },
+    darkModeSwitchLabel: "外观",
+    lightModeSwitchTitle: "切换到浅色主题",
+    darkModeSwitchTitle: "切换到深色主题",
+    sidebarMenuLabel: "目录",
+    returnToTopLabel: "回到顶部",
+    langMenuLabel: "切换语言",
+    skipToContentLabel: "跳转到内容",
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/tale/headplane" },
-      { icon: "githubsponsors", link: "https://github.com/sponsors/tale" },
-      { icon: "kofi", link: "https://ko-fi.com/atale" },
+      { icon: "github", link: "https://github.com/CGG888/headplaneCN" },
+      // Sponsorship goes to this fork's own sponsor page (upstream links removed).
+      { icon: "githubsponsors", link: `${base}sponsor`, ariaLabel: "赞助 / Sponsor" },
     ],
-
-    lastUpdated: {
-      text: "Updated at",
-      formatOptions: {
-        dateStyle: "full",
-        timeStyle: "medium",
-      },
-    },
   },
 });

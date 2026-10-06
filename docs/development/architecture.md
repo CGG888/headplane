@@ -1,22 +1,20 @@
 ---
-title: Architecture
-description: Service architecture patterns used in Headplane's server code.
+title: 架构
+description: Headplane 服务端代码使用的服务架构模式。
 outline: [2, 3]
 ---
 
-# Architecture
+# 架构
 
-Headplane's server code is organized as independent service modules within a
-single Node.js process. Each service manages its own state and lifecycle
-without relying on a shared god-object or dependency injection framework.
+Headplane 的服务端代码在单个 Node.js 进程中，由彼此独立的服务模块组成。每个服务自行管理状态
+和生命周期，不依赖共享的“上帝对象”，也不使用依赖注入框架。
 
-This page documents the patterns that all server-side services must follow.
+本页记录所有服务端服务都必须遵循的模式。
 
-## Core Pattern: Closure Factories
+## 核心模式：闭包工厂
 
-Every service is a **factory function** that takes its dependencies as
-arguments, closes over its private state, and returns a plain object of
-functions. No classes, no decorators, no module-level globals.
+每个服务都是一个**工厂函数**：依赖以参数传入，私有状态被闭包捕获，返回一个由函数组成的普通
+对象。没有类，没有装饰器，没有模块级全局变量。
 
 ```ts
 // ✅ Correct: closure factory
@@ -64,22 +62,19 @@ export class OidcService {
 }
 ```
 
-### Why Closures?
+### 为什么用闭包？
 
-- **Testable**: Create a fresh instance per test with different config. No
-  `vi.resetModules()`, no import-order hacks, no singletons to clean up.
-- **Composable**: Services can depend on other services by accepting them as
-  factory arguments. No container registration, no string keys.
-- **Hot-reloadable**: Call `service.reload(newConfig)` or create a new
-  instance. Old state is garbage collected.
-- **Explicit**: Every dependency is visible in the factory signature. No
-  hidden ambient state.
+- **可测试**：每个测试都可以用不同的配置创建一个全新实例。不需要 `vi.resetModules()`，不需要
+  处理导入顺序的取巧写法，也没有单例需要清理。
+- **可组合**：服务可以把其他服务当作工厂参数接收，从而依赖它们。不需要容器注册，也不需要
+  字符串键。
+- **可热重载**：调用 `service.reload(newConfig)` 或直接创建新实例即可，旧状态会被垃圾回收。
+- **显式**：每个依赖都出现在工厂函数签名里，没有隐藏的环境状态。
 
-## Service Interface
+## 服务接口
 
-Every service should define a TypeScript interface for its public API. This
-is what consumers (routes, other services, tests) depend on — never the
-internal implementation.
+每个服务都应该为自己的公开 API 定义 TypeScript 接口。使用方（路由、其他服务、测试）依赖的
+是这个接口，而不是内部实现。
 
 ```ts
 export interface OidcService {
@@ -91,11 +86,10 @@ export interface OidcService {
 }
 ```
 
-### Lifecycle Hooks
+### 生命周期钩子
 
-Services that run background work (timers, polling, watch loops) should
-expose lifecycle hooks. These keep the background behavior local to the
-service that owns it:
+需要运行后台工作（定时器、轮询、监听循环）的服务应该暴露生命周期钩子。这样后台行为就留在拥有
+它的服务内部：
 
 ```ts
 export interface AuthService {
@@ -126,10 +120,10 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
 }
 ```
 
-## Result Type
+## Result 类型
 
-Services that can fail use the shared `Result<T, E>` type instead of
-throwing exceptions. This makes error handling explicit at every call site.
+可能失败的服务使用共享的 `Result<T, E>` 类型，而不是抛出异常。这让每个调用点的错误处理都变
+得显式。
 
 ```ts
 import { type Result, ok, err } from "~/server/result";
@@ -141,7 +135,7 @@ return ok({ url, flowState });
 return err({ code: "discovery_failed", message: "..." });
 ```
 
-Routes and other callers use the discriminated union:
+路由和其他调用方使用这个可辨识联合：
 
 ```ts
 const result = await runtime.oidc.startFlow();
@@ -153,17 +147,16 @@ if (!result.ok) {
 return redirect(result.value.url);
 ```
 
-`Result` lives in `app/server/result.ts` and is intentionally minimal:
+`Result` 位于 `app/server/result.ts`，刻意保持最小：
 
 ```ts
 type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 ```
 
-## Composition Root
+## 组合根
 
-All services are wired together in a single place: `server/index.ts`. This
-is the **composition root** — the only file that knows about every service
-and how they connect.
+所有服务都在同一个地方装配：`server/index.ts`。它就是**组合根** —— 唯一知道全部服务以及它们
+如何连接的文件。
 
 ```ts
 export interface AppRuntime {
@@ -198,7 +191,7 @@ export async function createAppRuntime(): Promise<AppRuntime> {
 }
 ```
 
-React Router's `AppLoadContext` wraps the runtime:
+React Router 的 `AppLoadContext` 包装了这个运行时：
 
 ```ts
 const runtime = await createAppRuntime();
@@ -208,7 +201,7 @@ getLoadContext() {
 }
 ```
 
-Routes access services through `context.runtime`:
+路由通过 `context.runtime` 访问服务：
 
 ```ts
 export async function loader({ context }: Route.LoaderArgs) {
@@ -217,11 +210,9 @@ export async function loader({ context }: Route.LoaderArgs) {
 }
 ```
 
-### Dependency Direction
+### 依赖方向
 
-Services can depend on other services, but only through explicit factory
-arguments — never by importing another service's module and reading its
-state:
+服务可以依赖其他服务，但只能通过显式的工厂参数 —— 绝不能导入另一个服务的模块并读取它的状态：
 
 ```ts
 // ✅ Correct: explicit dependency
@@ -237,27 +228,26 @@ export function createAuthService(): AuthService {
 }
 ```
 
-## Error Handling
+## 错误处理
 
-### Config-Time vs Flow-Time
+### 配置期错误与流程期错误
 
-Services distinguish between errors that happen during setup (config-time)
-and errors that happen during a user action (flow-time). This distinction
-determines where and how errors are surfaced:
+服务会区分搭建阶段发生的错误（配置期）和用户操作期间发生的错误（流程期）。这一区分决定了错误
+在哪里、以什么方式呈现在界面上：
 
-| Type        | When                     | UI Surface               | Example                                   |
-| ----------- | ------------------------ | ------------------------ | ----------------------------------------- |
-| Config-time | Before user acts         | Banner on login page     | `discovery_failed`, `invalid_api_key`     |
-| Flow-time   | After user starts a flow | Redirect with error code | `token_exchange_failed`, `state_mismatch` |
-| Non-fatal   | During a flow            | Logged only              | `userinfo_failed`                         |
+| 类型     | 发生时机             | 界面呈现方式         | 示例                                      |
+| -------- | -------------------- | -------------------- | ----------------------------------------- |
+| 配置期   | 用户操作之前         | 登录页横幅           | `discovery_failed`、`invalid_api_key`     |
+| 流程期   | 用户开始流程之后     | 带错误码的重定向     | `token_exchange_failed`、`state_mismatch` |
+| 非致命   | 流程进行期间         | 仅记录日志           | `userinfo_failed`                         |
 
-### Error Codes
+### 错误码
 
-Every service error should have a unique `code` string that maps to:
+每个服务错误都应该有一个唯一的 `code` 字符串，它对应：
 
-1. A log message with actionable detail (for the operator)
-2. A UI component (for the user)
-3. A documentation section (for troubleshooting)
+1. 一条带可操作细节的日志（给运维者）
+2. 一个界面组件（给用户）
+3. 一个文档章节（用于故障排查）
 
 ```ts
 export interface OidcError {
@@ -267,12 +257,11 @@ export interface OidcError {
 }
 ```
 
-## Testing
+## 测试
 
-### Unit Tests
+### 单元测试
 
-Create a fresh service instance per test with the exact config you need.
-No mocking frameworks required:
+每个测试都用自己需要的配置创建一个全新的服务实例，不需要 mock 框架：
 
 ```ts
 import { createOidcService } from "~/server/oidc/provider";
@@ -290,9 +279,9 @@ test("invalidate clears cached endpoints", async () => {
 });
 ```
 
-### Faking Services
+### 伪造服务
 
-For route tests, build a partial runtime with only the services you need:
+在路由测试中，只搭建你需要的那些服务，组成一个部分运行时：
 
 ```ts
 function createTestRuntime(overrides: Partial<AppRuntime> = {}): AppRuntime {
@@ -314,10 +303,10 @@ test("login page shows SSO button when OIDC is ready", () => {
 });
 ```
 
-### Integration Tests
+### 集成测试
 
-Use real OIDC providers in containers (Dex, Keycloak) via `testcontainers`
-to test the full flow without browser automation:
+通过 `testcontainers` 在容器中使用真实的 OIDC 提供方（Dex、Keycloak），无需浏览器自动化即可
+测试完整流程：
 
 ```ts
 // Configure Dex with static client + static passwords
@@ -325,14 +314,12 @@ to test the full flow without browser automation:
 // Validate the entire server-side flow end-to-end
 ```
 
-## Adding a New Service
+## 新增一个服务
 
-1. **Define the interface** in a new file under `app/server/<name>/`.
-2. **Write the factory** function that takes explicit deps and returns the
-   interface. Keep state in closure variables.
-3. **Add lifecycle hooks** (`start`/`stop`/`reload`/`invalidate`) if the
-   service has background work or cached state.
-4. **Use `Result<T, E>`** for operations that can fail. Define a typed error
-   with a `code` field.
-5. **Wire it in `createAppRuntime()`** in `server/index.ts`.
-6. **Write tests** that create isolated instances — no module mocking needed.
+1. **定义接口**，放在 `app/server/<name>/` 下的新文件中。
+2. **编写工厂函数**，接收显式依赖并返回该接口。状态保存在闭包变量里。
+3. **添加生命周期钩子**（`start`/`stop`/`reload`/`invalidate`），前提是该服务有后台工作或缓存
+   状态。
+4. 对可能失败的操作**使用 `Result<T, E>`**。定义带 `code` 字段的类型化错误。
+5. 在 `server/index.ts` 的 `createAppRuntime()` 中**把它接进去**。
+6. **编写测试**，创建相互隔离的实例 —— 不需要 mock 模块。

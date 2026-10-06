@@ -16,7 +16,7 @@ export const RELEASES_URL = "https://api.github.com/repos/juanfont/headscale/rel
 
 /** Headplane's own releases, looked up exactly the same way. */
 export const HEADPLANE_RELEASES_URL =
-  "https://api.github.com/repos/CGG888/headplane/releases/latest";
+  "https://api.github.com/repos/CGG888/headplaneCN/releases/latest";
 
 /** Long enough for a healthy connection, short enough to never stall a page. */
 export const REQUEST_TIMEOUT_MS = 3_000;

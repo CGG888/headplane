@@ -153,7 +153,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
                     <Link
                       external
                       styled
-                      to="https://headplane.net/configuration/common-issues#issue-logging-in-does-not-do-anything"
+                      to="https://cgg888.github.io/headplaneCN/configuration/common-issues#登录没有反应"
                     >
                       {t("common.learnMore")}
                     </Link>

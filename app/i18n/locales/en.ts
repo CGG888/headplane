@@ -31,8 +31,8 @@ const en = {
     offline: "Offline",
   },
   header: {
-    logoAlt: "Headplane logo",
-    brand: "Headplane Console",
+    logoAlt: "HeadplaneCN logo",
+    brand: "HeadplaneCN Console",
     tabs: {
       overview: "Overview",
       machines: "Machines",
@@ -63,7 +63,8 @@ const en = {
     about:
       "Headplane is free and open-source software (upstream: {upstream}) — please use it and support its development. This fork is maintained at {fork}.",
     upstreamLink: "the upstream project",
-    forkLink: "CGG888/headplane",
+    forkLink: "CGG888/headplaneCN",
+    sponsorLink: "Sponsor this fork",
     debug: "Debug",
     showServerUrl: "Show server URL",
     hideServerUrl: "Hide server URL",
@@ -77,9 +78,17 @@ const en = {
   overview: {
     title: "Overview",
     intro:
-      "What this Headplane instance runs, how Headscale is configured, and whether anything needs attention. Read-only.",
+      "What this HeadplaneCN instance runs, how Headscale is configured, and whether anything needs attention. Read-only.",
     unavailable: "—",
     unavailableReason: "— ({reason})",
+    cards: {
+      manage: "Manage cards",
+      hideCard: "Hide this card",
+      body: "Cards you hide stay listed here so you can bring them back at any time. A card that reports a warning, an alert or a failure always stays visible.",
+      hiddenState: "Hidden",
+      protectedState: "Always visible",
+      restoreDefault: "Restore defaults",
+    },
     sections: {
       versions: "Versions",
       derp: "DERP",
@@ -104,7 +113,7 @@ const en = {
       releaseUnknown: "No release information",
     },
     reason: {
-      agentDisabled: "the Headplane Agent is not enabled",
+      agentDisabled: "the HeadplaneCN Agent is not enabled",
       apiUnavailable: "the Headscale API could not be read",
       configUnreadable: "the Headscale configuration file is not readable",
       notConfigured: "not configured",
@@ -112,11 +121,11 @@ const en = {
       unsupported: "not supported by this Headscale version",
     },
     versions: {
-      headplaneTitle: "Headplane",
-      headplaneBody: "This Headplane build, and the release it can see.",
+      headplaneTitle: "HeadplaneCN",
+      headplaneBody: "This HeadplaneCN build, and the release it can see.",
       headscaleTitle: "Headscale",
-      headscaleBody: "The Headscale server that Headplane talks to.",
-      agentTitle: "Headplane Agent",
+      headscaleBody: "The Headscale server that HeadplaneCN talks to.",
+      agentTitle: "HeadplaneCN Agent",
       agentBody: "The co-located agent that reports details the Headscale API omits.",
       running: "Running version",
       latest: "Latest release",
@@ -126,7 +135,7 @@ const en = {
       agentNodes: "Nodes reported",
       agentError: "Last sync error",
       agentDisabledBody:
-        "The Headplane Agent is not running, so node details are not collected. Enable it under Settings → Agent.",
+        "The HeadplaneCN Agent is not running, so node details are not collected. Enable it under Settings → Agent.",
     },
     derp: {
       regionTitle: "Embedded Region",
@@ -170,7 +179,7 @@ const en = {
         "point the A record at this machine's current address, or clear derp.server.ipv4",
       relayFixIpv6: "add an AAAA record for this hostname, or accept IPv4-only",
       relayFixIpv6NoRecords:
-        "a host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it",
+        "a host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart HeadplaneCN to clear it",
       relayReasonNoRecords: "the DNS lookup returned no records",
       relayReasonTimeout: "the DNS lookup timed out",
       relayReasonResolverError: "the DNS lookup failed",
@@ -206,41 +215,47 @@ const en = {
         "The domain's AAAA answer is {dns}, but this machine holds {host}. The record may point at another machine, or be a temporary privacy address — publish the host address instead.",
       ipv6HostCopy: "Copy host address",
       ipv6UnverifiedNote:
-        "The domain's DNS answer, which Headplane could not check against this machine's own addresses.",
+        "The domain's DNS answer, which HeadplaneCN could not check against this machine's own addresses.",
       stun: "STUN listen address",
       ipv6StunTitle: "STUN listens on IPv4 only",
       ipv6StunBody:
         "derp.server.ipv6 is set to {ipv6}, but STUN listens on {stun}. Go binds an IPv4 address such as 0.0.0.0 as IPv4 only, so a client without an IPv4 stack cannot reach STUN. Use a dual-stack or IPv6 listen address such as [::]:3478.",
-      mapsTitle: "Local DERP nodes",
-      mapsBody: "The relay regions the configured DERP maps describe, and where each came from.",
-      mapsSummary: "{regions} regions · {nodes} nodes",
-      mapsDetailTitle: "Regions in the configured maps",
-      mapsDetailBody: "One block per region, with the nodes it relays listed inline.",
-      mapsNoMaps: "No DERP map files or URLs are configured, so no region is described here.",
-      mapsEmpty: "The configured DERP maps describe no regions.",
-      mapsFileUnreadable:
-        "Headplane cannot read {path}: the map directory needs to be mounted read-write at the same absolute path inside the container.",
-      mapsFileInvalid: "{path} is not a DERP map Headplane can read.",
-      mapsFileEmpty: "{path} describes no regions.",
-      mapsRemoteUnavailable:
-        "At least one DERP map URL could not be read, so its regions are missing here.",
-      mapsResolveTruncated: "Only the first {count} node hostnames are resolved here.",
-      mapsRegionNodes: "{count} nodes",
-      mapsMoreRegions: "+{count} more",
-      mapsMoreNodes: "+{count} more nodes",
-      mapsRegionNoNodes: "This region lists no nodes.",
-      mapsSourceManual: "Manual name",
-      mapsSourceLocal: "Local file",
-      mapsSourceRemote: "Map URL",
-      mapsStun: "STUN",
-      mapsStunNone: "not offered",
-      mapsStunOnly: "STUN only",
-      mapsDefault: "default",
-      mapsDeclared: "map",
+      nodesTitle: "DERP nodes",
+      nodesBody: "Every DERP node this configuration describes, one row per source.",
+      nodesSummary: "{served} served here · {total} known",
+      nodesCount: "{count} nodes",
+      nodesMore: "+{count} more nodes",
+      nodesNotServed: "not served here",
+      nodesSourceEmbedded: "Embedded relay",
+      nodesSourceEmbeddedBody: "The relay derp.server configures.",
+      nodesSourceLocal: "Local map files",
+      nodesSourceLocalBody: "The maps listed in derp.paths.",
+      nodesSourceMirror: "Official filter",
+      nodesSourceMirrorBody: "The file the official region filter maintains.",
+      nodesSourceOfficial: "Official upstream",
+      nodesSourceOfficialBody: "What derp.urls adds that this machine does not serve.",
+      nodesEmbeddedOff: "The embedded DERP server is off, so it relays nothing.",
+      nodesLocalNone: "No map file is listed in derp.paths.",
+      nodesMirrorOff: "The official region filter is not set up.",
+      nodesMirrorUnlisted:
+        "The filtered map is not one of the files listed in derp.paths, so clients are not handed it.",
+      nodesOfficialNoUrls: "No map URL is configured in derp.urls.",
+      nodesOfficialCovered: "Every region the official map adds is already served above.",
+      nodesUnreadable: "None of the configured maps could be read.",
+      nodesEmpty: "The configured maps list no node.",
+      nodesFileUnreadable:
+        "HeadplaneCN cannot read {path}: the map directory needs to be mounted read-write at the same absolute path inside the container.",
+      nodesFileInvalid: "{path} is not a DERP map HeadplaneCN can read.",
+      nodesFileEmpty: "{path} describes no regions.",
+      nodesUrlUnreadable: "The map at {url} could not be read, so its nodes are missing here.",
+      nodesUrlEmpty: "The map at {url} describes no regions.",
+      nodesAdd:
+        "Nodes are defined in the DERP settings: the embedded relay, and every file listed in derp.paths. {link}",
+      nodesAddLink: "Add a node",
     },
     service: {
       title: "Headscale Server",
-      serverBody: "How Headplane reaches Headscale, and the access-control mode in force.",
+      serverBody: "How HeadplaneCN reaches Headscale, and the access-control mode in force.",
       url: "URL",
       baseDomain: "Base domain",
       policyMode: "Policy mode",
@@ -267,8 +282,8 @@ const en = {
     counts: {
       tailnetTitle: "Tailnet",
       tailnetBody: "What Headscale reports about the tailnet right now.",
-      headplaneTitle: "Headplane Data",
-      headplaneBody: "The records Headplane keeps for itself on this host.",
+      headplaneTitle: "HeadplaneCN Data",
+      headplaneBody: "The records HeadplaneCN keeps for itself on this host.",
       nodes: "Nodes",
       nodesSplit: "{online} online · {offline} offline",
       nodesValue: "{total} ({online} online, {offline} offline)",
@@ -465,7 +480,7 @@ const en = {
         "Reported by the machine itself: whether it obtained a port mapping from the router with NAT-PMP.",
       derp: {
         title: "DERP Relays",
-        body: "The relay address, the embedded DERP region, and the relays this machine uses — per-machine data comes from the Headplane Agent.",
+        body: "The relay address, the embedded DERP region, and the relays this machine uses — per-machine data comes from the HeadplaneCN Agent.",
         relayAddressTitle: "Relay clients reach",
         relayIpv4: "IPv4",
         relayIpv6: "IPv6",
@@ -478,11 +493,6 @@ const en = {
         relayVerdictUnavailable: "not checked: the DNS lookup did not complete",
         relayVerdictHostMissing: "not checked: server_url names no usable host",
         relayVerdictLiteral: "this endpoint is already an IP address, so nothing is resolved",
-        relayFixIpv4:
-          "point the A record at this machine's current address, or clear derp.server.ipv4",
-        relayFixIpv6: "add an AAAA record for this hostname, or accept IPv4-only",
-        relayFixIpv6NoRecords:
-          "a host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it",
         relayResolvedUnavailable: "not resolved",
         relayReasonNoRecords: "the DNS lookup returned no records",
         relayReasonTimeout: "the DNS lookup timed out",
@@ -492,8 +502,13 @@ const en = {
         relayUnavailable:
           "Headscale's server_url could not be read, so the relay clients reach is unknown.",
         relayMachineTitle: "Relays this machine uses",
+        relayInUse: "In use",
+        relaySourceEmbedded: "Embedded relay",
+        relaySourceLocal: "Local map files",
+        relaySourceMirror: "Official filter",
+        relaySourceOfficial: "Official upstream",
         agentRequired:
-          "Live relay data needs the Headplane Agent. Enable the agent so Headplane can read this machine's home region, preferred region, and DERP latency.",
+          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read this machine's home region, preferred region, and DERP latency.",
         empty: "This machine has not reported DERP relay information yet.",
         homeRegion: "Home region",
         preferredRegion: "Preferred region",
@@ -673,18 +688,18 @@ const en = {
         "This machine’s key expires soon. Re-authenticate or disable key expiry before then to keep it connected.",
       tailscaleSsh: "Tailscale SSH",
       tailscaleSshTooltip:
-        "This machine advertises Tailscale SSH, which allows you to authenticate SSH credentials using your Tailscale account and via the Headplane web UI.",
-      agent: "Headplane Agent",
+        "This machine advertises Tailscale SSH, which allows you to authenticate SSH credentials using your Tailscale account and via the HeadplaneCN web UI.",
+      agent: "HeadplaneCN Agent",
       agentTooltip:
-        "This machine is running the Headplane agent, which allows it to provide host information in the web UI.",
+        "This machine is running the HeadplaneCN agent, which allows it to provide host information in the web UI.",
     },
   },
   users: {
     list: {
       title: "Users",
       subtitle: "Manage the users in your network and their permissions.",
-      headplaneSection: "Headplane Users",
-      empty: "No users have signed into Headplane yet.",
+      headplaneSection: "HeadplaneCN Users",
+      empty: "No users have signed into HeadplaneCN yet.",
       columnUser: "User",
       columnRole: "Role",
       columnLastLogin: "Last Login",
@@ -693,7 +708,7 @@ const en = {
       actions: "Actions",
       unlinkedSection: "Unlinked Headscale Users",
       unlinkedBody:
-        "These Headscale users are not linked to a Headplane account and cannot be managed through Headplane.",
+        "These Headscale users are not linked to a HeadplaneCN account and cannot be managed through HeadplaneCN.",
       apiError:
         "Could not connect to the Headscale API. Headscale user data and machine information are unavailable.",
     },
@@ -733,9 +748,9 @@ const en = {
     create: {
       addUser: "Add user",
       title: "Create a Headscale user",
-      body: "This creates a new user in Headscale. The user will appear in the “Unlinked Headscale Users” section until they sign in and are automatically linked to a Headplane account.",
+      body: "This creates a new user in Headscale. The user will appear in the “Unlinked Headscale Users” section until they sign in and are automatically linked to a HeadplaneCN account.",
       bodyOidc:
-        "This creates a new user in Headscale. The user will appear in the “Unlinked Headscale Users” section until they sign in through your OIDC provider and are automatically linked to a Headplane account.",
+        "This creates a new user in Headscale. The user will appear in the “Unlinked Headscale Users” section until they sign in through your OIDC provider and are automatically linked to a HeadplaneCN account.",
       username: "Username",
       usernameRule:
         "Usernames must be at least 2 characters, start with a letter, and contain only letters, numbers, dots, dashes and underscores, with at most one @ that cannot be the last character.",
@@ -759,7 +774,7 @@ const en = {
     },
     changeRole: {
       title: "Change role for {name}?",
-      body: "Roles control what the user can access in Headplane. Each role grants a specific set of capabilities.",
+      body: "Roles control what the user can access in HeadplaneCN. Each role grants a specific set of capabilities.",
       ownerNotice: "The Tailnet owner cannot be reassigned.",
       label: "Role",
     },
@@ -785,7 +800,7 @@ const en = {
     },
     transfer: {
       title: "Transfer ownership to {name}?",
-      body: "This will make {name} the new owner of this Headplane instance. You will be demoted to an Admin. This action cannot be easily undone.",
+      body: "This will make {name} the new owner of this HeadplaneCN instance. You will be demoted to an Admin. This action cannot be easily undone.",
       notice:
         "Only the owner can transfer ownership. After this, you will no longer be able to manage ownership.",
     },
@@ -865,7 +880,7 @@ const en = {
       createFile:
         "Create the ACL policy file at the specified path in your Headscale configuration.",
       switchDatabase:
-        "Alternatively, you can switch Headscale to use {database} mode for ACLs by updating your Headscale configuration. This will allow Headplane to manage the ACL policy directly through the web interface.",
+        "Alternatively, you can switch Headscale to use {database} mode for ACLs by updating your Headscale configuration. This will allow HeadplaneCN to manage the ACL policy directly through the web interface.",
     },
     common: {
       sources: "Sources",
@@ -900,7 +915,7 @@ const en = {
       actionLabel: "Action",
       actionAccept: "Accept — allow the session immediately",
       actionCheck: "Check — require periodic re-authentication",
-      actionUnknown: "{action} — not known to Headplane",
+      actionUnknown: "{action} — not known to HeadplaneCN",
       sourcesDescription: "Who is allowed to open the SSH session.",
       sourcesPlaceholder: "group:ops",
       destinationsDescription: "The nodes that accept the SSH session.",
@@ -1034,7 +1049,7 @@ const en = {
     },
     unsupported: {
       title: "Unsupported policy sections",
-      body: "This policy defines {sections}, which Headscale does not support. Headplane keeps those sections verbatim when the policy is saved.",
+      body: "This policy defines {sections}, which Headscale does not support. HeadplaneCN keeps those sections verbatim when the policy is saved.",
     },
     autoApprovers: {
       title: "Auto-approvers",
@@ -1179,7 +1194,7 @@ const en = {
         tooManyRecords:
           "Too many records: this file contains {count}, but at most {max} are allowed.",
         conflictingRecord:
-          "Records {position} and another entry share a name and type but have different values. Headplane keeps one record per name and type, so add the extra value in Headscale's configuration file instead.",
+          "Records {position} and another entry share a name and type but have different values. HeadplaneCN keeps one record per name and type, so add the extra value in Headscale's configuration file instead.",
       },
     },
     domains: {
@@ -1193,9 +1208,9 @@ const en = {
     overview: {
       title: "Settings",
       intro:
-        "Keys, authentication and the Headscale configuration live here, alongside the Headplane agent, operation log and snapshots.",
+        "Keys, authentication and the Headscale configuration live here, alongside the HeadplaneCN agent, operation log and snapshots.",
       headscaleSection: "Headscale",
-      headplaneSection: "Headplane",
+      headplaneSection: "HeadplaneCN",
       preAuthTitle: "Pre-Auth Keys",
       preAuthBody:
         "Headscale fully supports pre-authentication keys in order to easily add devices to your Tailnet. To learn more about using pre-authentication keys, visit the {link}",
@@ -1205,25 +1220,25 @@ const en = {
       apiKeysBody:
         "API keys let tools and integrations authenticate against the Headscale API. The full key is shown only once, when it is created.",
       manageApiKeys: "Manage API Keys",
-      agentTitle: "Headplane Agent",
+      agentTitle: "HeadplaneCN Agent",
       agentBody:
-        "The Headplane Agent syncs node information like OS version and connectivity details from your Tailnet.",
+        "The HeadplaneCN Agent syncs node information like OS version and connectivity details from your Tailnet.",
       agentSettings: "Agent Settings",
       restrictionsTitle: "Authentication Restrictions",
       restrictionsBody:
-        "Headscale supports restricting OIDC authentication to only allow certain email domains, groups, or users to authenticate. This can be used to limit access to your Tailnet to only certain users or groups and Headplane will also respect these settings when authenticating. {link}",
+        "Headscale supports restricting OIDC authentication to only allow certain email domains, groups, or users to authenticate. This can be used to limit access to your Tailnet to only certain users or groups and HeadplaneCN will also respect these settings when authenticating. {link}",
       manageRestrictions: "Manage Restrictions",
       headscaleTitle: "Headscale Settings",
       headscaleBody:
-        "Edit the parts of Headscale's own configuration file that Headplane can safely change: OpenID Connect, trusted proxies, and where the Access Control policy is stored.",
+        "Edit the parts of Headscale's own configuration file that HeadplaneCN can safely change: OpenID Connect, trusted proxies, and where the Access Control policy is stored.",
       manageHeadscale: "Manage Headscale Settings",
       systemTitle: "System Status",
       systemBody:
-        "Check whether the Headscale server Headplane manages is healthy, which version it runs, and whether a newer release is available.",
+        "Check whether the Headscale server HeadplaneCN manages is healthy, which version it runs, and whether a newer release is available.",
       systemStatus: "View System Status",
       auditTitle: "Operation Log",
       auditBody:
-        "See who changed what through Headplane, with filters for the actor, the action and how far back to look.",
+        "See who changed what through HeadplaneCN, with filters for the actor, the action and how far back to look.",
       manageAudit: "View Operation Log",
       snapshotsTitle: "Configuration Snapshots",
       snapshotsBody:
@@ -1237,12 +1252,12 @@ const en = {
     system: {
       breadcrumb: "System Status",
       title: "System Status",
-      body: "Health, version, and configuration checks for the Headscale server that Headplane manages.",
+      body: "Health, version, and configuration checks for the Headscale server that HeadplaneCN manages.",
       statusTitle: "Health",
       statusHealthy: "Headscale is reachable",
       statusUnhealthy: "Headscale is unreachable",
       statusUnhealthyBody:
-        "Headplane could not reach the Headscale API. Start Headscale, then reload this page.",
+        "HeadplaneCN could not reach the Headscale API. Start Headscale, then reload this page.",
       versionLabel: "Running version",
       updateBadge: "Update available",
       updateBody: "Headscale {latest} is available. This server runs {current}.",
@@ -1262,7 +1277,7 @@ const en = {
       checksFailedTitle: "Failed checks: {count}",
       processTitle: "Process Control",
       processBody:
-        "Headplane can ask the configured integration to reload or restart Headscale for you.",
+        "HeadplaneCN can ask the configured integration to reload or restart Headscale for you.",
       processReload: "Reload configuration",
       processRestart: "Restart Headscale",
       processPending: "Working…",
@@ -1270,44 +1285,46 @@ const en = {
       processRestrictedTitle: "Read-only Access",
       processUnavailableTitle: "No Integration Enabled",
       processUnavailableBody:
-        "Headplane can only reload or restart Headscale when the Docker, Kubernetes, or native (/proc) integration is enabled. See the {link} for setup instructions.",
+        "HeadplaneCN can only reload or restart Headscale when the Docker, Kubernetes, or native (/proc) integration is enabled. See the {link} for setup instructions.",
       processUnavailableLink: "documentation",
       processSemanticsReload:
         "{name} sends SIGHUP to the Headscale process, which reloads the configuration without dropping connections.",
       processSemanticsRestart: "{name} restarts the Headscale container or pod.",
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
-        notAvailable: "No integration is enabled, so Headplane cannot reload or restart Headscale.",
-        failed: "The integration could not reach Headscale. Check the Headplane logs for details.",
+        notAvailable:
+          "No integration is enabled, so HeadplaneCN cannot reload or restart Headscale.",
+        failed:
+          "The integration could not reach Headscale. Check the HeadplaneCN logs for details.",
       },
       checks: {
         reachable: {
           title: "Headscale reachable",
-          pass: "The /health endpoint answered, so Headplane can talk to the Headscale API.",
-          fail: "The /health endpoint did not answer. Check that Headscale is running and that its URL in the Headplane configuration is correct.",
+          pass: "The /health endpoint answered, so HeadplaneCN can talk to the Headscale API.",
+          fail: "The /health endpoint did not answer. Check that Headscale is running and that its URL in the HeadplaneCN configuration is correct.",
         },
         apiKey: {
           title: "API key valid",
           pass: "The Headscale API accepted the configured API key.",
           invalid:
-            "Headscale rejected the configured API key, so it is invalid or expired. Generate a new key and update the Headplane configuration.",
+            "Headscale rejected the configured API key, so it is invalid or expired. Generate a new key and update the HeadplaneCN configuration.",
           unknown:
-            "Headplane could not check the API key because the request failed for another reason. Check the Headplane logs for details.",
+            "HeadplaneCN could not check the API key because the request failed for another reason. Check the HeadplaneCN logs for details.",
         },
         version: {
           title: "Headscale version",
-          pass: "Headscale {version} supports every feature Headplane offers.",
+          pass: "Headscale {version} supports every feature HeadplaneCN offers.",
           recommended:
             "Headscale {version} works, but {recommended} or newer is recommended: browser SSH is broken on the 0.29 beta releases through 0.29.1.",
           tooOld:
-            "Headscale {version} is older than {minimum}, so features such as the Headplane Agent and browser SSH are unavailable.",
+            "Headscale {version} is older than {minimum}, so features such as the HeadplaneCN Agent and browser SSH are unavailable.",
         },
         policyMode: {
           title: "Access Control policy mode",
           pass: "Headscale stores the policy in its database, so the Access Control editor can save through the API.",
-          file: "Headscale reads the policy from a file, so the Access Control editor cannot save through the API. Switch to the database mode to edit the policy in Headplane.",
+          file: "Headscale reads the policy from a file, so the Access Control editor cannot save through the API. Switch to the database mode to edit the policy in HeadplaneCN.",
           unknown:
-            "Headplane cannot read Headscale's configuration file, so the policy mode is unknown.",
+            "HeadplaneCN cannot read Headscale's configuration file, so the policy mode is unknown.",
         },
         oidc: {
           title: "OIDC configured",
@@ -1315,36 +1332,36 @@ const en = {
           missing:
             "Headscale has no OIDC provider configured. Browser SSH and single sign-on stay unavailable until one is set up.",
           unknown:
-            "Headplane cannot read Headscale's configuration file, so it cannot tell whether OIDC is configured.",
+            "HeadplaneCN cannot read Headscale's configuration file, so it cannot tell whether OIDC is configured.",
         },
         trustedProxies: {
           title: "Trusted proxies",
-          pass: "Headplane did not detect a reverse proxy, or Headscale already trusts the proxy in front of it.",
+          pass: "HeadplaneCN did not detect a reverse proxy, or Headscale already trusts the proxy in front of it.",
           missing:
-            "Headplane looks like it is reached through a reverse proxy, but Headscale has no trusted_proxies configured. Client addresses and some sign-in flows can be wrong until the proxy address range is added.",
+            "HeadplaneCN looks like it is reached through a reverse proxy, but Headscale has no trusted_proxies configured. Client addresses and some sign-in flows can be wrong until the proxy address range is added.",
         },
         configAccess: {
           title: "Headscale configuration file",
-          pass: "Headplane can read and write Headscale's configuration file.",
+          pass: "HeadplaneCN can read and write Headscale's configuration file.",
           readOnly:
-            "Headplane can read Headscale's configuration file but not write to it. Mount the file read-write to change these settings from Headplane.",
+            "HeadplaneCN can read Headscale's configuration file but not write to it. Mount the file read-write to change these settings from HeadplaneCN.",
           unreadable:
-            "Headplane cannot read Headscale's configuration file. Check the headscale.config_path setting and the file permissions.",
+            "HeadplaneCN cannot read Headscale's configuration file. Check the headscale.config_path setting and the file permissions.",
         },
         integration: {
           title: "Integration enabled",
-          pass: "{name} is enabled, so Headplane can reload or restart Headscale for you.",
+          pass: "{name} is enabled, so HeadplaneCN can reload or restart Headscale for you.",
           missing:
-            "No integration is enabled, so Headplane cannot reload or restart Headscale. Enable the Docker, Kubernetes, or native (/proc) integration.",
+            "No integration is enabled, so HeadplaneCN cannot reload or restart Headscale. Enable the Docker, Kubernetes, or native (/proc) integration.",
         },
       },
       configChecks: {
         title: "Configuration",
         body: "These checks read Headscale's own config.yaml and the files it points at, the same way headscale configtest does. Fix them in the file before Headscale is restarted.",
         unavailable:
-          "Headplane could not read Headscale's configuration file, so the configuration checks are unavailable.",
+          "HeadplaneCN could not read Headscale's configuration file, so the configuration checks are unavailable.",
         pathUnavailable:
-          "Cannot check {path}: it is not visible to this process, which normally means the container running Headplane does not mount that directory. Mount it to have this verified.",
+          "Cannot check {path}: it is not visible to this process, which normally means the container running HeadplaneCN does not mount that directory. Mount it to have this verified.",
         oidcKeys: {
           title: "Unsupported OIDC keys",
           pass: "The configuration does not contain any of the OIDC keys that Headscale 0.29 refuses to start with.",
@@ -1376,7 +1393,7 @@ const en = {
           missingDir:
             "The directory {path} does not exist, so Headscale cannot create its SQLite database there.",
           readOnlyDir:
-            "Headplane cannot write to {path}, which is usually a read-only mount, so it cannot tell whether Headscale can. That is normal for a read-only mount — only act on it if Headscale itself reports that it cannot write its database.",
+            "HeadplaneCN cannot write to {path}, which is usually a read-only mount, so it cannot tell whether Headscale can. That is normal for a read-only mount — only act on it if Headscale itself reports that it cannot write its database.",
         },
         policy: {
           title: "Access Control policy file",
@@ -1394,7 +1411,7 @@ const en = {
           title: "DNS records",
           pass: "Only one source of extra DNS records is configured.",
           conflict:
-            "Both dns.extra_records and dns.extra_records_path are set. Headplane reads the JSON file at {path} and ignores the inline records, and Headscale has to pick one of the two sources.",
+            "Both dns.extra_records and dns.extra_records_path are set. HeadplaneCN reads the JSON file at {path} and ignores the inline records, and Headscale has to pick one of the two sources.",
           review: "Review DNS records",
         },
         oidc: {
@@ -1418,9 +1435,9 @@ const en = {
             "The Noise private key at {path} does not exist yet, but neither does the database, so Headscale generates it on first start.",
         },
         relayUnavailable:
-          "Cannot check {host}: the DNS lookup did not complete, so Headplane cannot tell which addresses clients reach. The answer, including a negative one, is cached for five minutes, so reload this page to try again.",
+          "Cannot check {host}: the DNS lookup did not complete, so HeadplaneCN cannot tell which addresses clients reach. The answer, including a negative one, is cached for five minutes, so reload this page to try again.",
         relayHostUnusable:
-          "Cannot check the relay address: server_url is not a usable http(s) URL, so Headplane does not know which host clients reach.",
+          "Cannot check the relay address: server_url is not a usable http(s) URL, so HeadplaneCN does not know which host clients reach.",
         derpIpv4: {
           title: "Embedded relay IPv4",
           disabled:
@@ -1443,7 +1460,7 @@ const en = {
           mismatch:
             "derp.server.ipv6 declares {address}, but {host} does not resolve to it, so clients cannot use the relay over IPv6 at that address. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only.",
           missingRecord:
-            "derp.server.ipv6 declares {address}, but {host} has no AAAA record at all, so clients cannot use the relay over IPv6. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only. A host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart Headplane to clear it.",
+            "derp.server.ipv6 declares {address}, but {host} has no AAAA record at all, so clients cannot use the relay over IPv6. Add an AAAA record for this hostname pointing at the machine running the relay, or accept IPv4-only. A host resolver can answer with no AAAA even when the name has one: compare `dig @1.1.1.1 +short AAAA {host}` with `dig +short AAAA {host}`, and if the first answers, point this host's DNS at a resolver that returns AAAA. The negative answer is cached for five minutes; restart HeadplaneCN to clear it.",
         },
         derpMap: {
           exists: { title: "DERP map file exists ({path})" },
@@ -1456,8 +1473,8 @@ const en = {
         },
       },
       selfUpdate: {
-        title: "Headplane update available",
-        body: "Headplane {latest} is available. This instance reports {current}, the version baked in at build time (__VERSION__), so a custom build that reports its own version is never nagged. {link}",
+        title: "HeadplaneCN update available",
+        body: "HeadplaneCN {latest} is available. This instance reports {current}, the version baked in at build time (__VERSION__), so a custom build that reports its own version is never nagged. {link}",
         link: "View the release",
       },
       metrics: {
@@ -1467,12 +1484,12 @@ const en = {
         disabled:
           "Headscale's configuration does not set metrics_listen_addr, so its metrics listener is disabled. Set the address and restart Headscale to see metrics here.",
         invalid:
-          "Headplane cannot parse the metrics_listen_addr value “{value}”. Use host:port, for example 127.0.0.1:9090.",
+          "HeadplaneCN cannot parse the metrics_listen_addr value “{value}”. Use host:port, for example 127.0.0.1:9090.",
         unknown:
-          "Headplane could not read Headscale's configuration file, so it cannot tell where the metrics listener is.",
+          "HeadplaneCN could not read Headscale's configuration file, so it cannot tell where the metrics listener is.",
         unreachableTitle: "Metrics listener unreachable",
         unreachable:
-          "Headplane could not read {url}. The metrics listener must be reachable from Headplane itself; Headscale listens on {address}.",
+          "HeadplaneCN could not read {url}. The metrics listener must be reachable from HeadplaneCN itself; Headscale listens on {address}.",
         groups: {
           nodes: "Nodes",
           users: "Users",
@@ -1485,7 +1502,7 @@ const en = {
         uptimeValue: "{days}d {hours}h {minutes}m",
         seriesLabel: "{count} series",
         rawTitle: "Raw metrics",
-        rawDescription: "The exposition text exactly as Headplane received it.",
+        rawDescription: "The exposition text exactly as HeadplaneCN received it.",
         rawTruncated: "Showing the first {chars} characters.",
       },
       tabsLabel: "System status sections",
@@ -1510,7 +1527,7 @@ const en = {
       body: "These settings are written directly to Headscale's config.yaml, and only take effect after Headscale is restarted.",
       notWritableTitle: "Configuration Locked",
       notWritableBody:
-        "Headplane can only change these settings when Headscale's configuration file is mounted read-write. Mount {file} into the Headplane container with write access and restart Headplane.",
+        "HeadplaneCN can only change these settings when Headscale's configuration file is mounted read-write. Mount {file} into the HeadplaneCN container with write access and restart HeadplaneCN.",
       readOnlyTitle: "Read-only Access",
       oidcTitle: "OpenID Connect",
       oidcBody:
@@ -1588,7 +1605,7 @@ const en = {
         "Log output of the Headscale server. Changes take effect after Headscale is restarted.",
       logLevelLabel: "Log level",
       logLevelDescription:
-        "Headplane can only save debug, info, warn, and error. Headscale's default is info.",
+        "HeadplaneCN can only save debug, info, warn, and error. Headscale's default is info.",
       logFormatLabel: "Log format",
       logFormatDescription:
         "text for human-readable lines, json for structured output. Headscale's default is text.",
@@ -1685,7 +1702,7 @@ const en = {
       selfTestScopesMissingOpenid:
         "The requested scopes do not include openid, so the provider will not return an ID token.",
       selfTestScopesMissingClaims:
-        "The requested scopes do not include {scopes}. Without email the provider reports no verified address for allowed_domains, and without profile Headplane shows no name or picture.",
+        "The requested scopes do not include {scopes}. Without email the provider reports no verified address for allowed_domains, and without profile HeadplaneCN shows no name or picture.",
       selfTestScopesOk: "The requested scopes include openid, email, and profile.",
       selfTestPkceDisabled: "PKCE is disabled in the configuration, so no challenge is sent.",
       selfTestPkceMismatch:
@@ -1704,7 +1721,7 @@ const en = {
         "None of allowed_domains, allowed_groups, or allowed_users is set, so every account the provider authenticates may sign in.",
       selfTestAccessOk: "Sign-ins are limited by {lists}.",
       selfTestCallbackUnknown:
-        "Headplane has no server.base_url, so the callback URL to register with the provider cannot be shown.",
+        "HeadplaneCN has no server.base_url, so the callback URL to register with the provider cannot be shown.",
       selfTestCallbackOk: "Register this redirect URI with the identity provider: {url}",
       clientSecretPathLabel: "Client secret file path",
       clientSecretPathDescription:
@@ -1715,7 +1732,7 @@ const en = {
       overviewTab: "Overview",
       overviewTitle: "Configuration overview",
       overviewBody:
-        "These values are read from Headscale's configuration file and are display-only. Headplane never writes them: a wrong database path or IP range can lock you out of the server, and the rest are operational or secret file paths.",
+        "These values are read from Headscale's configuration file and are display-only. HeadplaneCN never writes them: a wrong database path or IP range can lock you out of the server, and the rest are operational or secret file paths.",
       overviewDisplayOnly: "Display only",
       overviewUnset: "—",
       overviewNetworkTitle: "Network",
@@ -1747,9 +1764,9 @@ const en = {
         body: "Where Headscale gets the relay map it hands to clients, how often that map is refreshed, and whether Headscale runs the embedded DERP server itself. Relay usage per machine is listed below.",
         statusTitle: "DERP Relays",
         statusBody:
-          "Where each machine connects through Headscale's DERP relays. Live relay data comes from the Headplane Agent.",
+          "Where each machine connects through Headscale's DERP relays. Live relay data comes from the HeadplaneCN Agent.",
         statusAgentRequired:
-          "Live relay data needs the Headplane Agent. Enable the agent so Headplane can read each machine's home region, preferred region, and DERP latency.",
+          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read each machine's home region, preferred region, and DERP latency.",
         statusEmpty: "No machines have reported DERP relay information yet.",
         machine: "Machine",
         homeRegion: "Home region",
@@ -1822,7 +1839,7 @@ const en = {
         keyConfigured: "A private key path is configured for the embedded server.",
         keyMissing: "No derp.server.private_key_path is configured for the embedded server.",
         serverKeyWarning:
-          "Headplane only stores the path in derp.server.private_key_path; the key file itself does not have to exist yet. Headscale generates it at that path when it starts, so the directory must be writable by Headscale, and an existing file must be readable by it.",
+          "HeadplaneCN only stores the path in derp.server.private_key_path; the key file itself does not have to exist yet. Headscale generates it at that path when it starts, so the directory must be writable by Headscale, and an existing file must be readable by it.",
         saveServer: "Save embedded server",
         presetButton: "Set up the embedded server",
         presetTitle: "Enable the embedded DERP server",
@@ -1845,14 +1862,14 @@ const en = {
           "Clients connect to the region's public address, so its ports must be reachable through any firewall or NAT. That is the usual reason a self-hosted region never gets used.",
         regionNamesTitle: "Region names",
         regionNamesBody:
-          "Headscale does not expose its DERP map, so external regions only have IDs. Name any region Headplane cannot resolve; the mapping is stored in Headplane's data directory, not in Headscale's config.",
+          "Headscale does not expose its DERP map, so external regions only have IDs. Name any region HeadplaneCN cannot resolve; the mapping is stored in HeadplaneCN's data directory, not in Headscale's config.",
         regionNamesEmpty: "No manual region names are configured.",
         regionNameIdLabel: "Region ID",
         regionNameIdDescription:
           "The numeric ID Tailscale reports for the region, for example 901.",
         regionNameIdPlaceholder: "901",
         regionNameValueLabel: "Region name",
-        regionNameValueDescription: "The name shown next to this region ID in Headplane.",
+        regionNameValueDescription: "The name shown next to this region ID in HeadplaneCN.",
         regionNameValuePlaceholder: "Amsterdam",
         addRegionName: "Add region name",
         removeRegionName: "Remove",
@@ -1888,19 +1905,19 @@ const en = {
             "The regions below are Tailscale's official DERP relays: public infrastructure run by Tailscale, not nodes you host yourself. This card mirrors that official map into a local map file and hands it to your clients, renumbering the regions into the 900s so you can keep only the ones you want. Tailscale changes those addresses over time, which is why the mirror refreshes itself.",
           summary: "{regions} official regions · {selected} selected · {file}",
           regionsBody:
-            "Tick the regions clients may use. Latency comes from the Headplane Agent's measurements across the machines it can see, so a region nothing measured stays unknown.",
+            "Tick the regions clients may use. Latency comes from the HeadplaneCN Agent's measurements across the machines it can see, so a region nothing measured stays unknown.",
           regionsEmpty:
-            "No official region has been read yet. Headplane fetches Tailscale's map in the background; check that this server can reach controlplane.tailscale.com.",
+            "No official region has been read yet. HeadplaneCN fetches Tailscale's map in the background; check that this server can reach controlplane.tailscale.com.",
           regionsUnreadable: "The official map could not be read: {reason}.",
           regionsRetry:
             "A failed fetch is retried within a few minutes; reload this page to try now.",
           fetchReasonTimeout: "the request timed out",
           fetchReasonNetwork: "the request could not be made",
           fetchReasonStatus: "the server answered with an error status",
-          fetchReasonTooLarge: "the map is larger than Headplane reads",
+          fetchReasonTooLarge: "the map is larger than HeadplaneCN reads",
           fetchReasonUnreadable: "the answer is not a DERP map",
           agentRequired:
-            "The Headplane Agent is not running, so no region has a measured latency. Tick regions by hand, or enable the agent to rank them.",
+            "The HeadplaneCN Agent is not running, so no region has a measured latency. Tick regions by hand, or enable the agent to rank them.",
           numberingNote:
             "901 is always Hong Kong and 902 always Singapore; the rest of the ticked regions are numbered from 903 upward by measured latency, ties going to the lower official id and then to the code. A region that already has a number keeps it when you save — Renumber applies these numbers to every mirrored region.",
           rankingNever:
@@ -1921,6 +1938,14 @@ const en = {
           selectFiltered: "Select the regions shown",
           selectRegion: "Mirror the {code} region",
           recommended: "Recommended: the fastest three",
+          selectionClear: "Clear selection",
+          selectionDefault: "Default selection (Hong Kong 901 + Singapore 902)",
+          addRegionNames: "Add region names for the selection",
+          addingRegionNames: "Adding region names…",
+          namesAdded: {
+            one: "Added {count} region name",
+            other: "Added {count} region names",
+          },
           columnNumber: "Assigned number",
           columnName: "Chinese name",
           columnCode: "Official code",
@@ -1929,6 +1954,8 @@ const en = {
           columnLatency: "Measured latency",
           columnSelect: "Include",
           latencyUnknown: "Not measured",
+          latencyNoMeasurements: "No machine has reported a latency yet.",
+          agentSettingsLink: "Open the Agent settings",
           fixedRegion: "Always mirrored",
           currentNumber: "now {number}",
           selectionNote:
@@ -2012,7 +2039,7 @@ const en = {
             invalidDerpMirrorSelection:
               "The selected regions are not a list of official region ids.",
             derpMirrorSaveFailed:
-              "The mirror settings could not be saved. Check that Headplane can write its data directory.",
+              "The mirror settings could not be saved. Check that HeadplaneCN can write its data directory.",
             derpMirrorCheckFailed: "The check could not be completed.",
             derpMirrorRunFailed: "The mirror run could not be completed.",
             derpMirrorReassignFailed: "The regions could not be renumbered.",
@@ -2021,7 +2048,7 @@ const en = {
         },
         relayDnsTitle: "Relay DNS resolver",
         relayDnsBody:
-          "Headplane resolves the relay hostname itself so the relay cards can show the addresses clients would reach. A host resolver that filters AAAA records can make an IPv6 address look missing, so relay lookups can use DNS servers of your own instead. Leaving the list empty follows the host's resolver, exactly as before; whatever is set here is used for relay lookups only.",
+          "HeadplaneCN resolves the relay hostname itself so the relay cards can show the addresses clients would reach. A host resolver that filters AAAA records can make an IPv6 address look missing, so relay lookups can use DNS servers of your own instead. Leaving the list empty follows the host's resolver, exactly as before; whatever is set here is used for relay lookups only.",
         relayDnsSummary: {
           one: "{count} DNS server",
           other: "{count} DNS servers",
@@ -2036,10 +2063,10 @@ const en = {
         relayDnsAddServer: "Add DNS server",
         relayDnsRemoveServer: "Remove",
         relayDnsStorageNote:
-          "Stored in Headplane's own data directory (relay-dns-servers.json), not in Headscale's config.",
+          "Stored in HeadplaneCN's own data directory (relay-dns-servers.json), not in Headscale's config.",
         relayDnsLookupTitle: "Relay lookup",
         relayDnsLookupBody:
-          "This is the answer the relay cards show for server_url's hostname. An answer with no records is cached for five minutes, so re-resolve instead of waiting it out or restarting Headplane.",
+          "This is the answer the relay cards show for server_url's hostname. An answer with no records is cached for five minutes, so re-resolve instead of waiting it out or restarting HeadplaneCN.",
         relayDnsReResolve: "Re-resolve now",
         relayDnsReResolving: "Re-resolving…",
         relayDnsResolverSystem: "System resolver",
@@ -2053,7 +2080,7 @@ const en = {
         relayDnsSettingsLink: "Edit relay DNS settings",
         mapsMountTitle: "Editing needs a read-write mount",
         mapsMountBody:
-          "Headplane reads and writes these files through the mounts it was given. Share only the directory holding the DERP maps, read-write, and keep the rest of Headscale's data directory out of the container:",
+          "HeadplaneCN reads and writes these files through the mounts it was given. Share only the directory holding the DERP maps, read-write, and keep the rest of Headscale's data directory out of the container:",
         mapsMountNote:
           "With the directory mounted read-only, View still works while Save reports that the container cannot write the path. Headscale itself must also be able to read these files, because it loads them when it starts.",
         mapsView: "View",
@@ -2082,7 +2109,7 @@ const en = {
           "An absolute path on the Headscale host. Headscale and this container must both be able to read it; see the mount note above.",
         sync: {
           title: "Address auto-sync",
-          body: "Keep derp.server.ipv4 and derp.server.ipv6 pointing at the addresses clients can reach. Headplane checks them on a schedule and writes Headscale's configuration file only when a value actually changed.",
+          body: "Keep derp.server.ipv4 and derp.server.ipv6 pointing at the addresses clients can reach. HeadplaneCN checks them on a schedule and writes Headscale's configuration file only when a value actually changed.",
           note: "IPv4 comes from the A record of server_url, because a machine behind NAT cannot know its own public address. IPv6 comes from this host's own global unicast address, or from the external echo below while it is enabled. A detection that finds nothing usable leaves the configured value exactly as it is.",
           overrideNote:
             "The detected address always wins. When it differs from derp.server.ipv4 or derp.server.ipv6, a run writes it — one key per family, and only for the family that actually changed — after taking a snapshot and recording an audit entry.",
@@ -2145,7 +2172,7 @@ const en = {
           skipNoRecords: "{family}: the hostname has no record of that type.",
           skipNotPublic: "{family}: the address is not a public one.",
           skipNoHostAddress: "{family}: this host has no global unicast address.",
-          skipNamespace: "{family}: Headplane cannot see the host's network namespace.",
+          skipNamespace: "{family}: HeadplaneCN cannot see the host's network namespace.",
           skipConfigNotWritable:
             "The Headscale configuration file is not writable, so nothing was written.",
           detectionTitle: "Detection candidates",
@@ -2178,7 +2205,7 @@ const en = {
             "Ask a public endpoint what IPv6 address the internet sees. That is the address clients actually reach, so while it answers it wins over every address this host holds.",
           echoEnabledLabel: "Use the external IPv6 echo",
           echoEnabledDescription:
-            "Off by default. While it is on, Headplane makes one outbound IPv6 request to the endpoint below per run or check.",
+            "Off by default. While it is on, HeadplaneCN makes one outbound IPv6 request to the endpoint below per run or check.",
           echoUrlLabel: "Echo endpoint",
           echoUrlDescription:
             "The endpoint asked first. The built-in fallbacks are tried in order when it does not answer.",
@@ -2234,7 +2261,7 @@ const en = {
           },
           writable: {
             pass: "The file is writable.",
-            fail: "Headplane cannot write this path or the directory holding it.",
+            fail: "HeadplaneCN cannot write this path or the directory holding it.",
           },
           size: {
             pass: "Within the {limit} KiB editing limit.",
@@ -2333,15 +2360,16 @@ const en = {
         invalidDerpRegionMapName: "Enter a name for this region.",
         derpRegionMapNotFound: "This region ID has no manual name.",
         derpRegionMapWriteFailed:
-          "Headplane could not write the region name mapping. Check that its data directory is writable and try again.",
+          "HeadplaneCN could not write the region name mapping. Check that its data directory is writable and try again.",
         derpPathsRequired:
           "Headscale requires at least one DERP map path when the embedded server is enabled and its region is not added automatically.",
         invalidDerpSyncInterval: "Choose 6, 12 or 24 hours as the check interval.",
         invalidDerpSyncFamilies: "Choose which address families the sync may update.",
         derpSyncSaveFailed:
-          "The sync settings could not be saved. Check that Headplane can write its data directory.",
+          "The sync settings could not be saved. Check that HeadplaneCN can write its data directory.",
         invalidHostEchoUrl: "Enter an absolute http or https URL for the IPv6 echo endpoint.",
-        hostEchoSaveFailed: "The echo setting could not be written to Headplane's data directory.",
+        hostEchoSaveFailed:
+          "The echo setting could not be written to HeadplaneCN's data directory.",
         invalidOidcExtraParams:
           "Each extra parameter needs a name without spaces and a value. Remove the empty row or fill it in.",
         duplicateOidcExtraParam: "The same parameter name is used twice. Keep one row per name.",
@@ -2356,27 +2384,27 @@ const en = {
           "The list holds at most {count} DNS servers. Remove one before adding another.",
         relayDnsServerNotFound: "This DNS server is not in the list.",
         relayDnsWriteFailed:
-          "Headplane could not write the relay DNS servers. Check that its data directory is writable and try again.",
+          "HeadplaneCN could not write the relay DNS servers. Check that its data directory is writable and try again.",
         invalidDerpMapPath:
           "Enter an absolute path exactly as derp.paths lists it; a relative path, or one containing .., cannot be edited.",
         derpMapPathNotConfigured:
           "This path is not in derp.paths. Add it there first, then edit the file.",
         derpMapTooLarge:
-          "This DERP map is larger than 256 KiB, which Headplane will not load or write.",
+          "This DERP map is larger than 256 KiB, which HeadplaneCN will not load or write.",
         derpMapInvalid:
           "This file is not a valid DERP map. Fix the problems listed above the save button.",
         derpMapUnavailable:
-          "Headplane cannot see this path, so it cannot write it. Mount the directory holding the DERP map files into the container (see the mount note above).",
+          "HeadplaneCN cannot see this path, so it cannot write it. Mount the directory holding the DERP map files into the container (see the mount note above).",
         derpMapNotWritable:
-          "Headplane cannot write this path. Mount the DERP map directory read-write, and make sure the container may write the file itself.",
+          "HeadplaneCN cannot write this path. Mount the DERP map directory read-write, and make sure the container may write the file itself.",
         derpMapWriteFailed:
-          "Headplane could not write the DERP map file. Check the container's permissions and free space, then try again.",
+          "HeadplaneCN could not write the DERP map file. Check the container's permissions and free space, then try again.",
         derpMapNoSnapshot:
-          "There is no snapshot to roll back to for this file, because it has not been edited by Headplane yet.",
+          "There is no snapshot to roll back to for this file, because it has not been edited by HeadplaneCN yet.",
       },
     },
     agent: {
-      title: "Headplane Agent",
+      title: "HeadplaneCN Agent",
       notEnabledTitle: "Agent Not Enabled",
       notEnabledBody: "{reason}. To learn how to set up the agent, visit the {link}",
       documentation: "documentation",
@@ -2394,7 +2422,7 @@ const en = {
       syncErrorTitle: "Sync Error",
       apiKeyRejectedTitle: "Headscale rejected the configured API key",
       apiKeyRejectedBody:
-        "The agent signs in with headscale.api_key from Headplane's own configuration, not with the key you logged in with, and Headscale answered 401 Unauthorized. Create a new key under {link}, put it in the configuration and restart Headplane.",
+        "The agent signs in with headscale.api_key from HeadplaneCN's own configuration, not with the key you logged in with, and Headscale answered 401 Unauthorized. Create a new key under {link}, put it in the configuration and restart HeadplaneCN.",
       apiKeysLink: "Settings → API keys",
       syncing: "Syncing…",
       syncNow: "Sync Now",
@@ -2403,9 +2431,9 @@ const en = {
       syncBody: "Fetch the latest node details from Headscale right away.",
       approveTitle: "Registration approval",
       approveBody:
-        "Headplane tries to approve the registration automatically. If the agent is still waiting, open {link} to approve it yourself.",
+        "HeadplaneCN tries to approve the registration automatically. If the agent is still waiting, open {link} to approve it yourself.",
       setupTitle: "Agent setup",
-      setupRowBody: "How to install the agent and connect it to Headplane.",
+      setupRowBody: "How to install the agent and connect it to HeadplaneCN.",
       setupBody:
         "The agent runs on the Headscale server and signs in with headscale.api_key. See {link} for setup and troubleshooting.",
       lastSyncedAt: "Last synced at: ",
@@ -2460,7 +2488,7 @@ const en = {
       runtimeWorkDir: "Work directory",
       runtimeCacheTtl: "Cache TTL",
       runtimeCacheTtlBody:
-        "Headplane serves these node details from this cache, which the agent refills every {interval}.",
+        "HeadplaneCN serves these node details from this cache, which the agent refills every {interval}.",
       runtimeTtlUnset: "The agent falls back to its built-in interval.",
       runtimeNetns: "Tailscale netns",
       runtimeOn: "On",
@@ -2616,7 +2644,7 @@ const en = {
         "You do not have the necessary permissions to edit the Authentication Restrictions settings. Please contact your administrator to request access or to make changes to these settings.",
       lockedTitle: "Configuration Locked",
       lockedBody:
-        "The Headscale configuration file is not editable through the web interface. Please ensure that you have correctly given Headplane write access to the file.",
+        "The Headscale configuration file is not editable through the web interface. Please ensure that you have correctly given HeadplaneCN write access to the file.",
       title: "Authentication Restrictions",
       permittedDomains: "Permitted Domains",
       permittedGroups: "Permitted Groups",
@@ -2663,9 +2691,9 @@ const en = {
     audit: {
       breadcrumb: "Operation Log",
       title: "Operation Log",
-      body: "Every change made through Headplane is recorded here, newest first.",
+      body: "Every change made through HeadplaneCN is recorded here, newest first.",
       listTitle: "Recorded operations",
-      listBody: "Newest first. Open an operation to see everything Headplane recorded for it.",
+      listBody: "Newest first. Open an operation to see everything HeadplaneCN recorded for it.",
       retentionTitle: "Retention",
       retentionBody:
         "Only the newest {count} operations are kept; older entries are dropped automatically.",
@@ -2710,7 +2738,7 @@ const en = {
       summaryActor: "actor: {actor}",
       summaryAction: "action: {action}",
       entryTitle: "Operation details",
-      entryDescription: "Everything Headplane recorded for this operation.",
+      entryDescription: "Everything HeadplaneCN recorded for this operation.",
       detailAction: "Action",
       detailResult: "Result",
       detailTime: "Time",
@@ -2737,7 +2765,7 @@ const en = {
       summaryFiles: "Files: {files}",
       breadcrumb: "Configuration Snapshots",
       title: "Configuration Snapshots",
-      body: "Headplane copies Headscale's configuration file, and its policy file when one is used, before it changes them. A snapshot can be downloaded or restored later.",
+      body: "HeadplaneCN copies Headscale's configuration file, and its policy file when one is used, before it changes them. A snapshot can be downloaded or restored later.",
       listTitle: "Stored snapshots",
       listBody: "Download a copy, or restore one to overwrite the live configuration.",
       summaryStored: "{count} snapshots · {size}",
@@ -2766,24 +2794,24 @@ const en = {
         noTargets:
           "No Headscale configuration file is configured, so there is nothing to snapshot.",
         unavailable:
-          "The snapshot directory could not be used. Check that Headplane can write to its data directory.",
+          "The snapshot directory could not be used. Check that HeadplaneCN can write to its data directory.",
         copyFailed: "None of the configuration files could be read.",
       },
       dataBackup: {
-        title: "Download Headplane data",
-        body: "Configuration snapshots cover Headscale's configuration and policy files, and this page can restore them. This download covers Headplane itself: its own database, copied consistently while Headplane keeps running.",
+        title: "Download HeadplaneCN data",
+        body: "Configuration snapshots cover Headscale's configuration and policy files, and this page can restore them. This download covers HeadplaneCN itself: its own database, copied consistently while HeadplaneCN keeps running.",
         contentsTitle: "What the copy contains",
         contents:
-          "Headplane's own database: local users and their sessions, the audit log, and the host information reported by the Headplane agent.",
+          "HeadplaneCN's own database: local users and their sessions, the audit log, and the host information reported by the HeadplaneCN agent.",
         excludesTitle: "What the copy does not contain",
         excludes:
-          "Secrets stay in config.yaml: cookie_secret and headscale.api_key are never written into the database. Data Headplane keeps in files beside the database, such as snapshot metadata, notification settings and delivery history, and node history, is not included either.",
+          "Secrets stay in config.yaml: cookie_secret and headscale.api_key are never written into the database. Data HeadplaneCN keeps in files beside the database, such as snapshot metadata, notification settings and delivery history, and node history, is not included either.",
         noRestore:
           "There is no one-click restore. Keep the file somewhere safe and put it back by hand if you ever need it.",
         download: "Download data backup",
         errors: {
           copyFailed:
-            "Headplane's database could not be copied. Check the server logs and try again.",
+            "HeadplaneCN's database could not be copied. Check the server logs and try again.",
           unavailable:
             "The backup could not be written to a temporary file. Check that the server has space in its temporary directory.",
         },
@@ -2792,7 +2820,7 @@ const en = {
     notifications: {
       breadcrumb: "Alert Notifications",
       title: "Alert Notifications",
-      body: "Headplane checks Headscale on a schedule and posts to a webhook when something changes: Headscale becoming unreachable, a node going offline, an API key about to expire, or a configuration check failing.",
+      body: "HeadplaneCN checks Headscale on a schedule and posts to a webhook when something changes: Headscale becoming unreachable, a node going offline, an API key about to expire, or a configuration check failing.",
       statusEnabled: "Enabled",
       statusDisabled: "Disabled",
       statusNever: "No deliveries yet",
@@ -2805,7 +2833,7 @@ const en = {
       channelBody: "Notifications are sent as a JSON POST to a single endpoint.",
       channelSummaryEmpty: "No webhook configured",
       enabledLabel: "Enable notifications",
-      enabledDescription: "While disabled, Headplane detects changes but sends nothing.",
+      enabledDescription: "While disabled, HeadplaneCN detects changes but sends nothing.",
       enabledOn: "On",
       enabledOff: "Off",
       webhookUrlLabel: "Webhook URL",
@@ -2827,7 +2855,7 @@ const en = {
       eventsLabel: "Events",
       eventsDescription: "Unchecked events are still detected, but never sent.",
       intervalLabel: "Check interval (seconds)",
-      intervalDescription: "How often Headplane looks for changes.",
+      intervalDescription: "How often HeadplaneCN looks for changes.",
       cooldownLabel: "Cooldown (seconds)",
       cooldownDescription: "Shortest time before the same condition is reported again.",
       expiryLabel: "API key warning window (days)",
@@ -2856,7 +2884,7 @@ const en = {
         invalidExpiry: "The API key warning window is outside the allowed range.",
         noEvents: "Select at least one event to report.",
         notConfigured: "Set a webhook URL before enabling or testing notifications.",
-        writeFailed: "The settings could not be written to Headplane's data directory.",
+        writeFailed: "The settings could not be written to HeadplaneCN's data directory.",
       },
     },
   },
@@ -2881,15 +2909,15 @@ const en = {
       usernameLabel: "Username",
       connect: "Connect",
     },
-    docs: "Headplane SSH Documentation",
+    docs: "HeadplaneCN SSH Documentation",
     errors: {
       wasmMissing: {
         title: "Browser SSH is not available",
-        message: "This version of Headplane was not built with browser SSH support.",
+        message: "This version of HeadplaneCN was not built with browser SSH support.",
       },
       agentRequired: {
-        title: "Browser SSH requires the Headplane agent",
-        message: "Browser SSH is only available when the Headplane agent integration is enabled.",
+        title: "Browser SSH requires the HeadplaneCN agent",
+        message: "Browser SSH is only available when the HeadplaneCN agent integration is enabled.",
       },
       oidcRequired: {
         title: "Browser SSH requires OIDC authentication",
@@ -2916,7 +2944,7 @@ const en = {
     noAccess: "Need access to the dashboard? Contact your administrator to request access.",
     link: {
       title: "Link your Headscale account",
-      body: "Headplane could not automatically match your SSO identity to an existing Headscale user. Please select your user from the list below to link your account and continue.",
+      body: "HeadplaneCN could not automatically match your SSO identity to an existing Headscale user. Please select your user from the list below to link your account and continue.",
       selectPlaceholder: "Select a user...",
       button: "Link and Continue",
       footer:
@@ -2934,15 +2962,15 @@ const en = {
       "This page could not be loaded because the Headscale server is unreachable. It will be available once the connection is restored.",
   },
   login: {
-    welcome: "Welcome to Headplane",
+    welcome: "Welcome to HeadplaneCN",
     apiKeyDescription:
-      "Enter an API key to authenticate with Headplane. You can generate one by running {command} in your terminal.",
+      "Enter an API key to authenticate with HeadplaneCN. You can generate one by running {command} in your terminal.",
     apiKeyLabel: "API Key",
     signIn: "Sign In",
     sso: "Single Sign-On",
     cookieWarning: {
       title: "Configuration Issue",
-      body: "Headplane is configured to use secure cookies, but this site is being served over an insecure connection and login will not work correctly. {link}",
+      body: "HeadplaneCN is configured to use secure cookies, but this site is being served over an insecure connection and login will not work correctly. {link}",
     },
     logout: {
       title: "You have been logged out",
@@ -2960,13 +2988,13 @@ const en = {
     oidcNotice: {
       title: "Configuration Issue(s)",
       noQuery:
-        "The SSO provider did not correctly redirect back to Headplane with the required parameters. Please ensure your SSO provider is configured correctly.",
+        "The SSO provider did not correctly redirect back to HeadplaneCN with the required parameters. Please ensure your SSO provider is configured correctly.",
       noSession:
-        "Unable to complete SSO login due to missing or invalid session data. Ensure that your Headplane cookie configuration is correct and that your browser is accepting cookies.",
+        "Unable to complete SSO login due to missing or invalid session data. Ensure that your HeadplaneCN cookie configuration is correct and that your browser is accepting cookies.",
       noSub:
         "The SSO provider did not return a valid user identifier. Please ensure your SSO provider is correctly configured to provide the {claim} claim.",
       authFailed:
-        "Authentication with the SSO provider failed. Please try again later. Headplane logs may provide more information.",
+        "Authentication with the SSO provider failed. Please try again later. HeadplaneCN logs may provide more information.",
       unknown: "An unknown error occurred during OIDC authentication. Please try again later.",
     },
     oidcConfig: {
@@ -2982,12 +3010,12 @@ const en = {
       discoveryFailed:
         "Unable to reach the OIDC provider for discovery. SSO will retry on the next login attempt.",
       unknown:
-        "An unknown OIDC configuration error occurred. Please check the Headplane logs for more information.",
+        "An unknown OIDC configuration error occurred. Please check the HeadplaneCN logs for more information.",
     },
   },
   errors: {
     headscaleConfigNotWritable:
-      "Headplane cannot write to the Headscale configuration file. Mount it read-write and restart Headplane.",
+      "HeadplaneCN cannot write to the Headscale configuration file. Mount it read-write and restart HeadplaneCN.",
     policyNotWritable:
       "Headscale is reading its ACL policy from a file, so the policy cannot be saved through the API. Ask your administrator to run Headscale with the `database` policy mode, or edit the policy file directly.",
     generic: {
@@ -3005,17 +3033,17 @@ const en = {
       invalidTitle: "Invalid response from Headscale API",
       invalidBody: "The Headscale API returned an unexpected response.",
       invalidAuth:
-        "The status code indicates an authentication error. Please verify your API key and Headplane configuration.",
+        "The status code indicates an authentication error. Please verify your API key and HeadplaneCN configuration.",
       invalidOther: "You may be using an unsupported version of Headscale or this may be a bug.",
       requestUrl: "Request URL:",
       statusCodeLabel: "Status Code:",
       connectionTitle: "Cannot connect to Headscale API",
       connectionBody:
-        "Headplane was unable to reach the Headscale API. Please check your network setup and configuration to ensure Headplane is able to connect.",
+        "HeadplaneCN was unable to reach the Headscale API. Please check your network setup and configuration to ensure HeadplaneCN is able to connect.",
       unexpectedTitle: "Unexpected Error",
       unexpectedBody:
         "An unexpected error occurred which is most likely a bug. Please consider filing an issue on the {link} repository with the details below.",
-      unexpectedLink: "Headplane GitHub",
+      unexpectedLink: "HeadplaneCN GitHub",
       details: "Error Details",
     },
     permission: {
@@ -3032,7 +3060,7 @@ const en = {
     },
     staleShell: {
       title: "Page is out of date",
-      body: "Headplane was updated while this page was open, so the browser is still using an older version of the page and cannot load the files it asks for. Reloading fetches the current version.",
+      body: "HeadplaneCN was updated while this page was open, so the browser is still using an older version of the page and cannot load the files it asks for. Reloading fetches the current version.",
       hint: "If this page keeps coming back, do a hard refresh (Ctrl+Shift+R, or Cmd+Shift+R on macOS) to bypass your reverse proxy cache.",
       reload: "Reload page",
     },

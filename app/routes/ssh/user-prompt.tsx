@@ -22,7 +22,11 @@ export default function UserPrompt({ hostname }: UserPromptProps) {
           {tr("ssh.prompt.body", {
             hostname: <Code>{hostname}</Code>,
             link: (
-              <Link external styled to="https://headplane.net/features/ssh#troubleshooting">
+              <Link
+                external
+                styled
+                to="https://cgg888.github.io/headplaneCN/en/features/ssh#troubleshooting"
+              >
                 {t("ssh.prompt.troubleshooting")}
               </Link>
             ),

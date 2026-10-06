@@ -163,6 +163,38 @@ export function normalizeAssignment(value: unknown): Record<string, number> {
   return Object.fromEntries(entries.toSorted((a, b) => a[1] - b[1] || Number(a[0]) - Number(b[0])));
 }
 
+/**
+ * The stored assignment reduced to the regions the operator still mirrors.
+ *
+ * A selection that dropped a region has no number for it either: the server's
+ * `assignRegionNumbers` returns only the selected regions and ranks the ones the
+ * stored assignment does not cover, so a stale entry would never survive the
+ * next run. Dropping it when the selection is saved keeps the stored numbering
+ * honest about what the mirror is set up to write, and re-ticking a region later
+ * ranks it like any other region the assignment does not cover.
+ */
+export function pruneAssignmentToSelection(
+  assignment: Record<string, number>,
+  selected: readonly string[],
+): Record<string, number> {
+  const wanted = new Set<string>();
+  for (const entry of selected) {
+    const id = normalizeOfficialRegionId(entry);
+    if (id !== undefined) {
+      wanted.add(id);
+    }
+  }
+
+  const kept: Array<[string, number]> = [];
+  for (const [id, number] of Object.entries(normalizeAssignment(assignment))) {
+    if (wanted.has(id)) {
+      kept.push([id, number]);
+    }
+  }
+
+  return Object.fromEntries(kept);
+}
+
 /** An ISO timestamp worth keeping; anything unparseable is not one. */
 function normalizeRankedAt(value: unknown): string | undefined {
   if (typeof value !== "string" || value.trim().length === 0) {

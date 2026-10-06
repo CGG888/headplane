@@ -14,7 +14,6 @@
 
 import {
   compareRelayAddresses,
-  relayResolutionSuggestsConfiguredResolver,
   relayVerdictIsNoteworthy,
   type RelayAddressComparison,
   type RelayAddressFamily,
@@ -48,20 +47,6 @@ export function relayFamilyVerdicts(
     ...(relayVerdictIsNoteworthy(comparison) ? { verdict: comparison.verdict } : {}),
     ...(comparison.declared === undefined ? {} : { declared: comparison.declared }),
   }));
-}
-
-/**
- * Whether an empty family is only the host's own resolver speaking, so the
- * cards can point at the configured resolver list. Either family is enough:
- * the hint is about the lookup, not about one address family.
- */
-export function relayResolutionBlamesSystemResolver(
-  resolution: RelayResolution | undefined,
-): boolean {
-  return (
-    relayResolutionSuggestsConfiguredResolver(resolution, "ipv4") ||
-    relayResolutionSuggestsConfiguredResolver(resolution, "ipv6")
-  );
 }
 
 /** Why a family has no address to print, including a lookup that never ran. */

@@ -25,7 +25,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
   const locale = loaderData?.locale ?? DEFAULT_LOCALE;
 
   return [
-    { title: "Headplane" },
+    { title: "HeadplaneCN" },
     {
       name: "description",
       content: translate(locale, "meta.description"),

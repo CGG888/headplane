@@ -1,145 +1,121 @@
 ---
-title: System Status
-description: Headscale version, update hints, diagnostics, metrics and a reload/restart button.
+title: 系统状态
+description: Headscale 版本、更新提示、诊断、指标，以及重载/重启按钮。
 outline: [2, 3]
 ---
 
-# System Status
+# 系统状态
 
-**Settings → System** answers the questions that otherwise mean SSHing into the
-Headscale host: is it healthy, which version is it, is anything misconfigured,
-and can it be restarted from here?
+**设置 → 系统**回答那些本来要 SSH 到 Headscale 主机上才能查的问题：它健康吗、是哪个版本、
+有没有配错、能不能从这里重启。
 
-The [Overview](/features/overview) page carries the at-a-glance version of this:
-the diagnostics and configuration checks as pass/warning/fail tallies, next to
-versions, the embedded DERP region and the tailnet counts. Open this page for the
-individual checks, the metrics panel and the reload/restart control.
+[功能总览](/features/overview) 页给出了它的速览版本：诊断与配置检查的通过/警告/失败
+计数，与版本、内嵌 DERP 区域和 tailnet 数量并列。要看逐项检查、指标面板和重载/重启控件，
+请打开这个页面。
 
-## Version and updates
+## 版本与更新
 
-The card shows the running Headscale version and, when it can tell, whether a
-newer release exists. The update hint is looked up from GitHub with a short
-timeout and cached for a few hours; on an offline or restricted network the
-lookup simply yields nothing and no badge is shown, so the page never depends on
-internet access.
+卡片显示正在运行的 Headscale 版本，以及在能判断时是否有更新的版本。更新提示从 GitHub 查询，
+带短超时并缓存数小时；在离线或受限网络上查询只会没有结果，也不显示任何标记，因此页面从不
+依赖互联网访问。
 
-Headplane runs the same comparison for **itself**, against the latest Headplane
-release on GitHub and with the same timeout and cache. The notice appears above
-the page only when the version this build reports — stamped in at build time —
-is strictly older, and it links to the release. A failed lookup, an untagged
-development build and a build that already reports that version or a newer one
-all stay silent, so a custom build is not nagged about an upstream release.
+Headplane 也会对**自己**做同样的比较，对象是 GitHub 上的最新 Headplane 版本，超时与缓存
+相同。只有当本构建上报的版本（构建时写入）严格更旧时，页面顶部才会出现提示并链接到该发布
+版本。查询失败、没有打标签的开发构建，以及已经上报该版本或更新版本的构建都保持沉默，因此
+自定义构建不会一直被上游版本骚扰。
 
-## Diagnostics
+## 诊断
 
-Each row is a check with a pass / warning / failure state, an explanation, and
-where it helps a link to the page that fixes it:
+每一行是一项检查，带通过 / 警告 / 失败状态、说明，以及在有帮助时指向修复页面的链接：
 
-| Check                     | Why it matters                                                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Headscale reachable       | `GET /health` — if this fails, nothing else on the page is meaningful.                                                       |
-| API key valid             | Headplane's `headscale.api_key` must still work; an expired key breaks every page.                                           |
-| Version new enough        | The Headplane Agent and browser SSH need Headscale 0.28+; newer releases fix real bugs, 0.29.2 is the recommended baseline.  |
-| Policy mode               | With `policy.mode: file` the Access Control editor cannot save through the API; `database` lets it.                          |
-| OIDC configured           | Browser SSH requires users to sign in through OIDC, so it needs a working OIDC block.                                        |
-| Trusted proxies           | Behind a reverse proxy, Headscale only sees the real client address when the proxy's network is listed in `trusted_proxies`. |
-| Headscale config readable | The DNS and Headscale settings pages can only read (or write) when `headscale.config_path` is mounted.                       |
-| Integration enabled       | Without an integration Headplane cannot reload or restart Headscale for you.                                                 |
+| 检查                     | 为什么重要                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Headscale 可达           | `GET /health` —— 这项失败时，页面其余内容都没有意义。                                                                    |
+| API 密钥有效             | Headplane 的 `headscale.api_key` 必须仍然可用；密钥过期会让每个页面都失效。                                              |
+| 版本足够新               | Headplane Agent 与浏览器 SSH 需要 Headscale 0.28+；更新的版本修复了真实缺陷，0.29.2 是推荐基线。                         |
+| 策略模式                 | `policy.mode: file` 时访问控制编辑器无法通过 API 保存；`database` 可以。                                                 |
+| 已配置 OIDC              | 浏览器 SSH 要求用户通过 OIDC 登录，因此需要一个可用的 OIDC 段。                                                           |
+| 可信代理                 | 在反向代理后面，只有当代理所在网段列在 `trusted_proxies` 中时，Headscale 才能看到真实客户端地址。                        |
+| Headscale 配置可读       | 只有 `headscale.config_path` 已挂载时，DNS 页和 Headscale 设置页才能读取（或写入）。                                     |
+| 集成已启用               | 没有集成时 Headplane 无法替你重载或重启 Headscale。                                                                       |
 
-## Configuration checks
+## 配置检查
 
-The page also reads Headscale's configuration file itself and reports the
-problems that otherwise only show up as a server that will not start or a
-setting that quietly does nothing:
+页面还会读取 Headscale 的配置文件本身，报出那些平时只表现为「服务器起不来」或「某个设置
+悄悄不生效」的问题：
 
-::: tip Paths a container cannot see
-Headplane can only inspect the paths it can actually reach. When it is given
-Headscale's `config.yaml` but not the directories that file points at, a path
-like `/vol1/@appdata/headscale/db.sqlite` does not exist _inside the container_
-even though it is perfectly healthy on the host. Those checks are reported as
-**unverifiable** — with the path and a hint to mount the directory — instead of
-being called failures. Mount the directory read-only into the container to turn
-them into real checks.
+::: tip 容器看不到的路径
+Headplane 只能检查它真正能访问到的路径。当它拿到 Headscale 的 `config.yaml`、却没有拿到
+该文件指向的目录时，`/vol1/@appdata/headscale/db.sqlite` 这类路径**在容器里**并不存在，
+尽管它在宿主机上完全健康。这类检查会报成**无法验证**（并给出路径和挂载提示），而不是判为
+失败。把该目录以只读方式挂进容器，它们就会变成真正的检查。
 :::
 
-| Check                | Why it matters                                                                                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Removed keys         | `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are gone in 0.29 and Headscale **refuses to start** while they are present.                         |
-| Trusted proxy ranges | `0.0.0.0/0` and `::/0` are configuration errors.                                                                                                                         |
-| TLS and ACME         | A configured certificate or Let's Encrypt hostname whose files do not exist cannot be served; `server_url` over `http` alongside TLS configuration is usually a mistake. |
-| Database             | A missing or read-only SQLite directory stops Headscale from writing anything.                                                                                           |
-| Policy file          | With `policy.mode: file`, an empty `policy.path` means _allow everything_.                                                                                               |
-| DNS records          | Both `dns.extra_records` and `dns.extra_records_path` set means the inline records are silently ignored.                                                                 |
-| OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                   |
-| Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                         |
-| Local DERP map files | Every entry in `derp.paths` gets its own rows — the file exists, is readable, is writable, is inside the size cap, parses as YAML, validates as a DERP map, and keeps its region ids and codes unique. A path this container cannot see is **unverifiable**. |
+| 检查                | 为什么重要                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 已移除的键          | `oidc.expiry`、`oidc.strip_email_domain` 和 `oidc.map_legacy_users` 在 0.29 已删除，存在时 Headscale **拒绝启动**。                                             |
+| 可信代理范围        | `0.0.0.0/0` 与 `::/0` 是配置错误。                                                                                                                              |
+| TLS 与 ACME         | 配置了证书或 Let's Encrypt 主机名但文件不存在就无法提供服务；`server_url` 用 `http` 同时又配了 TLS 通常是笔误。                                                  |
+| 数据库              | SQLite 目录缺失或只读会让 Headscale 什么都写不进去。                                                                                                            |
+| 策略文件            | `policy.mode: file` 时，`policy.path` 为空意味着**允许一切**。                                                                                                  |
+| DNS 记录            | `dns.extra_records` 与 `dns.extra_records_path` 同时设置时，内联记录会被静默忽略。                                                                              |
+| OIDC 一致性         | 有 issuer 却没有 client ID、PKCE 方法未知，或者同时存在密钥与密钥文件。                                                                                          |
+| Noise 密钥          | 配置了 `noise.private_key_path` 但文件不存在（Headscale 会在首次启动时生成它）。                                                                                 |
+| 本地 DERP 地图文件  | `derp.paths` 的每一条都会单独成行 —— 文件是否存在、是否可读、是否可写、是否在大小上限内、YAML 能否解析、是不是有效的 DERP 地图、区域 ID 与区域代码是否唯一。容器看不到的路径报**无法验证**。 |
 
-The local-map rows are the same checks the DERP card shows next to each path in
-[Settings → Headscale → DERP](/features/headscale-settings#editing-local-derp-map-files);
-here they are part of the one list you can read top to bottom, and each row names
-the file it inspected.
+本地地图那几行与 [设置 → Headscale → DERP](/features/headscale-settings) 里每个路径
+旁的检查是同一批；在这里它们属于一份可以从头读到尾的列表，而且每一行都会写出它检查的文件。
 
-A check that turns into a failure can also be pushed to a webhook instead of
-waiting to be read here; see [Alert Notifications](/features/notifications).
+变成失败的检查也可以直接推到 Webhook，而不必等你来看；见
+[告警通知](/features/notifications)。
 
-## Metrics
+## 指标
 
-The **Metrics** tab reads Headscale's Prometheus endpoint for you. Everything on
-it is read-only — nothing is written back to Headscale — and it fails softly:
-when it cannot show numbers it explains why instead of breaking the page.
+**指标**标签替你读取 Headscale 的 Prometheus 端点。其中一切都是只读的 —— 不会写回
+Headscale —— 而且它失败得很温和：拿不到数字时会说明原因，而不是把页面弄坏。
 
-The address comes from Headscale's own `metrics_listen_addr`. A missing or empty
-value means the listener is off, and the tab says exactly that; a value that is
-not `host:port` is reported as unparseable. When Headplane cannot read the
-configuration file at all it says it cannot tell where the listener is, rather
-than claiming the listener is disabled. Headscale often binds the listener to
-`0.0.0.0` or `[::]`, which cannot be dialled as written — in that case Headplane
-uses the host of your configured Headscale URL. It then fetches
-`http://<address>/metrics` server-side with a short timeout, so the listener has
-to be reachable from Headplane itself, not just from the machine running
-Headscale.
+地址来自 Headscale 自己的 `metrics_listen_addr`。缺失或为空表示监听器未开启，标签会照实
+说明；不是 `host:port` 的值会报成无法解析。当 Headplane 完全读不到配置文件时，它会说无法
+判断监听器在哪里，而不是声称监听器被禁用。Headscale 常把监听器绑到 `0.0.0.0` 或 `[::]`，
+这两个地址照原样是连不上的 —— 这种情况下 Headplane 会用你配置的 Headscale URL 的主机名。
+随后它在服务端以短超时抓取 `http://<地址>/metrics`，因此该监听器必须对 Headplane 自己可达，
+而不只是对运行 Headscale 的那台机器可达。
 
-On success the tab shows:
+成功时标签页显示：
 
-| Shown                                                              | Source                                                                                                                                                        |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uptime                                                             | `process_start_time_seconds` against the current time.                                                                                                        |
-| Goroutines                                                         | `go_goroutines`.                                                                                                                                              |
-| Nodes, Users, DERP and relays, Policy and Process (one group each) | The metric families whose names match that group, each summed across the samples it was reported with; the series count is shown when there is more than one. |
+| 显示项                                                              | 来源                                                                                                                                          |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 运行时长                                                            | `process_start_time_seconds` 与当前时间。                                                                                                      |
+| Goroutines                                                          | `go_goroutines`。                                                                                                                              |
+| 节点、用户、DERP 与中继、策略、进程（各一组）                        | 名称匹配该组的指标族，按其上报的样本求和；样本数多于一条时会显示序列数。                                                                        |
 
-Everything else is still available under **Raw metrics**, which shows the
-exposition text exactly as Headplane received it.
+其余内容仍在 **原始指标** 下可用，它按 Headplane 收到的原样显示 exposition 文本。
 
-A refused connection, a timeout, a non-200 answer or a body with no parsable
-samples all end as the same warning notice, which names the endpoint Headplane
-tried and the address it derived — most often because the listener binds loopback
-and Headplane runs in another container.
+连接被拒、超时、非 200 响应或正文里没有可解析的样本，最终都是同一条警告提示，它会写出
+Headplane 尝试的端点以及推导出的地址 —— 最常见的原因是监听器绑在回环地址上，而 Headplane
+跑在另一个容器里。
 
-::: info What the panel leaves out
+::: info 面板略去了什么
 
-Histograms and summaries are dropped — their `_bucket`, `_sum` and `_count`
-series are not numbers anyone reads off a status page without a query language.
-Each group also keeps at most 12 families, so a busy endpoint cannot turn the tab
-into a wall of numbers, and the raw view keeps the first 16,000 characters and
-says so when the response was longer.
+直方图和摘要被丢弃 —— 它们的 `_bucket`、`_sum`、`_count` 序列不是那种能直接从状态页读出
+的数字。每组最多保留 12 个指标族，避免繁忙端点把标签页变成一堵数字墙；原始视图保留前
+16,000 个字符，超过时会明确说明。
 
 :::
 
-## Reloading or restarting Headscale
+## 重载或重启 Headscale
 
-The button follows whatever integration is configured:
+按钮的行为取决于配置了哪种集成：
 
-| Integration                          | What the button does                                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `integration.proc` (native installs) | Sends **SIGHUP** to the `headscale serve` process — Headscale reloads its configuration without dropping connections. |
-| `integration.docker`                 | Restarts the Headscale container.                                                                                     |
-| `integration.kubernetes`             | Restarts the Headscale pod.                                                                                           |
+| 集成                                 | 按钮做什么                                                                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `integration.proc`（原生安装）       | 向 `headscale serve` 进程发送 **SIGHUP** —— Headscale 会在不断开连接的情况下重载配置。         |
+| `integration.docker`                 | 重启 Headscale 容器。                                                                          |
+| `integration.kubernetes`             | 重启 Headscale Pod。                                                                           |
 
-With no integration enabled the button is disabled and the page says so; restart
-Headscale however your service manager does it.
+没有启用任何集成时按钮是禁用的，页面也会说明；请按你服务管理器的方式重启 Headscale。
 
-::: tip Native installs and reloads
-A SIGHUP reload happens in place, so it is the safe choice after changing DNS,
-OIDC or `trusted_proxies`. Changes that swap the database or the policy mode are
-worth a full restart instead, which the native integration cannot do for you.
+::: tip 原生安装与重载
+SIGHUP 是就地重载，因此改动 DNS、OIDC 或 `trusted_proxies` 之后它是安全的选择。换数据库或
+切换策略模式这类改动更值得完整重启一次，而原生集成无法替你做到。
 :::

@@ -1,7 +1,8 @@
 {
-  "name": "headplane",
+  "name": "headplanecn",
   "version": "0.22.7",
   "private": true,
+  "repository": "git+https://github.com/CGG888/headplaneCN.git",
   "type": "module",
   "sideEffects": false,
   "scripts": {

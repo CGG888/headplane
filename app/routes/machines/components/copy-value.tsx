@@ -17,6 +17,7 @@ export default function CopyValue({
   copiedMessage,
   muted,
   reveal = "hover",
+  title,
   className,
 }: {
   value: string;
@@ -29,6 +30,12 @@ export default function CopyValue({
    * table rows keep it hidden until hover or focus.
    */
   reveal?: "hover" | "always";
+  /**
+   * Hover text for the value. Defaults to the value itself, which is what a
+   * truncated address needs; a caller that has something to explain about the
+   * value passes it here instead of printing a sentence under the row.
+   */
+  title?: string;
   className?: string;
 }) {
   const { t } = useI18n();
@@ -58,7 +65,7 @@ export default function CopyValue({
         className,
       )}
       onClick={handleCopy}
-      title={value}
+      title={title ?? value}
       type="button"
     >
       <span className="min-w-0 truncate">{value}</span>

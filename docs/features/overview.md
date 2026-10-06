@@ -1,106 +1,91 @@
 ---
-title: Overview
-description: The read-only dashboard for versions, the embedded DERP region, service facts, counts and health.
+title: 功能总览
+description: 只读看板：版本、内嵌 DERP 区域、服务信息、数量统计与健康状态。
 outline: [2, 3]
 ---
 
-# Overview
+# 功能总览
 
-**Overview** is the first tab in the navigation and lives at `/overview`. It
-answers the questions that otherwise mean opening several pages — what am I
-running, how is Headscale configured, and is anything wrong? — in one place.
+**总览**是导航里的第一个标签页，地址是 `/overview`。它把「我现在跑的是什么版本、
+Headscale 是怎么配的、有没有出问题」这些本来要翻好几个页面的问题集中到一处回答。
 
-Nothing on the page writes. There are no forms and no actions, and every card
-degrades on its own: a Headscale that does not answer, a configuration file
-Headplane cannot read or an agent that is not running leave the rest of the
-dashboard intact. A value that could not be read is shown as an em dash with a
-short reason ("the Headscale API could not be read", "not configured") instead of
-being guessed at.
+这个页面不写任何东西：没有表单，也没有操作按钮，而且每张卡片都各自降级 —— Headscale
+不响应、配置文件读不到、Agent 没在运行，都不会影响看板上其余部分。读不到的值显示为
+破折号加一句简短原因（「无法读取 Headscale API」「未配置」），而不是猜一个值填上。
 
-## Versions
+## 版本
 
-| Card                 | Shown                                                                                                                             | Source                                                                                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Headplane            | The version this build reports, and the latest Headplane release when it can be looked up                                          | The build version, and the same cached GitHub lookup the system page uses                                     |
-| Headscale            | The running version, and the latest Headscale release when it can be looked up                                                     | Headscale's `/version` API                                                                                    |
-| Headplane Agent      | The Tailscale version the agent reports, its last sync, how many nodes it reported and its last error                             | The agent's host info; when the agent is disabled the card says so and points at **Settings → Agent**         |
+| 卡片           | 显示内容                                                                      | 来源                                                                |
+| -------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Headplane      | 当前构建的版本，以及能查到时的最新 Headplane 版本                              | 构建时写入的版本，与系统页共用的 GitHub 缓存查询                     |
+| Headscale      | 正在运行的版本，以及能查到时的最新 Headscale 版本                              | Headscale 的 `/version` API                                          |
+| Headplane Agent | Agent 上报的 Tailscale 版本、最近一次同步、上报了多少节点以及最后一次错误     | Agent 的主机信息；Agent 关闭时卡片会说明并指向 **设置 → Agent**       |
 
-Headplane and Headscale each get an **Update available** chip when a newer release
-exists, and a **No release information** chip when the lookup could not run, so an
-offline instance is never claimed to be up to date.
+Headplane 和 Headscale 各自在有新版本时显示 **有可用更新** 标记，在查询失败时显示
+**无版本信息** 标记 —— 离线实例不会被当成「已是最新」。
 
-## The embedded DERP region
+## 内嵌 DERP 区域
 
-The **Embedded Region** card describes `derp.server` and the DERP map:
+**内嵌区域**卡片描述 `derp.server` 与 DERP 地图：
 
-| Row                   | Meaning                                                                                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Region                | `#{id} · {code} · {name}` from `derp.server.region_id`, `region_code` and `region_name`                                                                      |
-| Relay sources         | Where clients' relays come from, derived from `derp.server.enabled` and `derp.urls`: the embedded server only, the embedded server plus the public map, the public map only, or none |
-| DERP map URLs         | How many `derp.urls` entries are configured                                                                                                                  |
-| Local DERP map files  | How many `derp.paths` entries are configured                                                                                                                 |
+| 行                    | 含义                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 区域                  | 由 `derp.server.region_id`、`region_code`、`region_name` 组成 `#{id} · {code} · {name}`                                  |
+| 中继来源              | 客户端可用的中继来自哪里，由 `derp.server.enabled` 与 `derp.urls` 推出：仅内嵌服务器、内嵌 + 公开地图、仅公开地图、无    |
+| DERP 地图 URL         | 配置了 `derp.urls` 的多少条记录                                                                                          |
+| 本地 DERP 地图文件    | 配置了 `derp.paths` 的多少条记录                                                                                        |
 
-The card's chip says whether the embedded server is enabled.
+卡片上的标记说明内嵌服务器是否已启用。
 
-## Relay addresses and STUN
+## 中继地址与 STUN
 
-This card is **read-only**. It reports what clients are given and configures
-nothing: the schedule, the address families, the auto-reload switch, the external
-IPv6 echo and the detection panel all live in
-[Settings → Headscale → DERP](/features/headscale-settings#address-auto-sync),
-which the card links to.
+这张卡片是**只读**的：它只报告客户端拿到了什么，不配置任何东西。刷新计划、地址族、
+自动重载开关、外部 IPv6 回显以及探测面板都在
+[设置 → Headscale → DERP](/features/headscale-settings) 里，卡片只提供跳转。
 
-| Row                    | Chip       | Meaning                                                                                                                                                                  |
-| ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Client connect address | Derived    | The public `host:port` for the relay, derived from Headscale's `server_url`. DERP shares Headscale's HTTPS endpoint, so the port comes from the URL — 443 when it carries none — and never from `listen_addr`. |
-| IPv4                   | Configured | The address Headscale hands to clients that reach the relay directly: `derp.server.ipv4`, whether it was set by hand or written by the address auto-sync                      |
-| IPv6                   | Configured | The same for the other address family                                                                                                                                    |
-| STUN listen address    | Configured | `derp.server.stun_listen_addr`, the UDP address that answers STUN requests                                                                                               |
+| 行               | 标记 | 含义                                                                                                                                                        |
+| ---------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 客户端连接地址   | 推导 | 中继对外公开的 `host:port`，由 Headscale 的 `server_url` 推导。DERP 与控制服务共用同一个 HTTPS 端点，因此端口来自该 URL（未写端口时为 443），与 `listen_addr` 无关 |
+| IPv4             | 配置 | Headscale 下发给直连客户端的地址：`derp.server.ipv4`，无论它是手工写的还是地址自动同步写入的                                                                  |
+| IPv6             | 配置 | 另一个地址族同理                                                                                                                                             |
+| STUN 监听地址    | 配置 | `derp.server.stun_listen_addr`，即响应 STUN 请求的 UDP 地址                                                                                                   |
 
-Both addresses carry a copy button, so the value can be pasted straight into the
-settings card or into Headscale's own file. The card also names the resolver the
-relay lookups used — **System resolver** or **Configured: …** — and prints a
-one-line status from the last check; the detection panel behind that value (every
-candidate, its origin and why it was chosen or skipped) is only in the settings
-card.
+两个地址都带复制按钮，可以直接粘回设置卡片或 Headscale 自己的配置文件。卡片还会写出
+中继查询用的是哪个解析器 —— **系统解析器** 或 **已配置：…** —— 并给出一行最近检查状态；
+那一行背后的探测面板（每个候选、来源以及为什么被选中或跳过）只在设置卡片里。
 
-::: warning STUN and IPv6-only clients
+::: warning STUN 与纯 IPv6 客户端
 
-When `derp.server.ipv6` is set while STUN is bound to an IPv4 address such as
-`0.0.0.0:3478`, the card raises a warning. Go binds an IPv4 literal as IPv4 only,
-so a client without an IPv4 stack never reaches STUN and cannot discover its NAT
-mapping. Use a dual-stack or IPv6 listen address such as `[::]:3478` instead.
-Headscale's own `listen_addr`, which serves both the control API and the relay,
-needs the same treatment.
+当设置了 `derp.server.ipv6`、而 STUN 绑定在 `0.0.0.0:3478` 这样的 IPv4 地址上时，
+卡片会给出警告。Go 把 IPv4 字面量按纯 IPv4 绑定，因此没有 IPv4 栈的客户端根本到不了
+STUN，也就无法探测自己的 NAT 映射。请改用双栈或 IPv6 监听地址，例如 `[::]:3478`。
+Headscale 自己的 `listen_addr`（同时承载控制 API 和中继）也需要同样处理。
 
 :::
 
-## Service facts
+## 服务信息
 
-Three cards read the configuration Headplane already has:
+三张卡片读取 Headplane 已经拿到的配置：
 
-| Card              | Shown                                                                                                                                                                        |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Headscale Server  | The configured Headscale URL and whether it answers, `base_domain`, and the policy mode (**File** or **Database**)                                                             |
-| DNS & Policy      | The MagicDNS and override-local-DNS switches, and `dns.extra_records_path`, the extra-records file                                                                            |
-| Metrics & Proxies | The metrics listener address and whether Headplane can reach it — **Reachable**, **Unreachable**, **Not enabled**, **Invalid listen address** or **Unknown** — and how many entries `trusted_proxies` has |
+| 卡片             | 显示内容                                                                                                                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Headscale 服务器 | 配置的 Headscale URL 以及它是否响应、`base_domain`，以及策略模式（**文件** 或 **数据库**）                                                                                |
+| DNS 与策略       | MagicDNS 与「覆盖本地 DNS」开关，以及额外记录文件 `dns.extra_records_path`                                                                                               |
+| 指标与代理       | metrics 监听地址以及 Headplane 能否访问它 —— **可访问**、**不可访问**、**未启用**、**监听地址非法** 或 **未知** —— 还有 `trusted_proxies` 有多少条                     |
 
-## Counts
+## 数量统计
 
-| Card           | Shown                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tailnet        | Nodes with their online/offline split, users, pre-auth keys (only on Headscale versions that expose a global key list) and API keys              |
-| Headplane Data | Operation-log entries, and the number of configuration snapshots with their total size                                                          |
+| 卡片           | 显示内容                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Tailnet        | 节点总数与在线/离线拆分、用户数、预授权密钥（仅 Headscale 版本提供全局密钥列表时）以及 API 密钥数                    |
+| Headplane 数据 | 操作日志条数，以及配置快照的数量与总大小                                                                          |
 
-Counts that need the Headscale API show an em dash when that API cannot be read.
-The snapshot size is formatted in binary units, and the audit and snapshot counts
-come from Headplane's own stores.
+需要 Headscale API 的计数在 API 读不到时显示破折号。快照大小按二进制单位格式化，审计与
+快照计数来自 Headplane 自己的存储。
 
-## Health
+## 健康状态
 
-The **Health Summary** card tallies the same configuration checks and diagnostics
-that the [System Status](/features/system-status) page lists in full: the *pass*,
-*warning* and *fail* counts of each list. The chip reads **Healthy** while the
-diagnostics report no failures and no warnings, and **Needs attention** as soon
-as one of them does. The last line links straight to the system page for the
-per-check details, the metrics panel and the reload/restart button.
+**健康摘要**卡片统计的正是 [系统状态](/features/system-status) 页面完整列出的那些
+配置检查与诊断项：两类列表各自的 *通过*、*警告*、*失败* 数量。诊断项没有失败也没有警告时
+标记显示 **健康**，只要有任意一项出现问题就变成 **需要处理**。最后一行直接跳到系统页，看
+逐项明细、指标面板以及重载/重启按钮。

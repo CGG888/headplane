@@ -22,10 +22,10 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
 export function shouldRevalidateMachines(args: ShouldRevalidateFunctionArgs): boolean {
   const { currentUrl, nextUrl, formMethod, defaultShouldRevalidate } = args;
 
-  // A form submission - the route's own action (rename, expire, bulk edits), a
-  // dialog's fetcher or the relay "Re-resolve" fetcher - can change stored data,
-  // so it keeps React Router's answer. The machines action only ever mutates;
-  // there is no read-only `action_id` to special case.
+  // A form submission - the route's own action (rename, expire, bulk edits), or
+  // a dialog's fetcher - can change stored data, so it keeps React Router's
+  // answer. The machines action only ever mutates; there is no read-only
+  // `action_id` to special case.
   if (formMethod !== undefined) {
     return defaultShouldRevalidate;
   }

@@ -1,124 +1,99 @@
 ---
 title: Headplane Agent
-description: Configure the Headplane Agent for enhanced functionality.
+description: 配置 Headplane Agent 以获得更完整的功能。
 ---
 
 # Headplane Agent
 
-The Headplane Agent is an optional component that periodically syncs node
-information (such as version and OS details) from the Tailnet. Unlike previous
-versions, the agent does not require you to manually create or manage pre-auth
-keys — Headplane generates a fresh key for each agent startup and reuses the
-agent's existing Tailnet state across restarts.
+Headplane Agent 是一个可选组件，它会定期从 Tailnet 同步节点信息（版本、操作系统详情等）。
+与早期版本不同，Agent 不再需要你手工创建或管理预授权密钥 —— Headplane 在每次 Agent 启动时
+生成一把新密钥，并在重启之间复用 Agent 已有的 Tailnet 状态。
 
-## What the agent adds
+## Agent 带来了什么
 
-The Headscale API only knows what the control server itself sees. Everything the
-machines measure about themselves arrives through the agent:
+Headscale API 只知道控制服务器自己看得到的东西。机器自己测量到的一切都通过 Agent 到来：
 
-| Shown in | Data |
+| 显示位置 | 数据 |
 | --- | --- |
-| Machine list and details | Client version, OS and host details |
-| Machine details | **DERP relay**: the home and preferred region, whether that region is your **embedded DERP server**, and the measured latency to each region |
-| Headscale settings → DERP | The per-machine relay table |
+| 机器列表与详情 | 客户端版本、操作系统与主机详情 |
+| 机器详情 | **DERP 中继**：home 与 preferred 区域、该区域是否是你自己的**内嵌 DERP 服务器**，以及到各区域的实测延迟 |
+| Headscale 设置 → DERP | 每台机器的中继表 |
 
-Without the agent those pages say the agent is needed rather than showing an
-empty table — the control server does not carry this data.
+没有 Agent 时，这些页面会说明需要 Agent，而不是显示空表 —— 控制服务器本身不携带这些数据。
 
-## The relay card on a machine
+## 机器上的中继卡片
 
-A machine's detail page carries a **DERP Relays** card in two halves.
+机器详情页有一张 **DERP 中继**卡片，分两半。
 
-**Relay clients reach** is read-only and shows what Headscale hands to clients:
-the endpoint derived from `server_url`, then the **IPv4** and **IPv6** addresses
-`derp.server` declares — the same values the
-[Headscale settings](/features/headscale-settings#address-auto-sync) card manages
-— each with a copy button, the verdict against what the hostname actually
-resolves to, and the resolver the lookup used. It configures nothing and links
-back to the settings card for the schedule, the families and the detection
-panel.
+**客户端可达的中继**是只读的，显示 Headscale 下发给客户端的内容：由 `server_url` 推导出的
+端点，然后是 `derp.server` 声明的 **IPv4** 与 **IPv6** 地址 —— 与
+[Headscale 设置](/features/headscale-settings)卡片管理的是同一批值 —— 每个都带复制
+按钮、与主机名实际解析结果的比对结论，以及本次查询使用的解析器。它不配置任何东西，只链回
+设置卡片去看刷新计划、地址族和探测面板。
 
-**Relays this machine uses** needs the agent, and lists the home and preferred
-region plus the measured latency, fastest first. Region names are resolved
-through the same chain the settings page describes: the manual region-name
-mapping, the map files listed in `derp.paths`, the maps fetched from
-`derp.urls`, then Headscale's embedded region; a region none of them describes
-is shown by ID. The agent reports latency under Tailscale's own keys —
-`<regionID>-v4` and `<regionID>-v6` — so a region measured over both address
-families appears **once**, with its fastest sample, and a key that names no
-region (a legacy `host:port`, or a region code) is matched against the
-configured maps or printed as it arrived.
+**该机器使用的中继**需要 Agent，列出 home 与 preferred 区域以及实测延迟（最快的在前）。
+区域名走与设置页相同的解析链：手工区域名映射、`derp.paths` 里的地图文件、`derp.urls` 拉取
+的地图，最后是 Headscale 的内嵌区域；都不认识的区域直接显示 ID。Agent 按 Tailscale 自己的
+键上报延迟 —— `<regionID>-v4` 与 `<regionID>-v6` —— 因此同时用两个地址族测量过的区域只会
+出现**一次**，显示最快的那个样本；不自带区域的键（旧的 `host:port`、或区域代码）会先去
+配置的地图里匹配，匹配不到就按原样显示。
 
-## Prerequisites
+## 前置条件
 
-Before enabling the agent, ensure the following:
+启用 Agent 之前请确认：
 
-1. **Headscale 0.28 or newer** is required. The agent uses tag-only pre-auth
-   keys which are only available in Headscale 0.28+.
+1. **需要 Headscale 0.28 或更新版本。** Agent 使用只有标签的预授权密钥，而该特性从
+   Headscale 0.28 起才可用。
 
-2. **`headscale.api_key`** must be set in your Headplane configuration file.
-   The agent uses this key to auto-generate pre-auth keys for connecting to the
-   Tailnet and to auto-approve its own registration when Headscale is configured
-   to require manual approval.
+2. **必须在 Headplane 配置文件里设置 `headscale.api_key`。** Agent 用这把密钥自动生成连接
+   Tailnet 所需的预授权密钥，并在 Headscale 配置为需要人工批准时自动批准自己的注册。
 
-## Configuration
+## 配置
 
-To enable the Headplane Agent, you'll need to modify the following fields in
-your Headplane configuration file. For more information on configuring Headplane
-please refer to the
-[example configuration](https://github.com/tale/headplane/blob/main/config.example.yaml)
-for details.
+要启用 Headplane Agent，需要修改 Headplane 配置文件里的以下字段。关于 Headplane 配置的
+更多信息，请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。
 
-| Field                               | Description                                                                       |
+| 字段                                | 说明                                                                              |
 | ----------------------------------- | --------------------------------------------------------------------------------- |
-| **`integration.agent.enabled`**     | Set to `true` to enable the agent.                                                |
-| `integration.agent.host_name`       | _Optional_. Headscale user name for the agent (default: `headplane-agent`).       |
-| `integration.agent.cache_ttl`       | _Optional_. How often to sync in milliseconds (default: `180000` / 3 minutes).    |
-| `integration.agent.work_dir`        | _Optional_. Working directory for the agent's tailnet state.                      |
-| `integration.agent.executable_path` | _Optional_. Path to the agent binary (default: `/usr/libexec/headplane/agent`).   |
-| `integration.agent.tailscale_netns` | _Optional_. Use Tailscale's socket-level routing-loop handling (default: `true`). |
+| **`integration.agent.enabled`**     | 设为 `true` 以启用 Agent。                                                        |
+| `integration.agent.host_name`       | _可选_。Agent 的 Headscale 用户名（默认：`headplane-agent`）。                     |
+| `integration.agent.cache_ttl`       | _可选_。同步间隔，单位毫秒（默认：`180000` / 3 分钟）。                            |
+| `integration.agent.work_dir`        | _可选_。Agent 的 tailnet 状态工作目录。                                            |
+| `integration.agent.executable_path` | _可选_。Agent 二进制文件路径（默认：`/usr/libexec/headplane/agent`）。             |
+| `integration.agent.tailscale_netns` | _可选_。使用 Tailscale 的套接字级路由环路处理（默认：`true`）。                    |
 
-## Native Mode Configuration
+## 原生模式配置
 
-Once you've built Headplane locally, there will be a binary in the `./build`
-folder called `hp_agent`. Please move this binary to
-`/usr/libexec/headplane/agent` and ensure that it is executable.
+在本地构建 Headplane 之后，`./build` 目录里会有一个名为 `hp_agent` 的二进制文件。请把它
+移到 `/usr/libexec/headplane/agent`，并确保它有可执行权限。
 
 ::: tip
-If for some reason you cannot move the binary to the intended location, you can
-define **`integration.agent.executable_path`** in your Headplane configuration
-file to point to the correct location of the agent binary.
+如果因为某些原因无法把二进制文件放到目标位置，可以在 Headplane 配置文件里设置
+**`integration.agent.executable_path`**，指向 Agent 二进制文件的实际位置。
 :::
 
-The agent will also use `/var/lib/headplane/agent` as its data directory by
-default. You can change this location by defining
-**`integration.agent.work_dir`** in your Headplane configuration file. Ensure
-that the specified directory exists and is writable by the user running
-Headplane.
+Agent 默认还会使用 `/var/lib/headplane/agent` 作为数据目录。你可以在 Headplane 配置文件里
+设置 **`integration.agent.work_dir`** 来更改位置。请确保该目录存在，并且运行 Headplane 的
+用户对它可写。
 
-Headplane preserves the agent's `tailscaled.state` in this directory. This lets
-the agent retain its Tailnet identity across Headplane restarts instead of
-registering as a new host each time. If the agent's state is lost or unusable,
-Headplane falls back to the pre-auth key and registers a new agent node.
+Headplane 会把 Agent 的 `tailscaled.state` 保留在这个目录里。这样 Agent 在 Headplane 重启
+后仍能保留自己的 Tailnet 身份，而不是每次都注册成新主机。如果 Agent 的状态丢失或不可用，
+Headplane 会退回使用预授权密钥，注册一个新的 Agent 节点。
 
-## Tailscale socket routing handling
+## Tailscale 套接字路由处理
 
-By default, the agent uses Tailscale's socket handling to keep
-Tailscale-originated traffic from being routed back through Tailscale-managed
-routes. Tailscale attempts to apply its bypass mark to its outbound sockets so
-its routing and policy machinery can identify that traffic.
+默认情况下，Agent 使用 Tailscale 的套接字处理，避免由 Tailscale 发起的流量被路由回
+Tailscale 管理的路由。Tailscale 会尝试给它的出站套接字打上绕过标记，好让自身的路由与策略
+机制识别这些流量。
 
-With all capabilities dropped, `SO_MARK` returns `EPERM`. This does not break
-the container's routing; it causes Tailscale to fall back to
-`SO_BINDTODEVICE(DefaultRouteInterface())`. In a multi-network container, that
-fallback can pin the agent's Headscale connection to the default interface even
-though the container's Linux routing table has a correct Headscale-specific
-route through another interface. In this topology, a successful `SO_MARK` is
-not what selects the Headscale-facing interface; ordinary destination routing
-already makes the correct selection.
+在丢弃全部能力（capabilities）的容器里，`SO_MARK` 会返回 `EPERM`。这不会破坏容器的路由；
+它会让 Tailscale 退回到 `SO_BINDTODEVICE(DefaultRouteInterface())`。在多网络容器中，这个
+回退可能把 Agent 与 Headscale 的连接钉在默认接口上，尽管容器的 Linux 路由表里有一条正确
+的、经另一个接口到 Headscale 的路由。在这种拓扑下，选择通往 Headscale 的接口靠的并不是
+`SO_MARK` 成功，普通的按目标路由已经做出了正确的选择。
 
-After verifying that ordinary OS routing in the container's network namespace
-reaches Headscale correctly, the agent can rely on that routing instead:
+在确认容器网络命名空间里的普通操作系统路由可以正确到达 Headscale 之后，Agent 可以改为
+依赖这套路由：
 
 ```yaml
 integration:
@@ -127,39 +102,30 @@ integration:
     tailscale_netns: false
 ```
 
-Setting this to `false` disables Tailscale's mark-or-bind socket handling only
-inside the dedicated `hp_agent` process. `hp_agent` and the main Headplane
-process continue to share the container's Linux network namespace. The main
-process's networking behavior, container capabilities, Docker networks,
-interfaces, routing table, and default gateway remain unchanged. Leave this
-setting enabled unless the fallback is known to select the wrong interface;
-bare-metal and Tailscale-routed deployments may rely on its loop-avoidance
-behavior.
+把它设为 `false` 只会在专用的 `hp_agent` 进程里关闭 Tailscale 的 mark-or-bind 套接字处理。
+`hp_agent` 与主 Headplane 进程仍然共享容器的 Linux 网络命名空间。主进程的网络行为、容器
+能力、Docker 网络、接口、路由表和默认网关都不变。除非已经确认该回退会选中错误的接口，否则
+请保持开启；裸机部署和经由 Tailscale 路由的部署可能依赖它的环路避免行为。
 
-## Interactive approval
+## 交互式批准
 
-Under normal circumstances, the agent connects headlessly using the auto-generated
-pre-auth key and no manual interaction is required. If your Headscale server is
-configured to require interactive approval, Headplane detects the auth URL the
-agent prints and automatically approves the request using the configured
-`headscale.api_key`. The Settings page still shows the approval link as a
-fallback in case auto-approval fails.
+正常情况下 Agent 用自动生成的预授权密钥无交互地连接，不需要人工介入。如果你的 Headscale
+服务器配置为需要交互式批准，Headplane 会检测 Agent 打印的认证 URL，并用配置的
+`headscale.api_key` 自动批准请求。设置页仍会显示批准链接作为兜底，以防自动批准失败。
 
-## Usage
+## 使用
 
 <figure>
     <img class="dark-only" src="../assets/preview-dark.png" />
     <img class="light-only" src="../assets/preview-light.png" />
-    <figcaption>Headplane Dashboard</figcaption>
+    <figcaption>Headplane 看板</figcaption>
 </figure>
 
-After enabling and configuring the Headplane Agent, restart your Headplane
-instance. You should now see additional options in the UI, such as host
-information about each node and the ability to open SSH sessions directly from
-the browser if the nodes have Tailscale SSH enabled.
+启用并配置 Headplane Agent 之后，重启 Headplane 实例。你应该会在界面里看到更多内容，例如
+每个节点的主机信息，以及在节点启用 Tailscale SSH 时直接从浏览器打开 SSH 会话的能力。
 
 <figure>
     <img class="dark-only" src="../assets/machine-dark.png" />
     <img class="light-only" src="../assets/machine-light.png" />
-    <figcaption>Machine page</figcaption>
+    <figcaption>机器页面</figcaption>
 </figure>

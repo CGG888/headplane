@@ -1,74 +1,63 @@
 ---
-title: Audit Log
-description: See who changed what in Headplane, when, and export it.
+title: 操作审计
+description: 查看谁在什么时候改了什么，并导出记录。
 outline: [2, 3]
 ---
 
-# Audit Log
+# 操作审计
 
-Once more than one person can administer a tailnet, "who changed the policy
-yesterday?" stops being a rhetorical question. **Settings → Audit log** answers
-it from Headplane's own records.
+一旦不止一个人能管理 tailnet，「昨天是谁改了策略？」就不再是修辞问题。
+**设置 → 操作审计**用 Headplane 自己的记录回答它。
 
-## What gets recorded
+## 记录了什么
 
-Every change Headplane makes to Headscale is recorded with the acting identity,
-the action, the target and whether it succeeded:
+Headplane 对 Headscale 做的每一次改动都会记下操作者身份、动作、目标以及是否成功：
 
-| Recorded              | Examples                                                      |
-| --------------------- | ------------------------------------------------------------- |
-| Headscale settings    | OIDC, trusted proxies, policy mode, node lifetime, logs, DERP |
-| Access Control        | Policy saves and validations                                  |
-| DNS                   | Added, removed and imported records                           |
-| Machines              | Bulk tag, expiry, owner and delete runs                       |
-| API keys              | Creation and expiry                                           |
-| Process and snapshots | Reload/restart, taking and restoring a snapshot               |
+| 记录范围         | 示例                                                |
+| ---------------- | --------------------------------------------------- |
+| Headscale 设置   | OIDC、可信代理、策略模式、节点有效期、日志、DERP     |
+| 访问控制         | 策略的保存与校验                                     |
+| DNS              | 新增、删除、导入记录                                 |
+| 机器             | 批量标签、有效期、所有者、删除                       |
+| API 密钥         | 创建与过期                                           |
+| 进程与快照       | 重载/重启、创建与恢复快照                            |
 
-The actor is the Headplane user who performed it, and the API key or OIDC
-identity behind that user where one is available.
+操作者是执行该动作的 Headplane 用户，在能取到时还会记录该用户背后的 API 密钥或 OIDC 身份。
 
-## Where it lives
+## 记录存放位置
 
-Entries go into Headplane's own database (`server.data_path`, default
-`/var/lib/headplane/`, file `hp_persist.db`), keeping the newest few thousand so
-the file cannot grow without bound. Mount that directory as a volume if you want
-the history to survive recreating the container.
+记录写入 Headplane 自己的数据库（`server.data_path`，默认 `/var/lib/headplane/`，文件为
+`hp_persist.db`），只保留最新的几千条，避免文件无限增长。想让历史在重建容器后仍然存在，
+就把该目录挂成卷。
 
-## Viewing it
+## 查看
 
-The page requires the `configure_iam` capability — the same permission that lets
-someone change these settings in the first place. Entries are newest first with
-filters by actor, action and time range.
+页面需要 `configure_iam` 能力 —— 也就是最初允许别人改这些设置的那项权限。记录按最新在前
+排列，可以按操作者、动作和时间范围筛选。
 
-## Exporting
+## 导出
 
-**Export CSV** and **Export JSON** sit next to the filters and download the
-selection the page is showing: the actor, action and time range filters are
-applied, and the page number is not — an export always starts at the newest
-entry, not at the page you happen to be on. The link is
-`/settings/audit/export?format=csv` (or `json`), and the route keeps the same
-`configure_iam` capability gate as the page itself.
+**导出 CSV** 和 **导出 JSON** 就在筛选器旁边，下载的是页面当前展示的筛选结果：操作者、
+动作和时间范围筛选会生效，页码不会 —— 导出总是从最新一条开始，而不是你恰好停留的那一页。
+链接是 `/settings/audit/export?format=csv`（或 `json`），该路由与页面本身受同一个
+`configure_iam` 能力保护。
 
-| Format | Details                                                                                                                                                                                                  |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CSV    | RFC 4180: a field containing a quote, a comma or a line break is quoted, and quotes inside it are doubled. The header row is translated into your language; the body keeps the recorded values verbatim. |
-| JSON   | An array of records with `id`, `at` (ISO 8601), `actor`, `actorType`, `action`, `result`, `target` and `detail`.                                                                                         |
+| 格式 | 说明                                                                                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV  | 遵循 RFC 4180：含引号、逗号或换行的字段会被引号包裹，字段内的引号翻倍。表头会翻译成你的语言；正文里的值原样保留。                                                          |
+| JSON | 记录数组，字段为 `id`、`at`（ISO 8601）、`actor`、`actorType`、`action`、`result`、`target` 和 `detail`。                                                                  |
 
-The file is named `headplane-audit-YYYYMMDD-HHMMSS.csv` (or `.json`), with the
-timestamp in UTC so repeated downloads stay distinct, and is sent with
-`Cache-Control: no-store`.
+文件名是 `headplane-audit-YYYYMMDD-HHMMSS.csv`（或 `.json`），时间戳用 UTC，重复下载不会
+互相覆盖；响应头带 `Cache-Control: no-store`。
 
-::: warning What it does not cover
-Only changes made **through Headplane** are recorded. Edits made with
-`headscale` on the host, or by hand in `config.yaml`, never pass through
-Headplane and are invisible here.
+::: warning 它覆盖不到的部分
+只有**通过 Headplane** 做的改动会被记录。在宿主机上用 `headscale` 命令、或者手工编辑
+`config.yaml` 的改动不经过 Headplane，这里看不到。
 
-An audit write is also best-effort: if it fails, the change itself still happens
-and the failure is logged server-side, because losing a log line must not block
-an operator.
+审计写入也是尽力而为：写失败时改动本身照常发生，失败只记在服务端日志里，因为丢一行日志
+不该把操作者拦下来。
 
-An export is bounded as well: it stops at the newest 5,000 matching operations.
-Once a filtered selection reaches that size the filters card says so, and a
-download that was cut short carries `X-Audit-Export-Truncated: true` and
-`X-Audit-Export-Total` so whatever consumes the file can tell.
+导出同样有上限：最多导出最新的 5,000 条匹配操作。筛选结果达到这个数量时筛选卡片会说明，
+被截断的下载会带上 `X-Audit-Export-Truncated: true` 和 `X-Audit-Export-Total`，让消费该
+文件的程序自己判断。
 :::

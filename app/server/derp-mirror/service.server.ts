@@ -58,6 +58,7 @@ import {
 import {
   derpMirrorIntervalMs,
   normalizeDerpMirrorSettings,
+  pruneAssignmentToSelection,
   type DerpMirrorSettings,
 } from "./settings";
 import { readDerpMirrorDocument, writeDerpMirrorDocument, writeDerpMirrorSettings } from "./store";
@@ -728,7 +729,17 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     async update(patch) {
       await ensureLoaded();
       const previous = settings;
-      const next = normalizeDerpMirrorSettings({ ...previous, ...patch });
+      const merged = normalizeDerpMirrorSettings({ ...previous, ...patch });
+
+      // A save leaves the stored numbering covering exactly the regions the
+      // selection keeps. The server's `assignRegionNumbers` only ever returns
+      // the selected regions, so an entry for a region the operator dropped is
+      // stale as soon as the selection is saved, and the preview would be the
+      // only thing still showing it.
+      const next: DerpMirrorSettings = {
+        ...merged,
+        assignment: pruneAssignmentToSelection(merged.assignment, merged.officialRegionIds),
+      };
 
       try {
         await writeDerpMirrorSettings(options.dataPath, next);

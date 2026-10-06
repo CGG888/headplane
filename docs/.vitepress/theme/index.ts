@@ -24,7 +24,7 @@ export default {
                 h(
                   "a",
                   {
-                    href: "https://headplane.net",
+                    href: "https://cgg888.github.io/headplaneCN/",
                   },
                   "Go to the stable docs →",
                 ),

@@ -140,7 +140,7 @@ export function getErrorMessage(
           <Card.Text>
             {tr("errors.api.unexpectedBody", {
               link: (
-                <Link external styled to="https://github.com/tale/headplane/issues">
+                <Link external styled to="https://github.com/CGG888/headplaneCN/issues">
                   {t("errors.api.unexpectedLink")}
                 </Link>
               ),

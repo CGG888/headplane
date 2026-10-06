@@ -31,11 +31,14 @@ export default function Footer({ isDebug, baseUrl }: FooterProps) {
               </Link>
             ),
             fork: (
-              <Link external styled to="https://github.com/CGG888/headplane">
+              <Link external styled to="https://github.com/CGG888/headplaneCN">
                 {t("footer.forkLink")}
               </Link>
             ),
-          })}
+          })}{" "}
+          <Link external styled to="https://cgg888.github.io/headplaneCN/sponsor">
+            {t("footer.sponsorLink")}
+          </Link>
         </p>
         <div className="flex items-center gap-2 text-xs">
           {isDebug && (

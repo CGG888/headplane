@@ -38,7 +38,11 @@ export function OidcConfigErrorNotice({ errors }: { errors: OidcErrorCode[] }) {
             </li>
           ))}
         </ul>{" "}
-        <Link external styled to="https://headplane.net/features/sso#troubleshooting">
+        <Link
+          external
+          styled
+          to="https://cgg888.github.io/headplaneCN/en/features/sso#troubleshooting"
+        >
           {t("common.learnMore")}
         </Link>
       </Card.Text>

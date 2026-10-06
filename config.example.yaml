@@ -11,7 +11,7 @@ server:
 
   # The secret used to encode and decode web sessions (must be 32 characters)
   # You may also provide `cookie_secret_path` instead to read a value from disk.
-  # See https://headplane.net/configuration/#sensitive-values
+  # See https://cgg888.github.io/headplaneCN/configuration/#sensitive-values
   cookie_secret: "<change_me_to_something_secure!>"
 
   # Whether cookies should be marked as Secure
@@ -103,7 +103,7 @@ headscale:
   # Note: this pins Headscale's connection to exactly this one cert. If you
   # have a private CA you want trusted everywhere (Headscale, OIDC, Docker,
   # etc.), set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` on the Headplane
-  # process instead — see https://headplane.net/configuration/tls#custom-certificate-authorities
+  # process instead — see https://cgg888.github.io/headplaneCN/configuration/tls#custom-certificate-authorities
   # tls_cert_path: "/var/lib/headplane/tls.crt"
 
   # Optional, public URL if its different from the `headscale.url`
@@ -226,7 +226,7 @@ integration:
 #   # `/.well-known/openid-configuration`), you need to manually set endpoints.
 #   # This also works to override endpoints if you so desire or if your OIDC
 #   # discovery is missing certain endpoints (ie GitHub).
-#   # For some typical providers, see https://headplane.net/features/sso.
+#   # For some typical providers, see https://cgg888.github.io/headplaneCN/features/sso.
 #   authorization_endpoint: ""
 #   token_endpoint: ""
 #   userinfo_endpoint: ""
@@ -263,7 +263,7 @@ integration:
 #
 #   # The client secret for the OIDC client
 #   # You may also provide `client_secret_path` instead to read a value from disk.
-#   # See https://headplane.net/configuration/#sensitive-values
+#   # See https://cgg888.github.io/headplaneCN/configuration/#sensitive-values
 #   client_secret: "<your-client-secret>"
 #
 #   # Whether to use PKCE when authenticating users. This is recommended as it

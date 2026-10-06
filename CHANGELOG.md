@@ -1,5 +1,18 @@
 # Next
 
+## Changes
+
+- **This fork is now called HeadplaneCN.** The name changed everywhere a person reads it — the interface, the page titles, the documentation site and the package name — while everything a machine reads stayed exactly as it was: environment variables, `/etc/headplane`, `/var/lib/headplane`, container and image names, the API header, and the credit to the upstream project, which is still named and linked in the footer and the README.
+- **The documentation site is Chinese-first now and readable in both languages.** Simplified Chinese serves the site root, English lives under `/en/`, and the two trees are page-for-page equal: the same 34 pages, the same sidebar in the same order, and paired headings so the language switch keeps you in the same place. The site is published by GitHub Pages, the documentation links and image references point at this repository and its own registry, and there is a **sponsor page** with WeChat and Alipay QR codes.
+- **The official region filter is usable end to end.** You can clear the selection or restore the default (Hong Kong 901 and Singapore 902), the latency column explains itself when there is nothing to measure — either the agent is not reporting, with a link to its settings, or nothing has been measured yet — and one button adds the mirrored regions and their Chinese names to the manual region-name mapping, adding only what is missing, after a snapshot and with an audit entry.
+- **The Overview DERP card shows every node source at once**: embedded, local map files, the official mirror and the official upstream map, each with its node count, expandable to the node names, with the upstream rows marked as not served here. Cards on the Overview page can be **hidden per user**, and any card that is carrying a warning stays visible no matter what.
+- **The machine detail relay card shows addresses instead of prose**: the IPv4 and IPv6 values with copy buttons, the currently used relay marked as in use with a badge, and a badge per row saying which source serves it. The IPv6-versus-DNS explanation and the resolver line with its re-resolve button are gone from this card; the settings page still owns the resolver.
+
+## Fixes
+
+- Alert notifications use the new name, and their tests now assert that no payload still says the old brand alone.
+- Latency rows keep their measured order but no longer leave the column silently blank, and a stored region assignment that no longer matches the selected regions is pruned instead of being kept.
+- The documentation no longer links the site to the upstream registry image; install pages use this repository image.
 # 0.22.7 (October 6, 2026)
 
 ## Fixes

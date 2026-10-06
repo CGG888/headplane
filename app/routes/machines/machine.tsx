@@ -24,6 +24,7 @@ import {
   agentsContext,
   appConfigContext,
   authContext,
+  derpMirrorContext,
   headscaleConfigContext,
   headscaleContext,
   headscaleLiveStoreContext,
@@ -31,12 +32,11 @@ import {
   requestApiContext,
 } from "~/server/context";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
-import { loadDerpRegionSources } from "~/server/headscale/derp-region-sources";
+import { loadDerpNodeInventory } from "~/server/headscale/derp-region-sources";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { computeNodeTimeline, uptimePercent, type NodeTimeline } from "~/server/history/timeline";
 import type { NodeHistoryDocument } from "~/server/history/types";
 import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
-import { Capabilities } from "~/server/web/roles";
 import { getOSInfo, getTSVersion } from "~/utils/host-info";
 import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~/utils/node-info";
 import { getUserDisplayName } from "~/utils/user";
@@ -50,11 +50,12 @@ import MachineCard from "./components/machine-card";
 import { mapTagsToComponents, uiTagsForNode } from "./components/machine-row";
 import MachineStatus from "./components/machine-status";
 import MenuOptions from "./components/menu";
+import { embeddedDerpRegion, relayRegionSources } from "./derp-info";
 import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
 import Routes from "./dialogs/routes";
 import { machineAction } from "./machine-actions";
-import { relayAddressLines, relayResolutionBlamesSystemResolver } from "./relay-verdicts";
+import { relayAddressLines } from "./relay-verdicts";
 import { shouldRevalidateMachines } from "./should-revalidate";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -65,6 +66,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
+  const derpMirror = context.get(derpMirrorContext);
   const nodeHistory = context.get(nodeHistoryContext);
 
   if (!params.id) {
@@ -75,7 +77,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw data(null, { status: 204 });
   }
 
-  const principal = await auth.require(request);
+  // The identity is required, but nothing on this page is gated behind a
+  // capability any more: the relay card no longer offers the re-resolve control
+  // that used to need the DERP settings permission.
+  await auth.require(request);
   const magic = headscaleConfig.getMagicDNSBaseDomain();
 
   const { api } = await getRequestApi(request);
@@ -119,10 +124,20 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   // manual mapping, the local `derp.paths` maps and the remote `derp.urls` maps.
   // The card only ever receives the plain result, and a map that cannot be read
   // or fetched simply leaves that region as a bare id.
-  const [relayResolution, regionNames, regionSources] = await Promise.all([
-    loadSharedRelayResolution(relayEndpoint?.host),
-    readDerpRegionNames(appConfig.server.data_path),
-    loadDerpRegionSources({
+  //
+  // The maps are read held apart by source rather than merged, exactly as the
+  // Overview node card reads them: that is what tells the card whether a relay
+  // the machine uses is served by this deployment (the embedded relay, a local
+  // file, the official-region filter) or only advertised upstream. The read is
+  // the same one the merged names come from, so it costs nothing extra.
+  const mirrorSettingsLookup = (async () => {
+    await derpMirror.ready();
+    return derpMirror.settings();
+  })();
+
+  const nodeInventoryLookup = (async () => {
+    const mirror = await mirrorSettingsLookup;
+    return loadDerpNodeInventory({
       paths: derp.paths,
       urls: derp.urls,
       autoUpdateEnabled: derp.autoUpdateEnabled,
@@ -130,7 +145,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
       baseDir: appConfig.headscale.config_path
         ? dirname(appConfig.headscale.config_path)
         : undefined,
-    }),
+      mirrorPath: mirror.targetPath,
+    });
+  })();
+
+  const [relayResolution, regionNames, nodeInventory] = await Promise.all([
+    loadSharedRelayResolution(relayEndpoint?.host),
+    readDerpRegionNames(appConfig.server.data_path),
+    nodeInventoryLookup,
   ]);
   // The address lines join the declared addresses with the lookup, so each
   // family reads as one line instead of a declared-versus-resolved pair. The
@@ -138,6 +160,9 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   // reaches Node-only code (see `./relay-verdicts`).
   const relayView = buildRelayView(relayEndpoint, relayResolution, derp.server);
   const relay = relayView.host;
+  // One region id to the source that serves it, so a relay row can say whether
+  // this deployment serves the relay the machine uses.
+  const relaySources = relayRegionSources(nodeInventory.groups, embeddedDerpRegion(derp.server));
 
   return {
     agent: agentSync
@@ -151,19 +176,18 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     // Unlike `agent`, this stays true while the agent feature is on but no
     // agent has synced yet, so the page can tell "no agent" from "no data".
     agentEnabled: agents !== undefined,
-    // Whether this viewer may re-resolve the relay hostname from the DERP card.
-    // The relay DNS list is Headplane state behind the settings permission, so
-    // the card only offers the button to a viewer who may actually use it.
-    canRefreshRelayDns: auth.can(principal, Capabilities.configure_iam),
     derp,
     // Region labels the DERP card resolves: the manual names Headplane stores in
     // its data directory, plus what the configured DERP maps describe. A missing
     // or corrupt source simply resolves to fewer known names.
-    derpRegions: { manual: regionNames, ...regionSources },
+    derpRegions: {
+      manual: regionNames,
+      local: nodeInventory.local,
+      remote: nodeInventory.remote,
+    },
     relay,
-    relayResolution,
     relayLines: relayAddressLines(derp.server, relayResolution),
-    relaySuggestsConfigured: relayResolutionBlamesSystemResolver(relayResolution),
+    relaySources,
     existingTags: sortAssignableTags(nodes, policy),
     // `undefined` keeps the tag dialog from flagging every tag as undeclared.
     policyTags: extractTagOwnerTags(policy),
@@ -182,8 +206,7 @@ export const action = machineAction;
 /**
  * A machine's detail page is keyed by `params.id`, never by the query string, so
  * a search-param-only navigation must not re-run this loader. See
- * `./should-revalidate.ts`; the relay "Re-resolve" fetcher is a submission and
- * still revalidates.
+ * `./should-revalidate.ts`; a form submission still revalidates.
  */
 export const shouldRevalidate: ShouldRevalidateFunction = shouldRevalidateMachines;
 
@@ -196,13 +219,11 @@ export default function Page({
     agent,
     agentEnabled,
     availability,
-    canRefreshRelayDns,
     derp,
     derpRegions,
     relay,
-    relayResolution,
     relayLines,
-    relaySuggestsConfigured,
+    relaySources,
     stats,
     existingTags,
     policyTags,
@@ -537,12 +558,10 @@ export default function Page({
 
         <DerpInfo
           agentEnabled={agentEnabled}
-          canRefresh={canRefreshRelayDns}
           regions={derpRegions}
           relay={relay}
           relayLines={relayLines}
-          relayResolution={relayResolution}
-          relaySuggestsConfigured={relaySuggestsConfigured}
+          relaySources={relaySources}
           server={derp.server}
           stats={stats}
         />

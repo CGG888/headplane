@@ -19,6 +19,9 @@
  *
  * {@link loadDerpRegionInventory} is the same read with the detail the Overview
  * card shows: which map contributed each region and the nodes that map lists.
+ * {@link loadDerpNodeInventory} is that read held apart by source instead of
+ * merged, so the node card can count each source — the embedded relay, the
+ * `derp.paths` files, the region mirror's file and the official map — on its own.
  */
 
 import { readFile, stat } from "node:fs/promises";
@@ -33,10 +36,14 @@ import {
   readDerpMapRegions,
   type DerpMapRegionEntry,
 } from "~/routes/settings/headscale/derp-map-schema";
-import { resolveTargetPath } from "~/server/snapshots/paths";
+import { resolveTargetPath, samePath } from "~/server/snapshots/paths";
 import log from "~/utils/log";
 
-import { readDerpMapNodes, type DerpMapNodeEntry } from "./derp-map-nodes";
+import {
+  readDerpMapNodes,
+  type DerpMapNodeEntry,
+  type DerpMapRegionDetail,
+} from "./derp-map-nodes";
 import {
   loadRemoteDerpMapDetail,
   type DerpMapFetch,
@@ -105,6 +112,43 @@ export interface DerpRegionInventory extends DerpRegionNameData {
   files: DerpMapFileReading[];
   /** True when at least one configured `derp.urls` map could not be read. */
   remoteUnavailable: boolean;
+}
+
+/**
+ * One configured map on its own: the regions *this* map describes and the nodes
+ * they list, with nothing merged away. The Overview node card groups these by
+ * source (a local file, the region mirror's file, or a URL), which the merged
+ * {@link DerpRegionInventory} cannot express because it keeps only the first map
+ * that described a region.
+ */
+export interface DerpMapGroupReading {
+  /** The resolved path, or the URL, this reading came from. */
+  source: string;
+  /**
+   * `local` for a file listed in `derp.paths`, `mirror` for the file the region
+   * mirror maintains, `remote` for a URL listed in `derp.urls`.
+   */
+  kind: "local" | "mirror" | "remote";
+  /** `ok` only when this map described at least one region. */
+  state: DerpMapFileState;
+  /** The regions this map alone describes, in the order it listed them. */
+  regions: DerpMapRegionDetail[];
+}
+
+/** The configured maps held apart by source, for the Overview node card. */
+export interface DerpNodeInventory extends DerpRegionNameData {
+  /** Every configured map in configuration order: `derp.paths`, then `derp.urls`. */
+  groups: DerpMapGroupReading[];
+}
+
+/** {@link loadDerpNodeInventory} input: the maps, plus the mirror's own file. */
+export interface DerpNodeInventoryInput extends DerpRegionSourceInput {
+  /**
+   * The region mirror's target file, as Headplane's own settings hold it. A path
+   * that is also listed in `derp.paths` is tagged as the mirror's source instead
+   * of reading as a plain local map.
+   */
+  mirrorPath?: string;
 }
 
 const nodeFs: DerpRegionFs = {
@@ -234,6 +278,97 @@ export async function loadDerpRegionInventory(
   input: DerpRegionSourceInput,
   options: DerpRegionSourceOptions = {},
 ): Promise<DerpRegionInventory> {
+  const read = await readDerpMaps(input, options);
+
+  return {
+    local: read.local.size > 0 ? Object.fromEntries(read.local) : undefined,
+    remote: read.remote.size > 0 ? Object.fromEntries(read.remote) : undefined,
+    regions: [...read.regions.values()].toSorted((a, b) => a.regionId - b.regionId),
+    files: read.localPaths.map((path, index) => ({
+      path,
+      state: read.localReads[index]?.state ?? "unreadable",
+    })),
+    remoteUnavailable: read.remoteUnavailable,
+  };
+}
+
+/**
+ * The configured maps held apart by source, for the Overview node card: one
+ * group per `derp.paths` entry, the file the region mirror maintains tagged as
+ * its own kind, then one group per `derp.urls` map.
+ *
+ * This is the *same* read {@link loadDerpRegionInventory} makes — one read per
+ * local file (cached by path, size and mtime) and one fetch per URL through the
+ * shared remote cache — so a page that needs both pays for the documents once.
+ * Nothing here throws: a file this process cannot see, a URL that does not
+ * answer and a document that is not a map all become a group with a state that
+ * says so.
+ */
+export async function loadDerpNodeInventory(
+  input: DerpNodeInventoryInput,
+  options: DerpRegionSourceOptions = {},
+): Promise<DerpNodeInventory> {
+  const read = await readDerpMaps(input, options);
+  const mirrorPath = (input.mirrorPath ?? "").trim();
+  const mirror = mirrorPath.length > 0 ? resolveTargetPath(mirrorPath, input.baseDir) : undefined;
+
+  const groups: DerpMapGroupReading[] = [];
+  read.localPaths.forEach((path, index) => {
+    const reading = read.localReads[index];
+    groups.push({
+      source: path,
+      kind: mirror !== undefined && samePath(path, mirror) ? "mirror" : "local",
+      state: reading?.state ?? "unreadable",
+      regions: detailRegions(reading),
+    });
+  });
+
+  read.remoteUrls.forEach((url, index) => {
+    const entries = read.remoteReads[index];
+    groups.push({
+      source: url,
+      kind: "remote",
+      state: entries === undefined ? "unreadable" : entries.length > 0 ? "ok" : "empty",
+      regions: entries ?? [],
+    });
+  });
+
+  return {
+    local: read.local.size > 0 ? Object.fromEntries(read.local) : undefined,
+    remote: read.remote.size > 0 ? Object.fromEntries(read.remote) : undefined,
+    groups,
+  };
+}
+
+/** One map's regions with the nodes it lists under each, as one list. */
+function detailRegions(reading: LocalReading | undefined): DerpMapRegionDetail[] {
+  if (reading === undefined) {
+    return [];
+  }
+
+  return reading.regions.map((entry) => ({
+    ...entry,
+    nodes: reading.nodes.get(entry.regionId) ?? [],
+  }));
+}
+
+/** What one read of every configured map produced, before it is projected. */
+interface DerpMapReading {
+  localPaths: string[];
+  remoteUrls: string[];
+  localReads: LocalReading[];
+  remoteReads: (DerpMapRegionDetail[] | undefined)[];
+  local: Map<string, DerpRegionInfo>;
+  remote: Map<string, DerpRegionInfo>;
+  regions: Map<string, DerpMapRegionReading>;
+  remoteUnavailable: boolean;
+}
+
+/** One read of every configured map: the work both loaders above share. */
+async function readDerpMaps(
+  input: DerpRegionSourceInput,
+  options: DerpRegionSourceOptions,
+): Promise<DerpMapReading> {
   const fs = options.fs ?? nodeFs;
   const remoteOptions: RemoteDerpMapOptions = {
     fetch: options.fetch,
@@ -290,13 +425,13 @@ export async function loadDerpRegionInventory(
   });
 
   return {
-    local: local.size > 0 ? Object.fromEntries(local) : undefined,
-    remote: remote.size > 0 ? Object.fromEntries(remote) : undefined,
-    regions: [...regions.values()].toSorted((a, b) => a.regionId - b.regionId),
-    files: localPaths.map((path, index) => ({
-      path,
-      state: localReads[index]?.state ?? "unreadable",
-    })),
+    localPaths,
+    remoteUrls,
+    localReads,
+    remoteReads,
+    local,
+    remote,
+    regions,
     remoteUnavailable:
       remoteUrls.length > 0 && remoteReads.some((entries) => entries === undefined),
   };

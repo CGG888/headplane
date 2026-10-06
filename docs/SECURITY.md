@@ -1,9 +1,6 @@
-# Reporting Security Issues
+# 报告安全问题
 
-If you discover a security vulnerability within Headplane, please report it
-directly via the GitHub security advisory system. Please include as much
-information as possible, what the implications are, and a deterministic way
-to reproduce the issue. This will help me to quickly assess and address the
-vulnerability.
+如果你在 Headplane 中发现了安全漏洞，请直接通过 GitHub 的安全公告系统报告。请尽量提供完整的
+信息：漏洞会造成什么影响，以及一个可以稳定复现该问题的方法。这能帮助我尽快评估并修复该漏洞。
 
-> [Open a New Vulnerability Report](https://github.com/tale/headplane/security/advisories/new)
+> [提交新的漏洞报告](https://github.com/CGG888/headplaneCN/security/advisories/new)

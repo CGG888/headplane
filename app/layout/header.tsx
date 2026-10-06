@@ -138,7 +138,7 @@ export default function Header({ user, access, configAvailable }: HeaderProps) {
             </MenuTrigger>
             <MenuContent align="end">
               <MenuItem>
-                <Link external to="https://headplane.net">
+                <Link external to="https://cgg888.github.io/headplaneCN/">
                   {t("header.help.docs")}
                 </Link>
               </MenuItem>

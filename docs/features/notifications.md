@@ -1,109 +1,89 @@
 ---
-title: Alert Notifications
-description: Post to a webhook when Headscale, a node, an API key or a configuration check needs attention.
+title: 告警通知
+description: 当 Headscale、节点、API 密钥或配置检查需要关注时，把消息 POST 到 Webhook。
 outline: [2, 3]
 ---
 
-# Alert Notifications
+# 告警通知
 
-**Settings → Alert Notifications** posts a JSON body to one webhook whenever
-something needs attention: Headscale dropping out of reach, a node going offline,
-an API key about to expire, a configuration check turning into a failure, or a
-DERP address sync run that could not write. It
-is the push half of the [System Status](/features/system-status) page — that page
-tells you what is wrong when you look, this one tells you when you are not
-looking.
+**设置 → 告警通知**会在需要关注时把一段 JSON 发到一个 Webhook：Headscale 失联、节点掉线、
+API 密钥即将过期、配置检查变成失败，或者一次 DERP 地址同步写入失败。它是
+[系统状态](/features/system-status) 页的推送版本 —— 那个页面在你回头看时告诉你
+哪里不对，这个页面在你没看的时候告诉你。
 
-A background loop does the watching. It is completely inert while notifications
-are disabled: no timer is scheduled and no probe is made, so an instance that
-never turns this on pays nothing for it. Enabling it also requires a valid
-webhook URL — the settings form refuses to save an enabled channel without one.
+后台循环负责监视。通知未启用时它完全静止：不排定时器、不做探测，所以从不打开这个功能的
+实例不会为它付出任何代价。启用还要求一个合法的 Webhook URL —— 表单拒绝保存一个没有 URL
+的已启用通道。
 
-## Reported events
+## 上报的事件
 
-Every event fires on a **state change**, never repeatedly. Headplane remembers
-what the previous check concluded, so a node that is still offline on the next
-tick is not reported again, and a Headscale that stays down is one alert rather
-than one per interval.
+每个事件都在**状态变化**时触发，绝不会反复触发。Headplane 记住上一次检查的结论，所以下一
+个周期仍然离线的节点不会重复上报，持续不可达的 Headscale 也只算一次告警，而不是每个周期
+一次。
 
-| Event                      | Severity   | Fires when                                                                                                                                              |
-| -------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Headscale unreachable      | `critical` | A health probe fails after a probe that succeeded.                                                                                                      |
-| Headscale recovered        | `info`     | A health probe succeeds again after one that failed.                                                                                                    |
-| Node went offline          | `warning`  | A node that was online in the previous check is offline now; the target is the node's name.                                                             |
-| Node came back online      | `info`     | A node that was offline in the previous check is no longer offline; the target is its name, or its id if it left the tailnet.                           |
-| API key expiring           | `warning`  | A key enters the warning window; the target is the key prefix and `threshold` is the window in days. A key already past its expiration is not reported. |
-| Configuration check failed | `warning`  | A configuration check newly reports `fail`; the target is the check id.                                                                                 |
-| DERP address sync failed   | `warning`  | A **writing** [address auto-sync](/features/headscale-settings#address-auto-sync) or [official region filter](/features/headscale-settings#official-region-filter) run fails; see below. |
+| 事件               | 级别       | 触发时机                                                                                                                            |
+| ------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Headscale 不可达   | `critical` | 一次成功探测之后，健康探测失败。                                                                                                    |
+| Headscale 已恢复   | `info`     | 一次失败探测之后，健康探测重新成功。                                                                                                |
+| 节点掉线           | `warning`  | 上一次检查在线、现在离线的节点；target 是节点名。                                                                                   |
+| 节点恢复在线       | `info`     | 上一次检查离线、现在不再离线的节点；target 是它的名字，若已离开 tailnet 则是它的 id。                                               |
+| API 密钥即将过期   | `warning`  | 一把密钥进入预警窗口；target 是密钥前缀，`threshold` 是窗口天数。已经超过有效期的密钥不会上报。                                     |
+| 配置检查失败       | `warning`  | 某项配置检查新变成 `fail`；target 是检查 id。                                                                                        |
+| DERP 地址同步失败  | `warning`  | 一次**写入**的 [地址自动同步](/features/headscale-settings) 或 [官方区域节点筛选](/features/headscale-settings) 运行失败；见下方说明。 |
 
-The DERP sync events are reported by the sync services themselves rather than by
-the background check loop, but they go through the same enabled/selected filter,
-the same cooldown and the same delivery history:
+DERP 同步事件由同步服务自己上报，而不是后台检查循环，但它同样要过启用/勾选筛选、同样的冷却
+时间和同一份投递历史：
 
-- It fires only for a run that **writes**. A **Check** never reports anything,
-  because its result is on the screen in front of you, and a run that found
-  nothing to change is not a failure either.
-- It fires when a writing run failed: nothing usable was detected for a family,
-  the configuration was not writable, the write itself failed, or the reload
-  that follows it failed. The target carries the reason — the failure code for
-  the address sync, or `derp-region-mirror:<code>` for the region filter — and
-  the payload's title is the one shown above.
-- **A later successful writing run clears it.** Nothing is sent for the success;
-  the flag is only reset, so the next failure is a new transition and is
-  reported again. While the notifier is switched off, a failure is not recorded
-  at all, so turning notifications on and seeing another failure is still a real
-  transition worth reporting.
+- 只有**写入**的运行才会触发。**检查**从不上报任何东西，因为结果就在你眼前；一次没发现
+  任何变化的运行也不算失败。
+- 写入运行失败时触发：某个地址族没有探测到可用值、配置不可写、写入本身失败，或者写入后的
+  重载失败。target 会带上原因 —— 地址同步用失败码，区域筛选用 `derp-region-mirror:<code>`
+  —— 负载标题就是上表所示的那一条。
+- **之后任意一次成功的写入运行都会清除它。** 成功不会发送任何消息，只是把标记复位，因此
+  下一次失败算新的状态变化，会重新上报。在通知关闭期间发生的失败根本不会被记录，所以打开
+  通知后再遇到一次失败依然是值得上报的真实变化。
 
-The cooldown sits on top of that: when a condition does change back inside the
-cooldown window, the repeat is suppressed. It is what stops a flapping node from
-turning into a stream of notifications.
+冷却时间叠加在这之上：当某个条件在冷却窗口内又变化回来，重复上报会被抑制。这就是防止一台
+反复掉线的节点变成一串通知的原因。
 
-Two situations are deliberately silent rather than guessed at:
+有两种情况被刻意保持沉默，而不是靠猜：
 
-- **An unreachable Headscale is not a tailnet-wide outage.** While the API cannot
-  be reached, the node and API key lists are not fetched at all, and the previous
-  conclusions for them are left untouched. Every node is never reported offline
-  just because Headplane cannot ask.
-- **An unreadable configuration is not a failing one.** When Headscale's
-  configuration file is missing, unreadable or unparseable, the configuration
-  checks simply did not run: Headplane logs a warning and raises no alert, and the
-  previous check state is kept.
-- **Node and API key events need an API key.** Without `headscale.api_key`
-  Headplane cannot list nodes or keys, so those three events are never detected;
-  reachability, the configuration checks and the DERP sync reports still are.
+- **Headscale 不可达不等于整个 tailnet 掉线。** API 不可达期间根本不会去拉取节点和 API 密钥
+  列表，上一次的结论保持不动。绝不会因为 Headplane 问不到，就报告所有节点都离线。
+- **读不到配置不等于配置有问题。** 当 Headscale 的配置文件缺失、不可读或解析失败时，配置
+  检查只是没有运行：Headplane 记一条警告日志，不产生告警，上一次的检查状态保持不变。
+- **节点和 API 密钥事件需要 API 密钥。** 没有 `headscale.api_key` 时 Headplane 无法列出节点
+  或密钥，这三个事件永远不会被检测到；可达性、配置检查和 DERP 同步上报仍然有效。
 
-## Settings
+## 设置
 
-| Setting                | Default | Accepted range | Notes                                                            |
-| ---------------------- | ------- | -------------- | ---------------------------------------------------------------- |
-| Webhook URL            | empty   | —              | Absolute `http` or `https` URL; required to enable or test.      |
-| Shared secret          | empty   | —              | Optional; sent as the `X-Headplane-Secret` header on every POST. |
-| Reported events        | all seven | —              | At least one must stay selected.                                 |
-| Check interval         | 60 s    | 15–3600        | How often Headplane looks for changes.                           |
-| Cooldown               | 300 s   | 30–86400       | Shortest time before the same condition may be reported again.   |
-| API key warning window | 7 days  | 1–90           | How far ahead an expiring API key is worth reporting.            |
+| 设置               | 默认值   | 允许范围   | 说明                                                     |
+| ------------------ | -------- | ---------- | -------------------------------------------------------- |
+| Webhook URL        | 空       | —          | 绝对的 `http` 或 `https` URL；启用或测试时必填。         |
+| 共享密钥           | 空       | —          | 可选；每次 POST 都作为 `X-Headplane-Secret` 请求头发送。 |
+| 上报的事件         | 全部七项 | —          | 至少保留一项。                                           |
+| 检查间隔           | 60 秒    | 15–3600    | Headplane 多久检查一次变化。                             |
+| 冷却时间           | 300 秒   | 30–86400   | 同一条件最短多久之后才可以再次上报。                     |
+| API 密钥预警窗口   | 7 天     | 1–90       | 提前多久开始关注即将过期的 API 密钥。                    |
 
-Values outside those ranges are rejected with an error instead of being silently
-changed; a hand-edited `alerts.json` is clamped to the same bounds instead.
-Unchecking an event does not stop Headplane tracking that condition — it only
-stops it being sent — so a condition that begins while its event is unchecked is
-not reported when you re-check it.
+超出范围的值会被报错拒绝，而不是被悄悄改掉；手工编辑过的 `alerts.json` 则会被夹到同样的
+边界内。取消勾选某个事件并不会让 Headplane 停止跟踪该条件 —— 它只是不再发送 —— 所以某个
+条件在你取消勾选期间开始变化，等重新勾选时并不会补发。
 
-## The payload
+## 负载
 
-Each delivery is one `POST` with `Content-Type: application/json`, aborted after
-five seconds so a stalled endpoint cannot hold a check open. The copy is English
-and outside the translation catalogs, so automation can match on stable text:
+每次投递是一个 `POST`，`Content-Type: application/json`，五秒后中止，避免卡住的接收端拖住
+一次检查。文案是英文且不在翻译目录里，方便自动化按固定文本匹配：
 
-| Field       | Meaning                                                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `event`     | One of the seven event ids above, or `test`.                                                                                 |
-| `title`     | Short headline, e.g. `Node went offline`.                                                                                    |
-| `severity`  | `info`, `warning` or `critical`.                                                                                             |
-| `summary`   | One line with the target and threshold filled in.                                                                            |
-| `details`   | `{ "target": …, "threshold": … }`; either key is absent when the event has no such value — `{}` for the reachability events. |
-| `timestamp` | ISO 8601 time the change was **observed**, not when the delivery was attempted.                                              |
-| `version`   | The Headplane build that sent it.                                                                                            |
+| 字段        | 含义                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `event`     | 上表七个事件 id 之一，或 `test`。                                                                                               |
+| `title`     | 简短标题，例如 `Node went offline`。                                                                                            |
+| `severity`  | `info`、`warning` 或 `critical`。                                                                                               |
+| `summary`   | 填好 target 与 threshold 的一行说明。                                                                                           |
+| `details`   | `{ "target": …, "threshold": … }`；事件没有该值时对应键缺失 —— 可达性事件为 `{}`。                                             |
+| `timestamp` | 观察到变化的 ISO 8601 时间，而不是尝试投递的时间。                                                                              |
+| `version`   | 发出该通知的 Headplane 构建版本。                                                                                               |
 
 ```json
 {
@@ -117,46 +97,34 @@ and outside the translation catalogs, so automation can match on stable text:
 }
 ```
 
-That is enough for an n8n workflow, a Matrix or Slack relay, or a monitoring
-system: match on `event` and `severity`, quote `title` and `summary`, and use
-`details.target` to say which node, key or check it was about.
+这些足够 n8n 工作流、Matrix 或 Slack 转发机器人以及监控系统使用：匹配 `event` 与
+`severity`，引用 `title` 和 `summary`，再用 `details.target` 说明涉及哪个节点、密钥或检查。
 
-## Testing and delivery history
+## 测试与投递历史
 
-**Send test** posts a sample payload right now, using the URL and secret that are
-currently in the form — unsaved edits included — so a channel can be verified
-before it is enabled. It reports **Delivered (HTTP 200)** or **Not delivered**
-with the status and the error text, and the attempt is recorded in the history.
+**发送测试**会立刻用表单里当前的 URL 和密钥（包含尚未保存的修改）发送一份示例负载，因此
+通道可以在启用之前先验证。它会报告 **已投递（HTTP 200）** 或 **未投递**，并附状态码与错误
+文本，这次尝试也会记入历史。
 
-The **Delivery history** card lists the last 50 attempts, newest first, each with
-the event, whether it was delivered, the HTTP status when there was a response,
-the target and threshold, and a truncated error for the failures. When the newest
-attempt failed, the page says so at the top as well. History survives restarts,
-because it is kept next to the state rather than in memory.
+**投递历史**卡片按最新在前列出最近 50 次尝试，每条包含事件、是否投递成功、有响应时的
+HTTP 状态码、target 与 threshold，以及失败时截断的错误。最新一次投递失败时，页面顶部也会
+提示。历史在重启后仍然存在，因为它与状态一起保存，而不是放在内存里。
 
-## Where the state lives
+## 状态存放位置
 
-Everything lives in `alerts.json`, directly inside Headplane's data directory
-(`server.data_path`): the settings, the delivery history, and the last-known state
-the detector compares against — whether Headscale was reachable, which nodes were
-offline, which keys were inside the window, which checks were failing, whether the
-last DERP sync run failed, and when each condition was last reported. There is no
-database table and no migration to run.
+所有内容都在 `alerts.json` 里，直接放在 Headplane 的数据目录（`server.data_path`）下：
+设置、投递历史，以及检测器用来比对的上次已知状态 —— Headscale 是否可达、哪些节点离线、
+哪些密钥进入窗口、哪些检查失败、上一次 DERP 同步运行是否失败，以及每个条件上次上报的时间。
+没有数据库表，也没有需要执行的迁移。
 
-A missing or corrupt file reads as the defaults, and a write goes through a
-temporary file plus a rename, so an interrupted write leaves the earlier document
-intact.
+文件缺失或损坏时按默认值读取，写入走临时文件加改名，因此被中断的写入会保留之前那份文档。
 
-## What it does not do
+## 它不做什么
 
-- **One channel only.** Every event goes to the single configured webhook; there
-  is no second endpoint and no per-event routing.
-- **No retries.** A failed delivery is recorded in the history and is not retried
-  on its own. The same condition is only reported again when it changes state
-  again, and a repeat inside the cooldown window is suppressed.
-- **No per-user routing.** Notifications are not sent to the person who owns the
-  node or the key; who hears about it is decided by whatever consumes the webhook.
-- **Not a replacement for the audit log or the configuration checks.** The
-  [Audit Log](/features/audit) remains the record of what changed, and the
-  configuration checks on [System Status](/features/system-status) remain the
-  detail view. These notifications are a nudge towards them, not a substitute.
+- **只有一个通道。** 所有事件都发往唯一配置的 Webhook；没有第二个端点，也没有按事件分流。
+- **不重试。** 投递失败只记入历史，不会自行重试。同一条件只有在再次变化时才会再上报一次，
+  冷却窗口内的重复会被抑制。
+- **不按用户路由。** 通知不会发给节点或密钥的所有者；谁收到由消费该 Webhook 的程序决定。
+- **不是审计日志或配置检查的替代品。** [操作审计](/features/audit) 仍然是「改了什么」
+  的记录，[系统状态](/features/system-status) 上的配置检查仍然是细节视图。这些通知
+  只是提醒你去看它们，而不是替代它们。

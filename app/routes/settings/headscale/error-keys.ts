@@ -148,6 +148,12 @@ export interface HeadscaleSettingsSuccess {
    * instead of only in the persisted "last run" summary.
    */
   mirror?: DerpMirrorRun;
+  /**
+   * Present after the mirror's "add region names" action: how many manual names
+   * were actually added (`0` when every region already had one, which is what
+   * makes the action idempotent).
+   */
+  addedRegionNames?: number;
 }
 
 export interface HeadscaleSettingsFailure {

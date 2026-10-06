@@ -1,36 +1,32 @@
 ---
-title: Limited Mode
-description: Install Headplane in Limited Mode.
+title: 受限模式
+description: 以受限模式安装 Headplane。
 ---
 
-# Limited Mode
+# 受限模式
 
 ::: warning
-**Limited Mode is not recommended for production use.**
-Please consider using one of the other installation methods for a production
-deployment. Limited mode lacks advanced features such as network management,
-remote web SSH, and more.
+**受限模式不推荐用于生产环境。**
+生产部署请考虑其他安装方式。受限模式缺少网络管理、浏览器远程 SSH 等高级功能。
 :::
 
-Limited Mode is good for users who want to test out the _basic_ functionality
-provided by Headplane. It only interacts with the Headplane API and lacks all
-advanced features, making it suitable for local testing and development.
+受限模式适合想先试试 Headplane **基本**功能的用户。它只与 Headplane API 交互，没有任何高级
+功能，因此适合本地测试与开发。
 
-## Prerequisites
+## 前置条件
 
-- Docker (and optionally Docker Compose)
-- Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](/index.md#configuration) for Headplane.
+- Docker（可选 Docker Compose）
+- 已安装并运行 Headscale 0.27.0 或更新版本
+- 一份[填写完成的配置文件](./index.md)（Headplane 用）。
 
-## Installation
+## 安装
 
 ::: tip
-If you want to test Limited Mode without Docker, you can follow the
-[Native Mode](./native-mode.md) installation guide and simply avoid setting
-up any of the advanced features.
+想不用 Docker 试用受限模式，可以按[原生模式](/install/native-mode)指南安装，只是不配置
+任何高级功能。
 :::
 
-Running Headplane in Limited Mode is as simple as running 1 command:
+以受限模式运行 Headplane 只需要一条命令：
 
 ```bash
 docker run -d \
@@ -39,22 +35,20 @@ docker run -d \
     -v /path/to/data/storage:/var/lib/headplane \
     --name headplane
     --restart unless-stopped
-    ghcr.io/tale/headplane:latest
+    ghcr.io/cgg888/headplanecn:latest
 ```
 
-It's important to mount your configuration file and also provide a persistent
-storage location for Headplane to store its own data. You can also change the
-port mapping if you want to run it on a different port.
+挂载配置文件、并给 Headplane 一个持久化存储位置来保存自己的数据，这两点很重要。想换端口运行，
+改端口映射即可。
 
-### Optional: Docker Compose
+### 可选：Docker Compose
 
-If you prefer using Docker Compose, here is a minimal example of a
-`compose.yaml` file that runs Headplane in Limited Mode:
+更喜欢用 Docker Compose 的话，下面是以受限模式运行 Headplane 的最小 `compose.yaml` 示例：
 
 ```yaml
 services:
   headplane:
-    image: ghcr.io/tale/headplane:latest
+    image: ghcr.io/cgg888/headplanecn:latest
     container_name: headplane
     restart: unless-stopped
     ports:
@@ -64,26 +58,20 @@ services:
       - "/path/to/data/storage:/var/lib/headplane"
 ```
 
-## Accessing Headplane
+## 访问 Headplane
 
-After starting the container, you can access the Headplane web interface by
-navigating to `http://localhost:3000/admin` in your web browser (replace
-`localhost` with your server's IP address or domain name if not running locally).
+容器启动后，在浏览器里打开 `http://localhost:3000/admin` 就能访问 Headplane 界面（如果不是
+在本机运行，把 `localhost` 换成服务器的 IP 地址或域名）。
 
-In order to log in, you'll need to supply a Headscale API key. You can create
-one by running the following command within your Headscale environment:
+登录需要提供一把 Headscale API 密钥。可以在 Headscale 环境里执行下面的命令创建：
 
 ```bash
-# You may want to tweak the expiration duration as needed
+# 按需调整有效期
 headscale apikeys create --expiration 90d
 ```
 
-Limited Mode is intended for testing and development purposes, so please avoid
-using it in a production environment. For production deployments, consider using
-one of the other installation methods that will provide both the advanced
-features of Headplane and a more robust deployment.
+受限模式面向测试与开发，请不要在生产环境使用。生产部署请选择其他安装方式，它们既提供 Headplane
+的高级功能，也更稳健。
 
-Limited Mode also technically supports
-[Single Sign-On (SSO) authentication](../features/sso.md), but some parts of it
-may not work as expected. For a full-featured experience with SSO, please use
-one of the other installation methods.
+受限模式在技术上支持单点登录（SSO）认证（该部分说明目前只有英文版），但其中部分功能可能无法按预期工作。
+想要完整的 SSO 体验，请使用其他安装方式。

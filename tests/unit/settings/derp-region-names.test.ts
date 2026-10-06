@@ -8,6 +8,7 @@ import {
   DERP_REGION_NAMES_FILE,
   derpRegionNameFor,
   derpRegionNamesPath,
+  mergeMissingDerpRegionNames,
   parseDerpRegionNames,
   readDerpRegionNames,
   removeDerpRegionName,
@@ -88,6 +89,57 @@ describe("DERP region name helpers", () => {
     expect(derpRegionNameFor({ "901": "Amsterdam" }, 901)).toBe("Amsterdam");
     expect(derpRegionNameFor(undefined, 901)).toBeUndefined();
     expect(derpRegionNameFor({ "901": "Amsterdam" }, 902)).toBeUndefined();
+  });
+});
+
+describe("bulk insertion into the DERP region name mapping", () => {
+  test("adds the missing pairs and reports how many were added", () => {
+    const merged = mergeMissingDerpRegionNames({ "901": "Hong Kong" }, [
+      { regionId: 901, name: "香港" },
+      { regionId: 902, name: "新加坡" },
+      { regionId: "903", name: " 东京 " },
+    ]);
+
+    expect(merged.added).toBe(2);
+    expect(merged.names).toEqual({ "901": "Hong Kong", "902": "新加坡", "903": "东京" });
+  });
+
+  test("never overwrites a name the operator already set", () => {
+    const original = { "901": "My own name" };
+    const merged = mergeMissingDerpRegionNames(original, [{ regionId: 901, name: "香港" }]);
+
+    expect(merged.added).toBe(0);
+    expect(merged.names).toEqual({ "901": "My own name" });
+    expect(original).toEqual({ "901": "My own name" });
+  });
+
+  test("is idempotent: the same batch adds nothing the second time", () => {
+    const entries = [
+      { regionId: 901, name: "香港" },
+      { regionId: 902, name: "新加坡" },
+    ];
+
+    const first = mergeMissingDerpRegionNames({}, entries);
+    expect(first.added).toBe(2);
+
+    const second = mergeMissingDerpRegionNames(first.names, entries);
+    expect(second.added).toBe(0);
+    expect(second.names).toEqual(first.names);
+  });
+
+  test("skips unusable pairs without losing the rest of the batch", () => {
+    const merged = mergeMissingDerpRegionNames({}, [
+      { regionId: "abc", name: "Named" },
+      { regionId: 0, name: "Zero" },
+      { regionId: -1, name: "Negative" },
+      { regionId: 901, name: "   " },
+      { regionId: 902, name: "新加坡" },
+      // The same id twice in one batch only adds once.
+      { regionId: 902, name: "Singapore" },
+    ]);
+
+    expect(merged.added).toBe(1);
+    expect(merged.names).toEqual({ "902": "新加坡" });
   });
 });
 

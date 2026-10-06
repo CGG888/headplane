@@ -425,7 +425,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               >
                 {tr("settings.system.processUnavailableBody", {
                   link: (
-                    <Link external styled to="https://headplane.net/features/system-status">
+                    <Link
+                      external
+                      styled
+                      to="https://cgg888.github.io/headplaneCN/features/system-status"
+                    >
                       {t("settings.system.processUnavailableLink")}
                     </Link>
                   ),

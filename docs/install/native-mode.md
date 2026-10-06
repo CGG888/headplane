@@ -1,77 +1,69 @@
 ---
-title: Native Mode
-description: Install Headplane without Docker.
+title: 原生模式
+description: 不用 Docker 安装 Headplane。
 outline: [2, 3]
 ---
 
-# Native Mode
+# 原生模式
 
 ::: tip
-If you are looking to deploy with Docker, follow the
-[**Docker**](./docker.md) deployment guide.
+如果你想用 Docker 部署，请参考[**Docker**](/install/docker)部署指南。
 :::
 
-Headplane can be installed and run directly on your host system without the need
-for Docker. This method is suitable for users who already run Headscale natively
-or prefer to avoid containers.
+Headplane 可以不用 Docker，直接安装并运行在你的宿主机上。这种方式适合已经在原生运行
+Headscale、或者偏好不用容器的用户。
 
-## Prerequisites
+## 前置条件
 
-- A Linux-based operating system (e.g, Ubuntu, Debian, CentOS, Fedora)
-- Go matching the `go` directive in the checked-out release's `go.mod`
-  (only needed to build Headplane)
-- Node.js and [pnpm](https://pnpm.io/) matching the `engines` field in the
-  checked-out release's `package.json`. For v0.7.1, use Node.js `>=24.2 <25`
-  and pnpm `>=10.4 <11`; `packageManager` pins pnpm to `10.4.0`.
-- Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for Headplane.
+- 基于 Linux 的操作系统（例如 Ubuntu、Debian、CentOS、Fedora）
+- 与所检出发布版 `go.mod` 里 `go` 指令匹配的 Go（只有构建 Headplane 时才需要）
+- 与所检出发布版 `package.json` 里 `engines` 字段匹配的 Node.js 与
+  [pnpm](https://pnpm.io/)。以 v0.7.1 为例，使用 Node.js `>=24.2 <25`、pnpm `>=10.4 <11`；
+  `packageManager` 把 pnpm 固定为 `10.4.0`。
+- 已安装并运行 Headscale 0.27.0 或更新版本
+- 一份[填写完成的 Headplane 配置文件](./index.md)。
 
-Before building and running Headplane, ensure that the directory defined in
-`server.data_path` in your configuration exists and is writable by the user who
-will run Headplane.
+在构建和运行 Headplane 之前，请确认配置里 `server.data_path` 指向的目录存在，并且运行
+Headplane 的用户对它可写。
 
 ```bash
-# Adjust as needed and set a custom user if you desire
+# 按需调整，也可以指定其他用户
 sudo mkdir -p /var/lib/headplane
 sudo chown -R $(whoami):$(whoami) /var/lib/headplane
 ```
 
-## Building Headplane
+## 构建 Headplane
 
-Clone the Headplane repository, install dependencies, and build the project:
+克隆 Headplane 仓库、安装依赖并构建：
 
 ```bash
-# You can optionally checkout a specific release tag.
-git clone https://github.com/tale/headplane.git
-cd headplane
+# 也可以检出某个发布标签
+git clone https://github.com/CGG888/headplaneCN.git
+cd headplaneCN
 ./build.sh
 ```
 
-The build script installs locked dependencies and builds the web application,
-Browser SSH WASM module, Headplane Agent and healthcheck binary. Go and pnpm
-are build-time tools; the resulting application runs with Node.js.
+构建脚本会安装锁定版本的依赖，并构建 Web 应用、浏览器 SSH WASM 模块、Headplane Agent 和
+healthcheck 二进制文件。Go 与 pnpm 只是构建期工具；生成的应用用 Node.js 运行。
 
-## Running Headplane
+## 运行 Headplane
 
-Run `node build/server/index.js` from the project directory to start Headplane.
-If pnpm is installed, `pnpm start` runs the same command. Headplane will look
-for a config file at `/etc/headplane/config.yaml` by default, but you can specify
-a different path by setting the `HEADPLANE_CONFIG_PATH` environment variable.
+在项目目录里执行 `node build/server/index.js` 即可启动 Headplane。装了 pnpm 的话，
+`pnpm start` 是同一条命令。Headplane 默认在 `/etc/headplane/config.yaml` 找配置文件，也可以
+通过 `HEADPLANE_CONFIG_PATH` 环境变量指定其他路径。
 
-> Ensure that the `build/` directory exists relative to where the start command
-> is run, otherwise Headplane will not be able to find the frontend assets.
+> 请确保运行启动命令时所在的位置存在 `build/` 目录，否则 Headplane 找不到前端资源。
 
-### Example systemd Service
+### systemd 服务示例
 
-Slotting this file into `/etc/systemd/system/headplane.service` will allow
-you to manage Headplane via systemd. Adjust the paths and user as needed,
-run `sudo systemctl daemon-reload`, and then enable/start the service.
+把这个文件放到 `/etc/systemd/system/headplane.service`，就能用 systemd 管理 Headplane。按需
+调整路径与用户名，执行 `sudo systemctl daemon-reload`，然后启用并启动该服务。
 
 ```ini
 [Unit]
 Description=Headplane Service
-After=network.target # (or headscale.service if it runs via systemd)
-Requires=network.target # (or headscale.service if it runs via systemd)
+After=network.target # （若 headscale 也由 systemd 管理，则为 headscale.service）
+Requires=network.target # （同上）
 StartLimitIntervalSec=0
 
 [Service]
@@ -82,108 +74,91 @@ ExecStart=/usr/bin/node /path/to/your/cloned/headplane/build/server/index.js
 Restart=on-failure
 RestartSec=5s
 
-# Uncomment and set if using a custom config path
+# 使用自定义配置路径时取消注释并填写
 # Environment=HEADPLANE_CONFIG_PATH=/path/to/your/config.yaml
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-To access Headplane, navigate to `http://localhost:3000/admin` in your web
-browser (replace `localhost` with your server's IP address or domain name if
-not running locally).
+要访问 Headplane，在浏览器里打开 `http://localhost:3000/admin`（如果不是在本机运行，把
+`localhost` 换成服务器的 IP 地址或域名）。
 
-In order to log in, you'll need to supply a Headscale API key. You can create
-one by running the following command within your Headscale environment:
+登录需要提供一把 Headscale API 密钥。可以在 Headscale 环境里执行下面的命令创建：
 
 ```bash
-# You may want to tweak the expiration duration as needed
+# 按需调整有效期
 headscale apikeys create --expiration 90d
 ```
 
-## Enabling advanced features
+## 启用高级功能
 
-You've technically completed the installation, but read on if you would like
-to enable advanced features like the ability to edit network settings from the
-UI or remote SSH from the browser.
+到这里安装其实已经完成，但如果你想启用「在界面上编辑网络设置」或「从浏览器远程 SSH」这类高级
+功能，请继续往下读。
 
-### Network Management
+### 网络管理
 
-Network management allows you to configure Tailnet settings such as DNS servers,
-custom A records, the tailnet domain name, and MagicDNS from the Headplane UI.
+网络管理让你可以在 Headplane 界面里配置 Tailnet 设置，例如 DNS 服务器、自定义 A 记录、tailnet
+域名和 MagicDNS。
 
-#### Prerequisites
+#### 前置条件
 
-Network management (and other configurable Headscale features) requires that
-Headplane and Headscale both run on the same machine because Headplane needs
+网络管理（以及其他可配置的 Headscale 功能）要求 Headplane 与 Headscale 运行在同一台机器上，
+因为 Headplane 需要：
 
-- Access to read and write the Head**scale** configuration file
-- Access to read the `/proc` filesystem on Linux to locate Headscale's process
+- 读写 Head**scale** 配置文件的权限
+- 在 Linux 上读取 `/proc` 文件系统以定位 Headscale 进程的权限
 
-#### Configuration
+#### 配置
 
-Enabling network management is as simple as setting a few additional fields in
-your Headplane configuration file:
+启用网络管理只需在 Headplane 配置文件里多设几个字段：
 
-| Field                          | Description                                                                                                                    |
+| 字段                           | 说明                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.proc.enabled`** | Set to `true` to enable process inspection.                                                                                    |
-| **`headscale.config_path`**    | Path to your Head**scale** configuration file (e.g., `/etc/headscale/config.yaml`).                                            |
-| `headscale.dns_records_path`   | _Optional_. Refer to the [example configuration](https://github.com/tale/headplane/blob/main/config.example.yaml) for details. |
+| **`integration.proc.enabled`** | 设为 `true` 以启用进程检查。                                                                                                    |
+| **`headscale.config_path`**    | Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                                                             |
+| `headscale.dns_records_path`   | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。                                  |
 
-With these settings in place, restart Headplane. You should now see additional
-options in the UI navbar such as "DNS" and "Settings" where you can manage your
-Tailnet configuration.
+设置好这些之后重启 Headplane。你应该会在界面导航栏里看到「DNS」和「设置」这样的新入口，可以在
+那里管理 Tailnet 配置。
 
-### Remote Web SSH
+### 浏览器远程 SSH
 
-Remote Web SSH allows you to open a terminal session to your Tailscale nodes
-directly from the Headplane web interface via
-[Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh). This feature
-requires that Tailscale SSH is running on your nodes (done via
-`tailscale up --ssh`).
+浏览器远程 SSH 让你可以直接从 Headplane 界面、通过
+[Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh) 打开到 Tailscale 节点的终端会话。
+该功能要求节点上启用了 Tailscale SSH（通过 `tailscale up --ssh` 完成）。
 
-This feature uses the [Headplane Agent](../features/agent.md) to facilitate the
-SSH connections. Refer to the [Agent documentation](../features/agent.md) for
-setup instructions and specifically follow the
-[native mode configuration](../features/agent.md#native-mode-configuration)
-section to point Headplane to the correct agent location.
+该功能使用 [Headplane Agent](/features/agent) 来建立 SSH 连接，设置方法见
+[Agent 文档](/features/agent)，并且请特别按其中的「原生模式配置」一节把 Headplane
+指向正确的 Agent 位置。
 
-### Single Sign-On (SSO)
+### 单点登录（SSO）
 
-Single Sign-On (SSO) authentication allows users to log in to Headplane using
-external identity providers such as Google, GitHub, or any provider that
-supports OpenID Connect (OIDC).
+单点登录（SSO）认证让用户可以使用外部身份提供商登录 Headplane，例如 Google、GitHub，或任何
+支持 OpenID Connect（OIDC）的提供方。
 
-To get started with SSO, refer to the [SSO documentation](../features/sso.md)
-for detailed setup instructions.
+要开始使用 SSO，请参考 SSO 文档里的详细设置说明（该页目前只有英文版，可在导航栏的语言菜单里切换到 English 查看）。
 
-## Reverse Proxying
+## 反向代理
 
-You _should_ run Headplane behind a reverse proxy such as Nginx or Caddy in
-production. Additionally, putting Headscale beind the reverse proxy allows
-you to access both services via the same domain and TLS certificate.
+生产环境**应该**把 Headplane 放在 Nginx 或 Caddy 这类反向代理后面。此外，把 Headscale 也放到
+反向代理后面，可以让两个服务共用同一个域名和 TLS 证书。
 
-#### Configuration
+#### 配置
 
 ::: tip
-If you are using a [custom path prefix](#custom-path-prefix) for Headplane,
-adjust the `/admin` paths in the examples below accordingly.
+如果你给 Headplane 用了自定义路径前缀，请相应调整下面示例里的 `/admin` 路径。
 :::
 
-Headscale supports integrating with
-[several reverse proxies](https://headscale.net/stable/ref/integration/reverse-proxy/)
-such as Nginx, Caddy, Apache, etc. Deploying Headplane is as simple as adding
-a handler to route any requests to `/admin` to the Headplane service. Refer
-to the Nginx example below for a reference configuration. A similar setup via
-Traefik in Docker is available in the [Docker](./docker.md#reverse-proxying)
-installation documentation.
+Headscale 支持与 [多种反向代理](https://headscale.net/stable/ref/integration/reverse-proxy/)
+集成，例如 Nginx、Caddy、Apache 等。部署 Headplane 只需要加一条把 `/admin` 的请求路由到
+Headplane 服务的规则。参考配置见下面的 Nginx 示例；Docker 环境下类似的 Traefik 配置见
+[Docker](/install/docker)安装文档。
 
-#### Example Nginx Configuration
+#### Nginx 配置示例
 
-The following configuration will set up Nginx to proxy all Headscale requests
-on `headscale.example.com` and serve the Headplane UI under the `/admin` path.
-This is identical to how Tailscale's own admin console is served.
+下面的配置让 Nginx 代理 `headscale.example.com` 上所有 Headscale 请求，并在 `/admin` 路径下
+提供 Headplane 界面。这与 Tailscale 自己的管理控制台的提供方式完全一致。
 
 ```nginx
 server {
@@ -194,13 +169,13 @@ server {
     listen [::]:443 ssl http2;
     server_name headscale.example.com;
 
-    # Or use LetsEncrypt with Certbot (up to you)
+    # 也可以配合 Certbot 使用 LetsEncrypt（随你）
     ssl_certificate /path/to/your/fullchain.pem;
     ssl_certificate_key /path/to/your/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    location / { # Headscale runs on the root path
-        proxy_pass http://localhost:8080/; # Adjust if Headscale runs on a different port
+    location / { # Headscale 运行在根路径
+        proxy_pass http://localhost:8080/; # Headscale 端口不同时请调整
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -214,8 +189,8 @@ server {
         add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
     }
 
-    location /admin/ { # Headplane is served under /admin
-        proxy_pass http://localhost:3000; # Adjust if Headplane runs on a different port
+    location /admin/ { # Headplane 提供在 /admin 下
+        proxy_pass http://localhost:3000; # Headplane 端口不同时请调整
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -229,26 +204,23 @@ server {
 }
 ```
 
-## Custom Path Prefix
+## 自定义路径前缀
 
 ::: warning
-The only officially supported path prefix for Headplane is `/admin`. Using a
-custom path prefix may lead to unexpected issues and is not recommended.
+Headplane 官方唯一支持的路径前缀是 `/admin`。使用自定义路径前缀可能导致意料之外的问题，
+不推荐这样做。
 :::
 
-If for whatever reason you do not want to serve Headplane under `/admin`
-(e.g., you want to serve it under `/headplane`), you can set the prefix
-while building Headplane via the `__INTERNAL_PREFIX` environment variable.
+如果因为某些原因你不想把 Headplane 提供在 `/admin` 下（例如想放在 `/headplane`），可以在构建
+Headplane 时通过 `__INTERNAL_PREFIX` 环境变量设置前缀。
 
 ```bash
-# Example for /headplane prefix
-git clone https://github.com/tale/headplane.git
-cd headplane
-# Set the prefix here
+# 以 /headplane 前缀为例
+git clone https://github.com/CGG888/headplaneCN.git
+cd headplaneCN
+# 在这里设置前缀
 __INTERNAL_PREFIX=/headplane ./build.sh
 ```
 
-When running Headplane, all requests will only be served under the specified
-path. Make sure to also adjust your reverse proxy configuration accordingly if
-you are using one. Additionally, if you want to change the path prefix again,
-you will need to rebuild Headplane with the new prefix.
+运行 Headplane 时，所有请求只会提供在指定的路径下。如果你在用反向代理，请记得同步调整它的配置。
+另外，想再次更换路径前缀，就必须用新前缀重新构建 Headplane。

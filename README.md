@@ -1,27 +1,124 @@
-# Headplane
+# HeadplaneCN
 
-> 一个功能完整的 [Headscale](https://headscale.net) Web 管理界面
->
-> **本仓库在原版基础上新增了完整的三语界面（English / 简体中文 / 繁體中文）与一系列兼容性修复**，
-> 在「飞牛 fnOS（fpk 原生 headscale）+ Lucky 反向代理」这类部署下开箱可用。
+> **HeadplaneCN** 是 [Headplane](https://github.com/tale/headplane) 的分支（fork），面向**自托管 NAS** 场景调优，
+> 尤其是**飞牛 fnOS** 这类「headscale 以原生进程运行、面板跑在 Docker 里」的部署。
+> 在保留上游全部功能的基础上，本分支补齐了三语界面，并新增 DERP 地图在线编辑、中继地址自动同步、
+> 官方区域镜像、告警通知、配置快照与操作审计等能力。
 
-> **快速入口**：
-> [**📖 中文文档站**](https://cgg888.github.io/headplaneCN/)（英文在根路径，中文在 `/zh-Hans/`）
-> · [**📦 fnOS 完整安装说明**](./docs/install/fnos.md)（含 `config.yaml` 与 `docker-compose.yml` 全文）
-> · [🌏 多语言 / 翻译指南](./docs/features/languages.md)
-> · [🔧 常见问题排查](./docs/configuration/common-issues.md)
-> · [📝 变更日志](./CHANGELOG.md)
+[![镜像：ghcr.io/cgg888/headplanecn](https://img.shields.io/badge/ghcr.io-cgg888%2Fheadplanecn-2496ED?logo=docker&logoColor=white)](https://cgg888.github.io/headplaneCN/install/)
+[![许可证：MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
+**快速入口**：[中文文档](https://cgg888.github.io/headplaneCN/) ·
+[English docs](https://cgg888.github.io/headplaneCN/en/) ·
+[问题反馈](https://github.com/CGG888/headplaneCN/issues) ·
+[变更日志](./CHANGELOG.md)
 
 ![机器列表：状态、地址、在线时间、路由与标签](./docs/assets/1.png)
 
-## 中文说明
+## 这是什么
 
-### 这是什么
+Headscale 是 Tailscale 的**开源自托管控制端**（基于 WireGuard），官方**不带** Web 界面。
+HeadplaneCN 给它补上前端：机器、用户、访问控制（ACL）、DNS 与 Headscale 设置，都能在浏览器里管理。
 
-Headscale 是 Tailscale 的开源自托管控制端（基于 WireGuard），官方**不带** Web 界面。
-Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、DNS 与 Headscale 设置。
+本分支针对「NAS 上原生跑 headscale + Docker 跑面板 + 反向代理」这类部署做了适配，
+最典型的是**飞牛 fnOS**：fnOS 官方应用中心不提供 headscale，需要先添加第三方应用源
+`github.com/conversun/fnos-store` 安装 fpk 包，由该包**以原生进程运行 headscale**
+（安装步骤与两份可直接使用的配置文件见[中文文档的 fnOS 安装指南](https://cgg888.github.io/headplaneCN/install/fnos)）。
 
-![语言与主题切换：右上角用户菜单里的语言项与浅色/深色/跟随系统](./docs/assets/2.png)
+核心能力：机器过期时间/路由/改名/属主/标签、批量操作、ACL 与 SSH 规则（**需 Headscale `policy.mode: database`**，
+文件模式下只能查看）、用户与预授权密钥、API Key 管理、DNS 记录与 Headscale 设置编辑、OIDC 单点登录与代理认证、
+浏览器 SSH（需 Agent 集成 + 目标节点开启 `tailscale up --ssh` + OIDC 登录）。
+
+## 相对上游的新增能力
+
+- **DERP 地图在线编辑**：`derp.paths` 里的每个本地地图文件都能在浏览器里查看（带行号）、编辑、保存、回滚，
+  还提供三份带注释的示例模板；保存前自动快照该文件，服务端强校验 YAML 与 DERP map 结构
+  （区域 id/code 唯一、节点主机名与端口合法），失败时给出本地化原因，仅在可写挂载下才允许保存。
+- **中继地址自动同步**：按 6/12/24 小时或手动「立即运行」检测并写入 `derp.server.ipv4` / `ipv6`——
+  只在实际变化时写入、只改变化的键，写前自动快照并记入审计，失败发出告警；可选自动重载（默认开启，
+  会短暂中断客户端）。「检查」只预演不写入。
+- **可选的外部 IPv6 回显**（默认关闭）：只走 IPv6 询问公共回显服务，回答「互联网实际看到的地址」，
+  适配 NAT66 / 路由器转发的场景。
+- **官方区域镜像与筛选**：把 Tailscale 官方公共 DERP 区域按需镜像成一份本地地图文件下发给客户端，
+  重新编号到 **900 段**——**901 香港 / 902 新加坡**固定，其余 903+ **按 Agent 实测延迟**排序，
+  已分配的编号保持稳定；表格支持按延迟排序、筛选与「最快三个」预设。
+- **告警通知**：Webhook 推送 Headscale 失联与恢复、节点掉线与恢复、密钥即将过期、配置检查失败，
+  含冷却时间、投递历史与测试按钮。
+- **配置快照与操作审计**：设置页可一键生成配置快照并回滚，审计页记录谁在什么时候改了什么，支持导出 CSV / JSON。
+- **三语界面**：English / 简体中文 / 繁體中文。
+
+## 界面语言
+
+| 语言     | 标识      |
+| -------- | --------- |
+| English  | `en`      |
+| 简体中文 | `zh-Hans` |
+| 繁體中文 | `zh-Hant` |
+
+- **切换位置**：登录后点右上角**头像菜单**里的语言项；未登录时点**登录页右上角的地球按钮**。
+- **生效方式**：选择写入 `locale` cookie 并由**服务端渲染**，页头、表格、对话框、登录页、404 与权限错误提示全部跟随，时间格式也跟随。
+- **首次访问**：读取浏览器 `Accept-Language` 自动匹配，匹配不到时用英文。
+- Headscale API 报错、服务端日志与内部校验信息由上游产生，保持英文。
+
+## 部署
+
+镜像：`ghcr.io/cgg888/headplanecn`，标签为 `latest`、`x.y.z`，以及带 `-shell` 后缀的调试镜像（含 shell/curl，便于进容器排查）。
+完整步骤见[中文文档](https://cgg888.github.io/headplaneCN/)，其中
+[fnOS（飞牛）安装指南](https://cgg888.github.io/headplaneCN/install/fnos) 含可直接使用的 `config.yaml` 与 `docker-compose.yml`。
+
+```yaml
+services:
+  headplane:
+    image: ghcr.io/cgg888/headplanecn:latest
+    container_name: headplane
+    restart: unless-stopped
+
+    # host 网络：容器内 127.0.0.1 就是宿主机，可直接访问只监听本机的原生 headscale
+    # host 模式下不能再写 ports / extra_hosts
+    network_mode: host
+
+    # 共享宿主机 PID 命名空间：原生进程集成要读 /proc 找到 headscale 进程
+    pid: host
+
+    volumes:
+      - "/path/to/headplane/config.yaml:/etc/headplane/config.yaml:ro"
+      - "/path/to/headplane/data:/var/lib/headplane"
+      # 关键：headscale 的生效配置必须读写挂载，不能加 :ro
+      - "/path/to/headscale/config.yaml:/etc/headscale/config.yaml"
+
+    environment:
+      - "HEADPLANE_HEADSCALE__CONFIG_PATH=/etc/headscale/config.yaml"
+      - "HEADPLANE_INTEGRATION__PROC__ENABLED=true"
+      - "HEADPLANE_INTEGRATION__AGENT__ENABLED=true"
+```
+
+**四个关键点**
+
+1. **`network_mode: host`**：容器内的 `127.0.0.1` 就是宿主机，因此能直接访问只监听本机的 headscale；
+   host 模式下不能再写 `ports` / `extra_hosts`。
+2. **`pid: host`**：原生进程集成（`integration.proc`）需要读 `/proc` 才能找到 `headscale serve` 进程并发送 SIGHUP，
+   否则保存配置后不会生效。
+3. **Headscale 配置必须读写挂载**：把**生效的那份** `config.yaml` 挂进容器且**不加 `:ro`**
+   （例如 `/etc/headscale/config.yaml`），并让 `headscale.config_path` 指向同一个容器内路径——
+   这是 DNS / 设置入口出现、并且能保存的前提。
+4. **`derp.paths` 必须写宿主机路径，容器按相同绝对路径挂载**：Headscale 读的是宿主机上的那份文件，
+   容器内的挂载点必须与它**逐字相同**（不要写成 `/etc/headscale/derp-maps` 这类容器专用路径），
+   并以读写方式挂载；否则网页看不到它，或者 Headscale 重载时报
+   `getting DERPMap: open ...: no such file or directory`。
+
+**安全提醒**
+
+- `server.cookie_secret` 必须正好 32 个字符并保密（`openssl rand -base64 24`）。
+- Headscale 的 API Key 只在创建时显示一次；泄漏后用 `headscale apikeys expire --prefix <前缀>` 撤销后重建。
+- 不要把 `/var/run/docker.sock` 随意挂进容器 —— 那等于把宿主机的 root 权限交给容器。
+
+## 文档
+
+- **中文文档（主站，位于站点根路径）**：<https://cgg888.github.io/headplaneCN/>
+- **English docs（位于 `/en/`）**：<https://cgg888.github.io/headplaneCN/en/>
+- 变更记录：[CHANGELOG.md](./CHANGELOG.md)；贡献规范：[docs/en/CONTRIBUTING.md](./docs/en/CONTRIBUTING.md)
+
+## 版本记录
 
 ### 本仓库相对原版做了什么
 
@@ -67,139 +164,25 @@ Headplane 给它补上前端：管理机器、用户、访问控制（ACL）、D
 | **0.22.5** | **中继地址配置集中到设置**（设置 → Headscale → DERP → 地址自动同步：6/12/24h、族选择、自动重载默认开启、外部 IPv6 回显、探测面板；**「检查」只预演不写入**、**「立即运行」**仅写变化的键并先快照+审计；检测值为权威；**失败发告警**、无变化不告警）；**概述页中继卡改为纯只读**（值+复制/STUN/一行状态/设置链接，移除解析器徽标、重新解析、回显、候选与命名空间说明）；**修复「各区域延迟」显示未知**（真实键为 `<区域ID>-v4/-v6`）；**修复宿主机被误判为容器网络**（docker 桥/veth 不再作为证据；非 host 且无回显确认则不写入）；**水合期分包缺失不再重载循环**；DERP 地图检查接入系统配置检查；机器详情显示中继 IPv4/IPv6 |
 | **0.22.6** | **新增「区域镜像」Tab**：把 **Tailscale 官方 DERP 中继**（公共设施，非自建）按需镜像/筛选成一份本地地图文件下发给客户端；**重新编号到 900 段**——**901 香港 / 902 新加坡固定**，其余 903+ **按 Agent 实测延迟**排序，已分配编号**保持稳定**（只有点「重新编号」才重排并提示客户端可能短暂重选）；区域名中文化（未收录回退官方名）；表格支持按延迟排序/筛选与"最快三个"预设；设置含启用、专用目标文件（`official-mirror.yaml`，本任务维护、手工改动会被覆盖）、6/12/24h 周期、自动重载；**检查**只预演不写入；空选/越界路径/抓取失败/校验不过/不可写一律保留旧文件并记原因；写前快照 + 原子写 + 审计 + 失败告警 |
 | **0.22.7** | **修复官方地图读取**（官方是 PascalCase 线格式 `Regions`，此前用只认小写 `regions` 的本地读取器 → 解析出 0 个区域；现一个读取器兼容两种格式并归一化，本地格式行为不变；远程抓取超时 3s→**10s** 且重试一次；读不到时卡片显示原因而非空白）；**「官方区域节点筛选」卡片移入 DERP Tab**（位于「地址自动同步」下方、默认折叠、摘要显示区域数/已选数/目标文件；独立 Tab 移除；功能与编号规则不变：901 香港 / 902 新加坡固定、其余按实测延迟、编号稳定） |
+| **0.22.8** | **项目更名为 HeadplaneCN**（界面/页面标题/文档站/包名；环境变量、路径、容器与镜像名、API 头、上游致谢一律不变）；**文档站中英双语对齐**（中文为默认根路径、英文 `/en/`，两边各 34 页、侧边栏与标题逐条对应，GitHub Pages 发布，新增微信/支付宝**赞助页**）；**官方区域筛选可用化**（清除/恢复默认、延迟为空时给出原因与 Agent 设置入口、**一键加入区域名称**）；**概览 DERP 节点卡**四来源与计数、**卡片可按用户隐藏**（告警卡始终可见）；**机器详情中继卡只显示地址** + 「使用中」与来源微标 |
 
-### 界面语言
+## 反馈与贡献
 
-| 语言     | 标识      |
-| -------- | --------- |
-| English  | `en`      |
-| 简体中文 | `zh-Hans` |
-| 繁體中文 | `zh-Hant` |
+欢迎提交 issue 与 PR：<https://github.com/CGG888/headplaneCN/issues>
 
-- **切换位置**：登录后点右上角**头像菜单**里的语言项；未登录时点**登录页右上角的地球按钮**。
-- **生效方式**：选择写入 `locale` cookie 并由**服务端渲染** → 页头、表格、对话框、登录页、404 与权限错误提示全部跟随；时间格式也跟随所选语言。
-- **首次访问**：读取浏览器 `Accept-Language` 自动匹配（`zh-TW` / `zh-HK` / `zh-MO` → 繁體中文，其余中文 → 简体中文），匹配不到时用英文。
-- **词条位置**：`app/i18n/locales`；术语表、新增语言的完整步骤与自动化检查见 [多语言文档](./docs/features/languages.md)。
+## 致谢
 
-### 功能一览
+HeadplaneCN 是 **[Headplane](https://github.com/tale/headplane)** 的分支（fork）。
+Headplane 由 Aarnav Tale 及其贡献者开发维护，本分支的全部功能都建立在他们的工作之上 ——
+**没有上游项目，就没有这个分支**。
 
-- **机器管理**：过期时间、路由/子网、改名、转移与重新分配所有者、标签
-- **访问控制**：ACL 规则、SSH 规则、主机、标签与组（**需 Headscale 使用 `policy.mode: database`**，文件模式下只能查看）
-- **用户与预授权密钥**管理
-- **DNS 与 Headscale 设置**编辑（**需把 Headscale 的 `config.yaml` 读写挂载给 Headplane**）
-- **OIDC 单点登录**、**代理认证**（`server.proxy_auth`）
-- **浏览器 SSH**（需 Agent 集成 + 目标节点 `tailscale up --ssh` + **OIDC 登录**）
-- 不含 VNC / RDP：如需网页版，可另外部署 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Apache Guacamole
+- 上游仓库：<https://github.com/tale/headplane>
+- 上游文档：<https://headplane.net>
 
-![机器详情：子网与路由、Tailscale 地址、密钥过期时间](./docs/assets/3.png)
+上游本身的问题请提到上游仓库；本分支特有的改动、部署方式与问题，请提到本仓库的 issue。
 
-### 部署
+## 许可
 
-本仓库文档站（中文）：<https://cgg888.github.io/headplaneCN/>
-上游原版文档（英文，致谢原作者）：<https://headplane.net>
-
-> **飞牛 fnOS（fpk 原生 headscale + Lucky 反代）的完整安装说明，见 [docs/install/fnos.md](./docs/install/fnos.md)** —— 含两份可直接使用的设置文件（`config.yaml` 与 `docker-compose.yml`）与全部常见问题排查。
->
-> **注意**：fnOS 官方应用中心不提供 headscale，需先在应用中心添加第三方源 [github.com/conversun/fnos-store](https://github.com/conversun/fnos-store)，再安装 `headscale`（详见上面那份 fnOS 安装说明）。
-
-```bash
-docker pull ghcr.io/cgg888/headplane:latest
-# 国内加速：docker pull v6.gh-proxy.org/docker/ghcr.io/cgg888/headplane:latest
-```
-
-**飞牛 fnOS（fpk 原生 headscale + Lucky 反代）关键三点**
-
-1. **先确定 Headscale 的「生效配置」**：fnOS 上是 `/vol1/@appdata/headscale/config.yaml`
-   （程序与 CLI 在 `/vol1/@appcenter/headscale/`，其启动脚本执行的是 `headscale serve --config <上面那份>`；
-   `@appcenter/headscale/config/config.yaml` 只是**首次安装用的种子模板**，改了不生效）。
-2. **Headplane 侧三件套**：`headscale.config_path` 指向容器内路径 + 把该配置**读写**挂进容器（如 `/etc/headscale/config.yaml`，**不要 `:ro`**）+ `server.base_url` 填浏览器访问的公网地址（如 `https://你的域名:8443`，**不带 `/admin`**）。
-3. **想让网页能保存**：ACL 需 Headscale `policy.mode: database` 并**重启 headscale 进程**；DNS 与设置保存后要生效，需要 `integration.proc`（Headscale 为原生进程时）或容器化后的 `integration.docker`。
-
-### 版本与镜像标签
-
-采用语义化版本（自 v0.6.0）。本仓库由推送 git tag 触发构建，产物标签为
-`x.y.z`、`latest`、`x.y.z-shell`（带 shell/curl 的调试镜像）。
-
-### 安全提醒
-
-- `server.cookie_secret` 必须是 32 字符并保密（`openssl rand -base64 24`）。
-- Headscale 的 API Key 只在创建时显示一次；一旦泄漏，用
-  `headscale apikeys expire --prefix <前缀>` 撤销后重建。
-- 不要把 `/var/run/docker.sock` 随意挂进容器 —— 那等于把宿主机的 root 权限交给容器（本仓库文档中仅在内网场景建议，并推荐使用 socket-proxy）。
-
-### 贡献
-
-欢迎提交 issue 与 PR；规范见 [contributor guidelines](./docs/CONTRIBUTING.md)，文档站源码在 `docs/`。
-
----
-
-## English
-
-> A feature-complete web UI for [Headscale](https://headscale.net)
-
-_Screenshots are shown in the Chinese section above._
-
-Headscale is the de-facto self-hosted version of Tailscale, a popular Wireguard
-based VPN service. By default, it does not ship with a web UI, which is where
-Headplane comes in. Headplane is a feature-complete web UI for Headscale, allowing
-you to manage your nodes, networks, and ACLs with ease.
-
-Headplane aims to replicate the functionality offered by the official Tailscale
-product and dashboard, being one of the most feature complete Headscale UIs available.
-These are some of the features that Headplane offers:
-
-- Machine management, including expiry, network routing, name, and owner management
-- Access Control List (ACL) and tagging configuration for ACL enforcement
-- Support for OpenID Connect (OIDC) as a login provider
-- The ability to edit DNS settings and automatically provision Headscale
-- Configurability for Headscale's settings
-- A language switcher for English, Simplified Chinese, and Traditional Chinese
-
-### Languages
-
-The interface ships in three languages and needs no configuration to use them:
-
-| Locale    | Language                       |
-| --------- | ------------------------------ |
-| `en`      | English                        |
-| `zh-Hans` | 简体中文 (Simplified Chinese)  |
-| `zh-Hant` | 繁體中文 (Traditional Chinese) |
-
-Pick a language from the account menu in the header, or from the globe button on
-the login page. The choice is stored in a `locale` cookie and resolved on the
-server, so the entire interface — including the login page, error pages, and
-permission failures — renders in the selected language, and timestamps follow it
-too. A first-time visitor is matched against the browser's `Accept-Language`
-header before falling back to English.
-
-Translations live in `app/i18n/locales`. Adding a locale means adding a catalog,
-registering it in `app/i18n/index.ts` and `app/utils/locale.ts`, then running the
-unit tests, which assert that every catalog defines the same key space, keeps the
-placeholders aligned, and that Traditional Chinese contains no simplified
-characters. See the [language documentation](./docs/features/languages.md) for
-the glossary and the full contributor guide.
-
-Headscale API errors, server logs, and internal validation messages stay in
-English because the UI does not produce them.
-
-### Deployment
-
-Refer to the [website](https://headplane.net) for detailed installation instructions.
-A step-by-step guide for fnOS (native Headscale + Docker) is available at
-[docs/install/fnos.md](./docs/install/fnos.md).
-
-### Versioning
-
-Headplane uses [semantic versioning](https://semver.org/) for its releases (since v0.6.0).
-Pre-release builds are available under the `next` tag and get updated when a new release
-PR is opened and actively in testing.
-
-### Contributing
-
-Headplane is an open-source project and contributions are welcome! If you have
-any suggestions, bug reports, or feature requests, please open an issue. Also
-refer to the [contributor guidelines](./docs/CONTRIBUTING.md) for more info.
-
----
-
-> Copyright (c) 2025 Aarnav Tale
+本项目沿用上游的 **MIT License**，完整文本见 [LICENSE](./LICENSE)，
+版权声明为 `Copyright (c) 2024 Aarnav Tale`。MIT 许可允许使用、复制、修改、合并、发布、分发、
+再许可与销售本软件，但要求保留上述版权声明与本许可声明。

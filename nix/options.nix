@@ -24,7 +24,7 @@ in {
     settings = mkOption {
       description = ''
         Headplane configuration options. Generates a YAML config file.
-        See: https://github.com/tale/headplane/blob/main/config.example.yaml
+        See: https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml
       '';
       type = types.submodule {
         options = {

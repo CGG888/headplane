@@ -39,6 +39,7 @@ import {
 } from "~/server/context";
 import {
   assignRegionNumbers,
+  EMBEDDED_REGION_ID,
   HONG_KONG_MIRROR_NUMBER,
   HONG_KONG_REGION_ID,
   MIRROR_NUMBER_FIRST_RANKED,
@@ -157,6 +158,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const mirrorSettings = derpMirror.settings();
 
   let mirrorLatencies: Record<string, number> = {};
+  // Whether the agent is reporting at all: the feature being enabled is not
+  // enough, because an agent that has never synced (or whose newest sync failed)
+  // measures nothing either. The card says which of the two cases left the
+  // latency column empty instead of leaving it blank.
+  let agentAvailable = false;
+  if (agents) {
+    try {
+      const sync = agents.lastSync();
+      agentAvailable = sync.syncedAt !== null && sync.error === undefined;
+    } catch {
+      agentAvailable = false;
+    }
+  }
+
   if (agents) {
     try {
       mirrorLatencies = officialRegionLatencies(await agents.hostRecords());
@@ -222,6 +237,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ].filter((entry) => describedIds.has(entry.officialId)),
     firstFreeNumber: MIRROR_NUMBER_FIRST_RANKED,
     order: orderedIds,
+    // The numbers the rule never hands to a ranked region: the two anchors and
+    // Headscale's own embedded id. The preview needs them to drop a stored number
+    // the server would refuse.
+    reserved: [HONG_KONG_MIRROR_NUMBER, SINGAPORE_MIRROR_NUMBER, EMBEDDED_REGION_ID],
   };
 
   return {
@@ -270,6 +289,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     derpPrivateKeyDefault: defaultDerpPrivateKeyPath(appConfig.headscale.config_path),
     derpRelay,
     agentEnabled: agents !== undefined,
+    // Whether the agent is actually reporting; the mirror card explains an empty
+    // latency column with it.
+    agentAvailable,
     policyMode,
     policyPath,
     trustedProxies,
@@ -295,6 +317,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     derpPrivateKeyDefault,
     derpRelay,
     agentEnabled,
+    agentAvailable,
     policyMode,
     policyPath,
     trustedProxies,
@@ -468,7 +491,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             settings={derpSync.settings}
           />
           <DerpRegionMirror
-            agentEnabled={agentEnabled}
+            agentAvailable={agentAvailable}
             isDisabled={isDisabled}
             last={mirror.last}
             numbering={mirror.numbering}
