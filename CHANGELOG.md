@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **Webhook messages can be sent in the shape your chat platform expects.** Choose DingTalk, WeCom, Feishu, Slack or Discord on the notifications page and the alert arrives as that platform's own message: a coloured card or embed with an icon for the severity, the human title, the sentence explaining what happened, the specifics on labelled lines, the time in your local timezone and the version, plus a link to the page where you can act on it. The generic JSON format is unchanged down to the byte for anything already consuming it, the notification language setting applies to the formatted body too, and the event ids, severity mapping, dedupe, cooldown, history and request shape are all untouched.
+- **The machine detail page's latency list shows five regions and scrolls for the rest**, with the header and the coverage summary staying visible above it and no scrollbar at all when five or fewer regions have been measured.
 # 0.22.14 (October 6, 2026)
 
 ## Changes

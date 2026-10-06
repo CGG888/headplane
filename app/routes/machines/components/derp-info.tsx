@@ -9,6 +9,7 @@ import { useI18n } from "~/i18n/provider";
 import type { DerpNodeSourceKind } from "~/routes/overview-helpers";
 import { type RelayAddressVerdict, type RelayHostView } from "~/server/relay-dns";
 import type { HostInfo } from "~/types";
+import cn from "~/utils/cn";
 
 import {
   buildDerpInfo,
@@ -86,6 +87,25 @@ const LATENCY_SOURCE_KEYS: Record<MachineLatencySource, TranslationKey> = {
   reported: "machines.detail.derp.latencySourceReported",
   measured: "machines.detail.derp.latencySourceMeasured",
 };
+
+/**
+ * The keyboard ring the latency list's scroll box carries, the same one the
+ * Overview nodes card uses: the box takes focus so the rows a bounded height
+ * hides stay reachable without a pointer.
+ */
+const LATENCY_SCROLL_RING =
+  "focus:outline-hidden focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1 dark:focus:ring-indigo-400/40 dark:focus:ring-offset-mist-900";
+
+/**
+ * Five rows, and not a pixel more: a row is a 20px line (both `text-sm` and the
+ * badges read 1.25rem) plus `py-1.5`, so a row past the first is 33px with its
+ * divider, the first is 28px because it trims its top padding and the fifth of a
+ * longer list is 33px too — 28 + 4 × 33 = 160px, exactly `max-h-40`. The bound
+ * therefore shows five whole rows and cuts the sixth off clean (never a row half
+ * in view), and when the deployment serves five regions or fewer the box is only
+ * as tall as its rows: no scrollbar and no reserved space.
+ */
+const LATENCY_SCROLL_HEIGHT = "max-h-40";
 
 /**
  * One fact of the relay-address grid: the page's own label/value columns, so the
@@ -293,6 +313,9 @@ export default function DerpInfo({
               </dl>
 
               <div className="flex min-w-0 flex-col">
+                {/* The head of the list stays out of the scroller below, so the
+                    region/source/latency columns keep their names while the rows
+                    move: the label on the left, the tally on the right. */}
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <span className="text-xs font-medium tracking-wide text-mist-500 uppercase dark:text-mist-400">
                     {t("machines.detail.derp.latency")}
@@ -317,42 +340,56 @@ export default function DerpInfo({
                 ) : (
                   // One region per row: its name and badges, where the number
                   // came from, and the number itself in a fixed right-aligned
-                  // column, so the values line up down the table.
-                  <ul className="mt-1 flex flex-col">
-                    {latencies.rows.map((row) => (
-                      <li
-                        className="flex items-center gap-x-3 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0.5 last:pb-0.5 dark:border-mist-800/60"
-                        key={row.key}
-                      >
-                        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                          <span
-                            className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
-                            title={row.label}
-                          >
-                            {row.label}
+                  // column, so the values line up down the table. A deployment
+                  // that serves more than five regions scrolls in place inside
+                  // the bound instead of stretching the card past the pair of
+                  // cards above it; the rows themselves are untouched.
+                  <div
+                    aria-label={t("machines.detail.derp.latency")}
+                    className={cn(
+                      "mt-1 min-h-0 overflow-y-auto rounded-lg",
+                      LATENCY_SCROLL_HEIGHT,
+                      LATENCY_SCROLL_RING,
+                    )}
+                    role="group"
+                    tabIndex={0}
+                  >
+                    <ul className="flex flex-col">
+                      {latencies.rows.map((row) => (
+                        <li
+                          className="flex items-center gap-x-3 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0.5 last:pb-0.5 dark:border-mist-800/60"
+                          key={row.key}
+                        >
+                          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                            <span
+                              className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
+                              title={row.label}
+                            >
+                              {row.label}
+                            </span>
+                            {relayBadges(row)}
                           </span>
-                          {relayBadges(row)}
-                        </span>
-                        <span className="w-24 shrink-0 truncate text-right text-xs text-mist-500 dark:text-mist-400">
-                          {row.latencySource === undefined
-                            ? undefined
-                            : t(LATENCY_SOURCE_KEYS[row.latencySource])}
-                        </span>
-                        {row.latency === undefined ? (
-                          <span
-                            className="w-20 shrink-0 truncate text-right text-xs text-mist-400 dark:text-mist-500"
-                            title={t("machines.detail.derp.latencyUnmeasured")}
-                          >
-                            {t("machines.detail.derp.latencyUnmeasured")}
+                          <span className="w-24 shrink-0 truncate text-right text-xs text-mist-500 dark:text-mist-400">
+                            {row.latencySource === undefined
+                              ? undefined
+                              : t(LATENCY_SOURCE_KEYS[row.latencySource])}
                           </span>
-                        ) : (
-                          <span className="w-20 shrink-0 text-right font-mono text-xs text-mist-700 tabular-nums dark:text-mist-200">
-                            {row.latency}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                          {row.latency === undefined ? (
+                            <span
+                              className="w-20 shrink-0 truncate text-right text-xs text-mist-400 dark:text-mist-500"
+                              title={t("machines.detail.derp.latencyUnmeasured")}
+                            >
+                              {t("machines.detail.derp.latencyUnmeasured")}
+                            </span>
+                          ) : (
+                            <span className="w-20 shrink-0 text-right font-mono text-xs text-mist-700 tabular-nums dark:text-mist-200">
+                              {row.latency}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
 

@@ -9,6 +9,7 @@ import {
   ALERT_INTERVAL_MIN_SECONDS,
   isAlertEventId,
   isAlertLanguage,
+  isAlertWebhookFormat,
   isValidAlertWebhookUrl,
 } from "~/server/alerts/settings";
 import type { AlertEventId } from "~/server/alerts/types";
@@ -63,6 +64,7 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       const webhookUrl = formData.get("webhook_url")?.toString().trim() ?? "";
       const secret = formData.get("secret")?.toString() ?? "";
       const postedLanguage = formData.get("notification_language")?.toString().trim();
+      const postedFormat = formData.get("webhook_format")?.toString().trim();
       const stored = alerts.settings();
 
       if (webhookUrl.length > 0 && !isValidAlertWebhookUrl(webhookUrl)) {
@@ -82,11 +84,21 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
         notificationLanguage = postedLanguage;
       }
 
+      let webhookFormat = stored.webhookFormat;
+      if (postedFormat !== undefined && postedFormat.length > 0) {
+        if (!isAlertWebhookFormat(postedFormat)) {
+          return failure("invalidFormat", 400);
+        }
+
+        webhookFormat = postedFormat;
+      }
+
       const result = await alerts.update({
         enabled,
         webhookUrl,
         secret,
         notificationLanguage,
+        webhookFormat,
       });
       return result.success
         ? data({ success: true, kind: "save" } satisfies AlertActionResult)
@@ -133,6 +145,7 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       const postedUrl = formData.get("webhook_url")?.toString().trim() ?? "";
       const postedSecret = formData.get("secret")?.toString();
       const postedLanguage = formData.get("notification_language")?.toString().trim();
+      const postedFormat = formData.get("webhook_format")?.toString().trim();
       const stored = alerts.settings();
 
       const webhookUrl = postedUrl.length > 0 ? postedUrl : stored.webhookUrl;
@@ -148,10 +161,17 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
         return failure("invalidLanguage", 400);
       }
 
+      const webhookFormat =
+        postedFormat !== undefined && postedFormat.length > 0 ? postedFormat : stored.webhookFormat;
+      if (!isAlertWebhookFormat(webhookFormat)) {
+        return failure("invalidFormat", 400);
+      }
+
       const outcome = await alerts.test({
         webhookUrl,
         secret: postedUrl.length > 0 ? (postedSecret ?? stored.secret) : stored.secret,
         notificationLanguage,
+        webhookFormat,
       });
 
       return data(

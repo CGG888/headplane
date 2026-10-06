@@ -11,9 +11,11 @@ import { DEFAULT_LOCALE, type Locale } from "~/utils/locale";
 import {
   ALERT_EVENT_IDS,
   ALERT_LANGUAGE_IDS,
+  ALERT_WEBHOOK_FORMATS,
   type AlertEventId,
   type AlertLanguage,
   type AlertSettings,
+  type AlertWebhookFormat,
 } from "./types";
 
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
@@ -23,6 +25,9 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   // Follows the application default instead of pinning a language, so a
   // deployment that changes `DEFAULT_LOCALE` moves with it.
   notificationLanguage: "default",
+  // The shape the endpoint already receives: changing the default would break
+  // every existing consumer, so the platforms are strictly opt-in.
+  webhookFormat: "generic",
   events: [...ALERT_EVENT_IDS],
   intervalSeconds: 60,
   cooldownSeconds: 300,
@@ -43,6 +48,10 @@ export function isAlertEventId(value: unknown): value is AlertEventId {
 
 export function isAlertLanguage(value: unknown): value is AlertLanguage {
   return typeof value === "string" && (ALERT_LANGUAGE_IDS as readonly string[]).includes(value);
+}
+
+export function isAlertWebhookFormat(value: unknown): value is AlertWebhookFormat {
+  return typeof value === "string" && (ALERT_WEBHOOK_FORMATS as readonly string[]).includes(value);
 }
 
 /**
@@ -128,6 +137,9 @@ export function normalizeAlertSettings(value: unknown): AlertSettings {
     notificationLanguage: isAlertLanguage(source.notificationLanguage)
       ? source.notificationLanguage
       : DEFAULT_ALERT_SETTINGS.notificationLanguage,
+    webhookFormat: isAlertWebhookFormat(source.webhookFormat)
+      ? source.webhookFormat
+      : DEFAULT_ALERT_SETTINGS.webhookFormat,
     events,
     intervalSeconds: clampAlertInterval(source.intervalSeconds),
     cooldownSeconds: clampAlertCooldown(source.cooldownSeconds),

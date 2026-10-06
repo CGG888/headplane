@@ -62,6 +62,9 @@ describe("alert document parsing", () => {
       webhookUrl: "https://example.com/hook",
       secret: "s3cret",
       notificationLanguage: "zh-Hans",
+      // A document written before the format setting existed stays on the
+      // generic payload, which is what its endpoint already parses.
+      webhookFormat: "generic",
       events: ["nodeOffline"],
       intervalSeconds: 15,
       cooldownSeconds: 86_400,

@@ -8,6 +8,7 @@
 
 import { ulid } from "ulidx";
 
+import { alertRequestBodyForSettings } from "./format";
 import type { AlertPayload } from "./payload";
 import { appendDelivery } from "./store";
 import type { AlertDelivery, AlertHistoryEventId, AlertSettings } from "./types";
@@ -26,6 +27,13 @@ export interface AlertDeliveryOutcome {
 export interface AlertDeliveryOptions {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Headplane's own base URL, used to link a rendered message back to the page
+   * that fixes the condition. Absent or empty simply omits the link.
+   */
+  baseUrl?: string;
+  /** IANA zone for the human-facing time; defaults to the server's own zone. */
+  timeZone?: string;
 }
 
 function truncate(value: string): string {
@@ -62,10 +70,17 @@ export async function postAlertPayload(
   }
 
   try {
+    // The request method, headers and timeout never change with the format; only
+    // the body does, and the generic format is the payload byte for byte.
+    const body = alertRequestBodyForSettings(settings, payload, {
+      baseUrl: options.baseUrl,
+      timeZone: options.timeZone,
+    });
+
     const response = await doFetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
 

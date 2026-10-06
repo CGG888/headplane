@@ -37,6 +37,23 @@ export const ALERT_LANGUAGE_IDS = ["default", "en", "zh-Hans", "zh-Hant"] as con
 
 export type AlertLanguage = (typeof ALERT_LANGUAGE_IDS)[number];
 
+/**
+ * The chat platforms the notifier can shape a message for. `generic` is the
+ * original payload, byte for byte, so anything already consuming the webhook
+ * keeps working; every other value renders the platform's documented message
+ * shape around the same title, summary and details.
+ */
+export const ALERT_WEBHOOK_FORMATS = [
+  "generic",
+  "dingtalk",
+  "wecom",
+  "feishu",
+  "slack",
+  "discord",
+] as const;
+
+export type AlertWebhookFormat = (typeof ALERT_WEBHOOK_FORMATS)[number];
+
 export interface AlertSettings {
   enabled: boolean;
   /** Webhook endpoint receiving a JSON POST. Empty means "not configured". */
@@ -49,6 +66,11 @@ export interface AlertSettings {
    * in every language.
    */
   notificationLanguage: AlertLanguage;
+  /**
+   * The message shape the endpoint receives. `generic` posts the documented
+   * payload untouched; the chat platforms get their own rendered message.
+   */
+  webhookFormat: AlertWebhookFormat;
   /** Events to report; anything not listed is detected but never sent. */
   events: AlertEventId[];
   /** How often the scheduler looks for transitions, in seconds. */

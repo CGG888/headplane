@@ -112,6 +112,8 @@ export async function createAppContext(config: HeadplaneConfig) {
     headscale,
     apiKey: headscaleApiKey,
     hsLive,
+    // Lets a rendered message link back to the page that fixes the condition.
+    baseUrl: config.server.base_url ?? "",
   });
 
   // Node availability history shares the live node store the UI already polls,

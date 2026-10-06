@@ -50,6 +50,10 @@ export interface AlertServiceOptions {
   /** The server-wide API key; without it node and key events cannot be detected. */
   apiKey?: string;
   hsLive: LiveStore;
+  /** Headplane's own URL, for the link a rendered message carries. */
+  baseUrl?: string;
+  /** IANA zone for the human-facing time; defaults to the server's own zone. */
+  timeZone?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   /** Injectable clock, for tests. */
@@ -69,7 +73,10 @@ export interface AlertService {
   update(patch: Partial<AlertSettings>): Promise<AlertUpdateResult>;
   /** Posts a sample payload with the given (possibly unsaved) channel config. */
   test(
-    override?: Pick<AlertSettings, "webhookUrl" | "secret" | "notificationLanguage">,
+    override?: Pick<AlertSettings, "webhookUrl" | "secret" | "notificationLanguage"> & {
+      /** Optional so a caller that predates the setting keeps testing the rest. */
+      webhookFormat?: AlertSettings["webhookFormat"];
+    },
   ): Promise<AlertDeliveryOutcome>;
   /** One detection pass; a no-op while notifications are disabled. */
   runOnce(): Promise<void>;
@@ -91,6 +98,20 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
   let ticking = false;
 
   const now = () => options.now?.() ?? new Date();
+
+  /**
+   * Everything a delivery needs beyond the settings and the payload. The base
+   * URL and the zone only affect the rendered platforms: the generic payload is
+   * identical whichever they are.
+   */
+  function deliveryOptions() {
+    return {
+      timeoutMs: options.timeoutMs,
+      fetchImpl: options.fetchImpl,
+      baseUrl: options.baseUrl,
+      timeZone: options.timeZone,
+    };
+  }
 
   function ensureLoaded(): Promise<void> {
     loadPromise ??= readAlertsDocument(options.dataPath)
@@ -238,8 +259,7 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
           target: event.target,
           threshold: event.threshold,
           at: now(),
-          timeoutMs: options.timeoutMs,
-          fetchImpl: options.fetchImpl,
+          ...deliveryOptions(),
         });
 
         history = result.history;
@@ -321,8 +341,7 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
       target: event.target,
       threshold: event.threshold,
       at: now(),
-      timeoutMs: options.timeoutMs,
-      fetchImpl: options.fetchImpl,
+      ...deliveryOptions(),
     });
 
     document = {
@@ -364,14 +383,17 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
 
     async test(override) {
       await ensureLoaded();
-      const settings = normalizeAlertSettings({ ...document.settings, ...override });
+      const { webhookFormat, ...channel } = override ?? {};
+      const settings = normalizeAlertSettings({
+        ...document.settings,
+        ...channel,
+        // An omitted format keeps the stored one rather than resetting it.
+        ...(webhookFormat === undefined ? {} : { webhookFormat }),
+      });
       const at = now();
       const payload = buildTestAlertPayload(__VERSION__, at, settings.notificationLanguage);
 
-      const outcome = await postAlertPayload(settings, payload, {
-        timeoutMs: options.timeoutMs,
-        fetchImpl: options.fetchImpl,
-      });
+      const outcome = await postAlertPayload(settings, payload, deliveryOptions());
 
       // The Test button is part of the history the page shows, so the attempt
       // is recorded even though it is not a real event.

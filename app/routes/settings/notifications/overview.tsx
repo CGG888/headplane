@@ -22,7 +22,12 @@ import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import type { AlertDelivery, AlertLanguage, AlertSettings } from "~/server/alerts/types";
+import type {
+  AlertDelivery,
+  AlertLanguage,
+  AlertSettings,
+  AlertWebhookFormat,
+} from "~/server/alerts/types";
 import { alertsContext, authContext } from "~/server/context";
 import { Capabilities } from "~/server/web/roles";
 
@@ -30,6 +35,7 @@ import type { Route } from "./+types/overview";
 import { alertsAction, type AlertActionResult } from "./actions";
 import { alertMessage } from "./alert-message";
 import { ALERT_ERROR_KEYS } from "./error-keys";
+import { ALERT_FORMAT_ITEM_KEYS, ALERT_FORMAT_ORDER } from "./formats";
 import { ALERT_EVENT_KEYS, ALERT_EVENT_ORDER } from "./labels";
 
 /**
@@ -44,6 +50,13 @@ const ALERT_LANGUAGE_ITEMS: { value: AlertLanguage; labelKey: TranslationKey }[]
   { value: "zh-Hans", labelKey: "language.zh-Hans" },
   { value: "zh-Hant", labelKey: "language.zh-Hant" },
 ];
+
+/**
+ * The message shapes the channel can send. `generic` is the original payload,
+ * so an endpoint that already parses it is never affected by this setting.
+ */
+const ALERT_FORMAT_ITEMS: { value: AlertWebhookFormat; labelKey: TranslationKey }[] =
+  ALERT_FORMAT_ORDER.map((value) => ({ value, labelKey: ALERT_FORMAT_ITEM_KEYS[value] }));
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const auth = context.get(authContext);
@@ -117,6 +130,7 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
   const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl);
   const [secret, setSecret] = useState(settings.secret);
   const [notificationLanguage, setNotificationLanguage] = useState(settings.notificationLanguage);
+  const [webhookFormat, setWebhookFormat] = useState(settings.webhookFormat);
 
   const saveResult = saveFetcher.data;
   const saveError =
@@ -163,9 +177,9 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
           </span>
         </SettingsField>
 
-        {/* The connection fields pair up on a wide page; the switch keeps
+        {/* The connection fields go two per row on a wide page; the switch keeps
             the full row because its help text is a sentence, not a label. */}
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Input
             description={t("settings.notifications.webhookUrlDescription")}
             label={t("settings.notifications.webhookUrlLabel")}
@@ -198,6 +212,18 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
             }
             value={notificationLanguage}
           />
+
+          <Select
+            description={t("settings.notifications.webhookFormatDescription")}
+            items={ALERT_FORMAT_ITEMS.map((item) => ({
+              value: item.value,
+              label: t(item.labelKey),
+            }))}
+            label={t("settings.notifications.webhookFormatLabel")}
+            name="webhook_format"
+            onValueChange={(value) => setWebhookFormat((value ?? "generic") as AlertWebhookFormat)}
+            value={webhookFormat}
+          />
         </div>
 
         <SettingsActions>
@@ -221,6 +247,7 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
         <input name="webhook_url" type="hidden" value={webhookUrl} />
         <input name="secret" type="hidden" value={secret} />
         <input name="notification_language" type="hidden" value={notificationLanguage} />
+        <input name="webhook_format" type="hidden" value={webhookFormat} />
 
         <Text>{t("settings.notifications.testBody")}</Text>
 
