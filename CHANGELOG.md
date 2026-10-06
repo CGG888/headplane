@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.8 (October 6, 2026)
+
 ## Changes
 
 - **This fork is now called HeadplaneCN.** The name changed everywhere a person reads it — the interface, the page titles, the documentation site and the package name — while everything a machine reads stayed exactly as it was: environment variables, `/etc/headplane`, `/var/lib/headplane`, container and image names, the API header, and the credit to the upstream project, which is still named and linked in the footer and the README.
@@ -13,6 +15,9 @@
 - Alert notifications use the new name, and their tests now assert that no payload still says the old brand alone.
 - Latency rows keep their measured order but no longer leave the column silently blank, and a stored region assignment that no longer matches the selected regions is pruned instead of being kept.
 - The documentation no longer links the site to the upstream registry image; install pages use this repository image.
+
+---
+
 # 0.22.7 (October 6, 2026)
 
 ## Fixes
