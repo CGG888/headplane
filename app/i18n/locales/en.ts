@@ -537,6 +537,22 @@ const en = {
         unknown: "Unknown",
         noLatency: "No data",
       },
+      diagnostics: {
+        title: "Node diagnostics",
+        body: "Read-only details this machine reports through the HeadplaneCN Agent, plus the relays and regions this instance serves, grouped by area. Values that are identifiers or addresses copy themselves; addresses stay hidden until you reveal them.",
+        fields: {
+          one: "{count} field",
+          other: "{count} fields",
+        },
+        empty: "Nothing has been reported for this machine.",
+        noData: "No data",
+        unavailable: "Unavailable",
+        summaryUnavailable: "This machine has no reported details.",
+        noAgent: "The HeadplaneCN Agent is not enabled, so this machine has no reported details.",
+        noReport: "This machine has not reported any details to the HeadplaneCN Agent yet.",
+        notReported: "not reported",
+        truncated: "Some fields are not shown here to keep the card readable.",
+      },
     },
     new: {
       registerTitle: "Register Machine Key",
@@ -547,6 +563,16 @@ const en = {
         "Paste the registration URL or full hskey-authreq-... key from tailscale up.",
       addDevice: "Add Device",
       generatePreAuth: "Generate Pre-auth Key",
+    },
+    reject: {
+      menu: "Reject registration",
+      title: "Reject registration",
+      body: "Rejecting stops this device from joining your Tailnet: its pending registration request disappears and the device stays unregistered until someone registers it again. This never approves the device, and it never deletes or changes a machine that is already on the tailnet.",
+      errors: {
+        missingKey: "Paste the registration key of the device to reject.",
+        unsupported: "This Headscale version cannot reject a pending registration.",
+        failed: "Headscale could not reject this registration. Its request may already be gone.",
+      },
     },
     rename: {
       title: "Edit machine name for {name}",
@@ -2637,12 +2663,14 @@ const en = {
       expiration: "Expiration",
       lastSeen: "Last seen",
       never: "Never",
-      expiredNote:
-        "Headscale keeps this record after the key stops working and its API has no delete — expiring a key is how it is revoked.",
       expire: "Expire key",
       expireTitle: "Expire API key {prefix}?",
       expireBody:
         "Expiring this key immediately prevents it from authenticating with the Headscale API. This cannot be undone.",
+      delete: "Delete key",
+      deleteTitle: "Delete API key {prefix}?",
+      deleteBody:
+        "This permanently deletes the API key {prefix} from Headscale. It cannot be undone, and a deleted key can never be recovered. If the key should only stop working, expire it instead — expiring revokes it immediately and keeps the record.",
       bulkActionsLabel: "Bulk key actions",
       bulkSelected: "{count} selected",
       bulkExpire: "Expire selected",
@@ -2696,6 +2724,16 @@ const en = {
       bulkSummary: "Expired {count} pre-auth keys.",
       bulkError:
         "Some keys could not be expired. The list shows what Headscale still has; retry the ones that failed.",
+      delete: "Delete key",
+      deleteTitle: "Delete pre-auth key {key}?",
+      deleteBody:
+        "This permanently deletes the pre-auth key {key} from Headscale. It cannot be undone, and a deleted key can never be recovered. If the key should only stop working, expire it instead — expiring revokes it immediately and keeps the record.",
+      errors: {
+        notFound:
+          "No pre-auth key with this identifier was found. It may have already been removed.",
+        unsupported:
+          "This Headscale version cannot delete pre-auth keys. Expire the key instead to revoke it.",
+      },
     },
     authKeyRow: {
       key: "Key",
@@ -2708,8 +2746,6 @@ const en = {
       yes: "Yes",
       no: "No",
       tagOnly: "(Tag Only)",
-      expiredNote:
-        "Headscale keeps this record after the key stops working and its API has no delete — expiring a key is how it is revoked.",
     },
     expireKey: {
       button: "Expire Key",
@@ -2824,6 +2860,9 @@ const en = {
       actions: {
         apiKeyCreate: "Create API key",
         apiKeyExpire: "Expire API key",
+        apiKeyDelete: "Delete API key",
+        preAuthKeyDelete: "Delete pre-auth key",
+        registrationReject: "Reject registration",
         restrictionAddDomain: "Allow domain",
         restrictionRemoveDomain: "Remove domain",
         restrictionAddGroup: "Allow group",

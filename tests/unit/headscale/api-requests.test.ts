@@ -5,7 +5,9 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import type { Capabilities } from "~/server/headscale/api/capabilities";
 import { makeApiKeyApi } from "~/server/headscale/api/resources/api-keys";
+import { makeAuthApi } from "~/server/headscale/api/resources/auth";
 import { makeNodeApi } from "~/server/headscale/api/resources/nodes";
+import { makePreAuthKeyApi } from "~/server/headscale/api/resources/pre-auth-keys";
 import { createTransport, type Transport } from "~/server/headscale/api/transport";
 
 // These tests pin the exact HTTP requests Headplane sends to Headscale. The wire
@@ -27,6 +29,7 @@ const capabilities = {
   nodeOwnerIsImmutable: true,
   registerKeyIncludesAuthReqPrefix: true,
   keyExpiryCanBeDisabled: true,
+  authRequestsCanBeRejected: true,
 } as unknown as Capabilities;
 
 let server: Server;
@@ -54,6 +57,10 @@ beforeAll(async () => {
       }
       if (request.method === "POST" && request.url === "/api/v1/apikey") {
         response.end(JSON.stringify({ apiKey: API_KEY }));
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/v1/debug/node") {
+        response.end(JSON.stringify({ node: { id: "9", name: "debug-node", tags: [] } }));
         return;
       }
       response.end(JSON.stringify({}));
@@ -114,6 +121,128 @@ describe("API key requests", () => {
     expect(request.method).toBe("POST");
     expect(request.url).toBe("/api/v1/apikey/expire");
     expect(JSON.parse(request.body)).toEqual({ prefix: "abcdefghijkl" });
+  });
+
+  test("deletes a key by its raw prefix in the path", async () => {
+    const apiKeys = makeApiKeyApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    await apiKeys.delete("abcdefghijkl");
+
+    const request = lastRequest();
+    expect(request.method).toBe("DELETE");
+    // The spec's optional `id` query parameter is deliberately not sent: the
+    // spec does not say which identifier wins when both are present.
+    expect(request.url).toBe("/api/v1/apikey/abcdefghijkl");
+    expect(request.body).toBe("");
+    expect(request.auth).toBe(`Bearer ${API_KEY}`);
+  });
+});
+
+describe("Pre-auth key deletion requests", () => {
+  test("deletes a key by its stable id in the query string", async () => {
+    const preAuthKeys = makePreAuthKeyApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    await preAuthKeys.delete?.("7");
+
+    const request = lastRequest();
+    expect(request.method).toBe("DELETE");
+    expect(request.url).toBe("/api/v1/preauthkey?id=7");
+    expect(request.body).toBe("");
+    expect(request.auth).toBe(`Bearer ${API_KEY}`);
+  });
+
+  test("is unavailable before pre-auth keys have stable ids", () => {
+    const older = {
+      ...capabilities,
+      preAuthKeysHaveStableIds: false,
+    } as unknown as Capabilities;
+    const preAuthKeys = makePreAuthKeyApi(transport, older, API_KEY);
+
+    // The endpoint does not exist before 0.28, which is also the release that
+    // gave keys the id it deletes by.
+    expect(preAuthKeys.delete).toBeUndefined();
+    expect(preAuthKeys.listAll).toBeUndefined();
+  });
+});
+
+describe("Auth request requests", () => {
+  test("approves a pending registration by auth id", async () => {
+    const auth = makeAuthApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    await auth.approve("auth-123");
+
+    const request = lastRequest();
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("/api/v1/auth/approve");
+    expect(JSON.parse(request.body)).toEqual({ authId: "auth-123" });
+  });
+
+  test("rejects a pending registration by the same auth id", async () => {
+    const auth = makeAuthApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    await auth.reject?.("auth-123");
+
+    const request = lastRequest();
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("/api/v1/auth/reject");
+    expect(JSON.parse(request.body)).toEqual({ authId: "auth-123" });
+    expect(request.auth).toBe(`Bearer ${API_KEY}`);
+  });
+
+  test("is unavailable before 0.29", async () => {
+    const older = {
+      ...capabilities,
+      authRequestsCanBeRejected: false,
+    } as unknown as Capabilities;
+    const auth = makeAuthApi(transport, older, API_KEY);
+    recorded = [];
+
+    expect(auth.reject).toBeUndefined();
+
+    // Approving still works on those versions.
+    await auth.approve("auth-123");
+    expect(lastRequest().url).toBe("/api/v1/auth/approve");
+  });
+});
+
+describe("Debug node requests", () => {
+  test("creates a debug node from the spec's body", async () => {
+    const nodes = makeNodeApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    const node = await nodes.debug({
+      user: "alice",
+      key: "machine-key",
+      name: "debug-1",
+      routes: ["10.0.0.0/24"],
+    });
+
+    const request = lastRequest();
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("/api/v1/debug/node");
+    expect(JSON.parse(request.body)).toEqual({
+      user: "alice",
+      key: "machine-key",
+      name: "debug-1",
+      routes: ["10.0.0.0/24"],
+    });
+    expect(node.id).toBe("9");
+  });
+
+  test("omits fields the caller left out", async () => {
+    const nodes = makeNodeApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    await nodes.debug({});
+
+    const request = lastRequest();
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("/api/v1/debug/node");
+    expect(JSON.parse(request.body)).toEqual({});
   });
 });
 

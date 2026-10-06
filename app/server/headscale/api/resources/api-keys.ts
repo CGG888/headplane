@@ -18,6 +18,14 @@ export interface ApiKeyApi {
    * {@link list} is not accepted by the API.
    */
   expire(prefix: string): Promise<void>;
+
+  /**
+   * Permanently delete an API key's record. `prefix` is the same raw prefix
+   * {@link expire} takes; the endpoint also declares an optional `id` query
+   * parameter, but the spec does not say which identifier wins when both are
+   * present, so only the required path segment is sent.
+   */
+  delete(prefix: string): Promise<void>;
 }
 
 export function makeApiKeyApi(
@@ -52,6 +60,15 @@ export function makeApiKeyApi(
         path: "v1/apikey/expire",
         apiKey,
         body: { prefix },
+      });
+    },
+
+    delete: async (prefix) => {
+      // DELETE /api/v1/apikey/{prefix}
+      await transport.request({
+        method: "DELETE",
+        path: `v1/apikey/${encodeURIComponent(prefix)}`,
+        apiKey,
       });
     },
   };

@@ -1,12 +1,12 @@
-﻿import { type } from "arktype";
-import { Computer, FileKey2 } from "lucide-react";
+import { type } from "arktype";
+import { Ban, Computer, FileKey2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import CodeBlock from "~/components/code-block";
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
-import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/components/menu";
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "~/components/menu";
 import Select from "~/components/select";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -15,6 +15,8 @@ import { useI18n } from "~/i18n/provider";
 import type { User } from "~/types";
 import { normalizeRegistrationKey } from "~/utils/register-key";
 import { getUserDisplayName } from "~/utils/user";
+
+import RejectRegistration from "./reject";
 
 const registerSchema = type({
   register_key: "string > 0",
@@ -31,6 +33,7 @@ export interface NewMachineProps {
 export default function NewMachine(data: NewMachineProps) {
   const { t } = useI18n();
   const [pushDialog, setPushDialog] = useState(false);
+  const [rejectDialog, setRejectDialog] = useState(false);
   const form = useForm({
     schema: registerSchema,
     validate: (values) =>
@@ -72,6 +75,11 @@ export default function NewMachine(data: NewMachineProps) {
           />
         </DialogPanel>
       </Dialog>
+      {/* The other answer to a device that is waiting on a registration, kept
+          beside the register flow and visually apart from every node action:
+          it turns the pending request down instead of approving it, and never
+          touches a machine that is already on the tailnet. */}
+      <RejectRegistration isOpen={rejectDialog} setIsOpen={setRejectDialog} />
       <Menu disabled={data.isDisabled}>
         <MenuTrigger className="rounded-md bg-indigo-500 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-500/90 dark:bg-indigo-500/90 dark:hover:bg-indigo-500/80">
           {t("machines.new.addDevice")}
@@ -93,6 +101,17 @@ export default function NewMachine(data: NewMachineProps) {
             <div className="flex items-center gap-x-3">
               <FileKey2 className="w-4" />
               {t("machines.new.generatePreAuth")}
+            </div>
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            disabled={data.disabledKeys?.includes("register")}
+            onClick={() => setRejectDialog(true)}
+            variant="danger"
+          >
+            <div className="flex items-center gap-x-3">
+              <Ban className="w-4" />
+              {t("machines.reject.menu")}
             </div>
           </MenuItem>
         </MenuContent>

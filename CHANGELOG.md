@@ -1,5 +1,15 @@
 # Next
 
+## Changes
+
+- **A pending registration can now be rejected instead of only approved.** The machines list's registration menu gained a separate, destructive "reject registration" item with a confirmation that spells out what happens: the device will not join the tailnet, its pending request disappears, and it stays unregistered until someone registers it again. It takes the registration key (never a node id), so it cannot be confused with approving a device or deleting an existing machine, and it is only offered on a Headscale version that supports it.
+- **Keys can be deleted, not only expired.** Both the pre-auth key list and the API key list now offer a delete beside the existing expire, behind a confirmation that says the record is removed permanently and cannot be recovered — and that a key which should merely stop working can be expired instead, which revokes it immediately and keeps the record. Deleting a key never exposes or logs the secret; the audit log records who deleted what.
+- **The diagnostics card on a machine now shows data that actually exists.** It summarises what the page already knows about the machine — the agent-reported version, operating system, hostname and end-points, the network facts (NAT behaviour, hair-pinning, IPv4/IPv6 and UDP reachability, UPnP/PCP/NAT-PMP, the preferred and home relay region), the per-region latency table with its sources, and the relay regions this deployment serves — as humanised grouped rows, with addresses hidden by default and identifiers copyable, bounded so a large payload cannot take over the card, and saying plainly when something has not been reported. It reads nothing extra: no new request, no per-node debug endpoint (that one does not exist — the HTTP API's debug endpoint creates a node).
+
+## Fixes
+
+- **The latency list on a machine now aligns.** The region id and its name are separate columns instead of running together, the relay source and the measurement source each sit in their own fixed column as a coloured badge, the number stays right-aligned, and "not measured" reads as such with a dash rather than a blank — with the five-row bound, the coverage summary and the in-use badge unchanged.
+- The audit page labels the new actions (rejecting a registration, deleting a pre-auth key, deleting an API key) instead of printing their raw codes.
 # 0.22.15 (October 6, 2026)
 
 ## Changes

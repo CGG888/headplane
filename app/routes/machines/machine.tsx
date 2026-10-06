@@ -54,6 +54,7 @@ import MachineCard from "./components/machine-card";
 import { mapTagsToComponents, uiTagsForNode } from "./components/machine-row";
 import MachineStatus from "./components/machine-status";
 import MenuOptions from "./components/menu";
+import NodeDiagnostics from "./components/node-diagnostics";
 import { embeddedDerpRegion, relayRegionSources, servedDerpRegionIds } from "./derp-info";
 import Delete from "./dialogs/delete";
 import Expire from "./dialogs/expire";
@@ -609,6 +610,20 @@ export default function Page({
           stats={stats}
         />
       </div>
+
+      {/* Directly above the danger zone, and exactly as wide: the diagnostics
+          block is the last read-only card before the destructive one. It reads
+          only what this page already loaded, so it asks nothing of Headscale. */}
+      <NodeDiagnostics
+        diagnostics={{
+          agentEnabled,
+          stats,
+          regions: derpRegions,
+          relaySources,
+          server: derp.server,
+          inventory: relayInventory,
+        }}
+      />
 
       <MachineCard
         description={t("machines.remove.body")}

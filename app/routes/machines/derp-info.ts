@@ -13,6 +13,9 @@
  * receives plain values and never imports a server module.
  */
 
+// Type-only: the badge helper is a component module, and the tones only ever
+// travel as types through this pure module, so nothing is imported at runtime.
+import type { SettingsStatusTone } from "~/components/settings-nav";
 import type { DerpNodeSourceKind, DerpNodeSourcesView } from "~/routes/overview-helpers";
 // Type-only: `derp-region-sources` reads the filesystem, and this module is part
 // of the client bundle, so nothing may survive the type erasure here.
@@ -507,12 +510,30 @@ export function relayRegionSources(
  */
 export type MachineLatencySource = "reported" | "measured";
 
+/**
+ * The tones the latency list's micro badges use, taken from the app's one badge
+ * helper (`SettingsStatus`) rather than from a palette of this module's own:
+ * the tones have to keep meaning the same thing here and everywhere else.
+ */
+export type MachineLatencyTone = SettingsStatusTone;
+
 /** One relay a machine uses, as the card prints its row. */
 export interface MachineRelayUse {
   /** Stable identity of the row: `id:901`, or the agent's own key for a legacy sample. */
   key: string;
   /** `#901 · ams · Amsterdam`, from the one label chain. */
   label: string;
+  /**
+   * The label's leading id column, e.g. `#901`. Absent for a key that names no
+   * region (a legacy `host:port` sample), which the card's id column reads as a
+   * dash instead.
+   */
+  idLabel?: string;
+  /**
+   * The label's name column, e.g. `hkg · 香港` (or the whole `host:port` key
+   * when `idLabel` is absent). Absent while no source names the region.
+   */
+  nameLabel?: string;
   /** The region id the agent's key names, when it names one. */
   regionId?: number;
   /** The measured round trip, already formatted, when anyone measured it. */
@@ -685,6 +706,60 @@ function measuredRegionMs(
   return value;
 }
 
+/**
+ * The tone of the badge naming which configured source describes a region.
+ *
+ * One chain of meaning: a region this deployment actually serves (`embedded`,
+ * the `derp.paths` files, the region mirror's own file) reads in the app's "ok"
+ * green, a region only advertised upstream (`official`) reads in its "warn"
+ * amber, and a region no source describes has no badge at all.
+ */
+export function relaySourceTone(
+  source: DerpNodeSourceKind | undefined,
+): MachineLatencyTone | undefined {
+  switch (source) {
+    case "embedded":
+    case "local":
+    case "mirror":
+      return "ok";
+    case "official":
+      return "warn";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The tone of the badge naming where a latency number came from. A measurement
+ * this server took is "ok" — it is the local path, the same green the locally
+ * served relays use — a client's own report is "neutral" (relayed data, nothing
+ * wrong with it), and a row nobody measured stays neutral too: the card tones
+ * that one down further rather than colouring it as a problem.
+ */
+export function latencySourceTone(source: MachineLatencySource | undefined): MachineLatencyTone {
+  return source === "measured" ? "ok" : "neutral";
+}
+
+/**
+ * A row's label split into the two columns the latency list lines up: the id
+ * (`#901`) and the name (`hkg · 香港`). A key that names no region — a legacy
+ * `host:port` sample, or the caller's "unknown" text — has no id column, so the
+ * whole label is the name column and the card prints a dash for the id.
+ */
+function latencyLabelColumns(label: string): { idLabel?: string; nameLabel?: string } {
+  const separator = label.indexOf(" · ");
+  if (separator < 0) {
+    return label.startsWith("#") ? { idLabel: label } : { nameLabel: label };
+  }
+
+  const idLabel = label.slice(0, separator);
+  const nameLabel = label.slice(separator + 3);
+  return {
+    ...(idLabel.length === 0 ? {} : { idLabel }),
+    ...(nameLabel.length === 0 ? {} : { nameLabel }),
+  };
+}
+
 /** One served region as a latency row, with or without a number. */
 function servedLatencyRow(
   regionId: number,
@@ -697,6 +772,7 @@ function servedLatencyRow(
   return {
     key: `id:${regionId}`,
     label,
+    ...latencyLabelColumns(label),
     regionId,
     ...(latency === undefined ? {} : { latency }),
     ...(latencySource === undefined ? {} : { latencySource }),
@@ -816,11 +892,13 @@ export function buildMachineLatencyRows({
       continue;
     }
 
+    const label = resolveDerpLatencyKeyLabel(entry.region, sources, unknown);
     rows.push({
       milliseconds: entry.seconds * 1000,
       row: {
         key,
-        label: resolveDerpLatencyKeyLabel(entry.region, sources, unknown),
+        label,
+        ...latencyLabelColumns(label),
         ...(entry.regionId === undefined ? {} : { regionId: entry.regionId }),
         latency: formatDerpLatency(entry.seconds),
         latencySource: "reported",

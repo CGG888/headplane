@@ -1,6 +1,12 @@
 import { data, redirect } from "react-router";
 
-import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
+import { AUDIT_ACTIONS, auditActorOf, type AuditService } from "~/server/audit";
+import {
+  auditContext,
+  authContext,
+  headscaleLiveStoreContext,
+  requestApiContext,
+} from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
 import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
@@ -26,6 +32,30 @@ export type MachineBulkErrorCode =
   | "ownerUnsupported";
 
 /**
+ * Stable error codes returned to the registration-rejection dialog. Rejecting
+ * addresses a *pending* auth request, never a machine, so these are the only
+ * outcomes that dialog has to tell apart.
+ */
+export type MachineRejectErrorCode = "missingKey" | "invalidKey" | "unsupported" | "failed";
+
+/**
+ * The client this action needs for a rejection, taken structurally: the method
+ * is owned by the API module (and is optional there, because only Headscale
+ * 0.29+ can reject an auth request), so the action declares the one shape it
+ * calls and treats anything else as "this server cannot do that".
+ */
+export interface RegistrationRejectApi {
+  auth: { reject?: (authId: string) => Promise<void> };
+}
+
+/** The client's rejection method, or undefined on a Headscale that lacks it. */
+export function registrationRejector(
+  api: RegistrationRejectApi,
+): ((authId: string) => Promise<void>) | undefined {
+  return api.auth.reject;
+}
+
+/**
  * Upper bound on the machines one bulk request may touch. The list allows
  * selecting every visible row, so a cap keeps a stray selection from turning
  * into an unbounded sequence of API calls.
@@ -36,6 +66,21 @@ const BULK_ACTIONS = new Set(["bulk_set_tags", "bulk_set_expiry", "bulk_reassign
 
 function bulkError(errorCode: MachineBulkErrorCode | MachineExpiryErrorCode) {
   return data({ success: false as const, errorCode }, { status: 400 });
+}
+
+/** One rejection outcome, as the dialog reads it. */
+function rejectError(errorCode: MachineRejectErrorCode, status = 400) {
+  return data({ success: false as const, errorCode }, { status });
+}
+
+/** A thrown value as one short line the audit log can keep. */
+function describeError(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+
+  const text = typeof error === "string" ? error.trim() : "";
+  return text.length > 0 ? text : "unknown error";
 }
 
 /** Reads the selected node ids, dropping blanks and duplicates. */
@@ -53,6 +98,7 @@ function readBulkNodeIds(formData: FormData): string[] {
 
 export async function machineAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
+  const audit: AuditService | undefined = context.get(auditContext);
   const getRequestApi = context.get(requestApiContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
 
@@ -102,6 +148,67 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
     const node = await api.nodes.register(user, registrationKey);
     await headscaleLiveStore.refresh(nodesResource, api);
     return redirect(`/machines/${node.id}`);
+  }
+
+  // Rejecting a pending registration, the mirror of `register` above: it
+  // addresses the auth request a device is waiting on, never an existing node,
+  // so it is handled here — before any `node_id` lookup — and can never be
+  // confused with deleting a machine.
+  if (action === "reject_registration") {
+    if (!auth.can(principal, Capabilities.write_machines)) {
+      throw data(
+        { localized: { key: "errors.permission.manageMachines" } },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    const registrationKeyInput = formData.get("register_key")?.toString() ?? "";
+    if (registrationKeyInput.trim().length === 0) {
+      return rejectError("missingKey");
+    }
+
+    const authId = normalizeRegistrationKey(registrationKeyInput);
+    if (!authId) {
+      return rejectError("invalidKey");
+    }
+
+    // Only Headscale 0.29+ can turn a request down; on anything older the
+    // client has no method at all and the dialog says so.
+    const reject = registrationRejector(api);
+    if (reject === undefined) {
+      return rejectError("unsupported", 501);
+    }
+
+    try {
+      await reject(authId);
+    } catch (error) {
+      // A failed rejection is worth recording: it is the one path where a
+      // device's pending request may still be sitting on the server.
+      await audit?.record({
+        ...auditActorOf(principal),
+        action: AUDIT_ACTIONS.registrationReject,
+        target: authId,
+        detail: describeError(error),
+        result: "failure",
+      });
+
+      return rejectError("failed", 502);
+    }
+
+    await audit?.record({
+      ...auditActorOf(principal),
+      action: AUDIT_ACTIONS.registrationReject,
+      target: authId,
+      result: "success",
+    });
+
+    // The request is gone from Headscale now, so the list is re-read rather
+    // than patched: a rejection that raced a registration still shows the
+    // machine that was created, and never a full page reload.
+    await headscaleLiveStore.refresh(nodesResource, api);
+    return { success: true as const };
   }
 
   // Bulk actions run against a list of machines instead of the single node the

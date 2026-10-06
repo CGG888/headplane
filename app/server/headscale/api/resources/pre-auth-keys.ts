@@ -25,6 +25,14 @@ export interface PreAuthKeyApi {
   create(opts: CreatePreAuthKeyOptions): Promise<PreAuthKey>;
 
   expire(key: PreAuthKey): Promise<void>;
+
+  /**
+   * Permanently delete a pre-auth key's record, addressed by its stable key
+   * ID. Only present when `capabilities.preAuthKeysHaveStableIds` is true:
+   * the endpoint does not exist before 0.28.0, which is the same release that
+   * gave pre-auth keys the `id` this takes.
+   */
+  delete?: (id: string) => Promise<void>;
 }
 
 export function makePreAuthKeyApi(
@@ -83,6 +91,17 @@ export function makePreAuthKeyApi(
         preAuthKeys: PreAuthKey[];
       }>({ method: "GET", path: "v1/preauthkey", apiKey });
       return preAuthKeys;
+    };
+
+    api.delete = async (id) => {
+      // DELETE /api/v1/preauthkey?id=<id>. The spec declares `id` as an
+      // optional query parameter and nothing else; there is no request body.
+      await transport.request({
+        method: "DELETE",
+        path: "v1/preauthkey",
+        apiKey,
+        query: { id },
+      });
     };
   }
 

@@ -16,6 +16,8 @@ import {
   buildMachineLatencyRows,
   buildMachineRelayUse,
   embeddedDerpRegion,
+  latencySourceTone,
+  relaySourceTone,
   resolveDerpRegionLabel,
   type DerpEmbeddedServer,
   type DerpRegionLabel,
@@ -23,6 +25,7 @@ import {
   type DerpRegionNameData,
   type MachineLatencyInventory,
   type MachineLatencySource,
+  type MachineLatencyTone,
   type MachineRelayUse,
 } from "../derp-info";
 import { type RelayAddressLine, type RelayFamilyReason } from "../relay-verdicts";
@@ -169,10 +172,24 @@ export default function DerpInfo({
 
   const sourceBadge = (source: DerpNodeSourceKind | undefined) =>
     source === undefined ? undefined : (
-      <SettingsStatus tone={source === "official" ? "warn" : "neutral"}>
+      <SettingsStatus tone={relaySourceTone(source) ?? "neutral"}>
         {t(RELAY_SOURCE_KEYS[source])}
       </SettingsStatus>
     );
+
+  /**
+   * One micro badge, in its own fixed-width column so a glance down the list
+   * reads the same slot on every row. `muted` tones a badge down (the row nobody
+   * measured) without giving it a colour that would read as a problem.
+   */
+  const badgeCell = (tone: MachineLatencyTone, label: string, title: string, muted = false) => (
+    <span
+      className={cn("flex w-28 shrink-0 justify-end overflow-hidden", muted && "opacity-70")}
+      title={title}
+    >
+      <SettingsStatus tone={tone}>{label}</SettingsStatus>
+    </span>
+  );
 
   /** The badges of one relay row: what serves it, and whether it is the used one. */
   const relayBadges = (row: MachineRelayUse) => {
@@ -338,12 +355,16 @@ export default function DerpInfo({
                     {t("machines.detail.derp.noLatency")}
                   </p>
                 ) : (
-                  // One region per row: its name and badges, where the number
-                  // came from, and the number itself in a fixed right-aligned
-                  // column, so the values line up down the table. A deployment
-                  // that serves more than five regions scrolls in place inside
-                  // the bound instead of stretching the card past the pair of
-                  // cards above it; the rows themselves are untouched.
+                  // One region per row, in five columns that line up down the
+                  // whole list: the region id, its name (with the in-use badge),
+                  // the badge naming what serves the region, the badge naming
+                  // where the number came from, and the number itself, right
+                  // aligned. Every column keeps its width whether or not a row
+                  // fills it, so the badges read as one column and not as a
+                  // ragged left edge. A deployment that serves more than five
+                  // regions scrolls in place inside the bound instead of
+                  // stretching the card past the pair of cards above it; the
+                  // rows themselves are untouched.
                   <div
                     aria-label={t("machines.detail.derp.latency")}
                     className={cn(
@@ -357,32 +378,59 @@ export default function DerpInfo({
                     <ul className="flex flex-col">
                       {latencies.rows.map((row) => (
                         <li
-                          className="flex items-center gap-x-3 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0.5 last:pb-0.5 dark:border-mist-800/60"
+                          className="flex items-center gap-x-2 border-t border-mist-100 py-1.5 first:border-t-0 first:pt-0.5 last:pb-0.5 dark:border-mist-800/60"
                           key={row.key}
                         >
-                          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                          {/* Region id, its own aligned column. */}
+                          <span
+                            className="w-11 shrink-0 text-right font-mono text-xs text-mist-500 tabular-nums dark:text-mist-400"
+                            title={row.label}
+                          >
+                            {row.idLabel ?? "—"}
+                          </span>
+                          {/* Region name and, when this is the relay the agent
+                              reports as preferred, the badge that says so. */}
+                          <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
                             <span
                               className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
                               title={row.label}
                             >
-                              {row.label}
+                              {row.nameLabel ?? row.label}
                             </span>
-                            {relayBadges(row)}
+                            {row.inUse ? (
+                              <SettingsStatus tone="ok">
+                                {t("machines.detail.derp.relayInUse")}
+                              </SettingsStatus>
+                            ) : undefined}
                           </span>
-                          <span className="w-24 shrink-0 truncate text-right text-xs text-mist-500 dark:text-mist-400">
-                            {row.latencySource === undefined
-                              ? undefined
-                              : t(LATENCY_SOURCE_KEYS[row.latencySource])}
+                          {/* What serves the region, in every row's same slot. */}
+                          <span className="flex w-28 shrink-0 justify-end overflow-hidden">
+                            {row.source === undefined ? undefined : (
+                              <SettingsStatus tone={relaySourceTone(row.source) ?? "neutral"}>
+                                {t(RELAY_SOURCE_KEYS[row.source])}
+                              </SettingsStatus>
+                            )}
                           </span>
+                          {/* Where the number came from; a row nobody measured
+                              keeps its slot and reads muted. */}
+                          {row.latencySource === undefined
+                            ? badgeCell(
+                                latencySourceTone(undefined),
+                                t("machines.detail.derp.latencyUnmeasured"),
+                                t("machines.detail.derp.latencyUnmeasured"),
+                                true,
+                              )
+                            : badgeCell(
+                                latencySourceTone(row.latencySource),
+                                t(LATENCY_SOURCE_KEYS[row.latencySource]),
+                                t(LATENCY_SOURCE_KEYS[row.latencySource]),
+                              )}
                           {row.latency === undefined ? (
-                            <span
-                              className="w-20 shrink-0 truncate text-right text-xs text-mist-400 dark:text-mist-500"
-                              title={t("machines.detail.derp.latencyUnmeasured")}
-                            >
-                              {t("machines.detail.derp.latencyUnmeasured")}
+                            <span className="w-16 shrink-0 text-right font-mono text-xs text-mist-400 dark:text-mist-500">
+                              —
                             </span>
                           ) : (
-                            <span className="w-20 shrink-0 text-right font-mono text-xs text-mist-700 tabular-nums dark:text-mist-200">
+                            <span className="w-16 shrink-0 text-right font-mono text-xs text-mist-700 tabular-nums dark:text-mist-200">
                               {row.latency}
                             </span>
                           )}

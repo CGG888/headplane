@@ -3,6 +3,7 @@ import { useI18n } from "~/i18n/provider";
 import type { PreAuthKey, User } from "~/types";
 import { getUserDisplayName } from "~/utils/user";
 
+import DeleteAuthKey from "./dialogs/delete-auth-key";
 import ExpireAuthKey from "./dialogs/expire-auth-key";
 import { isPreAuthKeyExpired } from "./filters";
 import SelectCheckbox from "./select-checkbox";
@@ -10,12 +11,24 @@ import SelectCheckbox from "./select-checkbox";
 interface Props {
   authKey: PreAuthKey;
   user: User | null;
+  /**
+   * Whether this Headscale server can delete a pre-auth key at all. The
+   * endpoint and the stable key id it takes both start at 0.28, so older
+   * servers get no delete control instead of one that cannot work.
+   */
+  canDelete?: boolean;
   /** Omit to render the row without a selection box. */
   onSelectedChange?: (selected: boolean) => void;
   selected?: boolean;
 }
 
-export default function AuthKeyRow({ authKey, user, onSelectedChange, selected = false }: Props) {
+export default function AuthKeyRow({
+  authKey,
+  user,
+  canDelete = false,
+  onSelectedChange,
+  selected = false,
+}: Props) {
   const { t, locale } = useI18n();
   const createdAt = new Date(authKey.createdAt).toLocaleString(locale);
   const expiration = new Date(authKey.expiration).toLocaleString(locale);
@@ -23,6 +36,11 @@ export default function AuthKeyRow({ authKey, user, onSelectedChange, selected =
   const userDisplay = user
     ? getUserDisplayName(user, t("machines.common.tagOwned"))
     : t("settings.authKeyRow.tagOnly");
+
+  // Expiring a spent or already-expired key is a no-op, and a tag-only key has
+  // no owner for the expire endpoint; deleting is the one action that applies
+  // to both, which is why it is not gated the same way.
+  const showExpire = !isExpired && user !== null;
 
   return (
     <div className="flex w-full items-start gap-3">
@@ -56,15 +74,10 @@ export default function AuthKeyRow({ authKey, user, onSelectedChange, selected =
           <Attribute name={t("settings.authKeyRow.created")} value={createdAt} />
           <Attribute name={t("settings.authKeyRow.expiration")} value={expiration} />
         </div>
-        {isExpired ? (
-          // Headscale keeps expired and used keys in its list; say why there is
-          // no delete action next to the record it applies to.
-          <p className="mt-1 text-xs text-mist-500 dark:text-mist-400">
-            {t("settings.authKeyRow.expiredNote")}
-          </p>
-        ) : user ? (
-          <div className="mt-2" suppressHydrationWarning>
-            <ExpireAuthKey authKey={authKey} user={user} />
+        {showExpire || canDelete ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2" suppressHydrationWarning>
+            {showExpire && user ? <ExpireAuthKey authKey={authKey} user={user} /> : null}
+            {canDelete ? <DeleteAuthKey authKey={authKey} userId={user?.id ?? null} /> : null}
           </div>
         ) : null}
       </div>

@@ -510,6 +510,22 @@ const zhHans = {
         unknown: "未知",
         noLatency: "无数据",
       },
+      diagnostics: {
+        title: "节点诊断",
+        body: "本机通过 HeadplaneCN Agent 上报的只读详情，加上本实例提供的中继与区域，按区块分组。标识符与地址可以直接复制，地址默认隐藏，需要时再显示。",
+        fields: {
+          one: "{count} 个字段",
+          other: "{count} 个字段",
+        },
+        empty: "本机目前没有上报任何内容。",
+        noData: "无数据",
+        unavailable: "不可用",
+        summaryUnavailable: "本机没有可用的上报详情。",
+        noAgent: "HeadplaneCN Agent 未启用，因此没有本机的上报详情。",
+        noReport: "本机尚未向 HeadplaneCN Agent 上报任何详情。",
+        notReported: "未上报",
+        truncated: "为保持卡片可读，部分字段未显示。",
+      },
     },
     new: {
       registerTitle: "注册机器密钥",
@@ -519,6 +535,16 @@ const zhHans = {
       machineKeyInvalid: "请粘贴注册 URL，或 tailscale up 输出的完整 hskey-authreq-... 密钥。",
       addDevice: "添加设备",
       generatePreAuth: "生成预授权密钥",
+    },
+    reject: {
+      menu: "拒绝注册",
+      title: "拒绝注册",
+      body: "拒绝后该设备无法加入你的 Tailnet：待处理的注册请求会消失，设备保持未注册，操作者之后仍可重新注册它。此操作不会批准设备，也不会删除或改动已在网络中的机器。",
+      errors: {
+        missingKey: "请粘贴要拒绝的设备的注册密钥。",
+        unsupported: "当前 Headscale 版本无法拒绝待处理的注册请求。",
+        failed: "Headscale 未能拒绝该注册请求，它可能已经不存在了。",
+      },
     },
     rename: {
       title: "修改 {name} 的机器名称",
@@ -2459,11 +2485,13 @@ const zhHans = {
       expiration: "过期时间",
       lastSeen: "最后使用时间",
       never: "从未",
-      expiredNote:
-        "密钥失效后 Headscale 仍会保留记录，API 没有删除操作——使密钥过期就是吊销密钥的方式。",
       expire: "使密钥过期",
       expireTitle: "使 API 密钥 {prefix} 过期？",
       expireBody: "使该密钥过期后，它将立即无法通过 Headscale API 进行认证。此操作无法撤销。",
+      delete: "删除密钥",
+      deleteTitle: "删除 API 密钥 {prefix}？",
+      deleteBody:
+        "这将从 Headscale 永久删除 API 密钥 {prefix}，操作无法撤销，被删除的密钥也无法找回。如果只是想让密钥停止工作，请改用使密钥过期——过期会立即使其失效并保留记录。",
       bulkActionsLabel: "密钥批量操作",
       bulkSelected: "已选择 {count} 个",
       bulkExpire: "使所选密钥过期",
@@ -2512,6 +2540,14 @@ const zhHans = {
       bulkProgress: "正在使 {done}/{total} 个密钥过期…",
       bulkSummary: "已使 {count} 个预授权密钥过期。",
       bulkError: "部分密钥无法过期。列表显示的是 Headscale 中仍保留的密钥，请对失败的密钥重试。",
+      delete: "删除密钥",
+      deleteTitle: "删除预授权密钥 {key}？",
+      deleteBody:
+        "这将从 Headscale 永久删除预授权密钥 {key}，操作无法撤销，被删除的密钥也无法找回。如果只是想让密钥停止工作，请改用使密钥过期——过期会立即使其失效并保留记录。",
+      errors: {
+        notFound: "未找到该标识对应的预授权密钥，可能已被删除。",
+        unsupported: "当前 Headscale 版本无法删除预授权密钥。请改用使密钥过期来吊销它。",
+      },
     },
     authKeyRow: {
       key: "密钥",
@@ -2524,8 +2560,6 @@ const zhHans = {
       yes: "是",
       no: "否",
       tagOnly: "（仅标签）",
-      expiredNote:
-        "密钥失效后 Headscale 仍会保留记录，API 没有删除操作——使密钥过期就是吊销密钥的方式。",
     },
     expireKey: {
       button: "使密钥过期",
@@ -2636,6 +2670,9 @@ const zhHans = {
       actions: {
         apiKeyCreate: "创建 API 密钥",
         apiKeyExpire: "吊销 API 密钥",
+        apiKeyDelete: "删除 API 密钥",
+        preAuthKeyDelete: "删除预授权密钥",
+        registrationReject: "拒绝注册",
         restrictionAddDomain: "允许域名",
         restrictionRemoveDomain: "移除域名",
         restrictionAddGroup: "允许组",

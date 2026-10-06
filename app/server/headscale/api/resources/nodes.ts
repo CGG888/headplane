@@ -10,6 +10,23 @@ interface RawMachine extends Omit<Machine, "tags"> {
   invalidTags?: string[];
 }
 
+/**
+ * Body of `POST /api/v1/debug/node`, which fabricates a node server-side
+ * instead of reading one. Every field the spec declares is optional there, so
+ * they are optional here too; Headscale still needs at least a user and a key
+ * to create anything.
+ */
+export interface DebugNodeOptions {
+  /** Name of the owning user. */
+  user?: string;
+  /** Machine key to register the fabricated node under. */
+  key?: string;
+  /** Name to give the fabricated node. */
+  name?: string;
+  /** Subnet routes the fabricated node advertises. */
+  routes?: string[];
+}
+
 export interface NodeApi {
   list(): Promise<Machine[]>;
   get(id: string): Promise<Machine>;
@@ -26,6 +43,17 @@ export interface NodeApi {
    * supports (0.27.0+).
    */
   setExpiry(nodeId: string, expiry: Date): Promise<void>;
+  /**
+   * Create a debug node via `POST /api/v1/debug/node`.
+   *
+   * This is *not* a per-node debug-info endpoint: the spec
+   * (`HeadscaleService_DebugCreateNode`, verified against the live
+   * `swagger/v1/openapiv2.json` and upstream v0.27.0-v0.29.0) takes no node ID,
+   * takes `{ user, key, name, routes }` in the body and answers with the node
+   * it created. The response is normalized like {@link get}, so the raw fields
+   * Headscale returned are still on the object.
+   */
+  debug(opts: DebugNodeOptions): Promise<Machine>;
   /**
    * Reassign a node to a different user. Only present when
    * `capabilities.nodeOwnerIsImmutable` is false (Headscale < 0.28).
@@ -128,6 +156,22 @@ export function makeNodeApi(
         path: `v1/node/${nodeId}/expire?expiry=${encodeURIComponent(expiry.toISOString())}`,
         apiKey,
       });
+    },
+    debug: async ({ user, key, name, routes }) => {
+      // POST /api/v1/debug/node { user, key, name, routes } -> { node }
+      const body: Record<string, unknown> = {};
+      if (user !== undefined) body.user = user;
+      if (key !== undefined) body.key = key;
+      if (name !== undefined) body.name = name;
+      if (routes !== undefined) body.routes = routes;
+
+      const { node } = await transport.request<{ node: RawMachine }>({
+        method: "POST",
+        path: "v1/debug/node",
+        apiKey,
+        body,
+      });
+      return normalize(node);
     },
   };
 

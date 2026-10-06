@@ -3,6 +3,7 @@ import { useI18n } from "~/i18n/provider";
 import type { Key } from "~/types";
 import { isNoExpiry } from "~/utils/node-info";
 
+import DeleteApiKey from "./dialogs/delete-api-key";
 import ExpireApiKey from "./dialogs/expire-api-key";
 import { isApiKeyExpired } from "./filters";
 import SelectCheckbox from "./select-checkbox";
@@ -46,17 +47,13 @@ export default function ApiKeyRow({ apiKey, onSelectedChange, selected = false }
           <Attribute name={t("settings.apiKeys.expiration")} value={expiration} />
           <Attribute name={t("settings.apiKeys.lastSeen")} value={lastSeen} />
         </div>
-        {isExpired ? (
-          // Headscale keeps expired keys in its list; say why there is no
-          // delete action next to the record it applies to.
-          <p className="mt-1 text-xs text-mist-500 dark:text-mist-400">
-            {t("settings.apiKeys.expiredNote")}
-          </p>
-        ) : (
-          <div className="mt-2" suppressHydrationWarning>
-            <ExpireApiKey apiKey={apiKey} />
-          </div>
-        )}
+        {/* Headscale keeps expired keys in its list forever, so the delete
+            control is the one action that applies to every row; expiring an
+            already-expired key does nothing and stays hidden. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2" suppressHydrationWarning>
+          {isExpired ? null : <ExpireApiKey apiKey={apiKey} />}
+          <DeleteApiKey apiKey={apiKey} />
+        </div>
       </div>
     </div>
   );

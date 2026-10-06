@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { authContext, requestApiContext } from "~/server/context";
+import { auditContext, authContext, requestApiContext } from "~/server/context";
 
 // Mock the log module to avoid console spam during tests
 vi.mock("~/utils/log", () => ({
@@ -10,6 +10,13 @@ vi.mock("~/utils/log", () => ({
     debug: vi.fn(),
   },
 }));
+
+const PRINCIPAL = {
+  kind: "oidc",
+  sessionId: "session",
+  user: { id: "1", subject: "subject", role: "admin", headscaleUserId: "1" },
+  profile: { name: "Alice" },
+};
 
 function mockFormData(entries: Record<string, string>): FormData {
   const formData = new FormData();
@@ -32,17 +39,24 @@ interface SubmitOptions {
 
 // React Router delivers context values through context.get(contextKey), so the
 // mock answers whichever key the action asks for.
-function createMockContext(options: SubmitOptions, api: Record<string, unknown>) {
+function createMockContext(
+  options: SubmitOptions,
+  api: Record<string, unknown>,
+  audit: { record: ReturnType<typeof vi.fn> },
+) {
   return {
     get: (context: unknown) => {
       if (context === authContext) {
         return {
-          require: () => Promise.resolve({ id: 1 }),
+          require: () => Promise.resolve(PRINCIPAL),
           can: () => options.allowed ?? true,
         };
       }
       if (context === requestApiContext) {
-        return () => Promise.resolve({ principal: { id: 1 }, api });
+        return () => Promise.resolve({ api });
+      }
+      if (context === auditContext) {
+        return audit;
       }
       return undefined;
     },
@@ -59,16 +73,26 @@ async function submit(entries: Record<string, string>, options: SubmitOptions = 
 
   const create = vi.fn().mockResolvedValue({ apiKey: "hskey-api-abcdefghijkl-secret" });
   const expire = vi.fn().mockResolvedValue(undefined);
+  const remove = vi.fn().mockResolvedValue(undefined);
   if (options.failWith) {
     create.mockRejectedValue(options.failWith);
     expire.mockRejectedValue(options.failWith);
+    remove.mockRejectedValue(options.failWith);
   }
+
+  const record = vi.fn().mockResolvedValue(undefined);
 
   let result: ActionResult;
   try {
     result = (await apiKeysAction({
       request: mockRequest(mockFormData(entries)),
-      context: createMockContext(options, { apiKeys: { create, expire } }),
+      context: createMockContext(
+        options,
+        { apiKeys: { create, expire, delete: remove } },
+        {
+          record,
+        },
+      ),
       params: {},
     } as never)) as ActionResult;
   } catch (thrown) {
@@ -77,7 +101,7 @@ async function submit(entries: Record<string, string>, options: SubmitOptions = 
     result = thrown as ActionResult;
   }
 
-  return { result, create, expire };
+  return { result, create, expire, remove, record };
 }
 
 function statusOf(result: ActionResult): number {
@@ -174,5 +198,75 @@ describe("API key action", () => {
     );
     expect(create).not.toHaveBeenCalled();
     expect(expire).not.toHaveBeenCalled();
+  });
+});
+
+describe("API key deletion", () => {
+  // The same masking as expire: Headscale stores the raw prefix and the list
+  // only shows `hskey-api-<raw>-***`.
+  test.for([
+    ["hskey-api-abcdefghijkl-***", "abcdefghijkl"],
+    ["abcdefghijkl", "abcdefghijkl"],
+  ])("deletes the key behind the displayed prefix (%s)", async ([prefix, expected]) => {
+    const { result, remove, record } = await submit({ action_id: "delete_api_key", prefix });
+
+    expect(statusOf(result)).toBe(200);
+    expect(remove).toHaveBeenCalledWith(expected);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "api_key.delete",
+        target: `hskey-api-${expected}`,
+        result: "success",
+      }),
+    );
+  });
+
+  test("refuses a prefix that is nothing but mask characters", async () => {
+    const { result, remove } = await submit({ action_id: "delete_api_key", prefix: "***" });
+
+    expect(statusOf(result)).toBe(400);
+    expect((result.data as { errorCode: string }).errorCode).toBe("invalidPrefix");
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  // Re-deleting a key someone else already removed must not blow up the page:
+  // the record the operator wanted gone is gone.
+  test("reports a key Headscale no longer has", async () => {
+    const { result, remove, record } = await submit(
+      { action_id: "delete_api_key", prefix: "abcdefghijkl" },
+      {
+        failWith: {
+          data: {
+            requestUrl: "DELETE v1/apikey/abcdefghijkl",
+            statusCode: 404,
+            rawData: "not found",
+            data: null,
+          },
+          init: { status: 502 },
+        },
+      },
+    );
+
+    expect(statusOf(result)).toBe(404);
+    expect((result.data as { errorCode: string }).errorCode).toBe("notFound");
+    expect(remove).toHaveBeenCalledWith("abcdefghijkl");
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "api_key.delete",
+        result: "failure",
+        detail: "notFound",
+      }),
+    );
+  });
+
+  test("refuses to delete without the IAM capability", async () => {
+    const { result, remove, record } = await submit(
+      { action_id: "delete_api_key", prefix: "abcdefghijkl" },
+      { allowed: false },
+    );
+
+    expect(statusOf(result)).toBe(403);
+    expect(remove).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
   });
 });

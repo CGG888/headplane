@@ -510,6 +510,22 @@ const zhHant = {
         unknown: "未知",
         noLatency: "無資料",
       },
+      diagnostics: {
+        title: "節點診斷",
+        body: "本機透過 HeadplaneCN Agent 回報的唯讀詳情，加上本執行個體提供的中繼與區域，依區塊分組。識別碼與位址可以直接複製，位址預設隱藏，需要時再顯示。",
+        fields: {
+          one: "{count} 個欄位",
+          other: "{count} 個欄位",
+        },
+        empty: "本機目前沒有回報任何內容。",
+        noData: "沒有資料",
+        unavailable: "無法使用",
+        summaryUnavailable: "本機沒有可用的回報詳情。",
+        noAgent: "HeadplaneCN Agent 未啟用，因此沒有本機的回報詳情。",
+        noReport: "本機尚未向 HeadplaneCN Agent 回報任何詳情。",
+        notReported: "未回報",
+        truncated: "為保持卡片易讀，部分欄位未顯示。",
+      },
     },
     new: {
       registerTitle: "註冊機器金鑰",
@@ -519,6 +535,16 @@ const zhHant = {
       machineKeyInvalid: "請貼上註冊 URL，或 tailscale up 輸出的完整 hskey-authreq-... 金鑰。",
       addDevice: "新增裝置",
       generatePreAuth: "產生預先授權金鑰",
+    },
+    reject: {
+      menu: "拒絕註冊",
+      title: "拒絕註冊",
+      body: "拒絕後該裝置將無法加入你的 Tailnet：待處理的註冊請求會消失，裝置維持未註冊，操作者之後仍可重新註冊它。此操作不會核准裝置，也不會刪除或變更已在網路中的機器。",
+      errors: {
+        missingKey: "請貼上要拒絕的裝置註冊金鑰。",
+        unsupported: "目前的 Headscale 版本無法拒絕待處理的註冊請求。",
+        failed: "Headscale 未能拒絕此註冊請求，它可能已經不存在。",
+      },
     },
     rename: {
       title: "修改 {name} 的機器名稱",
@@ -2459,11 +2485,13 @@ const zhHant = {
       expiration: "到期時間",
       lastSeen: "最後使用時間",
       never: "從未",
-      expiredNote:
-        "金鑰失效後 Headscale 仍會保留記錄，API 沒有刪除操作——讓金鑰過期就是撤銷金鑰的方式。",
       expire: "讓金鑰過期",
       expireTitle: "讓 API 金鑰 {prefix} 過期？",
       expireBody: "讓此金鑰過期後，它將立即無法透過 Headscale API 進行驗證。此操作無法復原。",
+      delete: "刪除金鑰",
+      deleteTitle: "刪除 API 金鑰 {prefix}？",
+      deleteBody:
+        "這會從 Headscale 永久刪除 API 金鑰 {prefix}，且無法復原，刪除後也無法救回。如果只是要讓金鑰停止運作，請改用讓金鑰過期——過期會立即使其失效並保留記錄。",
       bulkActionsLabel: "金鑰批次操作",
       bulkSelected: "已選取 {count} 個",
       bulkExpire: "讓所選金鑰過期",
@@ -2512,6 +2540,14 @@ const zhHant = {
       bulkProgress: "正在讓 {done}/{total} 個金鑰過期…",
       bulkSummary: "已讓 {count} 個預先授權金鑰過期。",
       bulkError: "部分金鑰無法過期。清單顯示的是 Headscale 仍保留的金鑰，請對失敗的金鑰重試。",
+      delete: "刪除金鑰",
+      deleteTitle: "刪除預先授權金鑰 {key}？",
+      deleteBody:
+        "這會從 Headscale 永久刪除預先授權金鑰 {key}，且無法復原，刪除後也無法救回。如果只是要讓金鑰停止運作，請改用讓金鑰過期——過期會立即使其失效並保留記錄。",
+      errors: {
+        notFound: "找不到此識別碼對應的預先授權金鑰，可能已被刪除。",
+        unsupported: "目前的 Headscale 版本不支援刪除預先授權金鑰。請改用讓金鑰過期來撤銷它。",
+      },
     },
     authKeyRow: {
       key: "金鑰",
@@ -2524,8 +2560,6 @@ const zhHant = {
       yes: "是",
       no: "否",
       tagOnly: "（僅標籤）",
-      expiredNote:
-        "金鑰失效後 Headscale 仍會保留記錄，API 沒有刪除操作——讓金鑰過期就是撤銷金鑰的方式。",
     },
     expireKey: {
       button: "讓金鑰過期",
@@ -2636,6 +2670,9 @@ const zhHant = {
       actions: {
         apiKeyCreate: "建立 API 金鑰",
         apiKeyExpire: "撤銷 API 金鑰",
+        apiKeyDelete: "刪除 API 金鑰",
+        preAuthKeyDelete: "刪除預先授權金鑰",
+        registrationReject: "拒絕註冊",
         restrictionAddDomain: "允許網域",
         restrictionRemoveDomain: "移除網域",
         restrictionAddGroup: "允許群組",

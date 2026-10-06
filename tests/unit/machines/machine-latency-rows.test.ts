@@ -3,7 +3,9 @@ import { describe, expect, test } from "vitest";
 import {
   buildMachineLatencyRows,
   embeddedDerpRegion,
+  latencySourceTone,
   relayRegionSources,
+  relaySourceTone,
   servedDerpRegionIds,
   type DerpEmbeddedServer,
   type DerpRegionLabelSources,
@@ -202,6 +204,8 @@ describe("buildMachineLatencyRows", () => {
       {
         key: "id:902",
         label: "#902 · sin · 新加坡",
+        idLabel: "#902",
+        nameLabel: "sin · 新加坡",
         regionId: 902,
         latency: "58ms",
         latencySource: "reported",
@@ -213,16 +217,28 @@ describe("buildMachineLatencyRows", () => {
       {
         key: "id:1",
         label: "#1 · ams · Amsterdam",
+        idLabel: "#1",
+        nameLabel: "ams · Amsterdam",
         regionId: 1,
         latency: "60ms",
         latencySource: "reported",
         inUse: false,
         source: "official",
       },
-      { key: "id:901", label: "#901 · hkg · 香港", regionId: 901, inUse: false, source: "mirror" },
+      {
+        key: "id:901",
+        label: "#901 · hkg · 香港",
+        idLabel: "#901",
+        nameLabel: "hkg · 香港",
+        regionId: 901,
+        inUse: false,
+        source: "mirror",
+      },
       {
         key: "id:999",
         label: "#999 · headscale · Headscale Embedded DERP",
+        idLabel: "#999",
+        nameLabel: "headscale · Headscale Embedded DERP",
         regionId: 999,
         inUse: false,
         source: "embedded",
@@ -240,6 +256,8 @@ describe("buildMachineLatencyRows", () => {
     expect(rows[0]).toEqual({
       key: "key:derp1.tailscale.com:3478",
       label: "derp1.tailscale.com:3478",
+      // A key that names no region has no id column; the whole key is the name.
+      nameLabel: "derp1.tailscale.com:3478",
       latency: "200ms",
       latencySource: "reported",
       inUse: false,
@@ -258,6 +276,8 @@ describe("buildMachineLatencyRows", () => {
       {
         key: "id:999",
         label: "#999 · headscale · Headscale Embedded DERP",
+        idLabel: "#999",
+        nameLabel: "headscale · Headscale Embedded DERP",
         regionId: 999,
         latency: "31ms",
         latencySource: "reported",
@@ -341,11 +361,90 @@ describe("buildMachineLatencyRows", () => {
       {
         key: "id:999",
         label: "#999 · headscale · Headscale Embedded DERP",
+        idLabel: "#999",
+        nameLabel: "headscale · Headscale Embedded DERP",
         regionId: 999,
         inUse: false,
         source: "embedded",
       },
     ]);
     expect(summary).toEqual({ total: 1, reported: 0, measured: 0, unmeasured: 1 });
+  });
+});
+
+describe("latency row columns and badge tones", () => {
+  const base = { sources: LABEL_SOURCES, unknown: UNKNOWN, relaySources: RELAY_SOURCES };
+
+  test("gives every region one row with its id and name in separate columns", () => {
+    const { rows } = buildMachineLatencyRows({
+      ...base,
+      info: { NetInfo: { PreferredDERP: 901, DERPLatency: { "901": 0.02 } } },
+      inventory: inventory({ assignment: { "1": 901, "2": 902 }, measured: { "1": 42, "2": 58 } }),
+    });
+
+    // The id column is the same width for every row, so the names line up.
+    expect(rows.map((row) => [row.idLabel, row.nameLabel])).toEqual([
+      ["#901", "hkg · 香港"],
+      ["#902", "sin · 新加坡"],
+      ["#999", "headscale · Headscale Embedded DERP"],
+    ]);
+    // One entry per region, each still carrying the full label for its tooltip.
+    expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
+    expect(rows.map((row) => row.label)).toEqual([
+      "#901 · hkg · 香港",
+      "#902 · sin · 新加坡",
+      "#999 · headscale · Headscale Embedded DERP",
+    ]);
+  });
+
+  test("leaves a bare region id with no name column", () => {
+    const { rows } = buildMachineLatencyRows({
+      ...base,
+      info: undefined,
+      sources: { ...LABEL_SOURCES, local: {}, remote: {}, embedded: undefined },
+      inventory: inventory({ servedRegionIds: [901] }),
+    });
+
+    expect(rows[0]).toMatchObject({ label: "#901", idLabel: "#901" });
+    expect(rows[0].nameLabel).toBeUndefined();
+  });
+
+  test("tones locally served relays one way and upstream relays another", () => {
+    expect(relaySourceTone("embedded")).toBe("ok");
+    expect(relaySourceTone("local")).toBe("ok");
+    expect(relaySourceTone("mirror")).toBe("ok");
+    expect(relaySourceTone("official")).toBe("warn");
+    // A region no source describes has no badge to tone.
+    expect(relaySourceTone(undefined)).toBeUndefined();
+  });
+
+  test("tones the measurement badge by where the number came from", () => {
+    // A measurement taken here is the local path, the same green as a locally
+    // served relay; a client's report is relayed data, not a problem.
+    expect(latencySourceTone("measured")).toBe("ok");
+    expect(latencySourceTone("reported")).toBe("neutral");
+    // A row nobody measured is muted, never coloured as a warning.
+    expect(latencySourceTone(undefined)).toBe("neutral");
+  });
+
+  test("keeps the served sources and the measurement tones apart per row", () => {
+    const { rows } = buildMachineLatencyRows({
+      ...base,
+      info: { NetInfo: { PreferredDERP: 902, DERPLatency: { "902": 0.058, "1": 0.06 } } },
+      inventory: inventory(),
+    });
+
+    expect(
+      rows.map((row) => [
+        row.regionId,
+        relaySourceTone(row.source),
+        latencySourceTone(row.latencySource),
+      ]),
+    ).toEqual([
+      [902, "ok", "neutral"],
+      [1, "warn", "neutral"],
+      [901, "ok", "neutral"],
+      [999, "ok", "neutral"],
+    ]);
   });
 });

@@ -49,6 +49,14 @@ export interface Capabilities {
    * Disabling of key expiry was introduced in 0.29.0.
    */
   readonly keyExpiryCanBeDisabled: boolean;
+
+  /**
+   * `POST /api/v1/auth/reject` exists, so a pending registration can be
+   * turned down instead of approved. Added in 0.29.0; earlier servers only
+   * expose `approve`, which is why the method is optional. Confirmed against
+   * the upstream swagger: v0.28.0 and older do not list the endpoint.
+   */
+  readonly authRequestsCanBeRejected: boolean;
 }
 
 export function capabilitiesFor(version: ServerVersion): Capabilities {
@@ -58,5 +66,6 @@ export function capabilitiesFor(version: ServerVersion): Capabilities {
     nodeOwnerIsImmutable: gte(version, "0.28.0"),
     registerKeyIncludesAuthReqPrefix: gte(version, "0.29.0"),
     keyExpiryCanBeDisabled: gte(version, "0.29.0"),
+    authRequestsCanBeRejected: gte(version, "0.29.0"),
   };
 }

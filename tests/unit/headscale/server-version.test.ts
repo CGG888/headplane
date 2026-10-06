@@ -99,6 +99,7 @@ describe("capabilitiesFor", () => {
       nodeOwnerIsImmutable: true,
       registerKeyIncludesAuthReqPrefix: false,
       keyExpiryCanBeDisabled: false,
+      authRequestsCanBeRejected: false,
     });
   });
 
@@ -113,11 +114,17 @@ describe("capabilitiesFor", () => {
     expect(caps.registerKeyIncludesAuthReqPrefix).toBe(true);
   });
 
+  test("0.29.0 can reject a pending registration", () => {
+    // `POST /api/v1/auth/reject` is not in the 0.28 swagger.
+    expect(capabilitiesFor(parseServerVersion("0.29.0")).authRequestsCanBeRejected).toBe(true);
+  });
+
   test("0.27.1 lacks every 0.28-gated capability", () => {
     const caps = capabilitiesFor(parseServerVersion("0.27.1"));
     expect(caps.preAuthKeysHaveStableIds).toBe(false);
     expect(caps.nodeTagsAreFlat).toBe(false);
     expect(caps.nodeOwnerIsImmutable).toBe(false);
     expect(caps.registerKeyIncludesAuthReqPrefix).toBe(false);
+    expect(caps.authRequestsCanBeRejected).toBe(false);
   });
 });

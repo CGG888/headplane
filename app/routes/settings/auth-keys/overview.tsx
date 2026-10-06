@@ -116,6 +116,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   return {
     access: canGenerateAny || canGenerateOwn,
+    // Deleting a pre-auth key needs the endpoint and the stable key id, both
+    // of which start at Headscale 0.28; the API client omits the method below
+    // that, so the row can follow the same boundary.
+    canDeleteKeys: Boolean(api.preAuthKeys.delete),
     currentHeadscaleUserId: isUserPrincipal(principal) ? principal.user.headscaleUserId : undefined,
     currentSubject: isUserPrincipal(principal) ? principal.user.subject : undefined,
     keys,
@@ -135,6 +139,7 @@ export default function Page({
     users,
     url,
     access,
+    canDeleteKeys,
     selfServiceOnly,
     currentHeadscaleUserId,
     currentSubject,
@@ -329,6 +334,7 @@ export default function Page({
                   <TableList.Item key={key.id}>
                     <AuthKeyRow
                       authKey={key}
+                      canDelete={canDeleteKeys}
                       onSelectedChange={(checked) => toggleKey(key.id, checked)}
                       selected={selected.includes(key.id)}
                       user={null}
@@ -348,6 +354,7 @@ export default function Page({
                 <TableList.Item key={key.id}>
                   <AuthKeyRow
                     authKey={key}
+                    canDelete={canDeleteKeys}
                     onSelectedChange={(checked) => toggleKey(key.id, checked)}
                     selected={selected.includes(key.id)}
                     user={user}

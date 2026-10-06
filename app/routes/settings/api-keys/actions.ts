@@ -29,7 +29,15 @@ export interface ApiKeyExpireSuccess {
   success: true;
 }
 
-export type ApiKeyActionResult = ApiKeyCreateSuccess | ApiKeyExpireSuccess | ApiKeyFailure;
+export interface ApiKeyDeleteSuccess {
+  success: true;
+}
+
+export type ApiKeyActionResult =
+  | ApiKeyCreateSuccess
+  | ApiKeyExpireSuccess
+  | ApiKeyDeleteSuccess
+  | ApiKeyFailure;
 
 /** Highest number of days Headplane lets an API key live for. */
 const MAX_EXPIRATION_DAYS = 3650;
@@ -180,6 +188,59 @@ export async function apiKeysAction({ request, context }: Route.ActionArgs) {
       );
 
       return data({ success: true } satisfies ApiKeyExpireSuccess);
+    }
+
+    case "delete_api_key": {
+      const rawPrefix = formData.get("prefix")?.toString().trim() ?? "";
+      const prefix = normalizeApiKeyPrefix(rawPrefix);
+      if (prefix.length === 0) {
+        await recordApiKeyOperation(
+          audit,
+          principal,
+          AUDIT_ACTIONS.apiKeyDelete,
+          "",
+          "failure",
+          "invalidPrefix",
+        );
+
+        return data({ success: false, errorCode: "invalidPrefix" } satisfies ApiKeyFailure, {
+          status: 400,
+        });
+      }
+
+      try {
+        await api.apiKeys.delete(prefix);
+      } catch (error) {
+        // The key is already gone (someone else deleted it, or the list was
+        // stale). That is the outcome the operator asked for, so report it as
+        // a message instead of failing the page.
+        if (isDataWithApiError(error) && error.data.statusCode === 404) {
+          await recordApiKeyOperation(
+            audit,
+            principal,
+            AUDIT_ACTIONS.apiKeyDelete,
+            `hskey-api-${prefix}`,
+            "failure",
+            "notFound",
+          );
+
+          return data({ success: false, errorCode: "notFound" } satisfies ApiKeyFailure, {
+            status: 404,
+          });
+        }
+
+        throw error;
+      }
+
+      await recordApiKeyOperation(
+        audit,
+        principal,
+        AUDIT_ACTIONS.apiKeyDelete,
+        `hskey-api-${prefix}`,
+        "success",
+      );
+
+      return data({ success: true } satisfies ApiKeyDeleteSuccess);
     }
 
     default: {

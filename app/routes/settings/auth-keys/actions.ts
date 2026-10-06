@@ -1,17 +1,46 @@
 import { data } from "react-router";
 
-import { authContext, requestApiContext } from "~/server/context";
+import { AUDIT_ACTIONS, auditActorOf, type AuditResult, type AuditService } from "~/server/audit";
+import { auditContext, authContext, requestApiContext } from "~/server/context";
+import { isDataWithApiError } from "~/server/headscale/api/error-client";
+import type { Principal } from "~/server/web/auth";
 import { isUserPrincipal } from "~/server/web/auth";
 import { getOidcSubject } from "~/server/web/headscale-identity";
 import { Capabilities } from "~/server/web/roles";
 import type { PreAuthKey } from "~/types";
 
 import type { Route } from "./+types/overview";
-import { PRE_AUTH_KEY_EXPIRED } from "./result";
+import {
+  type AuthKeyDeleteFailure,
+  type AuthKeyDeleteSuccess,
+  PRE_AUTH_KEY_EXPIRED,
+} from "./result";
+
+/**
+ * Records one pre-auth key deletion. Never throws, so a broken audit log cannot
+ * break the mutation it is describing. The key's own string is a credential, so
+ * the log stores the stable id instead.
+ */
+async function recordPreAuthKeyDeletion(
+  audit: AuditService | undefined,
+  principal: Principal,
+  keyId: string,
+  result: AuditResult,
+  detail?: string,
+) {
+  await audit?.record({
+    ...auditActorOf(principal),
+    action: AUDIT_ACTIONS.preAuthKeyDelete,
+    target: keyId ? `preauthkey:${keyId}` : "",
+    detail: detail ?? null,
+    result,
+  });
+}
 
 export async function authKeysAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
   const getRequestApi = context.get(requestApiContext);
+  const audit: AuditService | undefined = context.get(auditContext);
 
   const { principal, api } = await getRequestApi(request);
 
@@ -148,6 +177,64 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
         user: { id: user },
       } as unknown as PreAuthKey);
       return data(PRE_AUTH_KEY_EXPIRED);
+    }
+
+    case "delete_preauthkey": {
+      const keyId = formData.get("key_id")?.toString().trim() ?? "";
+      if (keyId.length === 0) {
+        await recordPreAuthKeyDeletion(audit, principal, "", "failure", "invalidKeyId");
+
+        return data({ success: false, errorCode: "invalidKeyId" } satisfies AuthKeyDeleteFailure, {
+          status: 400,
+        });
+      }
+
+      // A self-service account may only delete a key it owns. The expire path
+      // proves ownership from the submitted user id; without one (a tag-only
+      // key) there is nothing a self-service account could own, so it is
+      // refused rather than trusted.
+      const userId = formData.get("user_id")?.toString() ?? "";
+      if (!canGenerateAny && userId.length === 0) {
+        throw data(
+          { localized: { key: "errors.permission.manageUserPreAuthKeys" } },
+          {
+            status: 403,
+          },
+        );
+      }
+
+      await checkSelfServiceOwnership(userId);
+
+      // The delete endpoint and the stable key id it addresses both start at
+      // Headscale 0.28, so the client leaves the method off below that.
+      if (!api.preAuthKeys.delete) {
+        await recordPreAuthKeyDeletion(audit, principal, keyId, "failure", "unsupported");
+
+        return data({ success: false, errorCode: "unsupported" } satisfies AuthKeyDeleteFailure, {
+          status: 400,
+        });
+      }
+
+      try {
+        await api.preAuthKeys.delete(keyId);
+      } catch (error) {
+        // Already gone: the operator's goal is met, so report it as a message
+        // instead of failing the page.
+        if (isDataWithApiError(error) && error.data.statusCode === 404) {
+          await recordPreAuthKeyDeletion(audit, principal, keyId, "failure", "notFound");
+
+          return data({ success: false, errorCode: "notFound" } satisfies AuthKeyDeleteFailure, {
+            status: 404,
+          });
+        }
+
+        await recordPreAuthKeyDeletion(audit, principal, keyId, "failure");
+        throw error;
+      }
+
+      await recordPreAuthKeyDeletion(audit, principal, keyId, "success");
+
+      return data({ success: true } satisfies AuthKeyDeleteSuccess);
     }
 
     default:
