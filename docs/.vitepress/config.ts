@@ -10,6 +10,7 @@ const zhHansNav = [
   { text: "首页", link: "/" },
   { text: "赞助", link: "/sponsor" },
   { text: "更新日志", link: "/CHANGELOG" },
+  { text: "版本记录", link: "/versions" },
 ];
 
 const zhHansSidebar = [
@@ -87,6 +88,7 @@ const enNav = [
   { text: "Home", link: "/en/" },
   { text: "Sponsor", link: "/en/sponsor" },
   { text: "Changelog", link: "/en/CHANGELOG" },
+  { text: "Version history", link: "/en/versions" },
 ];
 
 const enSidebar = [
@@ -175,7 +177,7 @@ export default defineConfig({
     },
   },
   title: "HeadplaneCN 中文文档",
-  description: "Headscale 的 Web 管理界面",
+  description: "HeadplaneCN 的 Web 管理界面",
   base,
   // One hostname covers every locale; the plugin derives the per-page
   // `hreflang` alternates from `locales` itself.
@@ -191,7 +193,7 @@ export default defineConfig({
       label: "简体中文",
       lang: "zh-Hans",
       title: "HeadplaneCN 中文文档",
-      description: "Headscale 的 Web 管理界面",
+      description: "HeadplaneCN 的 Web 管理界面",
       themeConfig: {
         nav: zhHansNav,
         sidebar: zhHansSidebar,
