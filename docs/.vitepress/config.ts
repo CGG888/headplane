@@ -72,6 +72,7 @@ const zhHansSidebar = [
         collapsed: true,
         items: [
           { text: "架构", link: "/development/architecture" },
+          { text: "Headscale API 参考", link: "/development/headscale-api" },
           { text: "贡献指南", link: "/CONTRIBUTING" },
           { text: "安全", link: "/SECURITY" },
         ],
@@ -151,6 +152,7 @@ const enSidebar = [
         collapsed: true,
         items: [
           { text: "Architecture", link: "/en/development/architecture" },
+          { text: "Headscale API reference", link: "/en/development/headscale-api" },
           { text: "Contributing", link: "/en/CONTRIBUTING" },
           { text: "Security", link: "/en/SECURITY" },
         ],
