@@ -44,11 +44,12 @@
 // measured merged over what the store already held, so a run that was stopped
 // early cannot drop the regions an earlier one measured.
 
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { access, chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 
-import { validateDerpMap } from "~/routes/settings/headscale/derp-map-schema";
+import { isDerpMapDocument, validateDerpMap } from "~/routes/settings/headscale/derp-map-schema";
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
 import type { Headscale } from "~/server/headscale/api";
 import {
@@ -84,7 +85,7 @@ import {
   type MirrorSource,
   type OfficialMapReport,
 } from "./sources";
-import { readDerpMirrorDocument, writeDerpMirrorDocument, writeDerpMirrorSettings } from "./store";
+import { readDerpMirrorDocument, writeDerpMirrorDocument } from "./store";
 import type {
   DerpLatencyRegionReading,
   DerpMirrorLatency,
@@ -360,7 +361,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
   let writeChain: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking = false;
-  let tempCounter = 0;
+  let disposed = false;
   let latencyRun: LatencyRun | undefined;
 
   const now = () => options.now?.() ?? new Date();
@@ -462,7 +463,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
 
   function schedule() {
     clearTimer();
-    if (!settings.enabled) {
+    if (disposed || !settings.enabled) {
       // The inert state: nothing is scheduled and nothing is fetched.
       return;
     }
@@ -535,13 +536,15 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
    */
   async function writeTarget(targetPath: string, content: string, mode?: number): Promise<void> {
     await mkdir(dirname(targetPath), { recursive: true });
-    const temp = `${targetPath}.${process.pid}.${tempCounter++}.tmp`;
+    const temp = `${targetPath}.${randomUUID()}.tmp`;
 
     try {
       await writeFile(
         temp,
         content,
-        mode === undefined ? { encoding: "utf8" } : { encoding: "utf8", mode },
+        mode === undefined
+          ? { encoding: "utf8", flag: "wx" }
+          : { encoding: "utf8", flag: "wx", mode },
       );
       if (mode !== undefined) {
         // `writeFile`'s mode is masked by the umask; the operator's file keeps
@@ -556,23 +559,19 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     }
   }
 
-  /** Snapshots the single file about to be replaced; a failure never blocks it. */
+  /**
+   * Snapshots the single file about to be replaced. A missing snapshot service
+   * only means the deployment keeps no snapshots; a failure, on the other hand,
+   * is thrown to the caller, which refuses the write — the snapshot is the only
+   * way back from a mirror that replaced the wrong file.
+   */
   async function takeSnapshot(target: SnapshotTarget): Promise<string | undefined> {
     if (options.snapshots === undefined) {
       return undefined;
     }
 
-    try {
-      const snapshot = await options.snapshots.take(DERP_MIRROR_SNAPSHOT_REASON, [target]);
-      return snapshot.id;
-    } catch (error) {
-      log.warn(
-        "config",
-        "Failed to snapshot before mirroring the DERP regions: %s",
-        errorMessage(error),
-      );
-      return undefined;
-    }
+    const snapshot = await options.snapshots.take(DERP_MIRROR_SNAPSHOT_REASON, [target]);
+    return snapshot.id;
   }
 
   /** Records the write; the audit store swallows its own failures. */
@@ -643,12 +642,22 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     }
   }
 
-  /** Stores the run as the newest one, then reports it, then returns it. */
+  /**
+   * Stores the run as the newest one, then reports it, then returns it.
+   *
+   * A `check` is a preview: it reports what a run would do and writes nothing
+   * at all, so it neither stores a run nor changes the remembered assignment.
+   * A disposed service abandons its in-flight run the same way.
+   */
   async function finish(
     run: DerpMirrorRun,
     next?: SettledAssignment,
     writeAssignment = true,
   ): Promise<DerpMirrorRun> {
+    if (run.mode !== "run" || disposed) {
+      return run;
+    }
+
     const rankedAt = writeAssignment ? next?.assignmentRankedAt : undefined;
     await persistRun(run, {
       ...settings,
@@ -656,15 +665,13 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       ...(rankedAt === undefined ? {} : { assignmentRankedAt: rankedAt }),
     });
 
-    if (run.mode === "run") {
-      log.info(
-        "config",
-        "DERP region mirror run: %s (%d region(s))%s",
-        run.outcome,
-        run.mirrored.length,
-        run.reason === undefined ? "" : ` reason=${run.reason}`,
-      );
-    }
+    log.info(
+      "config",
+      "DERP region mirror run: %s (%d region(s))%s",
+      run.outcome,
+      run.mirrored.length,
+      run.reason === undefined ? "" : ` reason=${run.reason}`,
+    );
 
     await reportToAlerts(run);
     return run;
@@ -684,6 +691,13 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     ticking = true;
     try {
       await ensureLoaded();
+      if (disposed) {
+        // Disposal abandons the run: once the service is gone, nothing may
+        // snapshot the target, replace the map, write an audit row or persist
+        // state.
+        return undefined;
+      }
+
       const current = settings;
       if (!manual && !current.enabled) {
         return undefined;
@@ -765,6 +779,22 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         locallyMeasuredRegionLatencies(current.latency),
       );
 
+      // A selection larger than the 900s can number would otherwise render a map
+      // that quietly leaves regions out, and every client behind them would lose
+      // its relay. Refusing to write keeps the file, and says which regions were
+      // left over.
+      if (numbered.unassigned.length > 0) {
+        return await finish({
+          ...base,
+          ...sources,
+          mirrored,
+          assignment: numbered.assignment,
+          outcome: "skipped",
+          reason: "numbering-exhausted",
+          detail: numbered.unassigned.join(", "),
+        });
+      }
+
       // 6. Render, then validate with the validator the map editor uses: a
       //    document Headscale would refuse is never written.
       const map = buildMirrorMap(regions, numbered.assignment, mirrored);
@@ -785,6 +815,24 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       // 7. Compare against what is already there. An identical map is left
       //    alone, so the file's modification time is untouched too.
       const previous = await readTarget(targetPath);
+
+      // A path that already holds something other than a DERP map is refused
+      // outright. `mirrorMapChanged` counts an unparsable file as a change, so a
+      // typo that points the mirror at Headscale's own configuration would
+      // otherwise replace that whole file with a map. A DERP map that is merely
+      // broken is still repaired: only the document's shape decides this.
+      if (previous !== undefined && previous.trim().length > 0 && !isDerpMapDocument(previous)) {
+        return await finish({
+          ...base,
+          ...sources,
+          mirrored,
+          assignment: numbered.assignment,
+          outcome: "skipped",
+          reason: "target-not-mirror",
+          detail: targetPath,
+        });
+      }
+
       const changed = mirrorMapChanged(previous, yaml);
       const settled = { ...base, ...sources, mirrored, assignment: numbered.assignment, changed };
 
@@ -810,9 +858,32 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         });
       }
 
+      if (disposed) {
+        // Disposed while the fetches were in flight: the write must not start
+        // at all, so the run is abandoned instead of reported as a result.
+        return undefined;
+      }
+
       // 8. Snapshot that single file, replace it, record it, then follow the
-      //    reload switch.
-      const snapshotId = await takeSnapshot({ path: targetPath, kind: "derp_map" });
+      //    reload switch. A snapshot that fails stops the write: it is the only
+      //    way back from a mirror that replaced the wrong file.
+      let snapshotId: string | undefined;
+      try {
+        snapshotId = await takeSnapshot({ path: targetPath, kind: "derp_map" });
+      } catch (error) {
+        log.warn(
+          "config",
+          "Failed to snapshot before mirroring the DERP regions: %s",
+          errorMessage(error),
+        );
+        return await finish({
+          ...settled,
+          outcome: "skipped",
+          reason: "snapshot-failed",
+          detail: errorMessage(error),
+        });
+      }
+
       await writeTarget(targetPath, yaml, await targetMode(targetPath));
 
       const written: DerpMirrorRun = {
@@ -882,14 +953,33 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       assignment: pruneAssignmentToSelection(merged.assignment, merged.officialRegionIds),
     };
 
-    try {
-      await writeDerpMirrorSettings(options.dataPath, next);
-    } catch (error) {
-      log.warn("config", "Unable to save the DERP region mirror settings: %s", errorMessage(error));
+    // Queued on the chain a run also writes through. A save that wrote the file
+    // on its own could land between a finishing run's read and its write, and
+    // that run would then save back the settings it had read a moment earlier.
+    let failure: unknown;
+    writeChain = writeChain.then(async () => {
+      try {
+        const current = await readDerpMirrorDocument(options.dataPath);
+        await writeDerpMirrorDocument(options.dataPath, {
+          settings: next,
+          ...(current.last === undefined ? {} : { last: current.last }),
+        });
+        settings = next;
+      } catch (error) {
+        failure = error;
+      }
+    });
+
+    await writeChain;
+    if (failure !== undefined) {
+      log.warn(
+        "config",
+        "Unable to save the DERP region mirror settings: %s",
+        errorMessage(failure),
+      );
       return { success: false, settings: previous };
     }
 
-    settings = next;
     schedule();
     return { success: true, settings: next };
   }
@@ -1008,6 +1098,12 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         regions: report.regions,
       });
 
+      if (disposed) {
+        // The probe outlived the service that started it; its reading is not
+        // stored.
+        return;
+      }
+
       const saved = await updateSettings({ latency });
       if (!saved.success) {
         log.warn("config", "Unable to save the DERP latency probe results");
@@ -1072,9 +1168,11 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
     },
 
     dispose() {
+      // Cancels the timer and abandons any run still in flight: the awaited
+      // steps that follow check this flag before they write anything.
+      disposed = true;
       clearTimer();
-      // A run still in flight is abandoned on shutdown or an HMR reload; it
-      // stores only what it had already measured.
+      // A latency probe still in flight is cancelled too.
       latencyRun?.controller.abort();
     },
   };

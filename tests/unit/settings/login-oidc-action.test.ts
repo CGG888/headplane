@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { dump } from "js-yaml";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { loginOidcAction } from "~/routes/settings/login/actions";
+import { loginOidcAction, loginOidcLoader } from "~/routes/settings/login/actions";
 import { createAuditStore, createMemoryAuditStorage } from "~/server/audit/store";
-import { appConfigContext, auditContext, authContext } from "~/server/context";
+import { appConfigContext, auditContext, authContext, oidcContext } from "~/server/context";
 import { loginOidcPath } from "~/server/headplane-store/login-oidc";
 import { Capabilities } from "~/server/web/roles";
 
@@ -66,6 +66,10 @@ function createMockContext(dataPath: string, permissions: MockPermissions = {}) 
           return audit;
         }
 
+        if (context === oidcContext) {
+          return { state: "enabled", reason: null };
+        }
+
         return undefined;
       },
     },
@@ -97,7 +101,20 @@ function dataOf<T>(result: ActionResult): T {
   return result.data as T;
 }
 
-describe("console login settings action", () => {
+async function load(dataPath: string, permissions?: MockPermissions) {
+  const mock = createMockContext(dataPath, permissions);
+
+  return (await loginOidcLoader({
+    request: {} as Request,
+    context: mock.context,
+    params: {},
+  } as never)) as {
+    canEdit: boolean;
+    view: { fields: { id: string; value: unknown }[] } | null;
+  };
+}
+
+describe("console login settings", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -230,5 +247,27 @@ describe("console login settings action", () => {
     expect(discovery?.status).toBe("fail");
     expect(discovery?.detail).toBe("not-a-url");
     expect(JSON.stringify(data)).not.toContain(SECRET);
+  });
+
+  test("a viewer without the IAM capability receives no configuration values", async () => {
+    const snapshot = await load(dir, { write: false });
+
+    expect(snapshot.canEdit).toBe(false);
+    expect(snapshot.view).toBeNull();
+
+    // Not merely hidden in the UI: the values must not be in the loader data.
+    const serialized = JSON.stringify(snapshot);
+    expect(serialized).not.toContain("file-client");
+    expect(serialized).not.toContain("file.example.com");
+  });
+
+  test("an operator with the IAM capability receives the values the page renders", async () => {
+    const snapshot = await load(dir);
+
+    expect(snapshot.canEdit).toBe(true);
+    expect(snapshot.view).not.toBeNull();
+    expect(snapshot.view?.fields.find((field) => field.id === "client_id")?.value).toBe(
+      "file-client",
+    );
   });
 });

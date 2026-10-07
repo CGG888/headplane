@@ -69,6 +69,8 @@ export default function BulkExpireApiKeys({ keys, onClearSelection }: BulkExpire
   const [isOpen, setIsOpen] = useState(false);
   const [queue, setQueue] = useState<string[] | null>(null);
   const [results, setResults] = useState<Map<string, ApiKeyErrorCode | null>>(new Map());
+  /** Bumped on every submit so a retry remounts the request children. */
+  const [attempt, setAttempt] = useState(0);
 
   const isRunning = queue !== null && results.size < queue.length;
   const failedPrefix = queue?.find((prefix) => results.get(prefix) != null) ?? null;
@@ -106,7 +108,10 @@ export default function BulkExpireApiKeys({ keys, onClearSelection }: BulkExpire
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open && isRunning) {
+      // A run in progress is not interruptible, but a run that only produced
+      // failures must be closable again; otherwise a single failed request left
+      // the dialog stuck with no way out.
+      if (!open && isRunning && failedPrefix === null) {
         return;
       }
 
@@ -116,7 +121,7 @@ export default function BulkExpireApiKeys({ keys, onClearSelection }: BulkExpire
         setResults(new Map());
       }
     },
-    [isRunning],
+    [failedPrefix, isRunning],
   );
 
   return (
@@ -169,6 +174,11 @@ export default function BulkExpireApiKeys({ keys, onClearSelection }: BulkExpire
 
             setResults(new Map());
             setQueue(keys.map((key) => key.prefix));
+            // Re-queueing the same prefixes would reuse the same child
+            // instances, whose `submitted` refs are already true, so no request
+            // would be sent and the dialog would spin forever on
+            // `results.size < queue.length`. Bumping the key remounts them.
+            setAttempt((current) => current + 1);
           }}
           variant="destructive"
         >
@@ -188,7 +198,7 @@ export default function BulkExpireApiKeys({ keys, onClearSelection }: BulkExpire
             </p>
           ) : null}
           {queue?.map((prefix) => (
-            <ExpireRequest key={prefix} onSettled={handleSettled} prefix={prefix} />
+            <ExpireRequest key={`${prefix}:${attempt}`} onSettled={handleSettled} prefix={prefix} />
           ))}
         </DialogPanel>
       </Dialog>

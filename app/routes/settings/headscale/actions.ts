@@ -284,7 +284,16 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("duplicateProxy");
       }
 
-      await headscaleConfig.patch([{ path: "trusted_proxies", value: [...trustedProxies, proxy] }]);
+      await headscaleConfig.mutate(() => {
+        // Re-read inside the write queue: two concurrent adds must not both
+        // start from the same list and have the later write drop the earlier.
+        const current = headscaleConfig.getTailnetSettings();
+        if (current.trustedProxies.includes(proxy)) {
+          return [];
+        }
+
+        return [{ path: "trusted_proxies", value: [...current.trustedProxies, proxy] }];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -296,12 +305,19 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("proxyNotFound");
       }
 
-      await headscaleConfig.patch([
-        {
-          path: "trusted_proxies",
-          value: trustedProxies.filter((entry) => entry !== proxy),
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getTailnetSettings();
+        if (!current.trustedProxies.includes(proxy)) {
+          return [];
+        }
+
+        return [
+          {
+            path: "trusted_proxies",
+            value: current.trustedProxies.filter((entry) => entry !== proxy),
+          },
+        ];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -429,7 +445,14 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("duplicateDerpUrl");
       }
 
-      await headscaleConfig.patch([{ path: "derp.urls", value: [...urls, url] }]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getDERPSettings();
+        if (current.urls.includes(url)) {
+          return [];
+        }
+
+        return [{ path: "derp.urls", value: [...current.urls, url] }];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -441,9 +464,14 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpUrlNotFound");
       }
 
-      await headscaleConfig.patch([
-        { path: "derp.urls", value: urls.filter((entry) => entry !== url) },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getDERPSettings();
+        if (!current.urls.includes(url)) {
+          return [];
+        }
+
+        return [{ path: "derp.urls", value: current.urls.filter((entry) => entry !== url) }];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -459,7 +487,14 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("duplicateDerpPath");
       }
 
-      await headscaleConfig.patch([{ path: "derp.paths", value: [...paths, path] }]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getDERPSettings();
+        if (current.paths.includes(path)) {
+          return [];
+        }
+
+        return [{ path: "derp.paths", value: [...current.paths, path] }];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }
@@ -471,9 +506,14 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpPathNotFound");
       }
 
-      await headscaleConfig.patch([
-        { path: "derp.paths", value: paths.filter((entry) => entry !== path) },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getDERPSettings();
+        if (!current.paths.includes(path)) {
+          return [];
+        }
+
+        return [{ path: "derp.paths", value: current.paths.filter((entry) => entry !== path) }];
+      });
       await integration?.onConfigChange(headscale);
       return success();
     }

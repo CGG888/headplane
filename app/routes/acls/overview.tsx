@@ -357,8 +357,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (
     isRouteErrorResponse(error) &&
     isApiError(error.data) &&
-    error.data.rawData.includes("reading policy from path") &&
-    error.data.rawData.includes("no such file or directory")
+    error.data.detail.includes("reading policy from path") &&
+    error.data.detail.includes("no such file or directory")
   ) {
     return (
       <div className="flex flex-col gap-4">

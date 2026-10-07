@@ -6,7 +6,7 @@ import Text from "~/components/text";
 import Title from "~/components/title";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
-import { Roles } from "~/server/web/roles";
+import { ASSIGNABLE_ROLES } from "~/server/web/roles";
 import type { Role } from "~/server/web/roles";
 
 interface ReassignProps {
@@ -57,19 +57,17 @@ export default function ReassignUser({
               label={t("users.changeRole.label")}
               name="new_role"
             >
-              {Object.keys(Roles)
-                .filter((r) => r !== "owner")
-                .map((r) => {
-                  const { name, desc } = mapRoleToName(r, t);
-                  return (
-                    <RadioGroup.Radio key={r} label={name} value={r}>
-                      <div className="block">
-                        <p className="font-bold">{name}</p>
-                        <p className="opacity-70">{desc}</p>
-                      </div>
-                    </RadioGroup.Radio>
-                  );
-                })}
+              {ASSIGNABLE_ROLES.map((r) => {
+                const { name, desc } = mapRoleToName(r, t);
+                return (
+                  <RadioGroup.Radio key={r} label={name} value={r}>
+                    <div className="block">
+                      <p className="font-bold">{name}</p>
+                      <p className="opacity-70">{desc}</p>
+                    </div>
+                  </RadioGroup.Radio>
+                );
+              })}
             </RadioGroup>
           </>
         )}

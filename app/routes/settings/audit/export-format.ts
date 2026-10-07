@@ -62,18 +62,26 @@ function columnValue(entry: AuditEntry, column: AuditExportColumn): string {
   }
 }
 
-/** Quotes a field that contains a quote, a comma or a line break (RFC 4180). */
+/**
+ * Quotes a field that contains a quote, a comma or a line break (RFC 4180) and
+ * neutralizes spreadsheet formulas: Excel and LibreOffice evaluate a cell that
+ * starts with `=`, `+`, `-` or `@` (or a tab/CR), so a value such as a node name
+ * like `=cmd|'/c calc'!A1` written into the audit log would run when an
+ * administrator opens the export. A leading apostrophe is the usual mitigation.
+ */
 export function escapeCsvField(value: string): string {
+  const neutralized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+
   if (
-    !value.includes('"') &&
-    !value.includes(",") &&
-    !value.includes("\n") &&
-    !value.includes("\r")
+    !neutralized.includes('"') &&
+    !neutralized.includes(",") &&
+    !neutralized.includes("\n") &&
+    !neutralized.includes("\r")
   ) {
-    return value;
+    return neutralized;
   }
 
-  return `"${value.replaceAll('"', '""')}"`;
+  return `"${neutralized.replaceAll('"', '""')}"`;
 }
 
 export function toAuditCsv(entries: readonly AuditEntry[], header: readonly string[]): string {

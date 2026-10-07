@@ -142,6 +142,30 @@ describe("live store change events", () => {
     store.dispose();
   });
 
+  test("a poll keeps the client its reader started it with", async () => {
+    const seen: HeadscaleClient[] = [];
+    const resource = defineResource("nodes", {
+      pollInterval: 5_000,
+      fetch: async (client: HeadscaleClient) => {
+        seen.push(client);
+        return [node()];
+      },
+      project: projectNodes,
+    });
+    const first = { name: "first" } as unknown as HeadscaleClient;
+    const second = { name: "second" } as unknown as HeadscaleClient;
+    const store = createLiveStore([resource]);
+
+    await store.get(resource, first);
+    // A later caller only reads through the store: the poll the first caller
+    // started must keep using that first client.
+    await store.read(resource, second);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(seen).toEqual([first, first]);
+    store.dispose();
+  });
+
   test("a real state flip still notifies", async () => {
     const { resource, load } = nodesStore();
     const store = createLiveStore([resource]);

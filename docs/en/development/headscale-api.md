@@ -75,72 +75,72 @@ site exists; **Partial** = the endpoint works but some parameters declared by th
 
 ### Nodes
 
-| Method | Path                                     | Capability                              | Status      | Where it is used (files and pages)                                                                          | Notes                              |
-| ------ | ---------------------------------------- | --------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| GET    | `/api/v1/node`                           | List nodes, optionally filtered by user | Partial     | `api/resources/nodes.ts:50`; `live-store.ts:123` (5s polling) -> `/machines`, `/overview`                    | The spec's `user` filter is unused |
-| GET    | `/api/v1/node/{nodeId}`                  | Read one node                           | Implemented | `api/resources/nodes.ts:58` -> `/machines/:id`, `machine-actions.ts:249`                                     |                                    |
-| DELETE | `/api/v1/node/{nodeId}`                  | Delete a node                           | Implemented | `api/resources/nodes.ts:66` -> `/machines/:id` delete dialog, bulk delete                                    | Irreversible                       |
-| POST   | `/api/v1/node/register`                  | Register a new node with a reg key      | Implemented | `api/resources/nodes.ts:69` -> `/machines` new machine dialog                                                | Sends query string and body        |
-| POST   | `/api/v1/node/{nodeId}/approve_routes`   | Approve subnet routes                   | Implemented | `api/resources/nodes.ts:88` -> `/machines/:id` routes dialog                                                 | Full replacement, not incremental  |
-| POST   | `/api/v1/node/{nodeId}/expire`           | Set or clear key expiry                 | Implemented | `api/resources/nodes.ts:96,114,121` -> expiry dialog, bulk expiry                                            | Three call shapes                  |
-| POST   | `/api/v1/node/{nodeId}/rename/{newName}` | Rename a node                           | Implemented | `api/resources/nodes.ts:99` -> rename dialog                                                                 | Names need escaping                |
-| POST   | `/api/v1/node/{nodeId}/tags`             | Replace node tags                       | Implemented | `api/resources/nodes.ts:106` -> tags dialog, bulk tags                                                       | Full replacement                   |
-| POST   | `/api/v1/node/backfillips`               | Backfill missing node IPs               | Missing     | No call site                                                                                                | `confirmed` semantics unconfirmed  |
+| Method | Path                                     | Capability                              | Status      | Where it is used (files and pages)                                                        | Notes                              |
+| ------ | ---------------------------------------- | --------------------------------------- | ----------- | ----------------------------------------------------------------------------------------- | ---------------------------------- |
+| GET    | `/api/v1/node`                           | List nodes, optionally filtered by user | Partial     | `api/resources/nodes.ts:50`; `live-store.ts:123` (5s polling) -> `/machines`, `/overview` | The spec's `user` filter is unused |
+| GET    | `/api/v1/node/{nodeId}`                  | Read one node                           | Implemented | `api/resources/nodes.ts:58` -> `/machines/:id`, `machine-actions.ts:249`                  |                                    |
+| DELETE | `/api/v1/node/{nodeId}`                  | Delete a node                           | Implemented | `api/resources/nodes.ts:66` -> `/machines/:id` delete dialog, bulk delete                 | Irreversible                       |
+| POST   | `/api/v1/node/register`                  | Register a new node with a reg key      | Implemented | `api/resources/nodes.ts:69` -> `/machines` new machine dialog                             | Sends query string and body        |
+| POST   | `/api/v1/node/{nodeId}/approve_routes`   | Approve subnet routes                   | Implemented | `api/resources/nodes.ts:88` -> `/machines/:id` routes dialog                              | Full replacement, not incremental  |
+| POST   | `/api/v1/node/{nodeId}/expire`           | Set or clear key expiry                 | Implemented | `api/resources/nodes.ts:96,114,121` -> expiry dialog, bulk expiry                         | Three call shapes                  |
+| POST   | `/api/v1/node/{nodeId}/rename/{newName}` | Rename a node                           | Implemented | `api/resources/nodes.ts:99` -> rename dialog                                              | Names need escaping                |
+| POST   | `/api/v1/node/{nodeId}/tags`             | Replace node tags                       | Implemented | `api/resources/nodes.ts:106` -> tags dialog, bulk tags                                    | Full replacement                   |
+| POST   | `/api/v1/node/backfillips`               | Backfill missing node IPs               | Missing     | No call site                                                                              | `confirmed` semantics unconfirmed  |
 
 ### Users
 
-| Method | Path                                    | Capability                        | Status      | Where it is used (files and pages)                                                                                | Notes                              |
-| ------ | --------------------------------------- | --------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| GET    | `/api/v1/user`                          | List users with three filters     | Implemented | `api/resources/users.ts:32`; `live-store.ts:129` (15s polling) -> `/users`, `/ssh/:id`, `/overview`                 | Filters are mutually exclusive      |
-| POST   | `/api/v1/user`                          | Create a user                     | Implemented | `api/resources/users.ts:46` -> `/users` create user dialog                                                          |                                    |
-| DELETE | `/api/v1/user/{id}`                     | Delete a user                     | Implemented | `api/resources/users.ts:55` -> `/users` delete user dialog                                                          | Cascade behaviour unconfirmed      |
-| POST   | `/api/v1/user/{oldId}/rename/{newName}` | Rename a user                     | Implemented | `api/resources/users.ts:58` -> `/users` rename user dialog                                                          | Also rewrites policy group names   |
+| Method | Path                                    | Capability                    | Status      | Where it is used (files and pages)                                                                  | Notes                            |
+| ------ | --------------------------------------- | ----------------------------- | ----------- | --------------------------------------------------------------------------------------------------- | -------------------------------- |
+| GET    | `/api/v1/user`                          | List users with three filters | Implemented | `api/resources/users.ts:32`; `live-store.ts:129` (15s polling) -> `/users`, `/ssh/:id`, `/overview` | Filters are mutually exclusive   |
+| POST   | `/api/v1/user`                          | Create a user                 | Implemented | `api/resources/users.ts:46` -> `/users` create user dialog                                          |                                  |
+| DELETE | `/api/v1/user/{id}`                     | Delete a user                 | Implemented | `api/resources/users.ts:55` -> `/users` delete user dialog                                          | Cascade behaviour unconfirmed    |
+| POST   | `/api/v1/user/{oldId}/rename/{newName}` | Rename a user                 | Implemented | `api/resources/users.ts:58` -> `/users` rename user dialog                                          | Also rewrites policy group names |
 
 ### Policy
 
-| Method | Path                   | Capability                   | Status      | Where it is used (files and pages)                                                     | Notes                          |
-| ------ | ---------------------- | ---------------------------- | ----------- | -------------------------------------------------------------------------------------- | ------------------------------ |
-| GET    | `/api/v1/policy`       | Read the current policy      | Implemented | `api/resources/policy.ts:20` -> `/acls`, `/users`, `/machines`, `/machines/:id`          | Policy travels as a string     |
-| PUT    | `/api/v1/policy`       | Overwrite the policy         | Implemented | `api/resources/policy.ts:38` -> `/acls` save; `/users` user groups dialog                | This project does the encoding |
-| POST   | `/api/v1/policy/check` | Validate only, do not store  | Implemented | `api/resources/policy.ts:30` -> `/acls` (`acl-action.ts:85`)                             | Returns an empty object `{}`   |
+| Method | Path                   | Capability                  | Status      | Where it is used (files and pages)                                              | Notes                          |
+| ------ | ---------------------- | --------------------------- | ----------- | ------------------------------------------------------------------------------- | ------------------------------ |
+| GET    | `/api/v1/policy`       | Read the current policy     | Implemented | `api/resources/policy.ts:20` -> `/acls`, `/users`, `/machines`, `/machines/:id` | Policy travels as a string     |
+| PUT    | `/api/v1/policy`       | Overwrite the policy        | Implemented | `api/resources/policy.ts:38` -> `/acls` save; `/users` user groups dialog       | This project does the encoding |
+| POST   | `/api/v1/policy/check` | Validate only, do not store | Implemented | `api/resources/policy.ts:30` -> `/acls` (`acl-action.ts:85`)                    | Returns an empty object `{}`   |
 
 ### Pre-auth keys
 
-| Method | Path                        | Capability                     | Status      | Where it is used (files and pages)                                                                              | Notes                                |
-| ------ | --------------------------- | ------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| GET    | `/api/v1/preauthkey`        | List pre-auth keys             | Implemented | `api/resources/pre-auth-keys.ts:36,81` -> Settings -> Pre-auth keys, `/overview`                                       | Spec lists no `user` param           |
-| POST   | `/api/v1/preauthkey`        | Create a pre-auth key          | Implemented | `api/resources/pre-auth-keys.ts:43` -> Settings -> Pre-auth keys, `/ssh/:id`, agent (`hp-agent.ts:129`)                | Supports ownerless tag-only keys     |
-| POST   | `/api/v1/preauthkey/expire` | Expire a pre-auth key          | Implemented | `api/resources/pre-auth-keys.ts:58` -> Settings -> Pre-auth keys                                                      | Wire format differs pre/post 0.28    |
-| DELETE | `/api/v1/preauthkey`        | Delete a pre-auth key record   | Missing     | No call site                                                                                                     | Expire already covers revocation     |
+| Method | Path                        | Capability                   | Status      | Where it is used (files and pages)                                                                      | Notes                             |
+| ------ | --------------------------- | ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| GET    | `/api/v1/preauthkey`        | List pre-auth keys           | Implemented | `api/resources/pre-auth-keys.ts:36,81` -> Settings -> Pre-auth keys, `/overview`                        | Spec lists no `user` param        |
+| POST   | `/api/v1/preauthkey`        | Create a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:43` -> Settings -> Pre-auth keys, `/ssh/:id`, agent (`hp-agent.ts:129`) | Supports ownerless tag-only keys  |
+| POST   | `/api/v1/preauthkey/expire` | Expire a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:58` -> Settings -> Pre-auth keys                                        | Wire format differs pre/post 0.28 |
+| DELETE | `/api/v1/preauthkey`        | Delete a pre-auth key record | Missing     | No call site                                                                                            | Expire already covers revocation  |
 
 ### API keys
 
-| Method | Path                      | Capability             | Status      | Where it is used (files and pages)                                                                                        | Notes                          |
-| ------ | ------------------------- | ---------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| GET    | `/api/v1/apikey`          | List API keys          | Implemented | `api/resources/api-keys.ts:29` -> Settings -> API keys, Settings -> System, login validation, `/overview`, layout, alerts   | Prefixes are masked            |
-| POST   | `/api/v1/apikey`          | Create an API key      | Implemented | `api/resources/api-keys.ts:38` -> Settings -> API keys create dialog                                                       | Plaintext returned once        |
-| POST   | `/api/v1/apikey/expire`   | Revoke an API key now  | Implemented | `api/resources/api-keys.ts:48` -> Settings -> API keys revoke dialog, bulk revoke                                          | Only sends `prefix`            |
-| DELETE | `/api/v1/apikey/{prefix}` | Delete an API key row  | Missing     | No call site                                                                                                              | Spec also has optional `id`    |
+| Method | Path                      | Capability            | Status      | Where it is used (files and pages)                                                                                        | Notes                       |
+| ------ | ------------------------- | --------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| GET    | `/api/v1/apikey`          | List API keys         | Implemented | `api/resources/api-keys.ts:29` -> Settings -> API keys, Settings -> System, login validation, `/overview`, layout, alerts | Prefixes are masked         |
+| POST   | `/api/v1/apikey`          | Create an API key     | Implemented | `api/resources/api-keys.ts:38` -> Settings -> API keys create dialog                                                      | Plaintext returned once     |
+| POST   | `/api/v1/apikey/expire`   | Revoke an API key now | Implemented | `api/resources/api-keys.ts:48` -> Settings -> API keys revoke dialog, bulk revoke                                         | Only sends `prefix`         |
+| DELETE | `/api/v1/apikey/{prefix}` | Delete an API key row | Missing     | No call site                                                                                                              | Spec also has optional `id` |
 
 ### Authentication and registration
 
-| Method | Path                    | Capability                          | Status      | Where it is used (files and pages)                                | Notes                                    |
-| ------ | ----------------------- | ----------------------------------- | ----------- | ----------------------------------------------------------------- | ---------------------------------------- |
-| POST   | `/api/v1/auth/approve`  | Approve a pending registration      | Implemented | `api/resources/auth.ts:18` -> agent auto-approve (`hp-agent.ts:183`) | No manual button; agent-only             |
-| POST   | `/api/v1/auth/register` | Complete a registration by authId   | Missing     | No call site                                                      | No "pending list" endpoint for the UI     |
-| POST   | `/api/v1/auth/reject`   | Reject a pending registration       | Missing     | No call site                                                      | Same as above                            |
+| Method | Path                    | Capability                        | Status      | Where it is used (files and pages)                                   | Notes                                 |
+| ------ | ----------------------- | --------------------------------- | ----------- | -------------------------------------------------------------------- | ------------------------------------- |
+| POST   | `/api/v1/auth/approve`  | Approve a pending registration    | Implemented | `api/resources/auth.ts:18` -> agent auto-approve (`hp-agent.ts:183`) | No manual button; agent-only          |
+| POST   | `/api/v1/auth/register` | Complete a registration by authId | Missing     | No call site                                                         | No "pending list" endpoint for the UI |
+| POST   | `/api/v1/auth/reject`   | Reject a pending registration     | Missing     | No call site                                                         | Same as above                         |
 
 ### Health
 
-| Method | Path             | Capability                                  | Status  | Where it is used (files and pages)                                                                     | Notes                              |
-| ------ | ---------------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| GET    | `/api/v1/health` | Authenticated health check with DB status   | Missing | No call site; this project uses the unauthenticated root `GET /health` (`transport.ts:159`) instead     | See the Health section             |
+| Method | Path             | Capability                                | Status  | Where it is used (files and pages)                                                                  | Notes                  |
+| ------ | ---------------- | ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| GET    | `/api/v1/health` | Authenticated health check with DB status | Missing | No call site; this project uses the unauthenticated root `GET /health` (`transport.ts:159`) instead | See the Health section |
 
 ### Debug
 
-| Method | Path                 | Capability               | Status  | Where it is used (files and pages) | Notes                       |
-| ------ | -------------------- | ------------------------ | ------- | ---------------------------------- | --------------------------- |
-| POST   | `/api/v1/debug/node` | Create a debug node      | Missing | No call site                       | Best left unimplemented     |
+| Method | Path                 | Capability          | Status  | Where it is used (files and pages) | Notes                   |
+| ------ | -------------------- | ------------------- | ------- | ---------------------------------- | ----------------------- |
+| POST   | `/api/v1/debug/node` | Create a debug node | Missing | No call site                       | Best left unimplemented |
 
 The spec contains **29 endpoints**: **21 implemented**, **1 partial**, **7 missing**.
 
@@ -228,8 +228,8 @@ The spec contains **29 endpoints**: **21 implemented**, **1 partial**, **7 missi
 
 The spec gives one endpoint three call shapes, all of whose parameters live in the query string:
 
-| Shape              | Parameters                     | Meaning                            |
-| ------------------ | ------------------------------ | ---------------------------------- |
+| Shape              | Parameters                     | Meaning                             |
+| ------------------ | ------------------------------ | ----------------------------------- |
 | Expire now         | none                           | Sets the expiry to the current time |
 | Toggle expiry      | `disableExpiry=true` / `false` | `true` means the node never expires |
 | Explicit timestamp | `expiry=<RFC3339>`             | Sets an explicit expiry timestamp   |
@@ -635,16 +635,16 @@ prints. This project's agent extracts the authId from a failed login's stderr wi
 Priority: **P1** worth doing soon, **P2** valuable but can wait, **P3** optional or best not done. Every conclusion
 below was checked against an actual call site in the code rather than inferred from memory.
 
-| Endpoint                              | Status  | Recommendation                                                                                                                              | Priority |
-| ------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `GET /api/v1/node` (`user` filter)    | Partial | Server-side filtering is worth considering for very large tailnets; the UI filters client-side today, so nothing is functionally missing      | P3       |
-| `POST /api/v1/node/backfillips`       | Missing | Add a confirmed, one-off repair entry under Settings -> System (nodes missing IPs after an old-database upgrade); confirm `confirmed` semantics first | P2       |
-| `DELETE /api/v1/preauthkey`           | Missing | The existing "revoke" already covers the main need via expire; if implemented, restrict deletion to expired or already-used keys              | P3       |
-| `DELETE /api/v1/apikey/{prefix}`      | Missing | Same as above — expire already invalidates the key immediately; if implemented, note the spec's optional `id` query parameter                 | P3       |
-| `POST /api/v1/auth/register`          | Missing | The spec has no pending-registration list, so the UI has no data source; leave it out unless the operator pastes an authId by hand            | P3       |
-| `POST /api/v1/auth/reject`            | Missing | Same reason; and the result cannot be reviewed in the UI afterwards                                                                          | P3       |
-| `POST /api/v1/debug/node`             | Missing | Best left unimplemented                                                                                                                     | P3       |
-| `GET /api/v1/health`                  | Missing | The root `/health` already covers this. Add it only when "is the database reachable" must be distinguished; could join Settings -> System diagnostics | P3 |
+| Endpoint                           | Status  | Recommendation                                                                                                                                        | Priority |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `GET /api/v1/node` (`user` filter) | Partial | Server-side filtering is worth considering for very large tailnets; the UI filters client-side today, so nothing is functionally missing              | P3       |
+| `POST /api/v1/node/backfillips`    | Missing | Add a confirmed, one-off repair entry under Settings -> System (nodes missing IPs after an old-database upgrade); confirm `confirmed` semantics first | P2       |
+| `DELETE /api/v1/preauthkey`        | Missing | The existing "revoke" already covers the main need via expire; if implemented, restrict deletion to expired or already-used keys                      | P3       |
+| `DELETE /api/v1/apikey/{prefix}`   | Missing | Same as above — expire already invalidates the key immediately; if implemented, note the spec's optional `id` query parameter                         | P3       |
+| `POST /api/v1/auth/register`       | Missing | The spec has no pending-registration list, so the UI has no data source; leave it out unless the operator pastes an authId by hand                    | P3       |
+| `POST /api/v1/auth/reject`         | Missing | Same reason; and the result cannot be reviewed in the UI afterwards                                                                                   | P3       |
+| `POST /api/v1/debug/node`          | Missing | Best left unimplemented                                                                                                                               | P3       |
+| `GET /api/v1/health`               | Missing | The root `/health` already covers this. Add it only when "is the database reachable" must be distinguished; could join Settings -> System diagnostics | P3       |
 
 **Additional findings (not among the four target endpoints above)**
 
@@ -677,12 +677,12 @@ below was checked against an actual call site in the code rather than inferred f
 
 3. **Common failure modes.**
 
-   | Symptom               | Meaning                                                                                                                                                                          | What to do                                                                             |
-   | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-   | `401 Unauthorized`    | The key is wrong, truncated, expired or revoked. Headplane's login page and Settings -> System report this as an invalid API key                                                  | Reissue with `headscale apikeys create` and update `headscale.api_key`                  |
-   | `403 Forbidden`       | Headscale API keys are admin-level and rarely produce this themselves. More often a reverse proxy (Caddy/Nginx) rejected the request, or Headplane's own permission bits denied it | Verify by calling the API directly, bypassing the proxy; then check capability flags and the user's role |
-   | `404 Not Found`       | The endpoint does not exist on the connected Headscale version (version gating). For example `POST /api/v1/node/{id}/user` was removed in 0.28+, and `/api/v1/node/backfillips` only appears on newer releases | Confirm the version via `/version`; this project derives capability flags from it rather than probing with 403s |
-   | `502 Bad Gateway`     | This is Headplane's own wrapper: any non-2xx upstream response is wrapped as a 502, with the real status code and raw body carried in the JSON as `statusCode`/`rawData`            | Read `statusCode` from the body to recover the real error instead of debugging a 502    |
+   | Symptom            | Meaning                                                                                                                                                                                                                                    | What to do                                                                                                      |
+   | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+   | `401 Unauthorized` | The key is wrong, truncated, expired or revoked. Headplane's login page and Settings -> System report this as an invalid API key                                                                                                           | Reissue with `headscale apikeys create` and update `headscale.api_key`                                          |
+   | `403 Forbidden`    | Headscale API keys are admin-level and rarely produce this themselves. More often a reverse proxy (Caddy/Nginx) rejected the request, or Headplane's own permission bits denied it                                                         | Verify by calling the API directly, bypassing the proxy; then check capability flags and the user's role        |
+   | `404 Not Found`    | The endpoint does not exist on the connected Headscale version (version gating). For example `POST /api/v1/node/{id}/user` was removed in 0.28+, and `/api/v1/node/backfillips` only appears on newer releases                             | Confirm the version via `/version`; this project derives capability flags from it rather than probing with 403s |
+   | `502 Bad Gateway`  | This is Headplane's own wrapper: any non-2xx upstream response is wrapped as a 502, with the real status code carried as `statusCode` and a sanitized one-line summary of the upstream text as `detail` (the raw body stays on the server) | Read `statusCode` from the body to recover the real error instead of debugging a 502                            |
 
 4. **Re-check an "implemented" claim.** First find the `path:` literals in
    `app/server/headscale/api/resources/*.ts` to establish client coverage, then search `app/routes/**` for the matching

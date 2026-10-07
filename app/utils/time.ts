@@ -1,42 +1,44 @@
+import type { Locale } from "~/utils/locale";
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const MONTH_MS = 30 * DAY_MS;
+
+type RelativeUnit = "minute" | "hour" | "day" | "month";
+
+const UNITS: ReadonlyArray<readonly [RelativeUnit, number]> = [
+  ["month", MONTH_MS],
+  ["day", DAY_MS],
+  ["hour", HOUR_MS],
+  ["minute", MINUTE_MS],
+];
+
 /**
  * Formats the time delta since a given date into a human-readable string.
- * - Under 1 hour: "X minutes ago"
- * - Under 1 day: "X hours, Y minutes ago"
- * - Under 1 month: "X days, Y hours ago"
- * - Over 1 month: "X months, Y days ago"
+ *
+ * The wording comes from `Intl.RelativeTimeFormat`, so nothing here is
+ * hardcoded English. Only the largest unit is reported ("2 hours ago", not
+ * "2 hours, 14 minutes ago"): the relative-time formatter cannot pluralize two
+ * counts in one sentence, and the absolute timestamp is already in the tooltip
+ * next to this text.
+ *
+ * A date that cannot be parsed reads as an empty string instead of throwing,
+ * and a timestamp in the future (clock skew) reads as "in ..." rather than as
+ * "0 minutes ago".
  */
-export function formatTimeDelta(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-
-  const minutes = Math.floor(diffMs / (1000 * 60));
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const months = Math.floor(days / 30);
-
-  if (minutes < 60) {
-    return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+export function formatTimeDelta(date: Date, locale: Locale): string {
+  const elapsed = Date.now() - date.getTime();
+  if (!Number.isFinite(elapsed)) {
+    return "";
   }
 
-  if (hours < 24) {
-    const remainingMinutes = minutes % 60;
-    if (remainingMinutes === 0) {
-      return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
-    }
-    return `${hours} hour${hours !== 1 ? "s" : ""}, ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""} ago`;
-  }
+  const absolute = Math.abs(elapsed);
+  const [unit, unitMs] = UNITS.find(([, size]) => absolute >= size) ?? ["minute", MINUTE_MS];
+  const count = Math.max(1, Math.floor(absolute / unitMs));
 
-  if (days < 30) {
-    const remainingHours = hours % 24;
-    if (remainingHours === 0) {
-      return `${days} day${days !== 1 ? "s" : ""} ago`;
-    }
-    return `${days} day${days !== 1 ? "s" : ""}, ${remainingHours} hour${remainingHours !== 1 ? "s" : ""} ago`;
-  }
-
-  const remainingDays = days % 30;
-  if (remainingDays === 0) {
-    return `${months} month${months !== 1 ? "s" : ""} ago`;
-  }
-  return `${months} month${months !== 1 ? "s" : ""}, ${remainingDays} day${remainingDays !== 1 ? "s" : ""} ago`;
+  return new Intl.RelativeTimeFormat(locale, { numeric: "always", style: "long" }).format(
+    elapsed < 0 ? count : -count,
+    unit,
+  );
 }

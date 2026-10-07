@@ -35,6 +35,12 @@ export default function UserGroups({
   const submittingRef = useRef(false);
   const [selected, setSelected] = useState([...groups]);
 
+  // Callers pass `user.groups` straight through, so the array identity changes
+  // on every revalidation (and would reset the selection while it is being
+  // edited). Key the reset off the group names instead, joined into one value;
+  // ACL group names cannot contain a newline, so the key is collision-free.
+  const groupsKey = groups.join("\n");
+
   // Fixed messages come back as a code so the UI can translate them; API and
   // policy parse errors are passed through verbatim.
   const error = fetcher.data?.errorCode ? t("users.groups.policyReadOnly") : fetcher.data?.error;
@@ -44,7 +50,7 @@ export default function UserGroups({
     if (isOpen) {
       setSelected([...groups]);
     }
-  }, [isOpen, groups]);
+  }, [isOpen, groupsKey]);
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {

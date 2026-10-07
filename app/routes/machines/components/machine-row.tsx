@@ -288,7 +288,7 @@ export default function MachineRow({
               className="truncate text-xs text-mist-500 tabular-nums dark:text-mist-400"
               suppressHydrationWarning
             >
-              {formatTimeDelta(lastSeen)}
+              {formatTimeDelta(lastSeen, locale)}
             </span>
           ) : undefined}
         </div>

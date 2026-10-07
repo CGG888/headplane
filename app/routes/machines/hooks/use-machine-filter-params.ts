@@ -10,13 +10,30 @@ export interface MachineFilterParams {
   clearFilters: () => void;
 }
 
+const FILTER_STATUSES = ["online", "offline", "expired"] as const;
+const FILTER_ROUTES = ["exit-node", "subnet"] as const;
+
+/**
+ * `?status=x` used to be asserted into the filter type and then handed to the
+ * machine list, where an unknown value reached `String.prototype` lookups
+ * (`?status=constructor`) or threw while formatting. Anything that is not one
+ * of the known values is treated as "no filter".
+ */
+export function parseStatus(raw: string | null): MachineFilterParams["filterStatus"] {
+  return FILTER_STATUSES.find((value) => value === raw) ?? null;
+}
+
+export function parseRoute(raw: string | null): MachineFilterParams["filterRoute"] {
+  return FILTER_ROUTES.find((value) => value === raw) ?? null;
+}
+
 export function useMachineFilterParams(): MachineFilterParams {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const filterUser = searchParams.get("user");
   const filterTag = searchParams.get("tag");
-  const filterStatus = searchParams.get("status") as MachineFilterParams["filterStatus"];
-  const filterRoute = searchParams.get("route") as MachineFilterParams["filterRoute"];
+  const filterStatus = parseStatus(searchParams.get("status"));
+  const filterRoute = parseRoute(searchParams.get("route"));
 
   const hasActiveFilters =
     filterUser !== null || filterTag !== null || filterStatus !== null || filterRoute !== null;

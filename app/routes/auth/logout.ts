@@ -24,10 +24,12 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 /**
- * A `GET` that ends a session must not be triggerable from another site, so we
- * refuse cross-site navigations. Browsers that do not send `Sec-Fetch-Site`
- * (older ones, or a proxy that strips it) are allowed through so logging out
- * never breaks.
+ * A request that ends a session must not be triggerable from another site, so we
+ * refuse cross-site navigations and submissions alike: a `POST` from another page
+ * would otherwise be accepted here, and React Router's own origin check for
+ * actions trusts headers a reverse proxy can rewrite. Browsers that do not send
+ * `Sec-Fetch-Site` (older ones, or a proxy that strips it) are allowed through so
+ * logging out never breaks.
  */
 export function isSameSiteLogout(request: Request) {
   const site = request.headers.get("sec-fetch-site");
@@ -39,7 +41,7 @@ export function isSameSiteLogout(request: Request) {
 }
 
 async function performLogout({ request, context }: ActionFunctionArgs | LoaderFunctionArgs) {
-  if (request.method === "GET" && !isSameSiteLogout(request)) {
+  if (!isSameSiteLogout(request)) {
     log.warn("auth", "Refusing cross-site logout request from %s", request.headers.get("referer"));
     return redirect("/machines");
   }

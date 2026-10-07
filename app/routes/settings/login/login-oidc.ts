@@ -18,22 +18,16 @@
 //   2. a value saved on /settings/login (HeadplaneCN's data directory);
 //   3. the config file's `oidc:` block;
 //   4. the schema default (`enabled: true`, `scope: "openid email profile"`,
-//      `default_role: "member"`, `use_pkce: false`, `logout_idp: false`).
+//      `default_role: "member"`, `use_pkce: true`, `logout_idp: false`).
 //
 // `logout_idp` also accepts the older `use_end_session` spelling as a source in
 // the environment and the config file, under the same precedence.
 
 import type { TranslationKey } from "~/i18n";
+import { ASSIGNABLE_ROLES } from "~/server/web/roles";
 
 /** Roles `oidc.default_role` accepts; the config schema rejects anything else. */
-export const LOGIN_OIDC_ROLES = [
-  "admin",
-  "network_admin",
-  "it_admin",
-  "auditor",
-  "viewer",
-  "member",
-] as const;
+export const LOGIN_OIDC_ROLES = ASSIGNABLE_ROLES;
 
 export type LoginOidcRole = (typeof LOGIN_OIDC_ROLES)[number];
 
@@ -102,7 +96,7 @@ export const LOGIN_OIDC_ENV_VARS: Record<LoginOidcFieldId, string> = {
 export const LOGIN_OIDC_DEFAULTS = {
   enabled: true,
   scope: "openid email profile",
-  use_pkce: false,
+  use_pkce: true,
   default_role: "member",
   logout_idp: false,
 } as const satisfies LoginOidcSettings;

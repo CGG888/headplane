@@ -11,6 +11,7 @@ import { isDataWithApiError } from "~/server/headscale/api/error-client";
 import { nodesResource } from "~/server/headscale/live-store";
 import { Capabilities } from "~/server/web/roles";
 import type { Machine } from "~/types";
+import log from "~/utils/log";
 import { normalizeRegistrationKey } from "~/utils/register-key";
 
 import type { Route } from "./+types/machine";
@@ -21,7 +22,15 @@ import { DEBUG_NODE_ACTION, debugNodeSummary, isCidr } from "./debug-node-reques
  * Stable error codes returned to the machine expiry dialog. The UI maps these
  * onto localized messages so the server never emits user-facing English text.
  */
-export type MachineExpiryErrorCode = "invalidExpiry" | "expiryInPast";
+export type MachineExpiryErrorCode = "invalidExpiry" | "expiryInPast" | "failed";
+
+/**
+ * Stable error code for the single-node dialogs (rename, delete, move, tag and
+ * route edits). Headscale refusing the call is normal - the node may have been
+ * deleted in another tab - and it must reach the dialog as data rather than as
+ * a thrown response, which would replace the machines page with an error page.
+ */
+export type MachineActionErrorCode = "failed";
 
 /**
  * Stable error codes returned to the bulk machine dialogs. Like the expiry
@@ -89,7 +98,7 @@ function rejectError(errorCode: MachineRejectErrorCode, status = 400) {
  * can show what the server said instead of a generic line.
  */
 function maintenanceError(
-  errorCode: MachineMaintenanceErrorCode,
+  errorCode: MachineMaintenanceErrorCode | MachineActionErrorCode,
   options: { message?: string; status?: number } = {},
 ) {
   return data(
@@ -100,6 +109,17 @@ function maintenanceError(
     },
     { status: options.status ?? 502 },
   );
+}
+
+/**
+ * One single-node dialog outcome for a failed Headscale call. Throwing here
+ * would hand the response to the nearest ErrorBoundary, which replaces the
+ * whole machines page (and with it the list the user was working in) because
+ * the transport layer turns every 4xx/5xx into a 502. Returning the failure
+ * instead lets the dialog stay open and say what Headscale said.
+ */
+function actionError(error: unknown) {
+  return maintenanceError("failed", { message: apiErrorMessage(error) });
 }
 
 /** Headscale's own explanation of a failed call, when it gave one. */
@@ -122,14 +142,24 @@ function describeError(error: unknown): string {
   return text.length > 0 ? text : "unknown error";
 }
 
+/** Headscale node ids are decimal `uint64` values; nothing else is valid. */
+const NODE_ID_PATTERN = /^\d{1,20}$/;
+
 /** Reads the selected node ids, dropping blanks and duplicates. */
 function readBulkNodeIds(formData: FormData): string[] {
   const ids = new Set<string>();
   for (const value of formData.getAll("node_ids")) {
     const id = value.toString().trim();
-    if (id.length > 0) {
-      ids.add(id);
+    if (id.length === 0) {
+      continue;
     }
+    // Reject anything that is not a plain decimal id: `new URL()` collapses
+    // `..` segments, so an id like `../user/1` would otherwise be interpolated
+    // into the request path and hit a different API endpoint.
+    if (!NODE_ID_PATTERN.test(id)) {
+      throw data(`Invalid \`node_ids\` entry: ${JSON.stringify(id)}`, { status: 400 });
+    }
+    ids.add(id);
   }
 
   return Array.from(ids);
@@ -392,6 +422,16 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
     // disappears mid-run) must not abort the machines behind it.
     let updated = 0;
     let failed = 0;
+    // Why each failure happened, so the dialogs can name the machines that were
+    // not changed instead of reporting only how many there were.
+    const failures: Array<{ id: string; reason: string }> = [];
+
+    const recordFailure = (id: string, error: unknown) => {
+      const reason = apiErrorMessage(error) ?? describeError(error);
+      failed += 1;
+      failures.push({ id, reason });
+      log.warn("api", "Bulk machine action %s failed for node %s: %s", action, id, reason);
+    };
 
     switch (action) {
       case "bulk_set_tags": {
@@ -410,8 +450,8 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           try {
             await api.nodes.setTags(id, tags);
             updated++;
-          } catch {
-            failed++;
+          } catch (error) {
+            recordFailure(id, error);
           }
         }
         break;
@@ -447,15 +487,18 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           try {
             await apply(id);
             updated++;
-          } catch {
-            failed++;
+          } catch (error) {
+            recordFailure(id, error);
           }
         }
         break;
       }
 
       case "bulk_reassign": {
-        const user = formData.get("user_id")?.toString();
+        // Headscale resolves the new owner by *username*: the endpoint is
+        // `POST v1/node/{id}/user` with `{"user": "bob"}`. Passing the numeric
+        // Headplane user id made every move fail with a 4xx.
+        const user = readOwnerName(formData);
         if (!user) {
           return bulkError("missingUserId");
         }
@@ -468,8 +511,8 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           try {
             await api.nodes.reassignUser(id, user);
             updated++;
-          } catch {
-            failed++;
+          } catch (error) {
+            recordFailure(id, error);
           }
         }
         break;
@@ -480,8 +523,8 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           try {
             await api.nodes.delete(id);
             updated++;
-          } catch {
-            failed++;
+          } catch (error) {
+            recordFailure(id, error);
           }
         }
         break;
@@ -496,7 +539,7 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
 
     // One refresh at the end covers the whole run.
     await headscaleLiveStore.refresh(nodesResource, api);
-    return { success: true as const, updated, failed };
+    return { success: true as const, updated, failed, failures };
   }
 
   // Check if the user has permission to manage this machine
@@ -507,11 +550,21 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
     });
   }
 
-  const node = await api.nodes.get(nodeId);
-  if (!node) {
-    throw data(`Machine with ID ${nodeId} not found`, {
-      status: 404,
+  // See `readBulkNodeIds`: a non-decimal id must never reach the request path.
+  if (!NODE_ID_PATTERN.test(nodeId.trim())) {
+    throw data(`Invalid \`node_id\` in the form data: ${JSON.stringify(nodeId)}`, {
+      status: 400,
     });
+  }
+
+  // A Headscale outage here must reach the open dialog as data, not replace
+  // the page with the nearest error boundary. `get` either returns the machine
+  // or throws, so a genuinely missing machine arrives through `actionError`.
+  let node: Machine;
+  try {
+    node = await api.nodes.get(nodeId);
+  } catch (error) {
+    return actionError(error);
   }
 
   if (!auth.canManageNode(principal, node)) {
@@ -532,36 +585,71 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
         });
       }
 
-      const name = String(formData.get("name"));
-      if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(name.toLowerCase())) {
+      // Headscale keeps node names as lowercase DNS labels, so normalise once
+      // and send exactly the value that was validated.
+      const name = newName.toLowerCase();
+      if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(name)) {
         throw data(
           "Machine names must be valid DNS labels: lowercase letters, numbers, and hyphens only, and must start and end with a letter or number.",
           { status: 400 },
         );
       }
 
-      await api.nodes.rename(nodeId, name);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { message: "Machine renamed" };
+      try {
+        await api.nodes.rename(nodeId, name);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Machine renamed" };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     case "delete": {
-      await api.nodes.delete(nodeId);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return redirect("/machines");
+      try {
+        await api.nodes.delete(nodeId);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Machine removed" };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     case "expire": {
-      await api.nodes.expire(nodeId);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { message: "Machine expired" };
+      try {
+        await api.nodes.expire(nodeId);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Machine expired" };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     case "toggle_expiry": {
-      const disableExpiry = String(formData.get("disableExpiry")) === "true";
-      await api.nodes.toggleExpiry(nodeId, disableExpiry);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { message: "Machine expired" };
+      // The menu submits the boolean as the strings "true"/"false"; anything
+      // else (a missing field, "TRUE", "") must be rejected explicitly rather
+      // than silently read as "restore Headscale's default".
+      const rawDisableExpiry = formData.get("disableExpiry")?.toString();
+      if (rawDisableExpiry !== "true" && rawDisableExpiry !== "false") {
+        throw data("Missing or invalid `disableExpiry` in the form data.", {
+          status: 400,
+        });
+      }
+
+      const disableExpiry = rawDisableExpiry === "true";
+
+      try {
+        await api.nodes.toggleExpiry(nodeId, disableExpiry);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return {
+          success: true as const,
+          // Two distinct messages, so the caller can tell "key expiry disabled"
+          // from "key expiry restored" instead of one shared string. Like every
+          // other arm in this switch these are plain strings and no UI reads them.
+          message: disableExpiry ? "Key expiry disabled" : "Key expiry restored",
+        };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     case "set_expiry": {
@@ -570,14 +658,34 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
       // explicit timestamp chosen by the user.
       const mode = formData.get("expiry_mode")?.toString();
 
-      if (mode === "never") {
-        await api.nodes.toggleExpiry(nodeId, true);
-      } else if (mode === "default") {
-        await api.nodes.toggleExpiry(nodeId, false);
-      } else if (mode === "custom") {
-        const raw = formData.get("expiry")?.toString();
-        const expiry = raw ? new Date(raw) : new Date(Number.NaN);
-        if (!raw || Number.isNaN(expiry.getTime())) {
+      try {
+        if (mode === "never") {
+          await api.nodes.toggleExpiry(nodeId, true);
+        } else if (mode === "default") {
+          await api.nodes.toggleExpiry(nodeId, false);
+        } else if (mode === "custom") {
+          const raw = formData.get("expiry")?.toString();
+          const expiry = raw ? new Date(raw) : new Date(Number.NaN);
+          if (!raw || Number.isNaN(expiry.getTime())) {
+            return data(
+              { success: false as const, errorCode: "invalidExpiry" as const },
+              {
+                status: 400,
+              },
+            );
+          }
+
+          if (expiry.getTime() <= Date.now()) {
+            return data(
+              { success: false as const, errorCode: "expiryInPast" as const },
+              {
+                status: 400,
+              },
+            );
+          }
+
+          await api.nodes.setExpiry(nodeId, expiry);
+        } else {
           return data(
             { success: false as const, errorCode: "invalidExpiry" as const },
             {
@@ -586,42 +694,43 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           );
         }
 
-        if (expiry.getTime() <= Date.now()) {
-          return data(
-            { success: false as const, errorCode: "expiryInPast" as const },
-            {
-              status: 400,
-            },
-          );
-        }
-
-        await api.nodes.setExpiry(nodeId, expiry);
-      } else {
-        return data(
-          { success: false as const, errorCode: "invalidExpiry" as const },
-          {
-            status: 400,
-          },
-        );
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Machine expiry updated" };
+      } catch (error) {
+        return actionError(error);
       }
-
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { success: true as const, message: "Machine expiry updated" };
     }
 
     case "update_tags": {
-      const tags = formData.get("tags")?.toString().split(",") ?? [];
+      const tags = (formData.get("tags")?.toString() ?? "")
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== "");
+
+      // Sanitize before the emptiness check. `"".split(",")` is `[""]`, which
+      // passed the old `length === 0` guard and then filtered down to `[]` —
+      // Headscale applies that as "remove every tag from the node".
       if (tags.length === 0) {
         throw data("Missing `tags` in the form data.", {
           status: 400,
         });
       }
 
+      if (tags.length > 64) {
+        throw data("Too many `tags` in the form data.", {
+          status: 400,
+        });
+      }
+
+      const invalidTag = tags.find((tag) => !/^tag:[^\s/]{1,127}$/.test(tag));
+      if (invalidTag !== undefined) {
+        throw data(`Invalid tag in the form data: ${invalidTag}`, {
+          status: 400,
+        });
+      }
+
       try {
-        await api.nodes.setTags(
-          nodeId,
-          tags.map((tag) => tag.trim()).filter((tag) => tag !== ""),
-        );
+        await api.nodes.setTags(nodeId, [...new Set(tags)]);
 
         await headscaleLiveStore.refresh(nodesResource, api);
         return { success: true as const, message: "Tags updated" };
@@ -641,7 +750,7 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           );
         }
 
-        throw error;
+        return actionError(error);
       }
     }
 
@@ -654,9 +763,31 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
         });
       }
 
-      const allRoutes = routes.split(",").map((route) => route.trim());
+      const allRoutes = routes
+        .split(",")
+        .map((route) => route.trim())
+        .filter((route) => route.length > 0);
       if (allRoutes.length === 0) {
         throw data("No routes provided to update", {
+          status: 400,
+        });
+      }
+
+      // The dialog only sends routes the node advertises, but the action is
+      // reachable with a hand-written POST: without these checks any
+      // `write_machines` holder could pre-approve `0.0.0.0/0` and `::/0` for a
+      // node that never advertised them, or push arbitrary strings through.
+      const invalidRoute = allRoutes.find((route) => !isCidr(route));
+      if (invalidRoute !== undefined) {
+        throw data(`Invalid route prefix in the form data: ${invalidRoute}`, {
+          status: 400,
+        });
+      }
+
+      const knownRoutes = new Set([...node.availableRoutes, ...node.approvedRoutes]);
+      const unknownRoute = allRoutes.find((route) => !knownRoutes.has(route));
+      if (unknownRoute !== undefined) {
+        throw data(`Route ${unknownRoute} is not advertised by this machine`, {
           status: 400,
         });
       }
@@ -691,15 +822,19 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
         }
       }
 
-      await api.nodes.approveRoutes(nodeId, newApproved);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { message: "Routes updated" };
+      try {
+        await api.nodes.approveRoutes(nodeId, newApproved);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Routes updated" };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     case "reassign": {
-      const user = formData.get("user_id")?.toString();
+      const user = readOwnerName(formData);
       if (!user) {
-        throw data("Missing `user_id` in the form data.", {
+        throw data("Missing `user_name` in the form data.", {
           status: 400,
         });
       }
@@ -709,9 +844,13 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
           status: 400,
         });
       }
-      await api.nodes.reassignUser(nodeId, user);
-      await headscaleLiveStore.refresh(nodesResource, api);
-      return { message: "Machine reassigned" };
+      try {
+        await api.nodes.reassignUser(nodeId, user);
+        await headscaleLiveStore.refresh(nodesResource, api);
+        return { success: true as const, message: "Machine reassigned" };
+      } catch (error) {
+        return actionError(error);
+      }
     }
 
     default:
@@ -721,7 +860,29 @@ export async function machineAction({ request, context }: Route.ActionArgs) {
   }
 }
 
-function extractApiErrorMessage(error: { data?: unknown; rawData: string }) {
+/**
+ * Reads the new owner for a node move. Headscale takes a *username* here
+ * (`POST v1/node/{id}/user` with `{"user": "bob"}`), not a numeric id, so the
+ * dialogs send `user.name`. Anything empty, absurdly long, or containing
+ * whitespace/slashes is rejected before it reaches the API.
+ */
+function readOwnerName(formData: FormData): string | undefined {
+  const raw = formData.get("user_name")?.toString()?.trim();
+  if (!raw || raw.length > 64) {
+    return undefined;
+  }
+
+  for (const character of raw) {
+    const code = character.codePointAt(0) ?? 0;
+    if (/\s/.test(character) || character === "/" || code < 0x20 || code === 0x7f) {
+      return undefined;
+    }
+  }
+
+  return raw;
+}
+
+function extractApiErrorMessage(error: { data?: unknown; detail: string }) {
   if (error.data != null && typeof error.data === "object" && "message" in error.data) {
     const message = (error.data as { message?: unknown }).message;
     if (typeof message === "string" && message.length > 0) {
@@ -729,5 +890,5 @@ function extractApiErrorMessage(error: { data?: unknown; rawData: string }) {
     }
   }
 
-  return error.rawData.length > 0 ? error.rawData : undefined;
+  return error.detail.length > 0 ? error.detail : undefined;
 }

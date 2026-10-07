@@ -215,7 +215,7 @@ describe("Pre-auth key deletion", () => {
           data: {
             requestUrl: "DELETE v1/preauthkey?id=7",
             statusCode: 404,
-            rawData: "not found",
+            detail: "not found",
             data: null,
           },
           init: { status: 502 },

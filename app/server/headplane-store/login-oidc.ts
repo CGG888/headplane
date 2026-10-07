@@ -12,6 +12,7 @@
 // half-written document behind. The document can hold a client secret, so it
 // is created with mode 0600.
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -114,8 +115,6 @@ export async function readLoginOidcSettings(dataPath: string): Promise<LoginOidc
   return (await readLoginOidcDocument(dataPath)).settings;
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the document atomically (temp file plus rename, mode 0600). Returns
  * false instead of throwing, because the settings action surfaces the failure
@@ -127,12 +126,15 @@ export async function writeLoginOidcDocument(
   document: LoginOidcDocument,
 ): Promise<boolean> {
   const path = loginOidcPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(temp, serializeLoginOidcDocument(document), {
       encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target; the mode only applies when the file is created.
+      flag: "wx",
       mode: LOGIN_OIDC_FILE_MODE,
     });
     await rename(temp, path);

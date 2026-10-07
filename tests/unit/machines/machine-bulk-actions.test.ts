@@ -1,6 +1,7 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
+import log from "~/utils/log";
 
 // Mock the log module to avoid console spam during tests
 vi.mock("~/utils/log", () => ({
@@ -136,6 +137,10 @@ function errorCodeOf(result: ActionResult): string | undefined {
   return (result.data as { errorCode?: string } | null)?.errorCode;
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("bulk machine actions", () => {
   test("applies one tag set to every selected machine", async () => {
     const { result, setTags, refresh } = await submit(
@@ -144,7 +149,7 @@ describe("bulk machine actions", () => {
     );
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 3, failed: 0 });
+    expect(result.data).toEqual({ success: true, updated: 3, failed: 0, failures: [] });
     expect(setTags).toHaveBeenCalledTimes(3);
     expect(setTags).toHaveBeenNthCalledWith(1, "1", ["tag:web", "tag:prod"]);
     expect(setTags).toHaveBeenNthCalledWith(3, "3", ["tag:web", "tag:prod"]);
@@ -176,7 +181,13 @@ describe("bulk machine actions", () => {
     );
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 2, failed: 1 });
+    expect(result.data).toEqual({
+      success: true,
+      updated: 2,
+      failed: 1,
+      // The failing machine's reason reaches the dialog, not just the count.
+      failures: [{ id: "2", reason: "node 2 failed" }],
+    });
     // The machine after the failing one is still attempted.
     expect(setTags).toHaveBeenCalledTimes(3);
     expect(refresh).toHaveBeenCalledOnce();
@@ -189,7 +200,7 @@ describe("bulk machine actions", () => {
       "2",
     ]);
 
-    expect(result.data).toEqual({ success: true, updated: 2, failed: 0 });
+    expect(result.data).toEqual({ success: true, updated: 2, failed: 0, failures: [] });
     expect(setTags).toHaveBeenCalledTimes(2);
   });
 
@@ -223,7 +234,7 @@ describe("bulk machine actions", () => {
     );
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 2, failed: 0 });
+    expect(result.data).toEqual({ success: true, updated: 2, failed: 0, failures: [] });
     expect(toggleExpiry).toHaveBeenNthCalledWith(1, "7", true);
     expect(toggleExpiry).toHaveBeenNthCalledWith(2, "8", true);
     expect(refresh).toHaveBeenCalledOnce();
@@ -249,7 +260,12 @@ describe("bulk machine actions", () => {
     );
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 1, failed: 1 });
+    expect(result.data).toEqual({
+      success: true,
+      updated: 1,
+      failed: 1,
+      failures: [{ id: "8", reason: "node 8 failed" }],
+    });
     expect(setExpiry).toHaveBeenCalledTimes(2);
     expect((setExpiry.mock.calls[0][1] as Date).toISOString()).toBe(expiry);
   });
@@ -280,14 +296,16 @@ describe("bulk machine actions", () => {
 
   test("reassigns every selected machine", async () => {
     const { result, reassignUser, refresh } = await submit(
-      { action_id: "bulk_reassign", user_id: "5" },
+      { action_id: "bulk_reassign", user_name: "alice" },
       ["1", "2"],
     );
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 2, failed: 0 });
-    expect(reassignUser).toHaveBeenNthCalledWith(1, "1", "5");
-    expect(reassignUser).toHaveBeenNthCalledWith(2, "2", "5");
+    expect(result.data).toEqual({ success: true, updated: 2, failed: 0, failures: [] });
+    // Headscale's move endpoint resolves the owner by *username*; the numeric
+    // Headscale user id it used to receive was rejected with a 4xx.
+    expect(reassignUser).toHaveBeenNthCalledWith(1, "1", "alice");
+    expect(reassignUser).toHaveBeenNthCalledWith(2, "2", "alice");
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -300,9 +318,11 @@ describe("bulk machine actions", () => {
   });
 
   test("reports when headscale cannot change owners", async () => {
-    const { result, refresh } = await submit({ action_id: "bulk_reassign", user_id: "5" }, ["1"], {
-      reassignSupported: false,
-    });
+    const { result, refresh } = await submit(
+      { action_id: "bulk_reassign", user_name: "alice" },
+      ["1"],
+      { reassignSupported: false },
+    );
 
     expect(statusOf(result)).toBe(400);
     expect(errorCodeOf(result)).toBe("ownerUnsupported");
@@ -317,7 +337,7 @@ describe("bulk machine actions", () => {
     ]);
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true, updated: 3, failed: 0 });
+    expect(result.data).toEqual({ success: true, updated: 3, failed: 0, failures: [] });
     expect(deleteNode.mock.calls.map((call) => call[0])).toEqual(["1", "2", "3"]);
     expect(refresh).toHaveBeenCalledOnce();
   });
@@ -327,7 +347,12 @@ describe("bulk machine actions", () => {
       failFor: (id) => id === "1",
     });
 
-    expect(result.data).toEqual({ success: true, updated: 2, failed: 1 });
+    expect(result.data).toEqual({
+      success: true,
+      updated: 2,
+      failed: 1,
+      failures: [{ id: "1", reason: "node 1 failed" }],
+    });
     expect(deleteNode).toHaveBeenCalledTimes(3);
   });
 
@@ -342,5 +367,36 @@ describe("bulk machine actions", () => {
     );
     expect(deleteNode).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  test("reports why each failed machine failed, in selection order", async () => {
+    const { result } = await submit({ action_id: "bulk_delete" }, ["1", "2", "3"], {
+      failFor: (id) => id !== "2",
+    });
+
+    expect(result.data).toEqual({
+      success: true,
+      updated: 1,
+      failed: 2,
+      failures: [
+        { id: "1", reason: "node 1 failed" },
+        { id: "3", reason: "node 3 failed" },
+      ],
+    });
+  });
+
+  test("logs every bulk failure with the node id and the reason", async () => {
+    const { result } = await submit({ action_id: "bulk_set_tags", tags: "tag:web" }, ["4"], {
+      failFor: () => true,
+    });
+
+    expect(result.data).toMatchObject({ failed: 1 });
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith(
+      "api",
+      "Bulk machine action %s failed for node %s: %s",
+      "bulk_set_tags",
+      "4",
+      "node 4 failed",
+    );
   });
 });

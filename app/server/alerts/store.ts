@@ -10,6 +10,7 @@
 // document degrades to defaults) and writes go through a temp file plus rename
 // so a crash never leaves a half-written document behind.
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -114,10 +115,24 @@ function parseState(value: unknown): AlertState {
   };
 }
 
-/** Parses the stored document, dropping anything that is not usable. */
-export function parseAlertsDocument(raw: string | undefined | null): AlertsDocument {
+/**
+ * Parses the stored document, dropping anything that is not usable.
+ *
+ * `onInvalid` reports why the stored document was ignored; the caller decides
+ * whether that is worth a log line. Defaults are still returned either way, so
+ * a corrupt file never takes the alerts service down with it.
+ */
+export function parseAlertsDocument(
+  raw: string | undefined | null,
+  onInvalid?: (reason: string) => void,
+): AlertsDocument {
   const fallback = defaultAlertsDocument();
-  if (!raw) {
+  if (raw === undefined || raw === null) {
+    return fallback;
+  }
+
+  if (raw.trim().length === 0) {
+    onInvalid?.("the file is empty");
     return fallback;
   }
 
@@ -125,10 +140,12 @@ export function parseAlertsDocument(raw: string | undefined | null): AlertsDocum
   try {
     parsed = JSON.parse(raw);
   } catch {
+    onInvalid?.("the file is not valid JSON");
     return fallback;
   }
 
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    onInvalid?.("the file does not hold a JSON object");
     return fallback;
   }
 
@@ -168,19 +185,45 @@ export function appendDelivery(
   return [delivery, ...history].slice(0, ALERT_HISTORY_LIMIT);
 }
 
-/** Reads the document; a missing, unreadable or corrupt file reads as defaults. */
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Node error codes are read defensively: a thrown value need not be an Error. */
+function errorCodeOf(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object" || !("code" in error)) {
+    return undefined;
+  }
+
+  const { code } = error as { code?: unknown };
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * Reads the document; a missing, unreadable or corrupt file reads as defaults.
+ *
+ * Every case except a missing file is logged. Falling back silently would show
+ * up as alert settings that reverted to `enabled: false` on their own, with
+ * nothing anywhere saying why.
+ */
 export async function readAlertsDocument(dataPath: string): Promise<AlertsDocument> {
+  const path = alertsPath(dataPath);
+
   try {
-    return parseAlertsDocument(await readFile(alertsPath(dataPath), "utf8"));
-  } catch {
+    return parseAlertsDocument(await readFile(path, "utf8"), (reason) => {
+      log.warn("server", "Ignoring the alerts stored in %s: %s", path, reason);
+    });
+  } catch (error) {
+    if (errorCodeOf(error) !== "ENOENT") {
+      log.warn("server", "Cannot read %s: %s", path, errorMessageOf(error));
+    }
+
     return defaultAlertsDocument();
   }
 }
 
-let tempCounter = 0;
-
 /**
- * Writes the document atomically (temp file plus rename). Returns false instead
+ * Writes the document atomically (temp file plus rename, mode 0600). Returns false instead
  * of throwing, because the settings action surfaces the failure as a localized
  * form error and the scheduler must survive it.
  */
@@ -189,11 +232,17 @@ export async function writeAlertsDocument(
   document: AlertsDocument,
 ): Promise<boolean> {
   const path = alertsPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeAlertsDocument(document), "utf8");
+    await writeFile(temp, serializeAlertsDocument(document), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target, and the mode is not masked by the umask.
+      flag: "wx",
+      mode: 0o600,
+    });
     await rename(temp, path);
     return true;
   } catch (error) {

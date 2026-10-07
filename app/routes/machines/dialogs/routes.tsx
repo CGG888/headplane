@@ -21,6 +21,13 @@ export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
   const { t } = useI18n();
   const fetcher = useFetcher();
 
+  // The action reports failures as data instead of throwing, so a rejected
+  // switch flip can be explained without unmounting the dialog.
+  const error =
+    fetcher.state === "idle" && fetcher.data && !fetcher.data.success
+      ? (fetcher.data.error ?? t("machines.common.errors.apiFailed"))
+      : null;
+
   const subnets = [
     ...node.customRouting.subnetApprovedRoutes,
     ...node.customRouting.subnetWaitingRoutes,
@@ -30,6 +37,11 @@ export default function Routes({ node, isOpen, setIsOpen }: RoutesProps) {
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
       <DialogPanel variant="unactionable">
         <Title>{t("machines.routes.title", { name: node.givenName })}</Title>
+        {error ? (
+          <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </p>
+        ) : null}
         <Text className="font-bold">{t("machines.routes.subnetTitle")}</Text>
         <Text>
           {t("machines.routes.subnetBody")}{" "}

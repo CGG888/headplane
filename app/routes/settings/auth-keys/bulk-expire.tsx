@@ -72,6 +72,8 @@ export default function BulkExpireAuthKeys({ keys, onClearSelection }: BulkExpir
   const [isOpen, setIsOpen] = useState(false);
   const [queue, setQueue] = useState<ExpirableAuthKey[] | null>(null);
   const [results, setResults] = useState<Map<string, boolean>>(new Map());
+  /** Bumped on every submit so a retry remounts the request children. */
+  const [attempt, setAttempt] = useState(0);
 
   const isRunning = queue !== null && results.size < queue.length;
   const failed = queue !== null && [...results.values()].some((succeeded) => !succeeded);
@@ -106,7 +108,10 @@ export default function BulkExpireAuthKeys({ keys, onClearSelection }: BulkExpir
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open && isRunning) {
+      // A run in progress is not interruptible, but a run that only produced
+      // failures must be closable again; otherwise a single failed request left
+      // the dialog stuck with no way out.
+      if (!open && isRunning && !failed) {
         return;
       }
 
@@ -116,7 +121,7 @@ export default function BulkExpireAuthKeys({ keys, onClearSelection }: BulkExpir
         setResults(new Map());
       }
     },
-    [isRunning],
+    [failed, isRunning],
   );
 
   return (
@@ -169,6 +174,11 @@ export default function BulkExpireAuthKeys({ keys, onClearSelection }: BulkExpir
 
             setResults(new Map());
             setQueue(keys);
+            // Re-queueing the same array would reuse the same child instances,
+            // whose `submitted` refs are already true, so no request would be
+            // sent and the dialog would spin forever on `results.size <
+            // queue.length`. Bumping the key remounts them.
+            setAttempt((current) => current + 1);
           }}
           variant="destructive"
         >
@@ -188,7 +198,11 @@ export default function BulkExpireAuthKeys({ keys, onClearSelection }: BulkExpir
             </p>
           ) : null}
           {queue?.map((authKey) => (
-            <ExpireRequest authKey={authKey} key={authKey.id} onSettled={handleSettled} />
+            <ExpireRequest
+              authKey={authKey}
+              key={`${authKey.id}:${attempt}`}
+              onSettled={handleSettled}
+            />
           ))}
         </DialogPanel>
       </Dialog>

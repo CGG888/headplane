@@ -12,7 +12,7 @@ const UNAUTHORIZED = {
   data: {
     requestUrl: "POST v1/preauthkey",
     statusCode: 401,
-    rawData: "Unauthorized",
+    detail: "Unauthorized",
     data: null,
   },
   init: { status: 502, statusText: "Bad Gateway" },

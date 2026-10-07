@@ -115,7 +115,12 @@ function coverageByBucket(ticks: readonly string[], resolved: ResolvedWindow): b
       index += 1;
     }
 
-    covered.push(index < times.length && times[index] < end);
+    // Buckets are half-open, so a tick on a boundary belongs to the bucket it
+    // starts and is counted exactly once. The window's end is the exception:
+    // there is no bucket after the last one, so that bucket also claims a tick
+    // at exactly `now` instead of dropping it.
+    const isLastBucket = bucket === resolved.buckets - 1;
+    covered.push(index < times.length && (isLastBucket ? times[index] <= end : times[index] < end));
   }
 
   return covered;

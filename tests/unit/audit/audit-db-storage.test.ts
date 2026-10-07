@@ -86,4 +86,84 @@ describe("audit database storage", () => {
     expect(page.total).toBe(2);
     expect(page.entries.map((item) => item.target)).toEqual(["target-3", "target-2"]);
   });
+
+  test("links every inserted row to the one before it", async () => {
+    const storage = createDbAuditStorage(createTestDb());
+    await storage.insert(entry(0, { target: "first" }));
+    await storage.insert(entry(5, { target: "second" }));
+    await storage.insert(entry(9, { target: "third" }));
+
+    // The oldest row is the window's anchor, so two rows are checked.
+    await expect(storage.verify()).resolves.toEqual({ checked: 2, broken: [] });
+  });
+
+  test("serialises concurrent inserts so the chain cannot fork", async () => {
+    const storage = createDbAuditStorage(createTestDb());
+    await Promise.all([0, 1, 2, 3, 4].map((minute) => storage.insert(entry(minute))));
+
+    const report = await storage.verify();
+    expect(report.checked).toBe(4);
+    expect(report.broken).toEqual([]);
+  });
+
+  test("a requested page cannot exceed the storage's own bound", async () => {
+    const storage = createDbAuditStorage(createTestDb());
+    const total = 2005;
+    for (let minute = 0; minute < total; minute += 1) {
+      await storage.insert(entry(minute));
+    }
+
+    // A caller asking for the whole table still gets a bounded window: the
+    // limit is clamped to MAX_LIMIT on the way in.
+    const page = await storage.query({ limit: 1_000_000 });
+    expect(page.total).toBe(total);
+    expect(page.entries).toHaveLength(2000);
+  }, 30_000);
+
+  test("reports a row whose recorded contents were edited", async () => {
+    const db = createTestDb();
+    const storage = createDbAuditStorage(db);
+    await storage.insert(entry(0, { target: "first" }));
+    await storage.insert(entry(5, { target: "second" }));
+    await storage.insert(entry(9, { target: "third" }));
+
+    db.run(sql`update audit_log set target = 'rewritten' where id = ${entry(5).id}`);
+
+    await expect(storage.verify()).resolves.toEqual({ checked: 2, broken: [entry(5).id] });
+  });
+
+  test("reports a row that was deleted from the middle of the log", async () => {
+    const db = createTestDb();
+    const storage = createDbAuditStorage(db);
+    await storage.insert(entry(0, { target: "first" }));
+    await storage.insert(entry(5, { target: "second" }));
+    await storage.insert(entry(9, { target: "third" }));
+
+    db.run(sql`delete from audit_log where id = ${entry(5).id}`);
+
+    await expect(storage.verify()).resolves.toEqual({ checked: 1, broken: [entry(9).id] });
+  });
+
+  test("trims by insertion order, not by timestamp", async () => {
+    const storage = createDbAuditStorage(createTestDb());
+    const store = createAuditStore(storage, { maxEntries: 1 });
+
+    // The entry recorded last carries the older timestamp, and the window has
+    // to follow it: the chain is ordered by insertion.
+    await store.record(entry(10, { target: "written-first" }));
+    await store.record(entry(0, { target: "written-last" }));
+
+    const page = await store.list();
+    expect(page.entries.map((item) => item.target)).toEqual(["written-last"]);
+    await expect(store.verify()).resolves.toEqual({ checked: 0, broken: [] });
+  });
+
+  test("reports how many rows the trim removed", async () => {
+    const storage = createDbAuditStorage(createTestDb());
+    await storage.insert(entry(0));
+    await storage.insert(entry(5));
+
+    await expect(storage.trim(1)).resolves.toBe(1);
+    await expect(storage.trim(1)).resolves.toBe(0);
+  });
 });

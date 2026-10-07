@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { extractTagOwnerTags, isNoExpiry, sortAssignableTags } from "~/utils/node-info";
+import {
+  extractTagOwnerTags,
+  isNoExpiry,
+  scanHuJson,
+  sortAssignableTags,
+  stripJsonCommentsAndTrailingCommas,
+} from "~/utils/node-info";
 
 describe("isNoExpiry", () => {
   test("returns true for null", () => {
@@ -81,5 +87,48 @@ describe("sortAssignableTags", () => {
         '{"tagOwners":{"tag:declared":[]}}',
       ),
     ).toEqual(["tag:declared", "tag:used"]);
+  });
+});
+
+describe("scanHuJson", () => {
+  test("reports whether the input carried comments", () => {
+    expect(scanHuJson('{"a": 1}').hasComments).toBe(false);
+    expect(scanHuJson('{"a": 1} // note').hasComments).toBe(true);
+  });
+
+  test("strips comments and trailing commas", () => {
+    const stripped = stripJsonCommentsAndTrailingCommas(`{
+      // comment
+      "tagOwners": { "tag:prod": [], },
+    }`);
+
+    expect(JSON.parse(stripped)).toEqual({ tagOwners: { "tag:prod": [] } });
+  });
+
+  test("keeps a comma that sits inside a string literal", () => {
+    // The comma before `}` is inside the string, so removing it would corrupt
+    // the value.
+    const stripped = scanHuJson(String.raw`{"message": "done,}", "list": [1, 2,],}`).stripped;
+
+    expect(JSON.parse(stripped)).toEqual({ message: "done,}", list: [1, 2] });
+    expect(stripped).toContain('"done,}"');
+  });
+
+  test("keeps a comma inside a string that ends with an escaped quote", () => {
+    const stripped = scanHuJson(String.raw`{"quote": "she said \"hi,\"", "after": 1,}`).stripped;
+
+    expect(JSON.parse(stripped)).toEqual({ quote: 'she said "hi,"', after: 1 });
+  });
+
+  test("handles nested objects and arrays around string commas", () => {
+    const stripped = scanHuJson(String.raw`{"a": [{"b": "x,]"}, {"c": ["y,}", 2,],},],}`).stripped;
+
+    expect(JSON.parse(stripped)).toEqual({ a: [{ b: "x,]" }, { c: ["y,}", 2] }] });
+  });
+
+  test("leaves a comma inside a string alone even when whitespace follows", () => {
+    const stripped = scanHuJson(String.raw`{"a": "text,   }", "b": 1,}`).stripped;
+
+    expect(JSON.parse(stripped)).toEqual({ a: "text,   }", b: 1 });
   });
 });

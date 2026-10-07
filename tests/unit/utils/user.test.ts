@@ -1,7 +1,14 @@
 import { describe, expect, test } from "vitest";
 
 import type { User } from "~/types/User";
-import { getUserDisplayName, USERNAME_PATTERN, validateUsername } from "~/utils/user";
+import {
+  getUserDisplayName,
+  USERNAME_PATTERN,
+  USER_STRING_MAX_LENGTH,
+  validateDisplayName,
+  validateEmail,
+  validateUsername,
+} from "~/utils/user";
 
 const makeUser = (overrides: Partial<User>): User => ({
   id: "default-id",
@@ -81,5 +88,35 @@ describe("USERNAME_PATTERN", () => {
     const regex = new RegExp(`^${USERNAME_PATTERN}$`, "v");
     expect(regex.test("alice@example.com")).toBe(true);
     expect(regex.test("lm@")).toBe(false);
+  });
+});
+
+describe("user field limits", () => {
+  // Headscale caps every user field at 255 characters, but only the lower bound
+  // was enforced before: an over-long value reached the API and came back as an
+  // opaque error instead of a form message.
+  test("username is bounded on both ends", () => {
+    expect(validateUsername("a".repeat(2))).toBeUndefined();
+    expect(validateUsername("a".repeat(USER_STRING_MAX_LENGTH))).toBeUndefined();
+    expect(validateUsername("a".repeat(USER_STRING_MAX_LENGTH + 1))).toBeTypeOf("string");
+  });
+
+  test("display names allow spaces but not control characters", () => {
+    expect(validateDisplayName("")).toBeUndefined();
+    expect(validateDisplayName("Alice Smith")).toBeUndefined();
+    expect(validateDisplayName("a".repeat(USER_STRING_MAX_LENGTH))).toBeUndefined();
+    expect(validateDisplayName("Alice\nSmith")).toBeTypeOf("string");
+    expect(validateDisplayName("Alice\u007fSmith")).toBeTypeOf("string");
+    expect(validateDisplayName("a".repeat(USER_STRING_MAX_LENGTH + 1))).toBeTypeOf("string");
+  });
+
+  test("emails must be exactly one non-empty local part and domain", () => {
+    expect(validateEmail("name@example.com")).toBeUndefined();
+    expect(validateEmail("")).toBeTypeOf("string");
+    expect(validateEmail("name")).toBeTypeOf("string");
+    expect(validateEmail("@example.com")).toBeTypeOf("string");
+    expect(validateEmail("name@")).toBeTypeOf("string");
+    expect(validateEmail("a@b@c")).toBeTypeOf("string");
+    expect(validateEmail(`${"a".repeat(USER_STRING_MAX_LENGTH)}@example.com`)).toBeTypeOf("string");
   });
 });

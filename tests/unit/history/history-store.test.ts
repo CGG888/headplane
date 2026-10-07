@@ -15,6 +15,7 @@ import {
 } from "~/server/history/store";
 import {
   emptyHistoryDocument,
+  HISTORY_MAX_NODES,
   HISTORY_MAX_SAMPLES_PER_NODE,
   HISTORY_VERSION,
   NODE_HISTORY_FILE,
@@ -92,6 +93,38 @@ describe("node history document parsing", () => {
     expect(parsed.ticks).toEqual([iso(BASE), iso(BASE + MINUTE)]);
     expect(parsed.nodes[0].samples).toHaveLength(HISTORY_MAX_SAMPLES_PER_NODE);
     expect(parsed.nodes[0].samples.at(-1)?.at).toBe(iso(BASE + (count - 1) * MINUTE));
+  });
+
+  test("caps the per-tick node list and keeps the newest records", () => {
+    const count = HISTORY_MAX_NODES + 10;
+    const at = iso(BASE);
+    const nodes = Array.from({ length: count }, (_, index) => ({
+      id: String(index),
+      samples: [{ at, online: index % 2 === 0 }],
+    }));
+
+    const parsed = parseHistoryDocument(
+      JSON.stringify({ version: HISTORY_VERSION, ticks: [at], nodes }),
+    );
+
+    expect(parsed.nodes).toHaveLength(HISTORY_MAX_NODES);
+    expect(parsed.nodes[0]?.id).toBe(String(count - HISTORY_MAX_NODES));
+    expect(parsed.nodes.at(-1)?.id).toBe(String(count - 1));
+  });
+
+  test("serializes at most the capped node list", () => {
+    const count = HISTORY_MAX_NODES + 5;
+    const at = iso(BASE);
+    const nodes = Array.from({ length: count }, (_, index) => ({
+      id: String(index),
+      samples: [{ at, online: true }],
+    }));
+
+    const raw = serializeHistoryDocument({ version: HISTORY_VERSION, ticks: [at], nodes });
+    const written = JSON.parse(raw) as { nodes: { id: string }[] };
+
+    expect(written.nodes).toHaveLength(HISTORY_MAX_NODES);
+    expect(written.nodes.at(-1)?.id).toBe(String(count - 1));
   });
 
   test("serializes stable JSON with a trailing newline", () => {

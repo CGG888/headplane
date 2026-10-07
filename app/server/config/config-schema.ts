@@ -119,7 +119,13 @@ const partialHeadscaleConfig = type({
   tls_cert_path: "string?",
 });
 
-const assignableRole = '"admin" | "network_admin" | "it_admin" | "auditor" | "viewer" | "member"';
+// Arktype needs a literal type string here, so this cannot be built from
+// `ASSIGNABLE_ROLES` at runtime or the type level in a readable way. It is kept
+// in sync by the `ROLE_PATTERN` check in tests/unit/config/config-file.test.ts.
+export const ROLE_PATTERN =
+  '"admin" | "network_admin" | "it_admin" | "auditor" | "viewer" | "member"';
+
+const assignableRole = ROLE_PATTERN;
 
 const oidcConfig = type({
   enabled: "boolean = true",
@@ -132,7 +138,10 @@ const oidcConfig = type({
       return value;
     })
     .optional(),
-  use_pkce: "boolean = false",
+  // PKCE is on unless the identity provider cannot do it: the runtime reader
+  // (`provider.ts`, `usePkce = config.usePkce !== false`) was already written
+  // for an unset value to mean "on", but this default overrode it with `false`.
+  use_pkce: "boolean = true",
   redirect_uri: type("string.url")
     .pipe((value, ctx) => {
       log.warn("config", "%s is deprecated and will be removed in 0.7.0", ctx.propString);

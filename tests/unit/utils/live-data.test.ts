@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
+  createIdleRevalidator,
   createLiveSubscription,
+  isTextEntryElement,
   parseLiveUpdatesPreference,
   shouldRevalidateForLiveChange,
   type LiveEventSource,
@@ -30,6 +32,11 @@ class FakeEventSource implements LiveEventSource {
 
   emit(type: string, payload: unknown) {
     this.listeners.get(type)?.({ data: JSON.stringify(payload) });
+  }
+
+  /** Sends the frame verbatim, for the payloads `JSON.stringify` cannot make. */
+  emitRaw(type: string, data: string) {
+    this.listeners.get(type)?.({ data });
   }
 }
 
@@ -93,6 +100,155 @@ describe("live change gate", () => {
     expect(
       shouldRevalidateForLiveChange({ paused: false, visible: true, revalidatorState: "idle" }),
     ).toBe(true);
+  });
+});
+
+function idleSetup(
+  initial: { canRevalidate?: boolean; active?: { tagName?: string } | null } = {},
+) {
+  let canRevalidate = initial.canRevalidate ?? true;
+  let active: { tagName?: string } | null = initial.active ?? null;
+  const revalidate = vi.fn();
+  const listeners: Array<() => void> = [];
+  const scheduled: Array<() => void> = [];
+
+  const idle = createIdleRevalidator({
+    revalidate,
+    canRevalidate: () => canRevalidate,
+    activeElement: () => active,
+    onFocusOut: (listener) => {
+      listeners.push(listener);
+      return () => {
+        listeners.splice(listeners.indexOf(listener), 1);
+      };
+    },
+    schedule: (listener) => {
+      scheduled.push(listener);
+    },
+  });
+
+  return {
+    idle,
+    revalidate,
+    focus: (element: { tagName?: string } | null) => {
+      active = element;
+    },
+    /**
+     * Focus leaving a field. `next` is what the browser reports as the active
+     * element by the time the replay runs; it defaults to nothing being focused.
+     */
+    blur: (next: { tagName?: string } | null = null) => {
+      active = next;
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+    flush: () => {
+      for (const listener of scheduled.splice(0)) {
+        listener();
+      }
+    },
+    setCanRevalidate: (next: boolean) => {
+      canRevalidate = next;
+    },
+    listenerCount: () => listeners.length,
+  };
+}
+
+describe("text entry detection", () => {
+  test("matches the controls a reload would steal focus from", () => {
+    expect(isTextEntryElement({ tagName: "INPUT" })).toBe(true);
+    expect(isTextEntryElement({ tagName: "TEXTAREA" })).toBe(true);
+    expect(isTextEntryElement({ tagName: "SELECT" })).toBe(true);
+    expect(isTextEntryElement({ tagName: "BUTTON" })).toBe(false);
+    expect(isTextEntryElement({ tagName: "DIV" })).toBe(false);
+    expect(isTextEntryElement(null)).toBe(false);
+    expect(isTextEntryElement(undefined)).toBe(false);
+  });
+});
+
+describe("idle revalidation", () => {
+  test("revalidates straight away when nothing is focused", () => {
+    const { idle, revalidate } = idleSetup();
+
+    idle.run();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+
+    idle.run();
+    expect(revalidate).toHaveBeenCalledTimes(2);
+  });
+
+  test("holds a change that lands mid-typing and replays it on focusout", () => {
+    const { idle, revalidate, focus, blur, flush } = idleSetup();
+    focus({ tagName: "INPUT" });
+
+    idle.run();
+    expect(revalidate).not.toHaveBeenCalled();
+
+    // `focusout` fires before the next element is focused, so the replay waits a
+    // tick and checks the active element again.
+    blur();
+    expect(revalidate).not.toHaveBeenCalled();
+    flush();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not reload when focus moves straight into another field", () => {
+    const { idle, revalidate, focus, blur, flush } = idleSetup();
+    focus({ tagName: "INPUT" });
+    idle.run();
+
+    focus({ tagName: "TEXTAREA" });
+    blur({ tagName: "TEXTAREA" });
+    flush();
+    expect(revalidate).not.toHaveBeenCalled();
+
+    blur();
+    flush();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps the request while the page is not allowed to reload", () => {
+    const { idle, revalidate, blur, flush, setCanRevalidate } = idleSetup({
+      canRevalidate: false,
+    });
+
+    idle.run();
+    expect(revalidate).not.toHaveBeenCalled();
+
+    blur();
+    flush();
+    expect(revalidate).not.toHaveBeenCalled();
+
+    setCanRevalidate(true);
+    blur();
+    flush();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  test("several changes while focused collapse into one reload", () => {
+    const { idle, revalidate, focus, blur, flush } = idleSetup();
+    focus({ tagName: "INPUT" });
+    idle.run();
+    idle.run();
+
+    blur();
+    flush();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  test("close stops listening and replays nothing", () => {
+    const { idle, revalidate, focus, blur, flush, listenerCount } = idleSetup();
+    focus({ tagName: "INPUT" });
+    idle.run();
+
+    // A replay that was already queued must not run against a closed component.
+    blur();
+    idle.close();
+    expect(listenerCount()).toBe(0);
+
+    flush();
+    expect(revalidate).not.toHaveBeenCalled();
   });
 });
 
@@ -177,6 +333,97 @@ describe("live subscription", () => {
 
     expect(markDirty).toHaveBeenCalledTimes(1);
     expect(revalidate).not.toHaveBeenCalled();
+    subscription.close();
+  });
+
+  test("a change event that is not the promised payload is ignored", () => {
+    const { subscription, revalidate } = setup({ paused: false });
+    const source = FakeEventSource.created[0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    source.emit("changed", "not an object");
+    source.emit("changed", { resource: "nodes" });
+    source.emit("changed", { resource: 7, version: "2" });
+    expect(revalidate).not.toHaveBeenCalled();
+
+    // A well formed event still goes through.
+    source.emit("changed", { resource: "nodes", version: "2" });
+    expect(revalidate).toHaveBeenCalledTimes(1);
+
+    warn.mockRestore();
+    subscription.close();
+  });
+
+  test("an unreadable frame is dropped and reported", () => {
+    const { subscription, revalidate } = setup({ paused: false });
+    const source = FakeEventSource.created[0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    source.emitRaw("changed", "{not json");
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    warn.mockRestore();
+    subscription.close();
+  });
+
+  test("a hello event that is not a version map does not become the baseline", () => {
+    const { subscription, revalidate } = setup({ paused: false });
+    const source = FakeEventSource.created[0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    source.emit("hello", ["nodes"]);
+    source.emit("changed", { resource: "nodes", version: "2" });
+    expect(revalidate).toHaveBeenCalledTimes(1);
+
+    // Once the real map arrives, its versions are the ones that count.
+    source.emit("hello", { nodes: "2" });
+    source.emit("changed", { resource: "nodes", version: "2" });
+    expect(revalidate).toHaveBeenCalledTimes(1);
+
+    warn.mockRestore();
+    subscription.close();
+  });
+
+  test("a repeated error replaces the pending reconnect instead of adding one", () => {
+    const { subscription } = setup({ paused: false });
+    const first = FakeEventSource.created[0];
+
+    // The first error schedules a retry in 1s and the second one in 2s; the
+    // retry that is already pending must not open a second connection.
+    first.onerror?.(new Error("disconnected"));
+    first.onerror?.(new Error("still disconnected"));
+
+    vi.advanceTimersByTime(2_000);
+    expect(FakeEventSource.created).toHaveLength(2);
+    subscription.close();
+  });
+
+  test("a revalidation that throws does not take the stream down", () => {
+    const revalidate = vi.fn(() => {
+      throw new Error("revalidate failed");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const subscription = createLiveSubscription({
+      url: "/events/live",
+      paused: false,
+      isVisible: () => true,
+      revalidate,
+      markDirty: vi.fn(),
+      createSource,
+    });
+    const source = FakeEventSource.created[0];
+
+    expect(() => {
+      source.emit("changed", { resource: "nodes", version: "2" });
+    }).not.toThrow();
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // The connection survived, so the next change is still delivered.
+    source.emit("changed", { resource: "nodes", version: "3" });
+    expect(revalidate).toHaveBeenCalledTimes(2);
+
+    warn.mockRestore();
     subscription.close();
   });
 });

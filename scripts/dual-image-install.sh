@@ -87,6 +87,7 @@ OPT_SERVER_URL=""
 OPT_DERP_HOST=""
 OPT_ADMIN_HOST=""
 OPT_HP_PORT=""
+OPT_ADMIN_BIND=""
 OPT_STUN_PORT=""
 OPT_TZ=""
 OPT_REGION_ID=""
@@ -114,6 +115,13 @@ ADMIN_HOST=""
 ADMIN_URL=""
 BASE_URL=""
 HP_PORT=""
+# Where the admin UI ends up reachable from, and what the container binds.
+# ADMIN_BIND is the operator's choice (0.0.0.0 or 127.0.0.1); HP_LISTEN_ADDR is
+# what server.host is set to: with bridge networking the container must listen on
+# 0.0.0.0 for docker to forward the published port, and the exposure is decided by
+# the published address instead.
+ADMIN_BIND=""
+HP_LISTEN_ADDR=""
 STUN_PORT=""
 METRICS_ADDR=""
 TZONE=""
@@ -271,6 +279,15 @@ mask_config_lines() {
 	sed -E 's/^([[:space:]]*(api_key|cookie_secret|client_secret|info_secret)[[:space:]]*:).*/\1 "<redacted>"/'
 }
 
+# The change log is printed on every run, so a key that holds a secret has to be
+# masked there as well - the same value is written to the file in full.
+is_secret_key() {
+	case "$1" in
+	*secret* | *api_key* | *password* | *passwd* | *token*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 have() { command -v "$1" >/dev/null 2>&1; }
 
 is_uint() {
@@ -365,6 +382,42 @@ v_derp_dir() {
 		return 1
 		;;
 	esac
+}
+
+# Refuses a target of the recursive `chown -R 0:0` below.  A recursive chown
+# overwrites ownership that nothing records, so it is only acceptable for a
+# directory that exists for this deployment: a system directory, the deployment
+# root or the HeadplaneCN data directory would take unrelated files with it.
+v_recursive_chown_target() {
+	local v="$1" d
+	local -a system_dirs=(
+		/ /etc /usr /bin /sbin /lib /lib64 /lib32 /boot /var /root /tmp /dev
+		/proc /sys /run /home /opt /srv /mnt /media /lost+found
+	)
+	for d in "${system_dirs[@]}"; do
+		if [[ $v == "$d" ]]; then
+			verr "'$v' is a system directory; refusing to change its ownership recursively"
+			return 1
+		fi
+	done
+	if [[ $v == "$BASE_DIR" ]]; then
+		verr "'$v' is the deployment root and also holds the HeadplaneCN files; refusing to change its ownership recursively"
+		return 1
+	fi
+	case "$BASE_DIR" in
+	"$v"/*)
+		verr "'$v' is a parent of the deployment root ($BASE_DIR), so a recursive chown would also take ownership of unrelated files; pick a dedicated directory"
+		return 1
+		;;
+	esac
+	local -a headplane_paths=("$HP_DATA" "$HP_CONFIG")
+	for d in "${headplane_paths[@]}"; do
+		if [[ -n $d && $v == "$d" ]]; then
+			verr "'$v' is a HeadplaneCN path; those are written by the HeadplaneCN container as its own user and must keep their owner"
+			return 1
+		fi
+	done
+	return 0
 }
 
 # Two prompts pointing at the same place must never pass silently: the containers
@@ -698,6 +751,60 @@ function strip_comment(v,   q) {
 AWK
 )
 
+# The items of one list block, one per line.  Used to check derp.paths before the
+# install finishes: Headscale exits at start-up when a listed map is unreadable.
+AWK_YAML_LIST=$(
+	cat <<'AWK'
+function trim(s) { gsub(/^[ \t]+/, "", s); gsub(/[ \t]+$/, "", s); return s }
+function strip_comment(v,   q) {
+  if (v ~ /^"/) {
+    q = index(substr(v, 2), "\"")
+    if (q > 0) return substr(v, 1, q + 1)
+    return v
+  }
+  if (v ~ /^'/) {
+    q = index(substr(v, 2), "'")
+    if (q > 0) return substr(v, 1, q + 1)
+    return v
+  }
+  sub(/[ \t]+#.*$/, "", v)
+  return v
+}
+function unquote(v) {
+  sub(/^"/, "", v); sub(/"$/, "", v)
+  sub(/^'/, "", v); sub(/'$/, "", v)
+  return v
+}
+{
+  line = $0
+  if (line ~ /^[ \t]*(#|$)/) next
+  match(line, /^[ \t]*/); ind = RLENGTH
+  body = substr(line, ind + 1)
+  if (body ~ /^-([ \t]|$)/) {
+    if (inblock && ind > bind) {
+      item = body; sub(/^-[ \t]*/, "", item)
+      print unquote(trim(strip_comment(item)))
+    }
+    next
+  }
+  if (body !~ /^[A-Za-z0-9_.-]+[ \t]*:/) next
+  k = body; sub(/[ \t]*:.*$/, "", k)
+  v = body; sub(/^[^:]*:[ \t]*/, "", v)
+  v = trim(strip_comment(v))
+  while (depth > 0 && blockind[depth] >= ind) depth--
+  p = ""
+  for (i = 1; i <= depth; i++) p = p (i > 1 ? "." : "") blockkey[i]
+  if (v == "") {
+    depth++; blockkey[depth] = k; blockind[depth] = ind
+    p = p (depth > 1 ? "." : "") k
+    inblock = (p == target); bind = ind
+  } else {
+    inblock = ((p == "" ? "" : p ".") k == target)
+  }
+}
+AWK
+)
+
 AWK_PATCH=$(
 	cat <<'AWK'
 function spaces(n,   s, i) { s = ""; for (i = 0; i < n; i++) s = s " "; return s }
@@ -741,6 +848,16 @@ function strip_comment(v,   q) {
   }
   sub(/[ \t]+#.*$/, "", v)
   return v
+}
+# True for a derp.paths entry the Headscale container cannot read: the images
+# only mount the config and data directories, so an absolute path outside them
+# (typically a host path from the installation being migrated) is not there, and
+# Headscale exits at start-up when a listed map cannot be read.
+function unreadable(p) {
+  if (p !~ /^\//) return 0
+  if (p == ctr_etc || index(p, ctr_etc "/") == 1) return 0
+  if (p == ctr_data || index(p, ctr_data "/") == 1) return 0
+  return 1
 }
 function find_block(path,   j, best) {
   best = 0
@@ -846,19 +963,45 @@ END {
     if (leaf > 0 && val[leaf] == "") {
       if (smode[si] == "list") {
         be = block_end(leaf)
-        found = 0; oldhost = ""
+        found = 0; stale = 0
+        pdir = sval[si]; sub(/\/[^\/]*$/, "", pdir)
         for (j = leaf + 1; j <= be; j++) {
           item = raw[j]
           if (item !~ /^[ \t]*-[ \t]*/) continue
           sub(/^[ \t]*-[ \t]*/, "", item); sub(/[ \t]+$/, "", item)
-          item = unquote(item)
+          item = unquote(strip_comment(item))
           if (item == sval[si]) found = 1
-          if (item ~ /^\/vol1\// || item ~ /@appdata/ || item ~ /^\/vol[0-9]*\//) oldhost = item
+          if (unreadable(item)) {
+            stale++
+            stale_line[stale] = j
+            sold[stale] = item
+          } else {
+            kept[item] = 1
+          }
         }
         if (found) continue
-        insert_after[be] = insert_after[be] spaces(indent[leaf] + 2) "- " sval[si] "\n"
-        logit("ADD", spath[si], "(not listed)", sval[si], "")
-        if (oldhost != "") logit("NOTE", spath[si], oldhost, "", "old host path is still listed; Headscale now runs in a container and cannot read it - remove that line by hand")
+        primary = 0
+        # Every unreadable entry was placed next to the map the installer writes
+        # (migration copies derp-maps/ there), so point the line at that copy
+        # instead of leaving a path the container cannot open.
+        for (st = 1; st <= stale; st++) {
+          j = stale_line[st]
+          base = sold[st]; sub(/^.*\//, "", base)
+          mapped = pdir "/" base
+          if (mapped == sval[si]) primary = 1
+          if (mapped in kept) {
+            dropped[j] = 1
+            logit("DROP", spath[si], sold[st], "", "another entry resolves to the same file; loading it twice would duplicate the maps")
+            continue
+          }
+          kept[mapped] = 1
+          raw[j] = spaces(indent[leaf] + 2) "- " mapped
+          logit("CHANGE", spath[si], sold[st], mapped, "old host path rewritten to the map inside the mounted config directory")
+        }
+        if (!primary) {
+          insert_after[be] = insert_after[be] spaces(indent[leaf] + 2) "- " sval[si] "\n"
+          logit("ADD", spath[si], "(not listed)", sval[si], "")
+        }
         continue
       }
       logit("MANUAL", spath[si], "(block)", sval[si], "key exists as a block; not rewritten automatically")
@@ -887,6 +1030,7 @@ END {
   }
 
   for (j = 1; j <= N; j++) {
+    if (j in dropped) continue
     if (j in newval) printf "%s%s: %s\n", spaces(indent[j]), key[j], newval[j]
     else printf "%s\n", raw[j]
     if (j in insert_after) printf "%s", insert_after[j]
@@ -902,9 +1046,64 @@ yaml_get() { # file dotted.key
 	awk -v target="$key" "$AWK_YAML_GET" "$file" 2>/dev/null || true
 }
 
+yaml_list() { # file dotted.key -> one item per line
+	local file="$1" key="$2"
+	[[ -r $file ]] || return 1
+	awk -v target="$key" "$AWK_YAML_LIST" "$file" 2>/dev/null || true
+}
+
+# The host path behind a container path, for the two directories the images
+# mount.  Prints nothing and fails for anything else.
+container_to_host_path() {
+	local p="$1"
+	case "$p" in
+	"$HS_ETC_CTR"/*) printf '%s/%s' "$HS_ETC" "${p#"$HS_ETC_CTR"/}" ;;
+	"$HS_ETC_CTR") printf '%s' "$HS_ETC" ;;
+	"$HS_DATA_CTR"/*) printf '%s/%s' "$HS_DATA" "${p#"$HS_DATA_CTR"/}" ;;
+	"$HS_DATA_CTR") printf '%s' "$HS_DATA" ;;
+	*) return 1 ;;
+	esac
+}
+
+# Headscale refuses to start when a derp.paths entry names a file it cannot read,
+# so an install that leaves one behind looks successful and then crashes.  Every
+# entry of the written config is resolved back to its host path here; anything
+# missing stops a real run before the containers are started (a dry run only
+# reports what it sees, because migration and the placeholder still have to run).
+verify_derp_paths() { # <written or previewed yaml> <real|plan>
+	local file="$1" phase="${2:-real}" entry host base bad=0 listed=0 ok=0
+	while IFS= read -r entry; do
+		[[ -n $entry ]] || continue
+		listed=1
+		if ! host="$(container_to_host_path "$entry")"; then
+			warn "derp.paths entry $entry is outside $HS_ETC_CTR and $HS_DATA_CTR; the Headscale container cannot read it"
+			bad=$((bad + 1))
+			continue
+		fi
+		base="${entry##*/}"
+		ok=0
+		[[ -e $host ]] && ok=1
+		[[ $entry == "$DERP_MAP_CTR" && $host == "$DERP_MAP_HOST" ]] && ok=1
+		[[ -n $MIGRATE_SRC && -e "$MIGRATE_SRC/derp-maps/$base" ]] && ok=1
+		if ((ok == 1)); then
+			dim "  derp.paths ok: $entry"
+			continue
+		fi
+		warn "derp.paths entry $entry has no file behind it ($host)"
+		bad=$((bad + 1))
+	done < <(yaml_list "$file" "derp.paths" || true)
+	((listed)) || return 0
+	((bad == 0)) && return 0
+	if [[ $phase == "real" ]]; then
+		die "$bad derp.paths entry/entries would stop Headscale at start-up; put each map in $DERP_MAP_DIR (the directory both containers mount) or drop the line, then re-run"
+	fi
+	warn "$bad derp.paths entry/entries of the planned config would stop Headscale at start-up"
+	return 0
+}
+
 patch_config() { # src spec logfile  (patched YAML on stdout)
 	local src="$1" spec="$2" log="$3"
-	awk -v specfile="$spec" -v logfile="$log" "$AWK_PATCH" "$src"
+	awk -v specfile="$spec" -v logfile="$log" -v ctr_etc="$HS_ETC_CTR" -v ctr_data="$HS_DATA_CTR" "$AWK_PATCH" "$src"
 }
 
 # -----------------------------------------------------------------------------
@@ -1118,34 +1317,23 @@ step_base_dir() {
 			continue
 			;;
 		esac
-		# writability: find the deepest existing ancestor, then probe it
-		probe="$reply"
-		while [[ ! -d $probe && $probe != "/" ]]; do
-			probe="$(dirname "$probe")"
-		done
+		# Writability, without touching the disk: only the deepest existing
+		# ancestor is probed.  Creating the directory and writing a probe file
+		# here contradicted the promise printed in MODE above (files are written
+		# once the plan is confirmed); the real mkdir -p runs in the write phase,
+		# which reports any remaining failure there.
+		if [[ -e $reply && ! -d $reply ]]; then
+			warn "'$reply' exists and is not a directory; choose another path"
+			tries=$((tries + 1))
+			((tries >= 5)) && die "too many invalid answers for the base directory"
+			continue
+		fi
+		probe="$(path_deepest_existing "$reply")"
 		if [[ ! -w $probe ]]; then
 			warn "'$probe' is not writable by $(id -un); choose another path or re-run with sudo"
 			tries=$((tries + 1))
 			((tries >= 5)) && die "too many invalid answers for the base directory"
 			continue
-		fi
-		if ((DRY_RUN == 0)); then
-			mkdir -p "$reply" 2>/dev/null || {
-				warn "cannot create $reply"
-				tries=$((tries + 1))
-				((tries >= 5)) && die "too many invalid answers for the base directory"
-				continue
-			}
-			local t=""
-			t="$(mktemp "$reply/.dii-probe.XXXXXX" 2>/dev/null)" || {
-				warn "cannot write inside $reply"
-				tries=$((tries + 1))
-				((tries >= 5)) && die "too many invalid answers for the base directory"
-				continue
-			}
-			rm -f "$t"
-		else
-			dim "  [dry-run] writability probe skipped, deepest existing ancestor '$probe' is writable"
 		fi
 		BASE_DIR="$reply"
 		break
@@ -1182,6 +1370,10 @@ step_base_dir() {
 	COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 	BACKUP_DIR="$BASE_DIR/backups"
 	warn_layout_collisions
+	# The recursive chown of the Headscale directories happens later, so a layout
+	# that would hand it unrelated files is rejected here, before anything exists.
+	v_recursive_chown_target "$HS_ETC" || die "refusing to change the ownership of $HS_ETC recursively"
+	v_recursive_chown_target "$HS_DATA" || die "refusing to change the ownership of $HS_DATA recursively"
 	ok "base directory: $BASE_DIR"
 	confirm "These directories will hold the Headscale database and private keys (back them up regularly). Understood?" y ||
 		die "aborted by the operator"
@@ -1330,6 +1522,45 @@ step_network() {
 	if [[ $HP_PORT == "$DEFAULT_HS_PORT" || $HP_PORT == "$DEFAULT_METRICS_PORT" ]]; then
 		warn "$HP_PORT is already used by Headscale ($DEFAULT_HS_PORT control / $DEFAULT_METRICS_PORT metrics)"
 		ask HP_PORT "HeadplaneCN listen port (must differ from $DEFAULT_HS_PORT and $DEFAULT_METRICS_PORT)" "$DEFAULT_ADMIN_PORT" v_port
+	fi
+
+	# Admin UI exposure. The dashboard is the most sensitive surface on this machine:
+	# metrics are localhost-only by default, so make the admin port ask the same
+	# question instead of silently publishing it on every interface. In bridge mode
+	# the published address decides, because the container itself must listen on
+	# 0.0.0.0 for docker to forward the port.
+	if [[ -n ${OPT_ADMIN_BIND:-} ]]; then
+		case "$OPT_ADMIN_BIND" in
+			0.0.0.0 | 127.0.0.1) ADMIN_BIND="$OPT_ADMIN_BIND" ;;
+			*) die "invalid --admin-bind: $OPT_ADMIN_BIND (use 0.0.0.0 or 127.0.0.1)" ;;
+		esac
+		printf 'Admin UI bind address [0.0.0.0]: %s (--admin-bind)\n' "$ADMIN_BIND" >&2
+	else
+		local ab=""
+		if ((HOST_NETWORK == 1)); then
+			choose_index ab "HeadplaneCN listen address:" 1 \
+				"0.0.0.0  (all interfaces - reachable from the LAN, recommended)" \
+				"127.0.0.1  (local only - put the reverse proxy on this machine)"
+		else
+			choose_index ab "Publish the HeadplaneCN admin port:" 1 \
+				"$HP_PORT on all interfaces  (reachable from the LAN, recommended)" \
+				"127.0.0.1:$HP_PORT  (local only - put the reverse proxy on this machine)"
+		fi
+		if [[ $ab == "2" ]]; then
+			ADMIN_BIND="127.0.0.1"
+		else
+			ADMIN_BIND="0.0.0.0"
+		fi
+	fi
+	if ((HOST_NETWORK == 1)); then
+		HP_LISTEN_ADDR="$ADMIN_BIND"
+	else
+		HP_LISTEN_ADDR="0.0.0.0"
+	fi
+	if [[ $ADMIN_BIND == "127.0.0.1" ]]; then
+		dim "  the admin UI is only reachable on 127.0.0.1:$HP_PORT of this machine"
+	else
+		warn "the admin UI is reachable on every interface of this machine (tcp/$HP_PORT); firewall it or put a TLS reverse proxy in front of it"
 	fi
 
 	# STUN
@@ -1552,7 +1783,7 @@ step_migration() {
 plan_migration() {
 	local ts="$1" archive
 	archive="$BACKUP_DIR/headscale-pre-migration-$ts.tar.gz"
-	emit "  backup: tar -czf $archive -C $(dirname "$MIGRATE_SRC") $(basename "$MIGRATE_SRC")"
+	emit "  backup: tar -czf $archive -C $(dirname "$MIGRATE_SRC") $(basename "$MIGRATE_SRC") (mode 600)"
 	emit "  copy (originals are never touched):"
 	emit "    $MIGRATE_SRC/config.yaml       -> $HS_ETC/config.yaml"
 	emit "    $MIGRATE_SRC/db.sqlite         -> $HS_DATA/db.sqlite"
@@ -1574,7 +1805,10 @@ run_migration() {
 		return 0
 	fi
 	if have tar; then
-		if tar -czf "$archive" -C "$(dirname "$MIGRATE_SRC")" "$(basename "$MIGRATE_SRC")"; then
+		# the archive holds the database and the private keys, so create it
+		# owner-only instead of trusting the umask of whoever runs the script
+		if (umask 077 && tar -czf "$archive" -C "$(dirname "$MIGRATE_SRC")" "$(basename "$MIGRATE_SRC")"); then
+			chmod 0600 "$archive" 2>/dev/null || warn "  could not restrict permissions on $archive, which holds the private keys"
 			BACKUP_FILES+=("$archive")
 			ok "  backup written: $archive ($(wc -c <"$archive" | tr -d ' ') bytes)"
 			if have sha256sum; then
@@ -1674,7 +1908,7 @@ hp_config_skeleton() {
 # Headscale API key.
 
 server:
-  host: "0.0.0.0"
+  host: "${HP_LISTEN_ADDR:-0.0.0.0}"
   port: $HP_PORT
 
   # The URL the browser uses: scheme + hostname + port, WITHOUT the /admin
@@ -1715,7 +1949,8 @@ EOF
 }
 
 build_compose_content() {
-	local c="" netmode ports_hs="" ports_hp="" deploy_mode_note
+	local c="" netmode ports_hs="" ports_hp="" deploy_mode_note admin_publish=""
+	[[ $ADMIN_BIND == "127.0.0.1" ]] && admin_publish="127.0.0.1:"
 	if ((HOST_NETWORK == 1)); then
 		netmode="    network_mode: \"host\""
 		deploy_mode_note="    # host networking: no ports: section - the container binds the NAS ports directly"
@@ -1726,7 +1961,7 @@ build_compose_content() {
       - \"127.0.0.1:$DEFAULT_METRICS_PORT:$DEFAULT_METRICS_PORT\"
       - \"$STUN_PORT:$STUN_PORT/udp\""
 		ports_hp="    ports:
-      - \"$HP_PORT:$HP_PORT\""
+      - \"$admin_publish$HP_PORT:$HP_PORT\""
 		deploy_mode_note="    # bridge networking: published ports below; HeadplaneCN reaches Headscale as http://headscale:$DEFAULT_HS_PORT"
 	fi
 	c+="# docker-compose.yml"$'\n'
@@ -1751,8 +1986,8 @@ build_compose_content() {
 	c+="    restart: \"unless-stopped\""$'\n'
 	c+="    command: \"serve\""$'\n'
 	[[ -n $netmode ]] && c+="$netmode"$'\n'
-	c+="    # HeadplaneCN needs to see this process to send it SIGHUP"$'\n'
-	c+="    pid: \"host\""$'\n'
+	c+="    # No pid: \"host\" here: the SIGHUP integration runs inside the headplane container,"$'\n'
+	c+="    # which shares the host PID namespace and sees this process anyway."$'\n'
 	[[ -n $ports_hs ]] && c+="$ports_hs"$'\n'
 	c+="    volumes:"$'\n'
 	c+="      # Config directory: config.yaml, policy and the DERP maps below $DERP_MAP_DIR"$'\n'
@@ -1863,6 +2098,7 @@ write_headscale_config() {
 		emit "--- end: $HS_ETC/config.yaml ---"
 		emit "changes that would be made:"
 		print_change_log "$log"
+		verify_derp_paths "$out" plan
 		return 0
 	fi
 
@@ -1891,6 +2127,7 @@ write_headscale_config() {
 	fi
 	emit "  changes applied to $HS_ETC/config.yaml:"
 	print_change_log "$log"
+	verify_derp_paths "$HS_ETC/config.yaml" real
 	if have diff; then
 		local d
 		d="$(diff -u "$bak" "$HS_ETC/config.yaml" 2>/dev/null || true)"
@@ -1922,7 +2159,7 @@ write_headplane_config() {
 	spec="$(new_tmp_file)"
 	log="$(new_tmp_file)"
 	{
-		printf 'server.host\tstr\t0.0.0.0\n'
+		printf 'server.host\tstr\t%s\n' "${HP_LISTEN_ADDR:-0.0.0.0}"
 		printf 'server.port\traw\t%s\n' "$HP_PORT"
 		printf 'server.base_url\tstr\t%s\n' "$BASE_URL"
 		printf 'server.cookie_secure\traw\t%s\n' "$([[ $BASE_URL == https://* ]] && echo true || echo false)"
@@ -1974,11 +2211,16 @@ print_change_log() {
 	while IFS=$'\t' read -r kind key old new note; do
 		[[ -n ${kind:-} ]] || continue
 		n=$((n + 1))
+		if is_secret_key "$key"; then
+			old="$(mask_secret "$old")"
+			new="$(mask_secret "$new")"
+		fi
 		case "$kind" in
 		CHANGE) emit "    ~ $key: $old  ->  $new" ;;
 		ADD) emit "    + $key: $new" ;;
 		MANUAL) emit "    ! $key: $note" ;;
 		NOTE) emit "    * $key: $note" ;;
+		DROP) emit "    - $key: $old ($note)" ;;
 		*) emit "    $kind $key $old $new $note" ;;
 		esac
 	done <"$log"
@@ -2031,6 +2273,7 @@ print_plan() {
 	emit "client URL     : $SERVER_URL"
 	emit "DERP endpoint  : $DERP_URL"
 	emit "admin UI       : $ADMIN_URL/admin  (server.base_url=$BASE_URL)"
+	emit "admin exposure : $(if [[ $ADMIN_BIND == "127.0.0.1" ]]; then printf 'reachable on 127.0.0.1:%s only' "$HP_PORT"; elif ((HOST_NETWORK == 1)); then printf 'reachable on every interface (server.host=%s)' "$ADMIN_BIND"; else printf 'published on every interface; firewall tcp/%s or put a TLS reverse proxy in front' "$HP_PORT"; fi)"
 	emit "API key        : $API_KEY_STATE"
 	emit "cookie secret  : $COOKIE_STATE"
 	emit ""
@@ -2208,6 +2451,8 @@ FLAGS
       --derp-host H[:P]   answer the embedded DERP prompt (or "none")
       --admin-host H[:P]  answer the admin UI prompt (or "none")
       --admin-port PORT   answer the HeadplaneCN listen port prompt
+      --admin-bind ADDR   admin UI exposure: 0.0.0.0 (all interfaces, default)
+                          or 127.0.0.1 (local only, behind a reverse proxy)
       --stun-port PORT    answer the STUN udp port prompt
       --region-id N       answer the embedded DERP region id prompt
       --tz ZONE           answer the timezone prompt
@@ -2340,6 +2585,17 @@ self_test() {
 	check_ok v_host_file "$T/headplane.yaml" "a new file below a writable parent"
 	check_ok v_host_file "$T/a-fixture-file" "an existing writable file"
 	check_no v_host_file "$T" "a directory given as a file"
+
+	# The prompts run before the "write these files now?" confirmation, so they
+	# must not create anything on disk.  This guards the removal of the
+	# `mkdir -p` + `mktemp` probe that step_base_dir used to run while it was
+	# only asking where to deploy.
+	if declare -f step_base_dir | grep -Eq '(^|[^a-z])(mkdir|mktemp|touch|stage_file)([^a-z]|$)'; then
+		printf 'FAIL  the base-directory prompt must not write to disk before the plan is confirmed\n'
+		fails=$((fails + 1))
+	else
+		printf 'PASS  the base-directory prompt writes nothing before the plan is confirmed\n'
+	fi
 
 	# the DERP map directory has to stay inside the chosen config directory
 	local saved_etc="$HS_ETC"
@@ -2505,11 +2761,12 @@ YAML
 		printf 'FAIL  patcher preserves unrelated blocks\n'
 		fails=$((fails + 1))
 	}
-	if grep -q '/etc/headscale/derp-maps/official-mirror.yaml' "$out" &&
-		grep -q '/vol1/@appdata/headscale/derp-maps/official-mirror.yaml' "$out"; then
-		printf 'PASS  patcher appends the container path to derp.paths\n'
+	if [[ "$(grep -c '^    - /etc/headscale/derp-maps/official-mirror.yaml$' "$out" || true)" == "1" ]] &&
+		! grep -q '/vol1/@appdata/headscale/derp-maps' "$out"; then
+		printf 'PASS  patcher rewrites a stale host path to the mounted container path\n'
 	else
-		printf 'FAIL  patcher derp.paths handling\n'
+		printf 'FAIL  patcher left a derp.paths entry the container cannot read\n'
+		sed 's/^/      | /' "$out"
 		fails=$((fails + 1))
 	fi
 	if grep -q 'keep this comment' "$out"; then
@@ -2518,10 +2775,12 @@ YAML
 		printf 'FAIL  patcher lost a comment\n'
 		fails=$((fails + 1))
 	fi
-	if grep -q 'old host path is still listed' "$log"; then
-		printf 'PASS  patcher warns about the stale host path\n'
+	if awk -F'\t' '$1 == "CHANGE" && $2 == "derp.paths" && $3 ~ /^\/vol1\// && $4 == "/etc/headscale/derp-maps/official-mirror.yaml" { found = 1 } END { exit !found }' "$log" &&
+		! grep -q 'old host path is still listed' "$log"; then
+		printf 'PASS  the change log records the rewrite instead of only a note\n'
 	else
-		printf 'FAIL  patcher did not warn about the stale host path\n'
+		printf 'FAIL  the change log does not record the derp.paths rewrite\n'
+		sed 's/^/      | /' "$log"
 		fails=$((fails + 1))
 	fi
 
@@ -2607,6 +2866,205 @@ YAML
 		fails=$((fails + 1))
 	fi
 
+	# every unreadable entry is rewritten next to the map the installer writes,
+	# while container paths that are already right stay untouched
+	local multi="$T/multi.yaml" outm="$T/outm.yaml" logm="$T/logm" specm="$T/specm"
+	cat >"$multi" <<'YAML'
+derp:
+  paths:
+    - /old/host/maps/a.yaml
+    - /etc/headscale/derp-maps/b.yaml
+    - /vol1/@appdata/headscale/derp-maps/c.yaml
+YAML
+	printf 'derp.paths\tlist\t/etc/headscale/derp-maps/official-mirror.yaml\n' >"$specm"
+	patch_config "$multi" "$specm" "$logm" >"$outm"
+	if grep -q '^    - /etc/headscale/derp-maps/a.yaml$' "$outm" &&
+		grep -q '^    - /etc/headscale/derp-maps/b.yaml$' "$outm" &&
+		grep -q '^    - /etc/headscale/derp-maps/c.yaml$' "$outm" &&
+		grep -q '^    - /etc/headscale/derp-maps/official-mirror.yaml$' "$outm" &&
+		! grep -q '/old/host/maps' "$outm"; then
+		printf 'PASS  patcher rewrites every unreadable entry and keeps readable ones\n'
+	else
+		printf 'FAIL  multi-entry derp.paths handling\n'
+		sed 's/^/      | /' "$outm"
+		fails=$((fails + 1))
+	fi
+
+	# two old entries with the same file name must not both be loaded
+	local dup="$T/dup.yaml" outd="$T/outd.yaml" logd="$T/logd" specd="$T/specd"
+	cat >"$dup" <<'YAML'
+derp:
+  paths:
+    - /old1/derp-maps/official-mirror.yaml
+    - /old2/derp-maps/official-mirror.yaml
+YAML
+	printf 'derp.paths\tlist\t/etc/headscale/derp-maps/official-mirror.yaml\n' >"$specd"
+	patch_config "$dup" "$specd" "$logd" >"$outd"
+	if [[ "$(grep -c '^    - /etc/headscale/derp-maps/official-mirror.yaml$' "$outd" || true)" == "1" ]] &&
+		awk -F'\t' '$1 == "DROP" { found = 1 } END { exit !found }' "$logd"; then
+		printf 'PASS  a duplicate that resolves to the same file is dropped\n'
+	else
+		printf 'FAIL  duplicate derp.paths entries\n'
+		sed 's/^/      | /' "$outd"
+		fails=$((fails + 1))
+	fi
+
+	# yaml_list reads exactly the items of the requested block
+	if [[ "$(yaml_list "$outm" "derp.paths" | wc -l | tr -d ' ')" == "4" ]] &&
+		[[ "$(yaml_list "$outm" "derp.server.region_id" | wc -l | tr -d ' ')" == "0" ]]; then
+		printf 'PASS  yaml_list reads one list block\n'
+	else
+		printf 'FAIL  yaml_list returned: %s\n' "$(yaml_list "$outm" "derp.paths" | tr '\n' ' ')"
+		fails=$((fails + 1))
+	fi
+
+	# container paths resolve to host paths, and only inside the two mounts
+	local s_etc="$HS_ETC" s_data="$HS_DATA"
+	HS_ETC="$T/etc/headscale"
+	HS_DATA="$T/var/lib/headscale"
+	if [[ "$(container_to_host_path "/etc/headscale/derp-maps/x.yaml")" == "$HS_ETC/derp-maps/x.yaml" ]] &&
+		[[ "$(container_to_host_path "/var/lib/headscale/db.sqlite")" == "$HS_DATA/db.sqlite" ]] &&
+		! container_to_host_path "/vol1/@appdata/headscale/x.yaml" >/dev/null 2>&1; then
+		printf 'PASS  container_to_host_path maps the mounted roots only\n'
+	else
+		printf 'FAIL  container_to_host_path\n'
+		fails=$((fails + 1))
+	fi
+	HS_ETC="$s_etc"
+	HS_DATA="$s_data"
+
+	# the derp.paths check: a real run refuses a config Headscale cannot read,
+	# a dry run only warns
+	local badyaml="$T/bad-derp.yaml" vout="" s_ctr="$DERP_MAP_CTR" s_host="$DERP_MAP_HOST"
+	DERP_MAP_CTR="/etc/headscale/derp-maps/official-mirror.yaml"
+	DERP_MAP_HOST="$HS_ETC/derp-maps/official-mirror.yaml"
+	cat >"$badyaml" <<'YAML'
+derp:
+  paths:
+    - /etc/headscale/derp-maps/missing.yaml
+    - /old/host/maps/gone.yaml
+YAML
+	vout="$(verify_derp_paths "$badyaml" plan 2>&1)" || true
+	if [[ $vout == *"no file behind it"* && $vout == *"outside"* ]]; then
+		printf 'PASS  the plan-phase derp.paths check reports both problems\n'
+	else
+		printf 'FAIL  the plan-phase derp.paths check said: %s\n' "$vout"
+		fails=$((fails + 1))
+	fi
+	if (verify_derp_paths "$badyaml" real) >/dev/null 2>&1; then
+		printf 'FAIL  the real-phase derp.paths check accepted a broken config\n'
+		fails=$((fails + 1))
+	else
+		printf 'PASS  the real-phase derp.paths check refuses a broken config\n'
+	fi
+	cat >"$badyaml" <<'YAML'
+derp:
+  paths:
+    - /etc/headscale/derp-maps/official-mirror.yaml
+YAML
+	if vout="$(verify_derp_paths "$badyaml" real 2>&1)"; then
+		if [[ $vout != *"would stop Headscale"* && $vout != *"outside"* ]]; then
+			printf 'PASS  the real-phase derp.paths check accepts the map it creates\n'
+		else
+			printf 'FAIL  the real-phase derp.paths check rejected its own placeholder: %s\n' "$vout"
+			fails=$((fails + 1))
+		fi
+	else
+		printf 'FAIL  the real-phase derp.paths check failed on a good config\n'
+		fails=$((fails + 1))
+	fi
+	DERP_MAP_CTR="$s_ctr"
+	DERP_MAP_HOST="$s_host"
+
+	# a migration copies the old installation and leaves an owner-only backup:
+	# the archive holds the database and both private keys
+	if have tar; then
+		local mig="$T/migrate" m_etc="$T/migrate-etc" m_data="$T/migrate-data"
+		local m_backup="$T/migrate-backups" m_mode="" m_archive="$T/none" m_chmodlog="$T/chmod-calls"
+		local m_posix=0 m_probe="$T/mode-probe"
+		local s_mig="$MIGRATE_SRC" s_backup="$BACKUP_DIR" s_etc2="$HS_ETC" s_data2="$HS_DATA" s_dry="$DRY_RUN"
+		mkdir -p "$mig" "$m_etc" "$m_data" "$m_backup"
+		printf 'server_url: https://old.example.com:8443\n' >"$mig/config.yaml"
+		printf 'SQLite format 3\n' >"$mig/db.sqlite"
+		printf 'noise\n' >"$mig/noise_private.key"
+		mkdir -p "$mig/derp-maps"
+		printf 'regions: {}\n' >"$mig/derp-maps/official-mirror.yaml"
+		# Windows file systems cannot express 0600, so assert the chmod call and
+		# only check the resulting mode where the platform reports POSIX bits
+		: >"$m_probe"
+		chmod 600 "$m_probe" 2>/dev/null || true
+		[[ "$(stat -c '%a' "$m_probe" 2>/dev/null || true)" == "600" ]] && m_posix=1
+		chmod() { printf 'chmod %s %s\n' "$1" "$2" >>"$m_chmodlog"; }
+		MIGRATE_SRC="$mig"
+		BACKUP_DIR="$m_backup"
+		HS_ETC="$m_etc"
+		HS_DATA="$m_data"
+		DRY_RUN=0
+		run_migration "selftest" >/dev/null 2>&1 || true
+		unset -f chmod
+		m_archive="$m_backup/headscale-pre-migration-selftest.tar.gz"
+		m_mode="$(stat -c '%a' "$m_archive" 2>/dev/null || true)"
+		if [[ -s "$m_archive" ]] &&
+			[[ -s "$m_etc/config.yaml" ]] &&
+			[[ -s "$m_data/db.sqlite" ]] &&
+			[[ -s "$m_etc/derp-maps/official-mirror.yaml" ]] &&
+			[[ -e "$m_chmodlog" ]] &&
+			grep -q "600 $m_archive" "$m_chmodlog" &&
+			{ ((m_posix == 0)) || [[ $m_mode == "600" ]]; }; then
+			printf 'PASS  a migration copies the old installation and writes a 600 backup\n'
+		else
+			printf 'FAIL  migration backup: mode=%s size=%s chmod logged=%s\n' \
+				"${m_mode:-unknown}" "$(wc -c <"$m_archive" 2>/dev/null | tr -d ' ' || printf '?')" \
+				"$(grep -c "600 $m_archive" "$m_chmodlog" 2>/dev/null || true)"
+			fails=$((fails + 1))
+		fi
+		MIGRATE_SRC="$s_mig"
+		BACKUP_DIR="$s_backup"
+		HS_ETC="$s_etc2"
+		HS_DATA="$s_data2"
+		DRY_RUN="$s_dry"
+	fi
+
+	# ---- compose: admin exposure and where pid: host belongs --------------
+	local cx="" c_save_bind="$ADMIN_BIND" c_save_listen="$HP_LISTEN_ADDR" c_save_net="$HOST_NETWORK" c_save_hp="$HP_PORT"
+	HP_PORT="4100"
+	HOST_NETWORK=0
+	ADMIN_BIND="0.0.0.0"
+	cx="$(build_compose_content)"
+	if grep -q '^      - "4100:4100"$' <<<"$cx" && ! grep -q '127.0.0.1:4100:4100' <<<"$cx"; then
+		printf 'PASS  the admin port is published on every interface by default\n'
+	else
+		printf 'FAIL  bridge compose does not publish the admin port on every interface\n'
+		fails=$((fails + 1))
+	fi
+	ADMIN_BIND="127.0.0.1"
+	cx="$(build_compose_content)"
+	if grep -q '^      - "127.0.0.1:4100:4100"$' <<<"$cx"; then
+		printf 'PASS  a local-only admin UI is published on 127.0.0.1 only\n'
+	else
+		printf 'FAIL  bridge compose still publishes the admin port on every interface\n'
+		fails=$((fails + 1))
+	fi
+	HOST_NETWORK=1
+	cx="$(build_compose_content)"
+	if ! grep -q '^    ports:$' <<<"$cx" && [[ "$(grep -c '^    pid: "host"$' <<<"$cx")" == "1" ]]; then
+		printf 'PASS  only the headplane service shares the host PID namespace\n'
+	else
+		printf 'FAIL  pid: "host" is on the wrong service (found %s)\n' "$(grep -c '^    pid: "host"$' <<<"$cx")"
+		fails=$((fails + 1))
+	fi
+	HP_LISTEN_ADDR="127.0.0.1"
+	if grep -q '^  host: "127.0.0.1"$' <<<"$(hp_config_skeleton)"; then
+		printf 'PASS  a local-only admin UI is written as server.host 127.0.0.1\n'
+	else
+		printf 'FAIL  hp_config_skeleton ignores the admin bind address\n'
+		fails=$((fails + 1))
+	fi
+	ADMIN_BIND="$c_save_bind"
+	HP_LISTEN_ADDR="$c_save_listen"
+	HOST_NETWORK="$c_save_net"
+	HP_PORT="$c_save_hp"
+
 	printf '\n%d failure(s)\n' "$fails"
 	((fails == 0)) || return 1
 	return 0
@@ -2668,6 +3126,11 @@ parse_args() {
 		--admin-port)
 			[[ $# -ge 2 ]] || die "--admin-port needs a value"
 			OPT_HP_PORT="$2"
+			shift
+			;;
+		--admin-bind)
+			[[ $# -ge 2 ]] || die "--admin-bind needs a value"
+			OPT_ADMIN_BIND="$2"
 			shift
 			;;
 		--stun-port)
@@ -2810,6 +3273,10 @@ main() {
 	# HP_DATA is left alone: the headplane container writes it as its own user.
 	local own
 	for own in "$HS_ETC" "$HS_DATA"; do
+		if ! v_recursive_chown_target "$own"; then
+			warn "not changing the ownership of $own"
+			continue
+		fi
 		if ((DRY_RUN)); then
 			emit "  [dry-run] chown -R 0:0 $own"
 		elif ((ROOT_UID == 0)); then

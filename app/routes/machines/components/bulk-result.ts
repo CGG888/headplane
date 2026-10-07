@@ -3,11 +3,21 @@ import type { TranslationKey, Vars } from "~/i18n";
 /** The translate function, narrowed to what these helpers need. */
 type Translate = (key: TranslationKey, vars?: Vars) => string;
 
-/** Successful bulk runs report how many machines changed and how many failed. */
+/** One machine a bulk run could not change, and why Headscale refused it. */
+export interface BulkFailure {
+  id: string;
+  reason: string;
+}
+
+/**
+ * Successful bulk runs report how many machines changed, how many failed, and
+ * the reason for each failure so the dialog can name the machines involved.
+ */
 export interface BulkResult {
   success: true;
   updated: number;
   failed: number;
+  failures: BulkFailure[];
 }
 
 /** A rejected bulk request carries a stable code the UI localizes. */

@@ -138,6 +138,8 @@ describe("DERP region mirror service", () => {
       withAlerts?: boolean;
       withIntegration?: boolean;
       reloadFails?: boolean;
+      /** Held open by a test that needs the run still in flight. */
+      gate?: { wait?: Promise<void> };
     } = {},
   ): Harness {
     const target = join(dir, "official-mirror.yaml");
@@ -187,6 +189,8 @@ describe("DERP region mirror service", () => {
           kinds: sources.map((source) => source.kind),
           cache,
         });
+
+        await options.gate?.wait;
 
         // The fake answers from its first source, or from none: a source list
         // either yields a map or reports every entry as failed.
@@ -294,6 +298,28 @@ describe("DERP region mirror service", () => {
     expect((await stat(h.target)).mtimeMs).toBe(before.mtimeMs);
   });
 
+  test("a disposed service abandons a run that is still loading", async () => {
+    const gate: { wait?: Promise<void> } = {};
+    const h = build({ gate });
+    await configure(h);
+
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    gate.wait = held;
+
+    const pending = h.service.runNow();
+    h.service.dispose();
+    release?.();
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.audit).toEqual([]);
+    expect(h.alerts).toEqual([]);
+    await expect(stat(h.target)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   test("a fetch that yields nothing keeps the previous file and records the reason", async () => {
     const h = build();
     await configure(h);
@@ -363,10 +389,85 @@ describe("DERP region mirror service", () => {
     expect(h.alerts).toEqual([{ failed: true, reason: "derp-region-mirror:validation-failed" }]);
   });
 
+  test("a selection larger than the 900s records the regions it cannot number", async () => {
+    const h = build();
+    // The mirrored range holds 97 usable numbers, so a map with 100 regions
+    // (only a pasted one is this large) cannot be numbered completely.
+    h.source.regions = Array.from({ length: 100 }, (_, index) =>
+      region(String(1000 + index), `r${index}`, `Region ${index}`),
+    );
+    const ids = h.source.regions.map((entry) => String(entry.regionId));
+    await configure(h, { officialRegionIds: ids });
+    await writeFile(h.target, "previous: map\n", "utf8");
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.reason).toBe("numbering-exhausted");
+    // The three highest ids rank last and are the ones left without a number.
+    expect(run?.detail).toBe("1097, 1098, 1099");
+    expect(run?.mirrored).toHaveLength(100);
+    expect(await readFile(h.target, "utf8")).toBe("previous: map\n");
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.audit).toHaveLength(0);
+    expect(h.alerts).toEqual([{ failed: true, reason: "derp-region-mirror:numbering-exhausted" }]);
+  });
+
+  test("a target that already holds something other than a DERP map is refused", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG] });
+    // A mirrored path that names Headscale's own configuration, or any other
+    // document, must not be replaced: `mirrorMapChanged` counts an unparsable
+    // file as a change, so the whole file would be overwritten.
+    const config = "server_url: https://headscale.example.com\n";
+    await writeFile(h.target, config, "utf8");
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.reason).toBe("target-not-mirror");
+    expect(run?.detail).toBe(h.target);
+    expect(await readFile(h.target, "utf8")).toBe(config);
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.reload).not.toHaveBeenCalled();
+    expect(h.alerts).toEqual([{ failed: true, reason: "derp-region-mirror:target-not-mirror" }]);
+  });
+
+  test("a broken mirror file is still repaired", async () => {
+    const h = build();
+    await configure(h, { officialRegionIds: [HKG] });
+    // Shaped like a DERP map but invalid inside: the shape is what decides
+    // whether the file may be replaced, so this one is repaired as before.
+    await writeFile(h.target, "regions:\n  broken:\n    regionid: not-a-number\n", "utf8");
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("changed");
+    expect(await readFile(h.target, "utf8")).toContain("regioncode: hkg");
+  });
+
+  test("a snapshot that fails stops the write", async () => {
+    const h = build();
+    h.snapshot.mockRejectedValue(new Error("the snapshot store is full"));
+    await configure(h, { officialRegionIds: [HKG] });
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("skipped");
+    expect(run?.reason).toBe("snapshot-failed");
+    expect(run?.detail).toBe("the snapshot store is full");
+    await expect(readFile(h.target, "utf8")).rejects.toBeDefined();
+    expect(h.audit).toHaveLength(0);
+    expect(h.reload).not.toHaveBeenCalled();
+    expect(h.alerts).toEqual([{ failed: true, reason: "derp-region-mirror:snapshot-failed" }]);
+  });
+
   test.skipIf(RUNS_AS_ROOT)("a read-only target is refused rather than replaced", async () => {
     const h = build();
     await configure(h, { officialRegionIds: [HKG] });
-    await writeFile(h.target, "previous: map\n", "utf8");
+    // A DERP map, so the write is refused for being unwritable rather than for
+    // the file's shape.
+    await writeFile(h.target, "regions: {}\n", "utf8");
     await chmod(h.target, 0o444);
 
     try {
@@ -374,7 +475,7 @@ describe("DERP region mirror service", () => {
 
       expect(run?.reason).toBe("not-writable");
       expect(run?.outcome).toBe("skipped");
-      expect(await readFile(h.target, "utf8")).toBe("previous: map\n");
+      expect(await readFile(h.target, "utf8")).toBe("regions: {}\n");
       expect(h.snapshot).not.toHaveBeenCalled();
       expect(h.alerts).toEqual([{ failed: true, reason: "derp-region-mirror:not-writable" }]);
     } finally {
@@ -442,14 +543,16 @@ describe("DERP region mirror service", () => {
     expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [TOK]: 903 });
     await expect(readFile(h.target, "utf8")).rejects.toBeDefined();
     expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.audit).toEqual([]);
     expect(h.reload).not.toHaveBeenCalled();
     expect(h.alerts).toEqual([]);
 
-    // A check proposes a numbering; it does not adopt it.
+    // A check proposes a numbering; it does not adopt it and does not even
+    // become the stored run: a preview writes nothing at all.
     const document = await readDerpMirrorDocument(dir);
     expect(document.settings.assignment).toEqual({});
     expect(document.settings.assignmentRankedAt).toBeUndefined();
-    expect(document.last?.mode).toBe("check");
+    expect(document.last).toBeUndefined();
   });
 
   test("check on an up-to-date file reports unchanged", async () => {
@@ -1479,11 +1582,12 @@ describe("DERP region mirror latency probe", () => {
 
   test("keeps the measurements an earlier run stored when a later run measures less", async () => {
     // A previous run reached New York; this one only gets as far as Hong Kong.
+    // The earlier reading is recent enough to still be worth keeping.
     await writeDerpMirrorDocument(dir, {
       settings: {
         ...DEFAULT_DERP_MIRROR_SETTINGS,
         latency: {
-          measuredAt: "2026-01-01T00:00:00.000Z",
+          measuredAt: "2026-02-02T00:00:00.000Z",
           outcome: "partial",
           regions: [
             {
@@ -1500,7 +1604,7 @@ describe("DERP region mirror latency probe", () => {
                   method: "stun",
                 },
               ],
-              measuredAt: "2026-01-01T00:00:00.000Z",
+              measuredAt: "2026-02-02T00:00:00.000Z",
               source: "measured",
             },
           ],
@@ -1536,7 +1640,7 @@ describe("DERP region mirror latency probe", () => {
       expect(stored?.outcome).toBe("partial");
       expect(stored?.regions.map((entry) => [entry.regionId, entry.measuredAt])).toEqual([
         [20, MEASURED_AT.toISOString()],
-        [25, "2026-01-01T00:00:00.000Z"],
+        [25, "2026-02-02T00:00:00.000Z"],
       ]);
       expect(stored?.regions.find((entry) => entry.regionId === 25)?.bestV4).toBe(120);
     } finally {

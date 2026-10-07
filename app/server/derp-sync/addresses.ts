@@ -306,12 +306,26 @@ export function relayHostnameFromServerUrl(serverUrl: string | undefined): strin
  * caller. `undefined` means "not an IPv4 host" rather than "no address".
  */
 export function literalSyncIpv4(host: string | undefined): string | undefined {
-  const trimmed = (host ?? "").trim();
-  if (trimmed.length === 0 || trimmed.includes(":") || trimmed.startsWith("[")) {
+  // A bracketed IPv6 literal arrives that way from `server_url`; the brackets
+  // are URL syntax rather than part of the address, so they come off before the
+  // literal check decides whether this is an IPv4 host at all.
+  const trimmed = (host ?? "").trim().replace(/^\[|\]$/g, "");
+  if (trimmed.length === 0 || trimmed.includes(":")) {
     return undefined;
   }
 
   return parseIpv4(trimmed) === undefined ? undefined : trimmed;
+}
+
+/**
+ * True when the host is an address literal rather than a name to look up. The
+ * IPv4 detection uses it to keep a literal away from the resolver: an IPv6
+ * literal has no A record to read, and handing a bracketed value to a resolver
+ * would produce a lookup failure that never happened.
+ */
+export function isIpLiteralHost(host: string | undefined): boolean {
+  const trimmed = (host ?? "").trim().replace(/^\[|\]$/g, "");
+  return trimmed.length > 0 && (trimmed.includes(":") || parseIpv4(trimmed) !== undefined);
 }
 
 // MARK: Plan

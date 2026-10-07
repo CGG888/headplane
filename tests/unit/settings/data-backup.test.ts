@@ -141,6 +141,21 @@ describe("consistent database copy", () => {
     expect(existsSync(backup.path)).toBe(false);
   });
 
+  test("removes the copy when the download is never consumed", async () => {
+    const backups = join(temp, "backups");
+    await mkdir(backups, { recursive: true });
+    const dbPath = join(temp, "data", "hp_persist.db");
+    await createDatabase(dbPath);
+
+    const backup = await createDataBackup({ dbPath, directory: backups, abandonedMs: 10 });
+    // Nobody ever reads this body: the abandoned copy has to clean itself up
+    // instead of waiting for the process to exit.
+    backup.stream();
+
+    await waitFor(async () => !existsSync(backup.path));
+    await expect(readdir(backups)).resolves.toEqual([]);
+  });
+
   test("removes the temporary file when the copy fails", async () => {
     const backups = join(temp, "backups");
     await mkdir(backups, { recursive: true });

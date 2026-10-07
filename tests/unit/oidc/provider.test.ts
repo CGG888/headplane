@@ -436,6 +436,10 @@ describe("handleCallback", () => {
     }
 
     expect(result.error.code).toBe("state_mismatch");
+    // The error is logged, so it must not carry either state value: the
+    // returned one is attacker controlled and the expected one is secret.
+    expect(result.error.message).not.toContain(flowState.state);
+    expect(result.error.message).not.toContain("wrong-state");
   });
 
   test("provider error in callback params", async () => {
@@ -915,6 +919,46 @@ describe("identity resolution", () => {
     expect(result.ok && result.value.role).toBe("admin");
   });
 
+  test("ignores a role claim that is not a known role", async () => {
+    // An unknown name used to be stored verbatim and then reached `capsForRole`,
+    // which looks the name up on an object literal and threw for it.
+    for (const claim of ["superuser", "constructor", "toString", "admin2", ""]) {
+      const result = await flowWithClaims(
+        { sub: "u1", headplane_role: claim },
+        { roleClaim: "headplane_role" },
+      );
+
+      expect(result.ok && result.value.role).toBeUndefined();
+    }
+  });
+
+  test("tolerates surrounding whitespace in a role claim", async () => {
+    const result = await flowWithClaims(
+      { sub: "u1", headplane_role: "  admin  " },
+      { roleClaim: "headplane_role" },
+    );
+
+    expect(result.ok && result.value.role).toBe("admin");
+  });
+
+  test("never takes the owner role from a claim", async () => {
+    const result = await flowWithClaims(
+      { sub: "u1", headplane_role: "owner" },
+      { roleClaim: "headplane_role" },
+    );
+
+    expect(result.ok && result.value.role).toBeUndefined();
+  });
+
+  test("ignores unknown entries in an array role claim", async () => {
+    const result = await flowWithClaims(
+      { sub: "u1", groups: ["superuser", "constructor"] },
+      { roleClaim: "groups" },
+    );
+
+    expect(result.ok && result.value.role).toBeUndefined();
+  });
+
   test("fetches userinfo when configured role claim is missing from ID token", async () => {
     const svc = createOidcService(testConfig({ usePkce: false, roleClaim: "headplane_role" }));
     const flowResult = await svc.startFlow();
@@ -1114,6 +1158,46 @@ describe("userinfo enrichment", () => {
 
     expect(result.value.subject).toBe("user-123");
     expect(result.value.name).toBe("SSO User");
+  });
+
+  test("ignores userinfo whose subject does not match the id token", async () => {
+    const svc = createOidcService(testConfig({ usePkce: false }));
+    const flowResult = await svc.startFlow();
+    if (!flowResult.ok) {
+      throw new Error("startFlow failed");
+    }
+
+    const { flowState } = flowResult.value;
+    const idToken = await signIdToken({ sub: "user-123" }, flowState.nonce);
+
+    tokenHandler = async (_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ access_token: "at", id_token: idToken, token_type: "Bearer" }));
+    };
+
+    userinfoHandler = (_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          sub: "someone-else",
+          name: "From UserInfo",
+          email: "attacker@example.com",
+        }),
+      );
+    };
+
+    const params = new URLSearchParams({ code: "c", state: flowState.state });
+    const result = await svc.handleCallback(params, flowState);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    // A response for another subject must not contribute any claim: the ID
+    // token keeps its own subject and the foreign email never lands.
+    expect(result.value.subject).toBe("user-123");
+    expect(result.value.email).toBeUndefined();
   });
 });
 

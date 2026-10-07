@@ -6,6 +6,7 @@
 // document degrades to an empty one) and writes go through a temp file plus a
 // rename, so a crash never leaves a half-written document behind.
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -13,6 +14,7 @@ import log from "~/utils/log";
 
 import {
   emptyHistoryDocument,
+  HISTORY_MAX_NODES,
   HISTORY_MAX_SAMPLES_PER_NODE,
   HISTORY_MAX_TICKS,
   HISTORY_VERSION,
@@ -122,7 +124,9 @@ export function parseHistoryDocument(raw: string | undefined | null): NodeHistor
     }
   }
 
-  return { version: HISTORY_VERSION, ticks, nodes };
+  // The node list is capped like the ticks and the samples: a document beyond
+  // the bound keeps its newest records instead of loading an unbounded fleet.
+  return { version: HISTORY_VERSION, ticks, nodes: nodes.slice(-HISTORY_MAX_NODES) };
 }
 
 /** Stable, human-editable JSON with a trailing newline and the caps applied. */
@@ -131,7 +135,7 @@ export function serializeHistoryDocument(document: NodeHistoryDocument): string 
     {
       version: HISTORY_VERSION,
       ticks: document.ticks.slice(-HISTORY_MAX_TICKS),
-      nodes: document.nodes.map((record) => ({
+      nodes: document.nodes.slice(-HISTORY_MAX_NODES).map((record) => ({
         id: record.id,
         ...(record.name === undefined ? {} : { name: record.name }),
         samples: record.samples.slice(-HISTORY_MAX_SAMPLES_PER_NODE),
@@ -151,8 +155,6 @@ export async function readHistoryDocument(dataPath: string): Promise<NodeHistory
   }
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the document atomically (temp file plus rename). Returns false instead
  * of throwing, because the sampler must survive a data directory it cannot
@@ -163,11 +165,16 @@ export async function writeHistoryDocument(
   document: NodeHistoryDocument,
 ): Promise<boolean> {
   const path = historyPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeHistoryDocument(document), "utf8");
+    await writeFile(temp, serializeHistoryDocument(document), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target.
+      flag: "wx",
+    });
     await rename(temp, path);
     return true;
   } catch (error) {

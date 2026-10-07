@@ -23,6 +23,23 @@ export interface UserApi {
   rename(id: string, newName: string): Promise<void>;
 }
 
+/** A headscale user ID as it appears in the REST path: a decimal `uint64`. */
+const USER_ID_PATTERN = /^\d{1,20}$/;
+
+/**
+ * Build a `v1/user/<id>...` path, refusing anything that is not a plain
+ * decimal ID. See `nodePath` in `resources/nodes.ts`: `new URL()` collapses
+ * `..` segments, so an ID like `../apikey` would otherwise reach a sibling
+ * endpoint while riding on the panel's own API key.
+ */
+function userPath(id: string, suffix = ""): `v1/user/${string}` {
+  const value = String(id).trim();
+  if (!USER_ID_PATTERN.test(value)) {
+    throw new Error(`Invalid user ID: ${JSON.stringify(String(id))}`);
+  }
+  return `v1/user/${value}${suffix}`;
+}
+
 export function makeUserApi(
   transport: Transport,
   _capabilities: Capabilities,
@@ -53,12 +70,12 @@ export function makeUserApi(
       return user;
     },
     delete: async (id) => {
-      await transport.request({ method: "DELETE", path: `v1/user/${id}`, apiKey });
+      await transport.request({ method: "DELETE", path: userPath(id), apiKey });
     },
     rename: async (id, newName) => {
       await transport.request({
         method: "POST",
-        path: `v1/user/${id}/rename/${encodeURIComponent(newName)}`,
+        path: userPath(id, `/rename/${encodeURIComponent(newName)}`),
         apiKey,
       });
     },

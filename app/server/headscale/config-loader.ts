@@ -1,5 +1,14 @@
-import { constants, access, readFile, writeFile } from "node:fs/promises";
-import { exit } from "node:process";
+import { randomUUID } from "node:crypto";
+import {
+  constants,
+  access,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 
 import * as v from "valibot";
 import { Document, parseDocument } from "yaml";
@@ -276,6 +285,7 @@ interface HeadscaleConfig {
   getServerOverview: () => ServerOverviewView;
   dnsRecords: () => DNSRecord[];
   patch: (patches: PatchConfig[]) => Promise<void>;
+  mutate: (build: () => PatchConfig[] | Promise<PatchConfig[]>) => Promise<void>;
   addDNS: (record: DNSRecord) => Promise<boolean | void>;
   removeDNS: (record: DNSRecord) => Promise<boolean | void>;
 }
@@ -309,6 +319,7 @@ function createHeadscaleConfig(
     getServerOverview: () => getServerOverview(state),
     dnsRecords: () => dnsRecords(state),
     patch: (patches) => patchHeadscaleConfig(state, patches),
+    mutate: (build) => mutateHeadscaleConfig(state, build),
     addDNS: (record) => addDNS(state, record),
     removeDNS: (record) => removeDNS(state, record),
   };
@@ -667,6 +678,37 @@ async function patchHeadscaleConfig(config: HeadscaleConfigState, patches: Patch
   await write;
 }
 
+/**
+ * Runs `build` inside the write queue so that reading the current value and
+ * computing the patches happens after every earlier write settled.
+ *
+ * `patch()` only serializes the write itself; callers that read a list from
+ * the in-memory config and then append to it (trusted proxies, DERP URLs and
+ * paths, extra DNS records, OIDC allow-lists) compute their new value before
+ * they enqueue, so two concurrent requests both started from the same list and
+ * the later write silently dropped the earlier one.
+ */
+async function mutateHeadscaleConfig(
+  config: HeadscaleConfigState,
+  build: () => PatchConfig[] | Promise<PatchConfig[]>,
+) {
+  if (!config.path || !config.document || !readable(config) || !writable(config)) {
+    return;
+  }
+
+  const write = config.writeQueue.then(async () => {
+    const patches = await build();
+    if (patches.length === 0) {
+      return;
+    }
+
+    await writePatches(config, patches);
+  });
+
+  config.writeQueue = write.catch(() => undefined);
+  await write;
+}
+
 async function writePatches(config: HeadscaleConfigState, patches: PatchConfig[]) {
   if (!config.path || !config.document) return;
 
@@ -685,8 +727,32 @@ async function writePatches(config: HeadscaleConfigState, patches: PatchConfig[]
   }
 
   log.debug("config", "Writing updated Headscale configuration to %s", config.path);
-  await writeFile(config.path, config.document.toString(), "utf8");
+  await atomicWriteFile(config.path, config.document.toString());
   config.config = config.document.toJSON();
+}
+
+/**
+ * Writes `data` next to `path` and renames it into place.
+ *
+ * A plain `writeFile` opens with `"w"`, which truncates first: a crash, a full
+ * disk, or a container restart between the truncate and the write leaves
+ * Headscale's own config.yaml half-written or empty. The rename is atomic, and
+ * the file mode of the existing file is preserved.
+ */
+async function atomicWriteFile(path: string, data: string) {
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
+
+  try {
+    const existing = await stat(path).catch(() => undefined);
+    await writeFile(temp, data, {
+      encoding: "utf8",
+      ...(existing === undefined ? {} : { mode: existing.mode }),
+    });
+    await rename(temp, path);
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 function splitPatchPath(path: string) {
@@ -735,12 +801,20 @@ async function addDNS(config: HeadscaleConfigState, record: DNSRecord) {
     return;
   }
 
-  await patchHeadscaleConfig(config, [
-    {
-      path: "dns.extra_records",
-      value: [...existing, record],
-    },
-  ]);
+  await mutateHeadscaleConfig(config, () => {
+    const current = dnsRecords(config);
+    if (current.some((i) => i.name === record.name && i.type === record.type)) {
+      log.debug("config", "DNS record already exists");
+      return [];
+    }
+
+    return [
+      {
+        path: "dns.extra_records",
+        value: [...current, record],
+      },
+    ];
+  });
 
   return true;
 }
@@ -762,12 +836,20 @@ async function removeDNS(config: HeadscaleConfigState, record: DNSRecord) {
     return;
   }
 
-  await patchHeadscaleConfig(config, [
-    {
-      path: "dns.extra_records",
-      value: filtered,
-    },
-  ]);
+  await mutateHeadscaleConfig(config, () => {
+    const current = dnsRecords(config);
+    const next = current.filter((i) => i.name !== record.name || i.type !== record.type);
+    if (current.length === next.length) {
+      return [];
+    }
+
+    return [
+      {
+        path: "dns.extra_records",
+        value: next,
+      },
+    ];
+  });
 
   return true;
 }
@@ -810,15 +892,34 @@ export async function loadHeadscaleConfig(path?: string, dnsPath?: string) {
     log.error("config", "Please set `dns.extra_records_path` in the Headscale config");
     log.error("config", "Or remove `headscale.dns_records_path` from the Headplane config");
 
-    exit(1);
+    // A caller asking for a separate DNS file while Headscale is not configured
+    // to read one is a configuration mistake, not a reason to stop the process:
+    // the error reaches the caller, which decides what to do with it.
+    throw new Error(
+      "Using separate DNS config file but dns.extra_records_path is not set in Headscale config. " +
+        "Please set `dns.extra_records_path` in the Headscale config, or remove `headscale.dns_records_path` from the Headplane config",
+    );
   }
 
   return createHeadscaleConfig(w ? "rw" : "ro", dns, document, path);
 }
 
 async function validateConfigPath(path: string) {
+  let resolved: string;
+
   try {
-    await access(path, constants.F_OK | constants.R_OK);
+    // Resolve symlinks first. A symlink is accepted, but the target has to be a
+    // regular file: a directory (or a symlink to one) where a configuration
+    // file is required must be rejected instead of reaching `readFile`.
+    resolved = await realpath(path);
+    const info = await stat(resolved);
+    if (!info.isFile()) {
+      log.error("config", "Unable to read a Headscale configuration file at %s", path);
+      log.error("config", "The path is not a regular file: %s", resolved);
+      return { w: false, r: false };
+    }
+
+    await access(resolved, constants.F_OK | constants.R_OK);
     log.info("config", "Found a valid Headscale configuration file at %s", path);
   } catch (error) {
     log.error("config", "Unable to read a Headscale configuration file at %s", path);
@@ -827,7 +928,7 @@ async function validateConfigPath(path: string) {
   }
 
   try {
-    await access(path, constants.F_OK | constants.W_OK);
+    await access(resolved, constants.F_OK | constants.W_OK);
     return { w: true, r: true };
   } catch {
     log.warn("config", "Headscale configuration file at %s is not writable", path);

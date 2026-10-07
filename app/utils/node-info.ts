@@ -156,5 +156,57 @@ export function scanHuJson(input: string): { stripped: string; hasComments: bool
     output += char;
   }
 
-  return { stripped: output.replace(/,\s*([}\]])/g, "$1"), hasComments };
+  return { stripped: stripTrailingCommas(output), hasComments };
+}
+
+/**
+ * Removes a comma that is only followed by whitespace and a closing brace or
+ * bracket. Comments are already gone by this point, but the comma may still sit
+ * inside a string literal — where JSON forbids dropping it — so quoted sections
+ * are skipped instead of being rewritten.
+ */
+function stripTrailingCommas(input: string): string {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+
+    if (inString) {
+      output += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      output += char;
+      continue;
+    }
+
+    if (char === ",") {
+      let lookahead = i + 1;
+      while (lookahead < input.length && /\s/.test(input[lookahead])) {
+        lookahead += 1;
+      }
+
+      if (input[lookahead] === "}" || input[lookahead] === "]") {
+        // Skip the comma and the whitespace before the closer, matching what
+        // the previous non-string-aware regex pass produced.
+        i = lookahead - 1;
+        continue;
+      }
+    }
+
+    output += char;
+  }
+
+  return output;
 }

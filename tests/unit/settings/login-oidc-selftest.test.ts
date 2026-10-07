@@ -123,4 +123,50 @@ describe("the self-test evaluates the merged configuration", () => {
     expect(merged.values.logout_idp).toBe(false);
     expect(endSession?.status).toBe("warn");
   });
+
+  test("client_secret_jwt is judged as the fallback the runtime uses", () => {
+    const merged = mergeLoginOidcLayers({ saved: { issuer: ISSUER } });
+
+    // app/server/context.ts rewrites this method to `undefined`, so the flow
+    // signs in with client_secret_post; the self-test must not fail a
+    // configuration that works.
+    const config = loginSelfTestConfigFrom({
+      settings: merged.values,
+      tokenEndpointAuthMethod: "client_secret_jwt",
+    });
+    expect(config.tokenEndpointAuthMethod).toBeUndefined();
+
+    const report = evaluateLoginSelfTest({
+      config,
+      probe: probe({
+        issuer: ISSUER,
+        scopes_supported: ["openid"],
+        token_endpoint_auth_methods_supported: ["client_secret_post"],
+      }),
+      runtime: { es384: true },
+    });
+
+    expect(report.checks.find((check) => check.id === "tokenAuth")?.status).toBe("pass");
+  });
+
+  test("a method the runtime does support is still judged as configured", () => {
+    const merged = mergeLoginOidcLayers({ saved: { issuer: ISSUER } });
+
+    const report = evaluateLoginSelfTest({
+      config: loginSelfTestConfigFrom({
+        settings: merged.values,
+        tokenEndpointAuthMethod: "client_secret_basic",
+      }),
+      probe: probe({
+        issuer: ISSUER,
+        scopes_supported: ["openid"],
+        token_endpoint_auth_methods_supported: ["client_secret_post"],
+      }),
+      runtime: { es384: true },
+    });
+
+    const tokenAuth = report.checks.find((check) => check.id === "tokenAuth");
+    expect(tokenAuth?.status).toBe("fail");
+    expect(tokenAuth?.params?.used).toBe("client_secret_basic");
+  });
 });

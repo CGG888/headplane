@@ -4,6 +4,7 @@ import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import type { JWSHeaderParameters, JWTPayload, FlattenedJWSInput } from "jose";
 
 import { type Result, err, ok } from "~/server/result";
+import { ASSIGNABLE_ROLES, isAssignableRole } from "~/server/web/roles";
 import log from "~/utils/log";
 
 export interface OidcConfig {
@@ -51,6 +52,13 @@ export interface OidcIdentity {
   name: string;
   username: string;
   email?: string;
+  /**
+   * The provider's `email_verified` claim, when it sends one. `undefined` means it
+   * said nothing, which is not the same as `false`: an email the provider marks
+   * unverified is an address the account holder typed in, so it must not be used
+   * to match an existing user.
+   */
+  emailVerified?: boolean;
   picture?: string;
   role?: string;
   idToken?: string;
@@ -249,7 +257,7 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
     }
 
     if (typeof metadata.issuer === "string" && metadata.issuer !== config.issuer) {
-      log.debug(
+      log.warn(
         "auth",
         "Discovery issuer %s does not match configured issuer %s",
         metadata.issuer,
@@ -329,6 +337,20 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
 
     if (config.extraParams) {
       for (const [key, value] of Object.entries(config.extraParams)) {
+        // The operator owns this map, but a typo in the settings page must not be
+        // able to replace `state`, `nonce`, `redirect_uri` or the PKCE challenge:
+        // the callback still verifies those values, so overwriting one here turns
+        // a login attempt into a failure (or silently points the code at another
+        // redirect URI) without any hint about where it came from.
+        if (PROTOCOL_PARAMETERS.has(key)) {
+          log.warn(
+            "auth",
+            "Ignoring the extra authorization parameter %s: it would replace a protocol parameter",
+            key,
+          );
+          continue;
+        }
+
         params.set(key, value);
       }
     }
@@ -368,9 +390,13 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
 
     const returnedState = callbackParams.get("state");
     if (returnedState !== flowState.state) {
+      // Neither state may reach the log: the returned one is attacker
+      // controlled, and the expected one is the secret that makes the flow
+      // unforgeable. The lengths are enough to tell a missing value apart from
+      // a truncated one without disclosing either.
       return err({
         code: "state_mismatch",
-        message: `State mismatch: expected ${flowState.state}, got ${returnedState}`,
+        message: `OIDC state mismatch (expected ${flowState.state.length} characters, received ${returnedState?.length ?? 0})`,
         hint: "Please try signing in again. If this keeps happening, your reverse proxy may be interfering with cookies.",
       });
     }
@@ -471,9 +497,10 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
       requestBody.set("client_id", config.clientId);
       requestBody.set("client_secret", config.clientSecret);
     } else {
-      const credentials = btoa(
-        `${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`,
-      );
+      // RFC 6749 §2.3.1 encodes the basic-auth credentials with the
+      // `application/x-www-form-urlencoded` algorithm (Appendix B), which
+      // `encodeURIComponent` does not implement (a space is `+`, not `%20`).
+      const credentials = btoa(`${formEncode(config.clientId)}:${formEncode(config.clientSecret)}`);
 
       headers.Authorization = `Basic ${credentials}`;
     }
@@ -574,6 +601,23 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
         issuer: config.issuer,
         audience: config.clientId,
         clockTolerance: 60,
+        // Only asymmetric algorithms, and only ones jose supports here: an
+        // unlisted algorithm cannot be selected by the token's own `alg`
+        // header, and `exp` is required rather than optional so a token that
+        // simply omits it cannot be treated as never expiring.
+        algorithms: [
+          "RS256",
+          "RS384",
+          "RS512",
+          "PS256",
+          "PS384",
+          "PS512",
+          "ES256",
+          "ES384",
+          "ES512",
+          "EdDSA",
+        ],
+        requiredClaims: ["exp"],
       });
 
       if (payload.nonce !== expectedNonce) {
@@ -729,6 +773,23 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
       }
 
       const userInfo = (await response.json()) as Record<string, unknown>;
+
+      // OIDC Core 5.3.2: when the UserInfo response carries `sub` it must match
+      // the ID token's subject. Everything below trusts the other claims (name,
+      // email, picture, the subject and role claims), so a mismatch is treated
+      // like any other UserInfo failure: the login continues with the ID
+      // token's own claims and only a debug line is logged.
+      const tokenSubject = readClaimAsString(claims, "sub");
+      const userInfoSubject = readClaimAsString(userInfo, "sub");
+      if (
+        tokenSubject !== undefined &&
+        userInfoSubject !== undefined &&
+        tokenSubject !== userInfoSubject
+      ) {
+        log.debug("auth", "UserInfo subject does not match the ID token; skipping enrichment");
+        return claims;
+      }
+
       const roleClaimValue = config.roleClaim
         ? (claims[config.roleClaim] ?? userInfo[config.roleClaim])
         : undefined;
@@ -752,6 +813,7 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
         preferred_username:
           claims.preferred_username ?? (userInfo.preferred_username as string | undefined),
         email: claims.email ?? (userInfo.email as string | undefined),
+        email_verified: claims.email_verified ?? userInfo.email_verified,
         picture: claims.picture ?? (userInfo.picture as string | undefined),
         sub: claims.sub ?? readClaimAsString(userInfo, "sub"),
       };
@@ -796,6 +858,7 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
       name,
       username,
       email: claims.email,
+      emailVerified: readClaimAsBoolean(claims, "email_verified"),
       picture,
       role: config.roleClaim ? resolveRoleClaim(claims, config.roleClaim) : undefined,
       idToken,
@@ -855,12 +918,17 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
   function resolveRoleClaim(claims: OidcClaims, claimName: string): string | undefined {
     const value = claims[claimName];
     if (typeof value === "string") {
-      return value.trim() || undefined;
+      // An IdP that sends an unknown role (or a string that merely looks like a
+      // role name) must not have it stored verbatim: it used to flow into
+      // `capsForRole`, which looks the name up on an object literal and threw
+      // for anything unknown, turning every login into a 500.
+      const trimmed = value.trim();
+      return isAssignableRole(trimmed) ? trimmed : undefined;
     }
 
     if (Array.isArray(value)) {
       const roles = new Set(value.filter((v): v is string => typeof v === "string"));
-      for (const role of ["admin", "network_admin", "it_admin", "auditor", "viewer", "member"]) {
+      for (const role of ASSIGNABLE_ROLES) {
         if (roles.has(role)) {
           return role;
         }
@@ -946,6 +1014,23 @@ export function createOidcService(initialConfig: OidcConfig): OidcService {
   }
 }
 
+/**
+ * Authorization request parameters that carry the flow's own guarantees. The
+ * `oidc.extra_params` setting is merged in afterwards, so these are listed here to
+ * keep that map from replacing them (`state` and `nonce` are verified on the way
+ * back, and a swapped `redirect_uri` would send the code somewhere else).
+ */
+const PROTOCOL_PARAMETERS = new Set([
+  "response_type",
+  "client_id",
+  "redirect_uri",
+  "scope",
+  "state",
+  "nonce",
+  "code_challenge",
+  "code_challenge_method",
+]);
+
 function readClaimAsString(claims: Record<string, unknown>, claimName: string): string | undefined {
   const value = claims[claimName];
   if (typeof value !== "string") {
@@ -954,6 +1039,41 @@ function readClaimAsString(claims: Record<string, unknown>, claimName: string): 
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readClaimAsBoolean(
+  claims: Record<string, unknown>,
+  claimName: string,
+): boolean | undefined {
+  const value = claims[claimName];
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  // Some providers serialize boolean claims as the strings "true"/"false"; a bare
+  // `Boolean(value)` would read `"false"` as true.
+  if (typeof value === "string") {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed === "true") {
+      return true;
+    }
+    if (trimmed === "false") {
+      return false;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Encodes one value with the `application/x-www-form-urlencoded` algorithm from
+ * RFC 6749 Appendix B. `URLSearchParams` implements exactly that algorithm
+ * (notably encoding a space as `+`), unlike `encodeURIComponent`, so it is used
+ * for the `client_secret_basic` credentials.
+ */
+export function formEncode(value: string): string {
+  const encoded = new URLSearchParams({ value }).toString();
+  return encoded.slice("value=".length);
 }
 
 function generateRandom(bytes = 32): string {
@@ -1082,7 +1202,16 @@ function validateOidcClaims(
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === "number" && now - clockToleranceSeconds >= payload.exp) {
+  // `exp` is mandatory (OIDC Core §2 requires it): without this check a token
+  // that simply omits the claim would pass as never expiring.
+  if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
+    return {
+      code: "invalid_id_token",
+      message: 'JWT claim validation failed: exp — missing or invalid "exp" claim value',
+    };
+  }
+
+  if (now - clockToleranceSeconds >= payload.exp) {
     return {
       code: "invalid_id_token",
       message: "ID token is expired",

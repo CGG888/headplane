@@ -23,10 +23,14 @@ function daysUntil(expiry: string) {
  */
 export function ExpiryTag({ variant, expiry }: ExpiryTagProps) {
   const { t, locale } = useI18n();
+  // Pinned to UTC: the server renders this in its own zone while the browser
+  // formats in the visitor's, so an unpinned formatter produced a different
+  // calendar day on each side and hydration never matched.
   const formatter = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
 
   return (

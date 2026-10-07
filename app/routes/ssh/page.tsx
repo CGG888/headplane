@@ -6,24 +6,26 @@ import Button from "~/components/button";
 import Card from "~/components/card";
 import Code from "~/components/code";
 import StatusBanner from "~/components/status-banner";
-import { useI18n } from "~/i18n/provider";
+import type { TranslationKey } from "~/i18n";
+import { useI18n, type I18nValue } from "~/i18n/provider";
 import {
   agentsContext,
   appConfigContext,
+  authContext,
   headscaleContext,
   requestApiContext,
 } from "~/server/context";
 import { findHeadscaleUserBySubject } from "~/server/web/headscale-identity";
 
 import type { Route } from "./+types/page";
-import { isSshErrorPayload, SSHErrorBoundary, sshError } from "./errors";
+import { isSshErrorPayload, SSHErrorBoundary, sshError, sshErrorMessageKey } from "./errors";
 import Ghostty from "./ghostty.client";
+import type { ConsoleKeyPayload } from "./key";
 import UserPrompt from "./user-prompt";
-import { connectTailnet } from "./wasm.client";
+import { connectTailnet, stopTailnet } from "./wasm.client";
 
 const WASM_MODULE_URL = `${__PREFIX__}/hp_ssh.wasm`;
 const WASM_HELPER_URL = `${__PREFIX__}/wasm_exec.js`;
-const SSH_PREAUTH_KEY_TTL_MS = 10 * 60 * 1000;
 
 export const shouldRevalidate: ShouldRevalidateFunction = () => {
   return false;
@@ -31,6 +33,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = () => {
 
 export async function loader({ request, params, context, url }: Route.LoaderArgs) {
   const agents = context.get(agentsContext);
+  const auth = context.get(authContext);
   const config = context.get(appConfigContext);
   const headscale = context.get(headscaleContext);
   const getRequestApi = context.get(requestApiContext);
@@ -69,6 +72,14 @@ export async function loader({ request, params, context, url }: Route.LoaderArgs
     throw data(sshError("nodeNotFound", { hostname }), 404);
   }
 
+  // A console mints a pre-auth key for the signed-in user and connects to the
+  // machine, so it is limited to machines that user owns (or to an account with
+  // broader machine rights). Without this, any signed-in account could open a
+  // shell on any machine by guessing its hostname.
+  if (!auth.canManageNode(principal, node)) {
+    throw data({ localized: { key: "errors.permission.actOnMachine" } }, { status: 403 });
+  }
+
   if (!node.online) {
     return { hostname, username, offline: true, node: undefined, compatibilityWarning };
   }
@@ -83,7 +94,9 @@ export async function loader({ request, params, context, url }: Route.LoaderArgs
     };
   }
 
-  // The user must exist within Headscale to generate a pre-auth key
+  // The user must exist within Headscale to generate a pre-auth key. The key
+  // itself is minted by the `/ssh/:id/key` action so it never lands in the
+  // server-rendered document.
   const users = await api.users.list();
   const hsUser = principal.user.headscaleUserId
     ? users.find((u) => u.id === principal.user.headscaleUserId)
@@ -93,14 +106,6 @@ export async function loader({ request, params, context, url }: Route.LoaderArgs
     throw data(sshError("userNotLinked"), 404);
   }
 
-  const preAuthKey = await api.preAuthKeys.create({
-    user: hsUser.id,
-    ephemeral: true,
-    reusable: false,
-    expiration: new Date(Date.now() + SSH_PREAUTH_KEY_TTL_MS),
-    aclTags: null,
-  });
-
   const controlURL = config.headscale.public_url ?? config.headscale.url;
   return {
     hostname,
@@ -109,8 +114,6 @@ export async function loader({ request, params, context, url }: Route.LoaderArgs
     node: {
       ipAddress: node.ipAddresses[0],
       controlURL,
-      preAuthKey: preAuthKey.key,
-      ephemeralHostname: generateHostname(username),
     },
     compatibilityWarning,
   };
@@ -130,9 +133,70 @@ function getBrowserSSHCompatibilityWarning(version: {
   return null;
 }
 
-function generateHostname(username: string) {
-  const hex = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  return `ssh-${hex}-${username}`;
+function consoleKeyUrl(hostname: string) {
+  return `${__PREFIX__}/ssh/${encodeURIComponent(hostname)}/key`;
+}
+
+/**
+ * Turns a failed key request into something the status overlay can show. The
+ * action answers with the same payloads the error boundary understands, so the
+ * message stays localized.
+ */
+async function readConsoleKeyError(response: Response, t: I18nValue["t"]): Promise<string> {
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (isSshErrorPayload(payload)) {
+    return t(sshErrorMessageKey(payload.sshError), payload.params);
+  }
+
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "localized" in payload &&
+    typeof (payload as { localized?: { key?: unknown } }).localized?.key === "string"
+  ) {
+    return t((payload as { localized: { key: TranslationKey } }).localized.key);
+  }
+
+  return `${response.status} ${response.statusText}`;
+}
+
+async function createConsoleKey(
+  hostname: string,
+  username: string,
+  t: I18nValue["t"],
+): Promise<ConsoleKeyPayload> {
+  const body = new FormData();
+  body.set("intent", "create");
+  body.set("user", username);
+
+  const response = await fetch(consoleKeyUrl(hostname), {
+    method: "POST",
+    body,
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readConsoleKeyError(response, t));
+  }
+
+  return (await response.json()) as ConsoleKeyPayload;
+}
+
+function revokeConsoleKey(hostname: string, key: string): void {
+  const body = new FormData();
+  body.set("intent", "revoke");
+  body.set("key", key);
+
+  // `keepalive` lets the request outlive the unmount that triggers it. A
+  // failure is not fatal: the key is unusable without the Tailnet session and
+  // still expires on its own.
+  void fetch(consoleKeyUrl(hostname), {
+    method: "POST",
+    body,
+    credentials: "same-origin",
+    keepalive: true,
+  }).catch(() => {});
 }
 
 export const links: Route.LinksFunction = () => [
@@ -216,43 +280,79 @@ function SSHConsole({
 }: {
   hostname: string;
   username: string;
-  node: { ipAddress: string; controlURL: string; preAuthKey: string; ephemeralHostname: string };
+  node: { ipAddress: string; controlURL: string };
 }) {
   const { t } = useI18n();
   const [ipn, setIpn] = useState<IPN | null>(null);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState(() => t("ssh.joining"));
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let instance: IPN | null = null;
+    let issuedKey: string | null = null;
 
-    connectTailnet({
-      controlURL: node.controlURL,
-      authKey: node.preAuthKey,
-      hostname: node.ephemeralHostname,
-      onPanic: (error) => {
-        if (!cancelled) {
-          setStatus(t("ssh.nodeStopped", { error: String(error) }));
-        }
-      },
-    }).then(
-      (instance) => {
-        if (cancelled) return;
-        setStatus(t("ssh.connecting", { hostname }));
-        setIpn(instance);
-      },
-      (error: unknown) => {
-        if (cancelled) return;
-        setStatus(
-          t("ssh.joinFailed", { error: error instanceof Error ? error.message : String(error) }),
-        );
-      },
-    );
+    setFailed(false);
+    setStatus(t("ssh.joining"));
+
+    const onPanic = (error: string) => {
+      if (cancelled) return;
+      setFailed(true);
+      setStatus(t("ssh.nodeStopped", { error: String(error) }));
+    };
+
+    void (async () => {
+      // The key is minted here rather than by the loader so it never reaches
+      // the server-rendered document.
+      const consoleKey = await createConsoleKey(hostname, username, t);
+      issuedKey = consoleKey.key;
+
+      const running = await connectTailnet({
+        controlURL: node.controlURL,
+        authKey: consoleKey.key,
+        hostname: consoleKey.ephemeralHostname,
+        onPanic,
+      });
+
+      if (cancelled) {
+        stopTailnet(running);
+        return;
+      }
+
+      instance = running;
+      setStatus(t("ssh.connecting", { hostname }));
+      setIpn(running);
+    })().catch((error: unknown) => {
+      if (cancelled) return;
+      setFailed(true);
+      setStatus(
+        t("ssh.joinFailed", { error: error instanceof Error ? error.message : String(error) }),
+      );
+    });
 
     return () => {
       cancelled = true;
+
+      // Closing the console must not leave the ephemeral node running or its
+      // pre-auth key valid. The revocation is fire-and-forget: the key is
+      // unusable without this browser's Tailnet session anyway.
+      if (issuedKey !== null) {
+        revokeConsoleKey(hostname, issuedKey);
+        issuedKey = null;
+      }
+
+      stopTailnet(instance);
+      instance = null;
     };
-  }, [node, hostname]);
+  }, [hostname, username, node, attempt]);
+
+  const retry = () => {
+    setIpn(null);
+    setConnected(false);
+    setAttempt((value) => value + 1);
+  };
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black">
@@ -261,6 +361,11 @@ function SSHConsole({
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="size-8 animate-spin text-mist-200" />
             <p className="text-sm text-mist-400">{status}</p>
+            {failed && (
+              <Button variant="heavy" className="mt-2" onClick={retry}>
+                {t("ssh.retry")}
+              </Button>
+            )}
           </div>
         </div>
       )}

@@ -1,8 +1,10 @@
 import { dump } from "js-yaml";
 import { beforeAll, describe, expect, test } from "vitest";
 
+import { ROLE_PATTERN } from "~/server/config/config-schema";
 import { ConfigError } from "~/server/config/error";
 import { loadConfig, loadConfigFile } from "~/server/config/load";
+import { ASSIGNABLE_ROLES } from "~/server/web/roles";
 
 import { clearFakeFiles, createFakeFile } from "../setup/overlay-fs";
 
@@ -252,5 +254,12 @@ describe("Configuration YAML file loading", () => {
 
     const disabledConfig = await loadConfig(disabledFilePath);
     expect(disabledConfig.integration?.agent?.tailscale_netns).toBe(false);
+  });
+
+  test("the schema role literal matches the assignable role list", () => {
+    // Arktype needs a literal type string, so config-schema.ts cannot build it
+    // from `ASSIGNABLE_ROLES` itself; this keeps the two from drifting apart
+    // (the same list also backs the OIDC role claim and the settings form).
+    expect(ROLE_PATTERN).toBe(ASSIGNABLE_ROLES.map((role) => `"${role}"`).join(" | "));
   });
 });

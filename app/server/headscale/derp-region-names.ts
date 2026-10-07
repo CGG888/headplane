@@ -12,6 +12,7 @@
  * plus rename so a crash never leaves a half-written mapping behind.
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -192,8 +193,6 @@ export async function readDerpRegionNames(dataPath: string): Promise<DerpRegionN
   }
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the mapping atomically (temp file plus rename) so a failure never
  * leaves a truncated file behind. Returns false instead of throwing, because
@@ -204,11 +203,16 @@ export async function writeDerpRegionNames(
   names: DerpRegionNames,
 ): Promise<boolean> {
   const path = derpRegionNamesPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeDerpRegionNames(names), "utf8");
+    await writeFile(temp, serializeDerpRegionNames(names), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target.
+      flag: "wx",
+    });
     await rename(temp, path);
     return true;
   } catch (error) {

@@ -9,5 +9,6 @@ export interface PreAuthKey {
   used: boolean;
   expiration: string;
   createdAt: string;
-  aclTags: string[];
+  /** Headscale sends `null` when the key carries no ACL tags. */
+  aclTags: string[] | null;
 }

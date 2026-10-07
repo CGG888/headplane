@@ -16,12 +16,8 @@ export const Menu = ({
 export const MenuTrigger = ({
   className,
   children,
-  disabled,
-  onClick,
-}: Pick<
-  ComponentProps<typeof BaseMenu.Trigger>,
-  "className" | "children" | "disabled" | "onClick"
->): JSX.Element => (
+  ...rest
+}: ComponentProps<typeof BaseMenu.Trigger>): JSX.Element => (
   <BaseMenu.Trigger
     className={cn(
       "inline-flex items-center justify-center",
@@ -30,8 +26,7 @@ export const MenuTrigger = ({
       "disabled:opacity-50 disabled:cursor-not-allowed",
       className,
     )}
-    disabled={disabled}
-    onClick={onClick}
+    {...rest}
   >
     {children}
   </BaseMenu.Trigger>
@@ -72,9 +67,8 @@ export const MenuItem = ({
   className,
   variant,
   children,
-  disabled,
-  onClick,
-}: Pick<ComponentProps<typeof BaseMenu.Item>, "className" | "children" | "disabled" | "onClick"> & {
+  ...rest
+}: ComponentProps<typeof BaseMenu.Item> & {
   variant?: "danger";
 }): JSX.Element => (
   <BaseMenu.Item
@@ -88,8 +82,7 @@ export const MenuItem = ({
       variant === "danger" && "text-red-500 dark:text-red-400",
       className,
     )}
-    disabled={disabled}
-    onClick={onClick}
+    {...rest}
   >
     {children}
   </BaseMenu.Item>

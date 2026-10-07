@@ -6,6 +6,11 @@ import Input from "~/components/input";
 import { SettingsActions } from "~/components/settings-nav";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
+import {
+  isValidRestrictionName,
+  RESTRICTION_NAME_PATTERN,
+  RESTRICTION_STRING_MAX_LENGTH,
+} from "~/utils/restrictions";
 
 const groupSchema = type({
   group: "string > 0",
@@ -28,6 +33,12 @@ export default function AddGroup({ groups, isDisabled }: AddGroupProps) {
         return { group: t("settings.addGroup.duplicate") };
       }
 
+      // The action rejects whitespace, control characters and anything over
+      // 255 characters (see `~/utils/restrictions`), so the dialog does too.
+      if (!isValidRestrictionName(group)) {
+        return { group: t("settings.addGroup.invalid") };
+      }
+
       return undefined;
     },
   });
@@ -39,6 +50,8 @@ export default function AddGroup({ groups, isDisabled }: AddGroupProps) {
         {...form.field("group")}
         description={t("settings.addGroup.description")}
         disabled={isDisabled}
+        maxLength={RESTRICTION_STRING_MAX_LENGTH}
+        pattern={RESTRICTION_NAME_PATTERN}
         required
         label={t("settings.addGroup.label")}
         placeholder={t("settings.addGroup.placeholder")}

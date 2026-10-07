@@ -39,6 +39,7 @@ interface MockHeadscale {
 
 interface MockAuth {
   createApiKeySession: ReturnType<typeof vi.fn>;
+  getClientAddress: () => string | undefined;
 }
 
 // React Router 7 provides context values through context.get(contextKey).
@@ -71,7 +72,7 @@ describe("Login action validation", () => {
 
     const mockContext = createMockContext({
       headscale: { client: vi.fn() },
-      auth: { createApiKeySession: vi.fn() },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
     });
 
     const result = (await loginAction({
@@ -91,7 +92,7 @@ describe("Login action validation", () => {
 
     const mockContext = createMockContext({
       headscale: { client: vi.fn() },
-      auth: { createApiKeySession: vi.fn() },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
     });
 
     const result = (await loginAction({
@@ -117,7 +118,7 @@ describe("Login action validation", () => {
       headscale: {
         client: () => ({ apiKeys: { list: mockGetApiKeys } }),
       },
-      auth: { createApiKeySession: vi.fn() },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
     });
 
     const result = (await loginAction({
@@ -126,8 +127,10 @@ describe("Login action validation", () => {
       params: {},
     } as any)) as LoginResult;
 
+    // Every rejection reason is reported as `invalid` so the response cannot be
+    // used to tell "no such key" from "expired key".
     expect(result.success).toBe(false);
-    expect(result.error).toBe("notFound");
+    expect(result.error).toBe("invalid");
   });
 
   test("returns error when api key has expired", async () => {
@@ -144,7 +147,7 @@ describe("Login action validation", () => {
       headscale: {
         client: () => ({ apiKeys: { list: mockGetApiKeys } }),
       },
-      auth: { createApiKeySession: vi.fn() },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
     });
 
     const result = (await loginAction({
@@ -154,7 +157,7 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("expired");
+    expect(result.error).toBe("invalid");
   });
 
   test("returns error when api key has no expiration field", async () => {
@@ -171,7 +174,7 @@ describe("Login action validation", () => {
       headscale: {
         client: () => ({ apiKeys: { list: mockGetApiKeys } }),
       },
-      auth: { createApiKeySession: vi.fn() },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
     });
 
     const result = (await loginAction({
@@ -181,7 +184,35 @@ describe("Login action validation", () => {
     } as any)) as LoginResult;
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("malformed");
+    expect(result.error).toBe("invalid");
+  });
+
+  test("returns error when the expiration cannot be parsed", async () => {
+    const { loginAction } = await import("~/routes/auth/login/action");
+    const formData = mockFormData("unparseable-key.secret");
+    const request = mockRequest(formData);
+
+    // `new Date("nonsense")` is invalid, and every comparison against NaN is
+    // false; the key must still be rejected rather than treated as fresh.
+    const mockGetApiKeys = vi
+      .fn()
+      .mockResolvedValue([{ prefix: "unparseable-key", expiration: "nonsense" }]);
+
+    const mockContext = createMockContext({
+      headscale: {
+        client: () => ({ apiKeys: { list: mockGetApiKeys } }),
+      },
+      auth: { createApiKeySession: vi.fn(), getClientAddress: () => undefined },
+    });
+
+    const result = (await loginAction({
+      request,
+      context: mockContext,
+      params: {},
+    } as any)) as LoginResult;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("invalid");
   });
 
   test("handles asterisks in api key prefix from headscale 0.28+", async () => {
@@ -203,7 +234,7 @@ describe("Login action validation", () => {
       headscale: {
         client: () => ({ apiKeys: { list: mockGetApiKeys } }),
       },
-      auth: { createApiKeySession: mockCreateSession },
+      auth: { createApiKeySession: mockCreateSession, getClientAddress: () => undefined },
     });
 
     const result = await loginAction({

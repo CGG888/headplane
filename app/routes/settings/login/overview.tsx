@@ -79,6 +79,29 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const failCount = report?.checks.filter((check) => check.status === "fail").length ?? 0;
 
   const view = loaderData.view;
+
+  // The loader only builds the configuration snapshot for accounts that may
+  // change it; everyone else gets the page without the values it contains.
+  if (view === null) {
+    return (
+      <SettingsPage
+        notices={
+          !loaderData.oidcEnabled ? (
+            <Notice title={t("settings.login.disabledTitle")} variant="warning">
+              {t("settings.login.disabledBody", { reason: loaderData.disabledReason ?? "—" })}
+            </Notice>
+          ) : undefined
+        }
+        title={t("settings.login.title")}
+        description={t("settings.login.body")}
+      >
+        <Notice title={t("errors.permission.viewIam")} variant="warning">
+          {t("errors.permission.modifyIam")}
+        </Notice>
+      </SettingsPage>
+    );
+  }
+
   const restartLabels = view.restartFields.map((id) => t(LOGIN_FIELD_LABELS[id])).join(", ");
 
   return (

@@ -507,3 +507,17 @@ describe("delivering a formatted message", () => {
     expect(rendered.embeds[0].description).toBe(payload.summary);
   });
 });
+
+describe("unknown webhook format", () => {
+  test("still produces the generic body instead of nothing", () => {
+    const payload = testPayload();
+
+    // A stored document from an older build, or a hand-edited store, can name a
+    // format this build does not know; the receiver must never get an
+    // `undefined` body because the switch had no default.
+    const body = alertRequestBody("telegram" as AlertWebhookFormat, payload, { locale: LOCALE });
+
+    expect(body).toBe(payload);
+    expect(JSON.stringify(body)).toBe(JSON.stringify(payload));
+  });
+});

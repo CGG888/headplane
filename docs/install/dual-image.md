@@ -60,7 +60,7 @@ bash dual-image-install.sh             # 正式安装
 - **两个组件可以分别重启。** 改 HeadplaneCN 的设置、升级 HeadplaneCN 的镜像，都不会顺带
   重启 Headscale；反过来 Headscale 重新加载配置也不影响 HeadplaneCN 的会话。生命周期解耦了。
 - **升级仍然是一条命令。** 版本固定在 compose 的两个 tag 上，`docker compose pull && docker
-  compose up -d` 一次处理两个镜像；回滚就是把 tag 改回去再 `up -d`。
+compose up -d` 一次处理两个镜像；回滚就是把 tag 改回去再 `up -d`。
 - **代价：Headscale 交给 compose 管。** 应用中心里没有它的启停按钮、也不会替你自动更新；
   版本、升级窗口、备份都要你在 compose 这一层负责（见下面的升级与回滚）。
 
@@ -68,15 +68,15 @@ bash dual-image-install.sh             # 正式安装
 
 所有路径以 `/vol1/1000/APP/` 为例，按你的实际存储位置替换。
 
-| 宿主机路径                             | 用途                                                       | 容器内路径（两个容器一致）        |
-| -------------------------------------- | ---------------------------------------------------------- | --------------------------------- |
-| `/vol1/1000/APP/headplane/`            | compose 文件、HeadplaneCN 配置、HeadplaneCN 数据           | —                                 |
-| `/vol1/1000/APP/headplane/config.yaml` | HeadplaneCN 自己的配置                                     | `/etc/headplane/config.yaml`（只读） |
-| `/vol1/1000/APP/headplane/data/`       | 会话、内部数据库、配置快照、Agent 状态                     | `/var/lib/headplane`              |
-| `/vol1/1000/APP/headscale/etc/`        | Headscale 的配置目录（要挂给两个容器）                     | `/etc/headscale`（读写）          |
-| `/vol1/1000/APP/headscale/etc/config.yaml` | Headscale 生效配置                                         | `/etc/headscale/config.yaml`（读写） |
-| `/vol1/1000/APP/headscale/etc/derp-maps/`  | 本地 DERP 地图（含区域筛选写出的那份）                     | `/etc/headscale/derp-maps/`（读写）  |
-| `/vol1/1000/APP/headscale/data/`       | `db.sqlite`、`noise_private.key`、`derp_server_private.key` | `/var/lib/headscale`（读写 / 只读）  |
+| 宿主机路径                                 | 用途                                                        | 容器内路径（两个容器一致）           |
+| ------------------------------------------ | ----------------------------------------------------------- | ------------------------------------ |
+| `/vol1/1000/APP/headplane/`                | compose 文件、HeadplaneCN 配置、HeadplaneCN 数据            | —                                    |
+| `/vol1/1000/APP/headplane/config.yaml`     | HeadplaneCN 自己的配置                                      | `/etc/headplane/config.yaml`（只读） |
+| `/vol1/1000/APP/headplane/data/`           | 会话、内部数据库、配置快照、Agent 状态                      | `/var/lib/headplane`                 |
+| `/vol1/1000/APP/headscale/etc/`            | Headscale 的配置目录（要挂给两个容器）                      | `/etc/headscale`（读写）             |
+| `/vol1/1000/APP/headscale/etc/config.yaml` | Headscale 生效配置                                          | `/etc/headscale/config.yaml`（读写） |
+| `/vol1/1000/APP/headscale/etc/derp-maps/`  | 本地 DERP 地图（含区域筛选写出的那份）                      | `/etc/headscale/derp-maps/`（读写）  |
+| `/vol1/1000/APP/headscale/data/`           | `db.sqlite`、`noise_private.key`、`derp_server_private.key` | `/var/lib/headscale`（读写 / 只读）  |
 
 ```bash
 mkdir -p /vol1/1000/APP/headplane/data \
@@ -98,8 +98,8 @@ services:
     command: serve
     # host 网络：容器直接用 NAS 的 8080 / 9090 / udp 3478，不需要端口映射
     network_mode: host
-    # 与 HeadplaneCN 共用一个 PID 命名空间，进程集成才能找到 headscale serve
-    pid: host
+    # 这里不需要 pid: host：进程集成跑在 HeadplaneCN 容器里，它已经共享宿主 PID
+    # 命名空间，本来就能看到 headscale serve（只有 headplane 服务需要这一行）
     volumes:
       # 配置 + 本地 DERP 地图。两个容器里都是 /etc/headscale，HeadplaneCN 要能改写它
       - "/vol1/1000/APP/headscale/etc:/etc/headscale"
@@ -143,14 +143,14 @@ services:
 
 ### 每个挂载的作用（一行一条）
 
-| 挂载                                                          | 作用                                                                                                       |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `/vol1/1000/APP/headscale/etc/`（headscale）                  | 配置目录：`config.yaml`、`derp-maps/`、DNS 记录文件；读写                                                      |
-| `/vol1/1000/APP/headscale/data:/var/lib/headscale`（headscale） | 数据库与私钥的读写位置，容器重建也不会丢                                                                   |
+| 挂载                                                                 | 作用                                                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `/vol1/1000/APP/headscale/etc/`（headscale）                         | 配置目录：`config.yaml`、`derp-maps/`、DNS 记录文件；读写                                                   |
+| `/vol1/1000/APP/headscale/data:/var/lib/headscale`（headscale）      | 数据库与私钥的读写位置，容器重建也不会丢                                                                    |
 | `/vol1/1000/APP/headplane/config.yaml:/etc/headplane/config.yaml:ro` | HeadplaneCN 自己的配置，只读即可                                                                            |
-| `/vol1/1000/APP/headplane/data:/var/lib/headplane`            | HeadplaneCN 的持久化数据（会话、内部库、快照、Agent 状态）                                                  |
-| `/vol1/1000/APP/headscale/etc:/etc/headscale`（headplane）    | **同一个绝对路径**：`headscale.config_path`、保存配置、DERP 地图的查看/编辑/保存都落在这份文件上            |
-| `/vol1/1000/APP/headscale/data:/var/lib/headscale:ro`（headplane） | **同一个绝对路径 + 只读**：配置检查与快照能看到 `db.sqlite`、`noise_private.key`；只读避免 HeadplaneCN 误写 |
+| `/vol1/1000/APP/headplane/data:/var/lib/headplane`                   | HeadplaneCN 的持久化数据（会话、内部库、快照、Agent 状态）                                                  |
+| `/vol1/1000/APP/headscale/etc:/etc/headscale`（headplane）           | **同一个绝对路径**：`headscale.config_path`、保存配置、DERP 地图的查看/编辑/保存都落在这份文件上            |
+| `/vol1/1000/APP/headscale/data:/var/lib/headscale:ro`（headplane）   | **同一个绝对路径 + 只读**：配置检查与快照能看到 `db.sqlite`、`noise_private.key`；只读避免 HeadplaneCN 误写 |
 
 ::: info 只读的数据目录是刻意的
 HeadplaneCN 的用户不是 Headscale 的用户。把数据目录挂成只读，配置检查里「数据库目录」一项会
@@ -165,12 +165,19 @@ host 网络下同样无效 —— 也不需要，容器里的 `127.0.0.1` 本来
 
 于是对外端口完全由容器里监听什么决定：
 
-| 端口        | 谁在听                | 怎么对外                                                                 |
-| ----------- | --------------------- | ------------------------------------------------------------------------ |
-| `tcp/8080`  | Headscale 控制服务    | Lucky 回源到 `127.0.0.1:8080`（控制路径与 `/derp` 都在这个端口上）        |
-| `tcp/9090`  | Headscale 指标        | 默认只给本机看；不要发布到公网                                           |
-| `udp/3478`  | 内嵌 DERP 的 STUN     | 在路由器/防火墙上把 `udp/3478` 直接放开到这台 NAS，**不能**走 HTTP 反代   |
-| `tcp/4100`  | HeadplaneCN           | Lucky 回源到 `127.0.0.1:4100`（默认是 `3000`，改了要同步改回源）          |
+| 端口       | 谁在听             | 怎么对外                                                                |
+| ---------- | ------------------ | ----------------------------------------------------------------------- |
+| `tcp/8080` | Headscale 控制服务 | Lucky 回源到 `127.0.0.1:8080`（控制路径与 `/derp` 都在这个端口上）      |
+| `tcp/9090` | Headscale 指标     | 默认只给本机看；不要发布到公网                                          |
+| `udp/3478` | 内嵌 DERP 的 STUN  | 在路由器/防火墙上把 `udp/3478` 直接放开到这台 NAS，**不能**走 HTTP 反代 |
+| `tcp/4100` | HeadplaneCN        | Lucky 回源到 `127.0.0.1:4100`（默认是 `3000`，改了要同步改回源）        |
+
+> [!IMPORTANT]
+> `tcp/4100` 是管理台，暴露面最大：`server.host` 默认 `0.0.0.0`（整个局域网可达）。
+> 只在本机做反代时把它收成 `127.0.0.1` 更安全 —— 安装脚本的 `--admin-bind 127.0.0.1`
+> 在 host 网络下写 `server.host: "127.0.0.1"`，在 bridge 网络下把发布地址收成
+> `127.0.0.1:4100`（容器内仍监听 `0.0.0.0`，否则 docker 无法转发）。无论哪种模式，
+> 都不要把 `tcp/4100` 直接暴露到公网：前面必须有一层 TLS 反代或防火墙。
 
 ## 两侧的配置改动
 
@@ -252,16 +259,16 @@ derp:
     - /etc/headscale/derp-maps/official-mirror.yaml
 ```
 
-| 改动                                                        | 为什么                                                                                                                       |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `listen_addr: 0.0.0.0:8080`                                 | 容器内监听；host 网络下直接就是 NAS 的 `8080`。客户端不关心这个端口，它只认 `server_url`                                     |
-| `server_url` **保持不变**                                   | 客户端是按它注册并校验的。改了它，所有已注册节点都要重新登录                                                                  |
-| `noise_private_key_path` / `database.sqlite.path` 指向 `/var/lib/headscale/...` | 这两个文件现在来自挂载的数据目录，路径必须是容器路径                                                                          |
-| `derp.paths` 改写成**容器路径**                             | Headscale 在容器里，它看到的是挂载给它的路径；写成 `/etc/headscale/derp-maps/...` 与 HeadplaneCN 看到的是同一个文件            |
-| `stun_listen_addr: 0.0.0.0:3478`                            | 内嵌 DERP 的 STUN；host 网络下直接占 NAS 的 `udp/3478`                                                                        |
-| `derp.server.enabled: true` + `private_key_path`            | 自建内嵌中继；私钥放在可写的数据目录里，缺失时 Headscale 会自动生成                                                            |
-| `derp.urls`                                                  | 原样保留你现在的值（只用自建中继就保持 `[]`）                                                                                  |
-| `policy.mode`                                                | 原样保留（想用网页改 ACL 就必须是 `database`）                                                                                 |
+| 改动                                                                            | 为什么                                                                                                              |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `listen_addr: 0.0.0.0:8080`                                                     | 容器内监听；host 网络下直接就是 NAS 的 `8080`。客户端不关心这个端口，它只认 `server_url`                            |
+| `server_url` **保持不变**                                                       | 客户端是按它注册并校验的。改了它，所有已注册节点都要重新登录                                                        |
+| `noise_private_key_path` / `database.sqlite.path` 指向 `/var/lib/headscale/...` | 这两个文件现在来自挂载的数据目录，路径必须是容器路径                                                                |
+| `derp.paths` 改写成**容器路径**                                                 | Headscale 在容器里，它看到的是挂载给它的路径；写成 `/etc/headscale/derp-maps/...` 与 HeadplaneCN 看到的是同一个文件 |
+| `stun_listen_addr: 0.0.0.0:3478`                                                | 内嵌 DERP 的 STUN；host 网络下直接占 NAS 的 `udp/3478`                                                              |
+| `derp.server.enabled: true` + `private_key_path`                                | 自建内嵌中继；私钥放在可写的数据目录里，缺失时 Headscale 会自动生成                                                 |
+| `derp.urls`                                                                     | 原样保留你现在的值（只用自建中继就保持 `[]`）                                                                       |
+| `policy.mode`                                                                   | 原样保留（想用网页改 ACL 就必须是 `database`）                                                                      |
 
 ### 旧的「宿主机路径 + 相同绝对路径」规则为什么消失
 
@@ -275,7 +282,7 @@ derp:
 - 两个容器把共享目录挂在**同一个绝对路径**上（`/etc/headscale`、`/var/lib/headscale`），
   这是「两个容器之间一致」，不再是「容器内路径必须等于宿主机路径」；
 - 过去那句报错 `getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or
-  directory` 当时是**必然**出现的；现在它只会因为「容器里真的没有这个文件」出现（文件没建、
+directory` 当时是**必然**出现的；现在它只会因为「容器里真的没有这个文件」出现（文件没建、
   挂载没加、路径写错），见常见故障。
 
 ::: warning DERP 区域筛选卡片的目标路径也要改
@@ -414,12 +421,12 @@ docker compose exec headscale headscale version
 对外只有一个端口 `8443`、两个主机名（外加可选的 `admin.`），Lucky 按 Host 头分流，全部回源到
 这台 NAS：
 
-| 对外主机名                | 回源                       | 承载流量                                                     |
-| ------------------------- | -------------------------- | ------------------------------------------------------------ |
-| `ha.<domain>:8443`        | `http://127.0.0.1:8080`    | `server_url` 所在域名：客户端控制流量（`/key`、`/ts2021`、`/api/v1/*`、`/health`）以及 `/derp` |
-| `derp.<domain>:8443`      | `http://127.0.0.1:8080`    | `/derp` 中继流量的另一个入口（同一个容器）                    |
-| `admin.<domain>:8443`     | `http://127.0.0.1:4100`    | HeadplaneCN 管理界面（`/admin`，含浏览器 SSH 的 WebSocket）    |
-| `udp/3478`（不经反代）    | NAS 的 `udp/3478`          | STUN，必须直连                                                |
+| 对外主机名             | 回源                    | 承载流量                                                                                       |
+| ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `ha.<domain>:8443`     | `http://127.0.0.1:8080` | `server_url` 所在域名：客户端控制流量（`/key`、`/ts2021`、`/api/v1/*`、`/health`）以及 `/derp` |
+| `derp.<domain>:8443`   | `http://127.0.0.1:8080` | `/derp` 中继流量的另一个入口（同一个容器）                                                     |
+| `admin.<domain>:8443`  | `http://127.0.0.1:4100` | HeadplaneCN 管理界面（`/admin`，含浏览器 SSH 的 WebSocket）                                    |
+| `udp/3478`（不经反代） | NAS 的 `udp/3478`       | STUN，必须直连                                                                                 |
 
 ### 客户端控制流量（`ha.`）
 
@@ -479,7 +486,7 @@ curl -s http://127.0.0.1:8080/health                # {"status":"pass"}
 - [ ] `设置 → Headscale` 能保存配置，并触发一次成功重载（日志里 `Sent SIGHUP to Headscale`）
 - [ ] **已注册客户端不重新注册即可上线**（`tailscale status` 直接显示已连接）
 - [ ] 内嵌中继真的被使用：`tailscale debug derp-map` 能看到区域，`tailscale debug derp
-      headscale` 能连通，机器详情页的中继卡片显示该区域
+    headscale` 能连通，机器详情页的中继卡片显示该区域
 - [ ] 通过 Lucky 能打开 `https://admin.<domain>:8443/admin`
 - [ ] 「官方区域节点筛选」卡片的目标路径是 `/etc/headscale/derp-maps/official-mirror.yaml`，
       并且**这同一条路径**出现在 `derp.paths` 里、文件确实存在
@@ -513,15 +520,15 @@ Headscale 启动/重载时读不到 `derp.paths` 里的某个文件，于是直�
 
 按可能性从高到低排查：
 
-| 检查                          | 命令 / 位置                                                                                  | 结论                                                             |
-| ----------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `server_url` 有没有被改       | `docker compose exec headscale grep server_url /etc/headscale/config.yaml`                    | 必须与迁移前逐字一致；改过就得把每个节点重新注册                  |
-| 域名与证书                    | 外网机器上 `curl -sI https://ha.<domain>:8443/health`                                          | 证书必须受客户端信任、域名必须与 `server_url` 一致                |
-| 反代是否透传长连接            | Lucky 里看是否 HTTP/2、是否关了缓冲、超时是否 ≥300 秒                                          | `/ts2021` 被缓冲或降级会让节点连不上或频繁掉线                     |
-| noise 私钥是否搬过来          | `docker compose exec headscale ls -l /var/lib/headscale/`                                      | 私钥被重新生成时，已注册节点全部无法通信（必须从备份恢复）         |
-| 数据库是否搬过来              | `docker compose exec headscale headscale nodes list`                                           | 列表为空说明 `db.sqlite` 没搬对或指向了别的路径                    |
-| 节点在册但显示离线            | `docker compose exec headscale headscale nodes list` 里的 last seen                            | 说明注册正常、是网络/反代链路问题，回到上两行                       |
-| 服务本身是否活着              | `curl -s http://127.0.0.1:8080/health`、`docker compose logs headscale`                        | 不是 `{"status":"pass"}` 就先看日志里的第一条错误                  |
+| 检查                    | 命令 / 位置                                                                | 结论                                                       |
+| ----------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `server_url` 有没有被改 | `docker compose exec headscale grep server_url /etc/headscale/config.yaml` | 必须与迁移前逐字一致；改过就得把每个节点重新注册           |
+| 域名与证书              | 外网机器上 `curl -sI https://ha.<domain>:8443/health`                      | 证书必须受客户端信任、域名必须与 `server_url` 一致         |
+| 反代是否透传长连接      | Lucky 里看是否 HTTP/2、是否关了缓冲、超时是否 ≥300 秒                      | `/ts2021` 被缓冲或降级会让节点连不上或频繁掉线             |
+| noise 私钥是否搬过来    | `docker compose exec headscale ls -l /var/lib/headscale/`                  | 私钥被重新生成时，已注册节点全部无法通信（必须从备份恢复） |
+| 数据库是否搬过来        | `docker compose exec headscale headscale nodes list`                       | 列表为空说明 `db.sqlite` 没搬对或指向了别的路径            |
+| 节点在册但显示离线      | `docker compose exec headscale headscale nodes list` 里的 last seen        | 说明注册正常、是网络/反代链路问题，回到上两行              |
+| 服务本身是否活着        | `curl -s http://127.0.0.1:8080/health`、`docker compose logs headscale`    | 不是 `{"status":"pass"}` 就先看日志里的第一条错误          |
 
 ::: tip 一句话
 客户端只认 `server_url` 和它背后的证书与链路；数据库和 noise 私钥是「它还是原来那个控制服务」

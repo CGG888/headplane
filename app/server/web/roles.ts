@@ -103,6 +103,42 @@ export const Roles = {
 export type Role = keyof typeof Roles;
 export type Capability = keyof typeof Capabilities;
 
+/**
+ * The roles an IdP claim or an administrator may hand out, in the priority
+ * order the OIDC role claim uses when the claim carries a list. `owner` is
+ * deliberately absent: ownership is transferred inside HeadplaneCN and is never
+ * taken from a claim.
+ */
+export const ASSIGNABLE_ROLES = [
+  "admin",
+  "network_admin",
+  "it_admin",
+  "auditor",
+  "viewer",
+  "member",
+] as const satisfies ReadonlyArray<Role>;
+
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+
+export function isAssignableRole(value: string): value is AssignableRole {
+  return ASSIGNABLE_ROLES.some((role) => role === value);
+}
+
+/**
+ * Coerce a role name that came from the database or a claim into a real role.
+ * `value in Roles` was the old shape of this check and it walks the prototype
+ * chain, so a stored `"constructor"` or `"toString"` used to survive and reach
+ * `capsForRole`/`hasCapability`. The owner is kept, everything else unknown
+ * falls back to `member`, which is the database default.
+ */
+export function normalizeRole(value: string): Role {
+  if (value === "owner" || isAssignableRole(value)) {
+    return value;
+  }
+
+  return "member";
+}
+
 export function hasCapability(role: Role, capability: Capability): boolean {
   return (Roles[role] & Capabilities[capability]) !== 0;
 }

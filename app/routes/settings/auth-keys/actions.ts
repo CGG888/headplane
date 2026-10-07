@@ -1,6 +1,12 @@
 import { data } from "react-router";
 
-import { AUDIT_ACTIONS, auditActorOf, type AuditResult, type AuditService } from "~/server/audit";
+import {
+  AUDIT_ACTIONS,
+  auditActorOf,
+  type AuditAction,
+  type AuditResult,
+  type AuditService,
+} from "~/server/audit";
 import { auditContext, authContext, requestApiContext } from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
 import type { Principal } from "~/server/web/auth";
@@ -35,6 +41,38 @@ async function recordPreAuthKeyDeletion(
     detail: detail ?? null,
     result,
   });
+}
+
+/**
+ * Records one pre-auth key lifecycle event (creation or expiry). Like the
+ * deletion path, the key's own string is a credential and is never stored:
+ * the log keeps the stable id plus a short, non-secret summary.
+ */
+async function recordPreAuthKeyEvent(
+  audit: AuditService | undefined,
+  principal: Principal,
+  action: AuditAction,
+  target: string,
+  detail?: string,
+  result: AuditResult = "success",
+) {
+  await audit?.record({
+    ...auditActorOf(principal),
+    action,
+    target,
+    detail: detail ?? null,
+    result,
+  });
+}
+
+/** A short, human-readable summary of what was issued. Never the key itself. */
+function describePreAuthKey(aclTags: string[], reusable: boolean, ephemeral: boolean): string {
+  const parts = [reusable ? "reusable" : "single-use", ephemeral ? "ephemeral" : "persistent"];
+  if (aclTags.length > 0) {
+    parts.push(`tags=${aclTags.join(",")}`);
+  }
+
+  return parts.join(" ");
 }
 
 export async function authKeysAction({ request, context }: Route.ActionArgs) {
@@ -139,13 +177,39 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
         });
       }
 
-      const key = await api.preAuthKeys.create({
-        user,
-        ephemeral: ephemeral === "on",
-        reusable: reusable === "on",
-        expiration: date,
-        aclTags: aclTags.length > 0 ? aclTags : null,
-      });
+      // Issuing a pre-auth key is how a device joins the tailnet, so it is one
+      // of the few operations worth auditing even when it succeeds: the key
+      // string itself is left out, the stable id and the flags are kept.
+      const keyTarget = user ? `user:${user}` : `tags:${aclTags.join(",")}`;
+      let key: PreAuthKey;
+      try {
+        key = await api.preAuthKeys.create({
+          user,
+          ephemeral: ephemeral === "on",
+          reusable: reusable === "on",
+          expiration: date,
+          aclTags: aclTags.length > 0 ? aclTags : null,
+        });
+      } catch (error) {
+        await recordPreAuthKeyEvent(
+          audit,
+          principal,
+          AUDIT_ACTIONS.preAuthKeyCreate,
+          keyTarget,
+          error instanceof Error ? error.message : String(error),
+          "failure",
+        );
+
+        throw error;
+      }
+
+      await recordPreAuthKeyEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.preAuthKeyCreate,
+        key.id ? `preauthkey:${key.id}` : keyTarget,
+        describePreAuthKey(aclTags, reusable === "on", ephemeral === "on"),
+      );
 
       return data({ success: true as const, key: key.key });
     }
@@ -171,11 +235,33 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
       // from User.id). Pre-0.28 expire posts a uint64 `user` field, which
       // the API layer reads from `key.user?.id`. Headscale 0.28+ only
       // looks at `key.id` (the stable preauthkey id).
-      await api.preAuthKeys.expire({
-        id: keyId,
-        key,
-        user: { id: user },
-      } as unknown as PreAuthKey);
+      try {
+        await api.preAuthKeys.expire({
+          id: keyId,
+          key,
+          user: { id: user },
+        } as unknown as PreAuthKey);
+      } catch (error) {
+        await recordPreAuthKeyEvent(
+          audit,
+          principal,
+          AUDIT_ACTIONS.preAuthKeyExpire,
+          `preauthkey:${keyId}`,
+          error instanceof Error ? error.message : String(error),
+          "failure",
+        );
+
+        throw error;
+      }
+
+      await recordPreAuthKeyEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.preAuthKeyExpire,
+        `preauthkey:${keyId}`,
+        `user:${user}`,
+      );
+
       return data(PRE_AUTH_KEY_EXPIRED);
     }
 

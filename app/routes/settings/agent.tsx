@@ -1,5 +1,5 @@
 import { Activity, BookOpen, Cpu, RefreshCw } from "lucide-react";
-import { useFetcher } from "react-router";
+import { data, useFetcher } from "react-router";
 
 import Attribute from "~/components/attribute";
 import Button from "~/components/button";
@@ -15,13 +15,16 @@ import {
 import StatusCircle from "~/components/status-circle";
 import Text from "~/components/text";
 import { useI18n, type I18nValue } from "~/i18n/provider";
+import { AUDIT_ACTIONS, auditActorOf } from "~/server/audit";
 import {
   agentsContext,
+  auditContext,
   authContext,
   headscaleLiveStoreContext,
   requestApiContext,
 } from "~/server/context";
 import { nodesResource } from "~/server/headscale/live-store";
+import { Capabilities } from "~/server/web/roles";
 import {
   AGENT_NODE_ROW_LIMIT,
   agentSelfVersion,
@@ -56,7 +59,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const getRequestApi = context.get(requestApiContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
 
-  await auth.require(request);
+  const principal = await auth.require(request);
+
+  // The page exposes host paths (agent executable, working directory, netns) and
+  // its action re-runs the agent sync, so it is gated like the other system
+  // settings instead of on "signed in" alone.
+  if (!auth.can(principal, Capabilities.configure_iam)) {
+    throw data({ localized: { key: "errors.permission.viewIam" } }, { status: 403 });
+  }
 
   if (agents.state !== "enabled") {
     return { enabled: false as const, reason: agents.reason };
@@ -125,9 +135,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
   const agents = context.get(agentsContext);
+  const audit = context.get(auditContext);
   const auth = context.get(authContext);
 
-  await auth.require(request);
+  const principal = await auth.require(request);
+  if (!auth.can(principal, Capabilities.configure_iam)) {
+    throw data({ localized: { key: "errors.permission.modifyIam" } }, { status: 403 });
+  }
 
   if (agents.state !== "enabled") {
     return { success: false, error: agents.reason };
@@ -135,6 +149,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   await agents.value.triggerSync();
   const sync = agents.value.lastSync();
+
+  // The sync hands the container a Tailscale auth key, so it joins a machine to
+  // the tailnet. The error text is not stored: it can quote the login URL,
+  // which carries the key.
+  await audit?.record({
+    ...auditActorOf(principal),
+    action: AUDIT_ACTIONS.agentSync,
+    detail: null,
+    result: sync.error ? "failure" : "success",
+    target: "agent",
+  });
+
   return {
     success: !sync.error,
     error: sync.error,
@@ -194,7 +220,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ? t("settings.agent.statusWaiting")
       : t("settings.agent.statusHealthy");
   const lastSynced = loaderData.syncedAt
-    ? formatTimeDelta(new Date(loaderData.syncedAt))
+    ? formatTimeDelta(new Date(loaderData.syncedAt), locale)
     : t("settings.agent.never");
   const lastSyncedAt = loaderData.syncedAt
     ? new Date(loaderData.syncedAt).toLocaleString(locale)

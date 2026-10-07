@@ -75,6 +75,31 @@ export interface NodeApi {
   reassignUser?: (id: string, user: string) => Promise<void>;
 }
 
+/**
+ * A headscale node ID as it appears in the REST path: a decimal `uint64`
+ * written by Headscale itself. Nothing else is a node ID.
+ */
+export const NODE_ID_PATTERN = /^\d{1,20}$/;
+
+/**
+ * Build a `v1/node/<id>...` path, refusing anything that is not a plain
+ * decimal ID.
+ *
+ * The IDs on this API come from request bodies, and `new URL(url, baseUrl)`
+ * (see `transport.ts`) collapses `..` segments. Interpolating `../user/42`
+ * therefore used to turn `DELETE /api/v1/node/../user/42` into
+ * `DELETE /api/v1/user/42`, i.e. any node-scoped endpoint could be re-pointed
+ * at a sibling endpoint while still riding on the panel's own API key. Pair
+ * this with the `..` backstop in `Transport.request`.
+ */
+function nodePath(id: string, suffix = ""): `v1/node/${string}` {
+  const value = String(id).trim();
+  if (!NODE_ID_PATTERN.test(value)) {
+    throw new Error(`Invalid node ID: ${JSON.stringify(String(id))}`);
+  }
+  return `v1/node/${value}${suffix}`;
+}
+
 export function makeNodeApi(
   transport: Transport,
   capabilities: Capabilities,
@@ -90,23 +115,37 @@ export function makeNodeApi(
 
   const api: NodeApi = {
     list: async () => {
-      const { nodes } = await transport.request<{ nodes: RawMachine[] }>({
+      const result = await transport.request<{ nodes?: RawMachine[] }>({
         method: "GET",
         path: "v1/node",
         apiKey,
       });
+      const nodes = result?.nodes;
+      if (!Array.isArray(nodes)) {
+        throw new Error(
+          "Headscale returned an unexpected node list: the response has no `nodes` array",
+        );
+      }
+
       return nodes.map(normalize);
     },
     get: async (id) => {
-      const { node } = await transport.request<{ node: RawMachine }>({
+      const result = await transport.request<{ node?: RawMachine }>({
         method: "GET",
-        path: `v1/node/${id}`,
+        path: nodePath(id),
         apiKey,
       });
+      const node = result?.node;
+      if (node === undefined || node === null || typeof node !== "object") {
+        throw new Error(
+          `Headscale returned an unexpected node response for ${id}: the response has no \`node\` object`,
+        );
+      }
+
       return normalize(node);
     },
     delete: async (id) => {
-      await transport.request({ method: "DELETE", path: `v1/node/${id}`, apiKey });
+      await transport.request({ method: "DELETE", path: nodePath(id), apiKey });
     },
     register: async (user, key) => {
       // Headscale's node-register endpoint expects the registration
@@ -130,25 +169,25 @@ export function makeNodeApi(
     approveRoutes: async (id, routes) => {
       await transport.request({
         method: "POST",
-        path: `v1/node/${id}/approve_routes`,
+        path: nodePath(id, "/approve_routes"),
         apiKey,
         body: { routes },
       });
     },
     expire: async (id) => {
-      await transport.request({ method: "POST", path: `v1/node/${id}/expire`, apiKey });
+      await transport.request({ method: "POST", path: nodePath(id, "/expire"), apiKey });
     },
     rename: async (id, newName) => {
       await transport.request({
         method: "POST",
-        path: `v1/node/${id}/rename/${encodeURIComponent(newName)}`,
+        path: nodePath(id, `/rename/${encodeURIComponent(newName)}`),
         apiKey,
       });
     },
     setTags: async (id, tags) => {
       await transport.request({
         method: "POST",
-        path: `v1/node/${id}/tags`,
+        path: nodePath(id, "/tags"),
         apiKey,
         body: { tags },
       });
@@ -156,7 +195,7 @@ export function makeNodeApi(
     toggleExpiry: async (nodeId, disableExpiry) => {
       await transport.request({
         method: "POST",
-        path: `v1/node/${nodeId}/expire?disableExpiry=${disableExpiry}`,
+        path: nodePath(nodeId, `/expire?disableExpiry=${disableExpiry ? "true" : "false"}`),
         apiKey,
       });
     },
@@ -167,7 +206,7 @@ export function makeNodeApi(
       // https://github.com/juanfont/headscale/blob/v0.29.4/gen/openapiv2/headscale/v1/headscale.swagger.json
       await transport.request({
         method: "POST",
-        path: `v1/node/${nodeId}/expire?expiry=${encodeURIComponent(expiry.toISOString())}`,
+        path: nodePath(nodeId, `/expire?expiry=${encodeURIComponent(expiry.toISOString())}`),
         apiKey,
       });
     },
@@ -204,7 +243,7 @@ export function makeNodeApi(
     api.reassignUser = async (id, user) => {
       await transport.request({
         method: "POST",
-        path: `v1/node/${id}/user`,
+        path: nodePath(id, "/user"),
         apiKey,
         body: { user },
       });

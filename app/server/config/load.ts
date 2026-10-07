@@ -18,6 +18,7 @@ import {
   pathSupportedKeys,
   type HeadplaneConfig,
 } from "./config-schema";
+import { warnAboutRiskyAuthConfig } from "./config-warnings";
 import { ConfigError } from "./error";
 
 /** Where the config file is read from; also the file never written by the UI. */
@@ -102,6 +103,7 @@ export async function loadConfig(configPathOverride?: string) {
         "Ignoring the console login settings saved on /settings/login because they are invalid: %s",
         finalConfig.map((e) => e.toString()).join("; "),
       );
+      warnAboutRiskyAuthConfig(fallback);
       return fallback;
     }
 
@@ -110,6 +112,7 @@ export async function loadConfig(configPathOverride?: string) {
     });
   }
 
+  warnAboutRiskyAuthConfig(finalConfig);
   return finalConfig;
 }
 

@@ -6,7 +6,14 @@ import type { HeadscaleConnectionError } from "./error";
 export interface HeadscaleAPIError {
   requestUrl: `${string} ${string}`;
   statusCode: number;
-  rawData: string;
+  /**
+   * One sanitized line describing what the upstream said, produced by
+   * `summarizeErrorBody` in `transport.ts`. The upstream body itself is
+   * deliberately not part of the payload: it ends up in a browser, and a reverse
+   * proxy in front of Headscale answers with its own HTML error page when the
+   * backend is unreachable.
+   */
+  detail: string;
   data: Record<string, unknown> | null;
 }
 
@@ -21,7 +28,7 @@ export function isApiError(error: unknown): error is HeadscaleAPIError {
     typeof error === "object" &&
     "requestUrl" in error &&
     "statusCode" in error &&
-    "rawData" in error &&
+    "detail" in error &&
     "data" in error
   );
 }

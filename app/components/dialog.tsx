@@ -19,12 +19,26 @@ function Dialog(props: DialogProps) {
   const { pause, resume } = useLiveData();
   const { isOpen, onOpenChange } = props;
 
+  // `pause`/`resume` are new function identities on every render, so they are
+  // read through refs instead of being dependencies: depending on them would
+  // release and re-take the hold on every render.
+  const pauseRef = useRef(pause);
+  pauseRef.current = pause;
+  const resumeRef = useRef(resume);
+  resumeRef.current = resume;
+
   useEffect(() => {
-    if (isOpen) {
-      pause();
-    } else {
-      resume();
+    if (!isOpen) {
+      return;
     }
+
+    // Hold the live-update stream while the dialog is open and always release
+    // it when the dialog closes *or unmounts*. The previous version had no
+    // cleanup and only called `resume()` when `isOpen` flipped to false, so a
+    // dialog that is unmounted instead of closed (the machine context menu sets
+    // its modal back to null) left the stream paused until the next navigation.
+    pauseRef.current();
+    return () => resumeRef.current();
   }, [isOpen]);
 
   if (Array.isArray(props.children)) {

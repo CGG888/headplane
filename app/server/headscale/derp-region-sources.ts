@@ -217,15 +217,29 @@ function toRegionMap(entries: readonly DerpMapRegionEntry[]): DerpRegionMap {
  */
 async function readLocalDerpMap(path: string, fs: DerpRegionFs): Promise<LocalReading> {
   let cacheKey: string | undefined;
+  let knownSize: number | undefined;
   try {
     const info = await fs.stat(path);
     cacheKey = `${info.mtimeMs}:${info.size}`;
+    knownSize = info.size;
     const cached = localCache.get(path);
     if (cached !== undefined && cached.key === cacheKey) {
       return { state: cached.state, regions: cached.regions, nodes: cached.nodes };
     }
   } catch {
     // A file that cannot be stat'd is simply read; nothing is cached for it.
+  }
+
+  // The size is already known, so a file that is too large is never read: the
+  // read is exactly what would pull the whole thing into memory first.
+  if (knownSize !== undefined && knownSize > MAX_DERP_MAP_BYTES) {
+    log.debug("config", `The DERP map at ${path} is larger than the supported size`);
+    const large: LocalReading = { state: "invalid", regions: [], nodes: NO_REGIONS };
+    if (cacheKey !== undefined) {
+      localCache.set(path, { key: cacheKey, ...large });
+    }
+
+    return large;
   }
 
   let body: string;

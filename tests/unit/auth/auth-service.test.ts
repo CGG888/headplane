@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { authSessions } from "~/server/db/schema";
 import type { AuthService, Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
 import type { Machine } from "~/types";
@@ -9,6 +11,25 @@ import { createTestAuth } from "./create-auth";
 vi.mock("~/utils/log", () => ({
   default: { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() },
 }));
+
+/**
+ * `require` answers a request that carries no usable session with a redirect to the
+ * login page (routes outside the layout call it directly, and a thrown `Error`
+ * surfaced there as a 500). Asserting the redirect keeps that contract honest.
+ */
+async function expectLoginRedirect(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+  } catch (error) {
+    expect(error).toBeInstanceOf(Response);
+    const response = error as Response;
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
+    return;
+  }
+
+  throw new Error("Expected require() to redirect to the login page");
+}
 
 describe("findOrCreateUser", () => {
   let auth: AuthService;
@@ -234,14 +255,119 @@ describe("session round-trip", () => {
   test("expired session throws", async () => {
     const userId = await auth.findOrCreateUser("sub-1", { name: "Alice" });
 
-    const cookieHeader = await auth.createOidcSession(userId, { name: "Alice" }, { maxAge: -1 });
+    const cookieHeader = await auth.createOidcSession(
+      userId,
+      { name: "Alice" },
+      { maxAgeMs: -1000 },
+    );
 
     const cookieValue = cookieHeader.split(";")[0];
     const request = new Request("http://localhost/test", {
       headers: { cookie: cookieValue },
     });
 
-    await expect(auth.require(request)).rejects.toThrow();
+    await expectLoginRedirect(auth.require(request));
+  });
+
+  test("defaults the session lifetime to the cookie max age in seconds", async () => {
+    const { auth: sessionAuth, db } = createTestAuth();
+    const userId = await sessionAuth.findOrCreateUser("sub-1", { name: "Alice" });
+
+    // `cookie.maxAge` is configured in seconds (3600 in the test setup) and both
+    // the stored row and the cookie have to agree with it. Passing that number
+    // through a millisecond parameter used to put the expiry ~285 years out.
+    const before = Date.now();
+    const cookieHeader = await sessionAuth.createOidcSession(userId, { name: "Alice" });
+    const after = Date.now();
+
+    expect(cookieHeader).toContain("Max-Age=3600");
+
+    // The column stores whole seconds, so the row may sit up to a second below
+    // the exact instant; the magnitude is what matters here.
+    const [session] = await db.select().from(authSessions);
+    const expiresAt = session.expires_at.getTime();
+    expect(expiresAt).toBeGreaterThan(before + 3599_000);
+    expect(expiresAt).toBeLessThan(after + 3600_000);
+  });
+});
+
+describe("api key sessions", () => {
+  test("resolves a session whose credential matches the stored hash", async () => {
+    const { auth } = createTestAuth();
+    const cookieHeader = await auth.createApiKeySession(
+      "hskey-api-abc123",
+      "hskey-api-abc***",
+      60_000,
+    );
+    const request = new Request("http://localhost/test", {
+      headers: { cookie: cookieHeader.split(";")[0] },
+    });
+
+    const principal = await auth.require(request);
+    expect(principal.kind).toBe("api_key");
+    if (principal.kind === "api_key") {
+      expect(principal.apiKey).toBe("hskey-api-abc123");
+      expect(principal.displayName).toBe("hskey-api-abc***");
+    }
+  });
+
+  test("rejects and drops a session whose hash no longer matches the cookie", async () => {
+    const { auth, db } = createTestAuth();
+    const cookieHeader = await auth.createApiKeySession(
+      "hskey-api-abc123",
+      "hskey-api-abc***",
+      60_000,
+    );
+
+    // Revocation happens on the row, not in the cookie: clearing the hash takes
+    // the session out of service even though the client still holds its cookie.
+    await db
+      .update(authSessions)
+      .set({ api_key_hash: null })
+      .where(eq(authSessions.kind, "api_key"));
+
+    const request = new Request("http://localhost/test", {
+      headers: { cookie: cookieHeader.split(";")[0] },
+    });
+
+    await expectLoginRedirect(auth.require(request));
+    expect(await db.select().from(authSessions)).toHaveLength(0);
+  });
+
+  test("keeps a database failure as an error instead of a login redirect", async () => {
+    const { auth, db } = createTestAuth();
+    const cookieHeader = await auth.createApiKeySession("hskey-api-abc123", "key", 60_000);
+    const request = new Request("http://localhost/test", {
+      headers: { cookie: cookieHeader.split(";")[0] },
+    });
+
+    // A redirect is only right when the request has no session; an outage has to
+    // stay a 500, otherwise every user is bounced to a login page that also fails.
+    vi.spyOn(db, "select").mockImplementation(() => {
+      throw new Error("database is offline");
+    });
+
+    await expect(auth.require(request)).rejects.toThrow("database is offline");
+  });
+
+  test("rejects a cookie whose credential differs from the stored hash", async () => {
+    const { auth, db } = createTestAuth();
+    const cookieHeader = await auth.createApiKeySession(
+      "hskey-api-abc123",
+      "hskey-api-abc***",
+      60_000,
+    );
+
+    await db
+      .update(authSessions)
+      .set({ api_key_hash: "0".repeat(64) })
+      .where(eq(authSessions.kind, "api_key"));
+
+    const request = new Request("http://localhost/test", {
+      headers: { cookie: cookieHeader.split(";")[0] },
+    });
+
+    await expectLoginRedirect(auth.require(request));
   });
 });
 
@@ -303,7 +429,7 @@ describe("proxy authentication", () => {
 
     auth.registerRequestClientAddress(request, "10.11.42.9");
 
-    await expect(auth.require(request)).rejects.toThrow("No session cookie found");
+    await expectLoginRedirect(auth.require(request));
   });
 
   test("can check allowed CIDRs against a forwarded IP from a trusted proxy", async () => {
@@ -348,7 +474,7 @@ describe("proxy authentication", () => {
 
     auth.registerRequestClientAddress(request, "198.51.100.10");
 
-    await expect(auth.require(request)).rejects.toThrow("No session cookie found");
+    await expectLoginRedirect(auth.require(request));
   });
 });
 

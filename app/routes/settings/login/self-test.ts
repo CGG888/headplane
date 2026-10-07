@@ -87,17 +87,31 @@ export interface LoginSelfTestSettingsInput {
 }
 
 /**
+ * The runtime does not support this method: `app/server/context.ts` rewrites it
+ * to `undefined` so the login flow falls back to `DEFAULT_TOKEN_AUTH_METHOD`,
+ * and `provider.ts` retries on the other method when a provider rejects it.
+ * The self-test has to drop it the same way, otherwise it fails a
+ * configuration that signs people in.
+ */
+export const UNSUPPORTED_TOKEN_AUTH_METHOD = "client_secret_jwt";
+
+/**
  * Builds the check input from the merged settings, so the self-test always
  * evaluates the configuration a restart would read.
  */
 export function loginSelfTestConfigFrom(input: LoginSelfTestSettingsInput): LoginSelfTestConfig {
+  const tokenEndpointAuthMethod =
+    input.tokenEndpointAuthMethod === UNSUPPORTED_TOKEN_AUTH_METHOD
+      ? undefined
+      : coerceString(input.tokenEndpointAuthMethod);
+
   return {
     issuer: coerceString(input.settings.issuer),
     scope: coerceString(input.settings.scope),
     endSessionEndpoint: coerceString(input.settings.end_session_endpoint),
     postLogoutRedirectUri: coerceString(input.settings.post_logout_redirect_uri),
     idpLogoutEnabled: input.settings.logout_idp === true,
-    tokenEndpointAuthMethod: coerceString(input.tokenEndpointAuthMethod),
+    tokenEndpointAuthMethod,
     baseUrl: coerceString(input.baseUrl),
   };
 }

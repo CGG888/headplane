@@ -1,5 +1,12 @@
 # Next
 
+## Fixes
+
+- **Several places that trusted upstream data now check it instead.** A Headscale response that is missing its node or API-key array, a remote DERP map cache that could grow without bound, a DERP map file swapped between its size check and its read, and a configured DNS records path that is actually a directory are now reported and refused instead of silently treated as empty or read anyway. A misconfigured `dns.extra_records_path` reports a normal error instead of terminating the process from inside a library function.
+- **Long-running services stop leaking and stop writing after shutdown.** Alert cooldown state is pruned instead of growing forever, the audit log cannot be asked for an unbounded number of rows, stored latency readings expire after a week, a DERP "check" no longer records the run it only inspected, and a disposed mirror or sync service abandons the run it was in the middle of instead of persisting it.
+- **The console login's OIDC path is stricter.** The `info` endpoint's secret is compared in constant time, a UserInfo response whose subject disagrees with the ID token is ignored instead of trusted, the self-test judges `client_secret_jwt` by the value the runtime actually uses, and the login page no longer treats a missing error state or an unparseable session expiration as valid.
+- **Smaller corrections.** An API key whose expiration cannot be parsed is treated as expired; the policy editor's comment and trailing-comma stripping no longer corrupts content inside strings; the audit log's "Load more" appends the next page instead of replacing the rows on screen; a machine rename submits the name it validated; bulk machine actions say which machines failed and why; the key-expiry toggle distinguishes "disabled" from "restored" and the uptime history counts the last sample in its window; the notification settings no longer send the stored webhook secret to the browser; and the install script writes its migration backup mode 600, no longer probes the base directory before the plan is confirmed, and can bind the admin UI to `127.0.0.1` with `--admin-bind`.
+
 # 0.22.19 (October 6, 2026)
 
 ## Changes
@@ -219,6 +226,7 @@
 
 - The "Local DERP nodes" box lists its regions while collapsed — `#id · code · name · N nodes · source` (capped, with a "+N more" line) — instead of only a count, keeping the same card geometry as its siblings.
 - Documentation: a new "Where the relay addresses come from" passage (and the Chinese equivalent in the fnOS guide) explains the per-family rule, the three source labels, the mismatch warning and the no-public-IPv6 case.
+
 # 0.22.1 (October 6, 2026)
 
 ## Fixes
@@ -295,18 +303,21 @@
 ## Changes
 
 - **The relay cards say which resolver answered, and can re-resolve there.** Both the machine detail card and the Overview show a "Relay lookup" pill — the system resolver, or the configured servers with their addresses — and, when the system resolver returned nothing for an address family, the hint that a configured resolver is how to find out whether the name really has that record, with a link to the settings page. A **Re-resolve** button clears the cached answer and runs the lookup again from the card itself, so a fresh record shows up without waiting out the five-minute cache or visiting the settings page.
+
 # 0.21.4 (October 5, 2026)
 
 ## Fixes
 
 - **Live updates are now opt-in, with a switch.** They previously reloaded whatever page you had open every few seconds: Headscale restamps each node's `last_seen` whenever a node checks in, so an idle tailnet looked changed on almost every poll and every open page revalidated continuously. Change detection now compares a stable projection that drops the self-updating fields and sorts collections, so only something a person can see — a node going offline, a rename, a tag, an expiry, an address — counts as a change, and bursts are coalesced into one update per twenty seconds. The background alert and node-history loops read the snapshot without waking the stream. Turn live updates on from the user menu; the choice is remembered.
 - A revalidation is also skipped while a field has focus, so typing or choosing an option is never interrupted.
+
 # 0.21.3 (October 5, 2026)
 
 ## Fixes
 
 - **Fixed: pages reloaded themselves constantly.** The live store compared the raw node payload between polls, and Headscale refreshes fields such as `last_seen` on every poll — so "unchanged" data looked changed, a change event was sent to every open page every few seconds, and the interface revalidated out from under you. Change detection now compares a stable projection that ignores the fields which move on their own, so a reload only happens when something a person can see actually changes. The stored snapshot still holds the full payload.
 - The page also refuses to revalidate while you are typing in a field or choosing from a dropdown, so a background update can no longer drop your focus or your input.
+
 # 0.21.2 (October 5, 2026)
 
 ## Changes

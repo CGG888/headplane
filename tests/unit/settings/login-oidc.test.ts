@@ -57,7 +57,7 @@ describe("console login settings precedence", () => {
     expect(merged.values).toMatchObject({
       enabled: true,
       scope: "openid email profile",
-      use_pkce: false,
+      use_pkce: true,
       default_role: "member",
       logout_idp: false,
     });

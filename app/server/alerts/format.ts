@@ -248,6 +248,12 @@ export function alertRequestBody(
     case "discord": {
       return discordRequest(presentation, context.locale);
     }
+    default: {
+      // A format that is not one of the known ones — an older stored document,
+      // a hand-edited store — must still produce a body. The receiver gets the
+      // generic payload instead of the literal `undefined`.
+      return payload;
+    }
   }
 }
 

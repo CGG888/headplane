@@ -68,7 +68,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   await alerts.ready();
-  return { settings: alerts.settings(), history: alerts.history() };
+  // The webhook secret is a credential and never reaches the browser: the
+  // loader replaces it with an empty value, and the action treats an empty
+  // submission as "keep the stored secret".
+  const settings = alerts.settings();
+  return { settings: { ...settings, secret: "" }, history: alerts.history() };
 }
 
 export const action = alertsAction;
@@ -128,6 +132,8 @@ function ChannelSection({ settings }: { settings: AlertSettings }) {
 
   const [enabled, setEnabled] = useState(settings.enabled);
   const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl);
+  // The loader never ships the stored secret, so this starts empty; leaving it
+  // empty keeps the saved credential, typing one replaces it.
   const [secret, setSecret] = useState(settings.secret);
   const [notificationLanguage, setNotificationLanguage] = useState(settings.notificationLanguage);
   const [webhookFormat, setWebhookFormat] = useState(settings.webhookFormat);

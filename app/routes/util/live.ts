@@ -1,10 +1,28 @@
+import { data } from "react-router";
+
 import { headscaleLiveStoreContext, requestApiContext } from "~/server/context";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import log from "~/utils/log";
 
 import type { Route } from "./+types/live";
 
+/**
+ * How many live streams this process serves at once. Every stream holds a store
+ * subscription plus a queue that a slow (or half-open) client never drains, so
+ * "one per open tab" needs a ceiling: without one, a client that reconnects
+ * without ever disconnecting grows both without bound.
+ */
+export const MAX_LIVE_STREAMS = 32;
+
+let activeStreams = 0;
+
 export async function loader({ request, context }: Route.LoaderArgs) {
+  if (activeStreams >= MAX_LIVE_STREAMS) {
+    log.warn("sse", "Refusing a live connection: %d streams are already open", activeStreams);
+
+    throw data("Too many live connections", { status: 429 });
+  }
+
   const getRequestApi = context.get(requestApiContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
 
@@ -16,45 +34,75 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     headscaleLiveStore.get(usersResource, api),
   ]);
 
+  let teardown = () => {};
+
   const stream = new ReadableStream({
     start(controller) {
+      activeStreams += 1;
+
       let closed = false;
+      let unsubscribe: (() => void) | undefined;
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
       const encoder = new TextEncoder();
-      const send = (event: string, data: unknown) => {
+
+      // The single exit: a closed socket, a failed write and a client cancel all
+      // release the subscription, the timer and the slot. Each of them used to
+      // be handled separately, and two of the paths (a failed `send`, a failed
+      // heartbeat) only flipped a flag — the listener stayed registered and the
+      // queue kept growing.
+      teardown = () => {
+        if (closed) return;
+        closed = true;
+        activeStreams -= 1;
+        try {
+          unsubscribe?.();
+        } catch {}
+        if (heartbeat !== undefined) {
+          clearInterval(heartbeat);
+        }
+        try {
+          controller.close();
+        } catch {}
+      };
+
+      const send = (event: string, payload: unknown) => {
         if (closed) return;
         try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`),
+          );
         } catch {
-          closed = true;
+          teardown();
         }
       };
+
+      unsubscribe = headscaleLiveStore.subscribe((resource, version) => {
+        log.debug("sse", "Sending change event: %s v%s", resource, version);
+        send("changed", { resource, version });
+      });
+
+      heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        } catch {
+          teardown();
+        }
+      }, 30_000);
 
       const versions = headscaleLiveStore.getVersions();
       log.debug("sse", "Client connected, sending hello with versions: %o", versions);
       send("hello", versions);
 
-      const unsubscribe = headscaleLiveStore.subscribe((resource, version) => {
-        log.debug("sse", "Sending change event: %s v%s", resource, version);
-        send("changed", { resource, version });
-      });
-
-      const heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(": heartbeat\n\n"));
-        } catch {
-          clearInterval(heartbeat);
-        }
-      }, 30_000);
-
       request.signal.addEventListener("abort", () => {
         log.debug("sse", "Client disconnected");
-        closed = true;
-        unsubscribe();
-        clearInterval(heartbeat);
-        try {
-          controller.close();
-        } catch {}
+        teardown();
       });
+    },
+
+    // A consumer that cancels the body (the browser closing the page) never
+    // fires the abort signal on every runtime, so the slot is released here too.
+    cancel() {
+      teardown();
     },
   });
 

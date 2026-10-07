@@ -146,6 +146,7 @@ describe("audit store", () => {
       insert: () => Promise.reject(new Error("insert failed")),
       query: () => Promise.reject(new Error("query failed")),
       trim: () => Promise.reject(new Error("trim failed")),
+      verify: () => Promise.reject(new Error("verify failed")),
     };
     const store = createAuditStore(failing);
 
@@ -159,6 +160,78 @@ describe("audit store", () => {
     ).resolves.toBeUndefined();
     await expect(store.list()).resolves.toEqual({ entries: [], total: 0 });
     await expect(store.count()).resolves.toBe(0);
+    await expect(store.verify()).resolves.toEqual({ checked: 0, broken: [], unavailable: true });
+  });
+
+  test("a failed write is counted so the gap in the log is visible", async () => {
+    let fail = true;
+    const storage = createMemoryAuditStorage();
+    const store = createAuditStore({
+      insert: async (input) => {
+        if (fail) {
+          throw new Error("insert failed");
+        }
+        return storage.insert(input);
+      },
+      query: (query) => storage.query(query),
+      trim: (keep) => storage.trim(keep),
+      verify: () => storage.verify(),
+    });
+
+    expect(store.dropped).toBe(0);
+
+    const input = {
+      actor: "alice",
+      actorType: "user" as const,
+      action: AUDIT_ACTIONS.apiKeyCreate,
+      result: "success" as const,
+    };
+    await expect(store.record(input)).resolves.toBeUndefined();
+    await expect(store.record(input)).resolves.toBeUndefined();
+    expect(store.dropped).toBe(2);
+
+    // Once storage recovers the count stops moving, and the entry lands.
+    fail = false;
+    await expect(store.record(input)).resolves.toMatchObject({ actor: "alice" });
+    expect(store.dropped).toBe(2);
+    await expect(store.count()).resolves.toBe(1);
+  });
+
+  test("the in-memory backend builds and checks a hash chain", async () => {
+    const store = createAuditStore(createMemoryAuditStorage());
+    for (let minute = 0; minute < 3; minute += 1) {
+      await store.record({
+        actor: "alice",
+        actorType: "user",
+        action: AUDIT_ACTIONS.apiKeyCreate,
+        target: `target-${minute}`,
+        result: "success",
+      });
+    }
+
+    await expect(store.verify()).resolves.toEqual({ checked: 2, broken: [] });
+  });
+
+  test("trimming in memory keeps the newest entries and drops the rest", async () => {
+    const storage = createMemoryAuditStorage();
+    const store = createAuditStore(storage, { maxEntries: 2 });
+    for (let minute = 0; minute < 4; minute += 1) {
+      await store.record({
+        id: `id-${minute}`,
+        at: at(minute),
+        actor: "alice",
+        actorType: "user",
+        action: AUDIT_ACTIONS.apiKeyCreate,
+        target: `target-${minute}`,
+        result: "success",
+      });
+    }
+
+    const page = await store.list();
+    expect(page.total).toBe(2);
+    expect(page.entries.map((item) => item.target)).toEqual(["target-3", "target-2"]);
+    // The survivors still line up, and the window's anchor has no predecessor.
+    await expect(store.verify()).resolves.toEqual({ checked: 1, broken: [] });
   });
 });
 

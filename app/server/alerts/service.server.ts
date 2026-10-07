@@ -16,7 +16,13 @@ import type { Headscale } from "~/server/headscale/api";
 import { nodesResource, type LiveStore } from "~/server/headscale/live-store";
 import log from "~/utils/log";
 
-import { alertSeverity, detectAlertEvents, emitAlertEvent, sameAlertState } from "./events";
+import {
+  alertSeverity,
+  detectAlertEvents,
+  emitAlertEvent,
+  pruneSentAlerts,
+  sameAlertState,
+} from "./events";
 import {
   createAlertDelivery,
   notifyAlert,
@@ -26,6 +32,7 @@ import {
 import { buildAlertPayload, buildTestAlertPayload } from "./payload";
 import { isValidAlertWebhookUrl, normalizeAlertSettings } from "./settings";
 import {
+  ALERT_HISTORY_LIMIT,
   appendDelivery,
   defaultAlertsDocument,
   readAlertsDocument,
@@ -36,9 +43,11 @@ import type {
   AlertApiKeySnapshot,
   AlertConfigChecksSnapshot,
   AlertDelivery,
+  AlertEvent,
   AlertNodeSnapshot,
   AlertSettings,
   AlertSnapshot,
+  AlertState,
 } from "./types";
 
 export interface AlertServiceOptions {
@@ -90,12 +99,96 @@ export interface AlertService {
   dispose(): void;
 }
 
+const MAX_DELIVERY_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 30_000;
+const MAX_PENDING_DELIVERIES = 50;
+
+interface PendingAlertDelivery {
+  event: AlertEvent;
+  /** Attempts already made; the first POST counts as one. */
+  attempts: number;
+  /** Epoch milliseconds of the next attempt. */
+  nextAttemptAt: number;
+}
+
+/**
+ * Keeps the later timestamp per condition key. Two writers can start the
+ * cooldown for the same condition, and losing the later entry would let the
+ * other one report it again on the next run.
+ */
+function mergeSent(
+  base: Record<string, string>,
+  extra: Record<string, string>,
+): Record<string, string> {
+  const merged = { ...base };
+  for (const [key, at] of Object.entries(extra)) {
+    const current = merged[key];
+    if (current === undefined || at > current) {
+      merged[key] = at;
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Merges one tick's conclusions into the document as it exists at commit time.
+ *
+ * A tick waits on the Headscale API, and the Test button and the DERP sync write
+ * to the same document while it does. The deliveries they appended are newer
+ * than the history the tick started from, and `derpSyncFailed` is a flag only
+ * the sync writes, so neither is thrown away when the tick commits; the tick's
+ * own history and state are layered on top instead.
+ */
+function mergeTickDocument(
+  committed: AlertsDocument,
+  start: { history: readonly AlertDelivery[]; state: AlertState },
+  history: readonly AlertDelivery[],
+  state: AlertState,
+): AlertsDocument {
+  const known = new Set(start.history.map((delivery) => delivery.id));
+  const merged = [...history];
+  for (const delivery of committed.history) {
+    if (!known.has(delivery.id) && !merged.some((item) => item.id === delivery.id)) {
+      merged.push(delivery);
+    }
+  }
+
+  // Same shape as `appendDelivery`: newest first, so the page keeps reading the
+  // newest attempts from the front.
+  merged.sort((left, right) => right.at.localeCompare(left.at));
+
+  return {
+    settings: committed.settings,
+    history: merged.slice(0, ALERT_HISTORY_LIMIT),
+    state: {
+      ...state,
+      derpSyncFailed: committed.state.derpSyncFailed,
+      sent: mergeSent(state.sent, committed.state.sent),
+    },
+  };
+}
+
 export function createAlertService(options: AlertServiceOptions): AlertService {
   let document: AlertsDocument = defaultAlertsDocument();
   let loadPromise: Promise<void> | undefined;
   let writeChain: Promise<boolean> = Promise.resolve(true);
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking = false;
+
+  /**
+   * Deliveries that came back with a non-2xx or a network error, waiting for a
+   * retry with exponential backoff.
+   *
+   * The detector only emits on a *transition*, and the transition is committed
+   * to the state before the POST happens, so a single failed request used to
+   * lose the alert for good: the next tick sees an unchanged state, no event is
+   * detected, and the cooldown still holds. That is exactly how a "Headscale is
+   * unreachable" page was lost to one webhook timeout. The queue is
+   * deliberately in memory and bounded — a restart drops pending retries
+   * rather than replaying stale ones.
+   */
+  const pendingRetries: PendingAlertDelivery[] = [];
 
   const now = () => options.now?.() ?? new Date();
 
@@ -124,6 +217,17 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
 
   /** Serializes writes so a settings save and a tick cannot clobber each other. */
   function persist(): Promise<boolean> {
+    // The cooldown map only needs the entries that can still suppress an event,
+    // so it is pruned at the single point every writer commits through. Without
+    // this the stored state grows with every condition ever seen.
+    document = {
+      ...document,
+      state: {
+        ...document.state,
+        sent: pruneSentAlerts(document.state.sent, document.settings, now()),
+      },
+    };
+
     const pending = document;
     writeChain = writeChain.then(() => writeAlertsDocument(options.dataPath, pending));
     return writeChain;
@@ -245,12 +349,17 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
         return;
       }
 
+      // Read before the first await: the commit at the end merges against what
+      // this tick started from rather than whatever landed while it waited.
+      const start = { history: document.history, state: document.state };
+
       const snapshot = await gatherSnapshot();
       const at = now();
-      const { events, state } = detectAlertEvents(document.state, snapshot, document.settings, at);
+      const { events, state } = detectAlertEvents(start.state, snapshot, document.settings, at);
 
-      let history = document.history;
-      for (const event of events) {
+      let history = start.history;
+
+      async function deliver(event: AlertEvent, attempt: number): Promise<void> {
         const result = await notifyAlert({
           settings: document.settings,
           payload: buildAlertPayload(event, __VERSION__, document.settings.notificationLanguage),
@@ -263,11 +372,56 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
         });
 
         history = result.history;
+        if (result.delivery.ok) {
+          return;
+        }
+
+        const where = `${event.id}${event.target === undefined ? "" : ` (${event.target})`}`;
+        if (attempt >= MAX_DELIVERY_ATTEMPTS) {
+          log.warn("server", "Alerts: giving up on %s after %d attempts", where, attempt);
+          return;
+        }
+
+        if (pendingRetries.length >= MAX_PENDING_DELIVERIES) {
+          log.warn(
+            "server",
+            "Alerts: dropping the retry for %s, %d deliveries are already queued",
+            where,
+            pendingRetries.length,
+          );
+          return;
+        }
+
+        // 30 s, 60 s, 120 s, 240 s between the five attempts.
+        pendingRetries.push({
+          event,
+          attempts: attempt,
+          nextAttemptAt: now().getTime() + RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+        });
+        log.warn("server", "Alerts: delivery of %s failed, a retry is queued", where);
       }
 
-      const changed = !sameAlertState(state, document.state);
-      document = { settings: document.settings, history, state };
-      if (changed || events.length > 0) {
+      // Due retries go first: a condition that keeps re-firing must not starve
+      // the alerts that failed earlier.
+      const due = pendingRetries.filter((entry) => entry.nextAttemptAt <= at.getTime());
+      for (const entry of due) {
+        const index = pendingRetries.indexOf(entry);
+        if (index >= 0) {
+          pendingRetries.splice(index, 1);
+        }
+      }
+
+      for (const entry of due) {
+        await deliver(entry.event, entry.attempts + 1);
+      }
+
+      for (const event of events) {
+        await deliver(event, 1);
+      }
+
+      const changed = !sameAlertState(state, start.state);
+      document = mergeTickDocument(document, start, history, state);
+      if (changed || events.length > 0 || due.length > 0) {
         await persist();
       }
     } catch (error) {
@@ -328,7 +482,14 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
       // Suppressed (notifications off, the event deselected, or the cooldown):
       // remember the failure without delivering it, exactly like a change the
       // detector would have recorded but not sent.
-      document = { ...document, state: { ...previous, derpSyncFailed: true, sent } };
+      document = {
+        ...document,
+        state: {
+          ...document.state,
+          derpSyncFailed: true,
+          sent: mergeSent(document.state.sent, sent),
+        },
+      };
       await persist();
       return;
     }
@@ -344,10 +505,26 @@ export function createAlertService(options: AlertServiceOptions): AlertService {
       ...deliveryOptions(),
     });
 
+    // Same reasoning as the tick path: the flag is already committed, so a
+    // failed POST would otherwise never be retried.
+    if (!result.delivery.ok && pendingRetries.length < MAX_PENDING_DELIVERIES) {
+      pendingRetries.push({
+        event,
+        attempts: 1,
+        nextAttemptAt: now().getTime() + RETRY_BASE_DELAY_MS,
+      });
+    }
+
     document = {
       ...document,
       history: result.history,
-      state: { ...previous, derpSyncFailed: true, sent },
+      // The tick can have reported other conditions while this POST was in
+      // flight, so its state is merged rather than replaced.
+      state: {
+        ...document.state,
+        derpSyncFailed: true,
+        sent: mergeSent(document.state.sent, sent),
+      },
     };
     await persist();
   }

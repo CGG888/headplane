@@ -6,6 +6,11 @@ import Input from "~/components/input";
 import { SettingsActions } from "~/components/settings-nav";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
+import {
+  isValidRestrictionName,
+  RESTRICTION_NAME_PATTERN,
+  RESTRICTION_STRING_MAX_LENGTH,
+} from "~/utils/restrictions";
 
 const userSchema = type({
   user: "string > 0",
@@ -28,6 +33,12 @@ export default function AddUser({ users, isDisabled }: AddUserProps) {
         return { user: t("settings.addUser.duplicate") };
       }
 
+      // The action rejects whitespace, control characters and anything over
+      // 255 characters (see `~/utils/restrictions`), so the dialog does too.
+      if (!isValidRestrictionName(user)) {
+        return { user: t("settings.addUser.invalid") };
+      }
+
       return undefined;
     },
   });
@@ -39,6 +50,8 @@ export default function AddUser({ users, isDisabled }: AddUserProps) {
         {...form.field("user")}
         description={t("settings.addUser.description")}
         disabled={isDisabled}
+        maxLength={RESTRICTION_STRING_MAX_LENGTH}
+        pattern={RESTRICTION_NAME_PATTERN}
         required
         label={t("settings.addUser.label")}
         placeholder={t("settings.addUser.placeholder")}

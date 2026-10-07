@@ -62,7 +62,7 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
     case "save_channel": {
       const enabled = formData.get("enabled")?.toString() === "true";
       const webhookUrl = formData.get("webhook_url")?.toString().trim() ?? "";
-      const secret = formData.get("secret")?.toString() ?? "";
+      const postedSecret = formData.get("secret")?.toString() ?? "";
       const postedLanguage = formData.get("notification_language")?.toString().trim();
       const postedFormat = formData.get("webhook_format")?.toString().trim();
       const stored = alerts.settings();
@@ -93,10 +93,13 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
         webhookFormat = postedFormat;
       }
 
+      // The loader does not ship the stored secret, so the field arrives empty
+      // for a page the operator never touched. An empty submission therefore
+      // keeps the stored credential; only a non-empty value replaces it.
       const result = await alerts.update({
         enabled,
         webhookUrl,
-        secret,
+        secret: postedSecret.length > 0 ? postedSecret : stored.secret,
         notificationLanguage,
         webhookFormat,
       });
@@ -143,7 +146,7 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       // Unsaved edits in the form are what the operator wants to try, so the
       // posted channel values win over the stored ones when they are present.
       const postedUrl = formData.get("webhook_url")?.toString().trim() ?? "";
-      const postedSecret = formData.get("secret")?.toString();
+      const postedSecret = formData.get("secret")?.toString() ?? "";
       const postedLanguage = formData.get("notification_language")?.toString().trim();
       const postedFormat = formData.get("webhook_format")?.toString().trim();
       const stored = alerts.settings();
@@ -152,6 +155,14 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
       if (!isValidAlertWebhookUrl(webhookUrl)) {
         return failure("notConfigured", 400);
       }
+
+      // The stored secret belongs to the stored URL. A test aimed anywhere else
+      // must not replay it to whatever host was typed into the field, so it uses
+      // exactly the posted secret — which may be empty, and then the request
+      // fails upstream instead of leaking the credential. A test of the stored
+      // URL keeps the stored secret when the field was left empty, because the
+      // loader never fills it in.
+      const savedUrlTest = postedUrl.length === 0 || postedUrl === stored.webhookUrl;
 
       const notificationLanguage =
         postedLanguage !== undefined && postedLanguage.length > 0
@@ -169,7 +180,11 @@ export async function alertsAction({ request, context }: Route.ActionArgs) {
 
       const outcome = await alerts.test({
         webhookUrl,
-        secret: postedUrl.length > 0 ? (postedSecret ?? stored.secret) : stored.secret,
+        secret: savedUrlTest
+          ? postedSecret.length > 0
+            ? postedSecret
+            : stored.secret
+          : postedSecret,
         notificationLanguage,
         webhookFormat,
       });

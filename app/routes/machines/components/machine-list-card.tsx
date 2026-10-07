@@ -151,7 +151,7 @@ export default function MachineListCard({
         >
           {isConnected
             ? t("machines.common.connected")
-            : `${lastSeen.toLocaleString(locale)} · ${formatTimeDelta(lastSeen)}`}
+            : `${lastSeen.toLocaleString(locale)} · ${formatTimeDelta(lastSeen, locale)}`}
         </span>
       </div>
     </article>

@@ -692,6 +692,41 @@ describe("DERP address sync service", () => {
     expect(await readdir(dir)).toEqual(["derp-sync.json"]);
   });
 
+  test("a settings save made while a run is in flight survives the run", async () => {
+    let release = (): void => undefined;
+    let parked = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const atRelayLookup = new Promise<void>((resolve) => {
+      parked = resolve;
+    });
+    const test19 = build({
+      initial: { ipv4: "9.9.9.9" },
+      resolve: async () => {
+        parked();
+        await gate;
+        return resolution([PUBLIC_IPV4]);
+      },
+    });
+    await test19.service.update({ enabled: true, families: "ipv4", autoReload: false });
+
+    const run = test19.service.runNow();
+    // The run has already read its settings and is waiting on DNS from here on,
+    // so this save is exactly the one an in-flight run used to roll back.
+    await atRelayLookup;
+    // 6 is one of the offered intervals; anything else normalizes back to 12.
+    await test19.service.update({ intervalHours: 6 });
+    release();
+    await run;
+
+    const stored = await readDerpSyncDocument(dir);
+
+    expect(stored.settings.intervalHours).toBe(6);
+    expect(test19.service.settings().intervalHours).toBe(6);
+    expect(stored.last?.outcome).toBe("changed");
+  });
+
   test("never throws when the store cannot be written", async () => {
     const blocker = join(dir, "blocked");
     await writeFile(blocker, "not a directory", "utf8");
@@ -718,6 +753,50 @@ describe("DERP address sync service", () => {
     const stored = await readDerpSyncDocument(blocker);
     expect(stored.settings.enabled).toBe(false);
     service.dispose();
+  });
+
+  test("an address-literal relay is not looked up for the family it cannot answer", async () => {
+    const resolve = vi.fn(async () => resolution([PUBLIC_IPV4]));
+    const literal = build({ initial: { ipv6: HOST_IPV6 }, resolve });
+    literal.setServerUrl("https://[2001:db8::1]:8443");
+    await literal.service.update({ enabled: true, families: "ipv4" });
+
+    const run = await literal.service.runNow();
+
+    // The relay is an IPv6 literal, so there is no A record to read. Asking the
+    // resolver would only fail for the wrong reason.
+    expect(resolve).not.toHaveBeenCalled();
+    expect(run?.skipped).toContainEqual({
+      family: "ipv4",
+      reason: "no-records",
+      detail: "[2001:db8::1]",
+    });
+  });
+
+  test("a disposed service abandons a run that is still resolving", async () => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const disposing = build({
+      initial: { ipv4: "9.9.9.9" },
+      resolve: async () => {
+        await held;
+        return resolution([PUBLIC_IPV4]);
+      },
+    });
+    await disposing.service.update({ enabled: true, families: "ipv4" });
+
+    const pending = disposing.service.runNow();
+    disposing.service.dispose();
+    release?.();
+
+    // Nothing the run was about to do may happen once the service is disposed.
+    await expect(pending).resolves.toBeUndefined();
+    expect(disposing.patches).toEqual([]);
+    expect(disposing.snapshot).not.toHaveBeenCalled();
+    expect(disposing.audit).toEqual([]);
+    expect(disposing.current().ipv4).toBe("9.9.9.9");
   });
 });
 
@@ -860,6 +939,20 @@ describe("DERP address sync failure predicate", () => {
     expect(
       derpSyncFailureReason(run({ skipped: [{ family: "ipv6", reason: "no-host-address" }] })),
     ).toBe("detection-unusable");
+  });
+
+  test("a family skipped while the other was detected is not a failed detection", () => {
+    // IPv6 found nothing usable, but IPv4 was detected: the run did its job, so
+    // it must not raise the alert.
+    expect(
+      derpSyncFailureReason(
+        run({
+          detected: { ipv4: { address: PUBLIC_IPV4, source: "dns" } },
+          unchanged: ["ipv4"],
+          skipped: [{ family: "ipv6", reason: "no-host-address" }],
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   test("the most severe reason wins when a run failed in more than one way", () => {

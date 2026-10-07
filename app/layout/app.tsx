@@ -108,12 +108,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       isHealthy,
       user,
     };
-  } catch {
-    return redirect("/login", {
-      headers: {
-        "Set-Cookie": await auth.destroySession(request),
-      },
-    });
+  } catch (error) {
+    // `auth.require` reports "not signed in" with a redirect response, and that
+    // is the only case this layout answers by clearing the cookie. Everything
+    // else that could be thrown in here — a database outage, an unreachable
+    // Headscale, a bug in the block above — used to land in the same branch and
+    // silently destroyed the session, so a transient failure looked exactly like
+    // "you were logged out". Log it and let the error boundary render it.
+    if (error instanceof Response && error.status >= 300 && error.status < 400) {
+      return redirect("/login", {
+        headers: {
+          "Set-Cookie": await auth.destroySession(request),
+        },
+      });
+    }
+
+    log.error("auth", "Failed to load the app layout: %s", String(error));
+    throw error;
   }
 }
 

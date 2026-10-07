@@ -36,6 +36,11 @@ const MESSAGE_KEYS: Record<SshErrorCode, TranslationKey> = {
   userNotLinked: "ssh.errors.userNotLinked.message",
 };
 
+/** The translatable message key for a code, for callers outside the boundary. */
+export function sshErrorMessageKey(code: SshErrorCode): TranslationKey {
+  return MESSAGE_KEYS[code];
+}
+
 /** Payload carried by `data(...)` so the boundary can translate the error. */
 export interface SshErrorPayload {
   sshError: SshErrorCode;

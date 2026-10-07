@@ -119,13 +119,15 @@ function errorCodeOf(result: ActionResult): MachineMaintenanceErrorCode | undefi
 }
 
 /** The error the real transport throws for a non-2xx Headscale response. */
-function apiFailure(rawData: string, statusCode = 502) {
+function apiFailure(body: string, statusCode = 502) {
   return data(
     {
       requestUrl: "POST v1/node/backfillips",
       statusCode,
-      rawData,
-      data: JSON.parse(rawData) as Record<string, unknown>,
+      // `detail` is the sanitized stand-in for the upstream text; the parsed
+      // object stays in `data`, exactly as the real transport builds it.
+      detail: body,
+      data: JSON.parse(body) as Record<string, unknown>,
     },
     { status: 502 },
   );

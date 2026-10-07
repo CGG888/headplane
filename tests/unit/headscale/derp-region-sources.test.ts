@@ -137,6 +137,25 @@ describe("loadRemoteDerpMap", () => {
     expect(second).toEqual(first);
   });
 
+  test("the cache stays bounded and lets the oldest map go", async () => {
+    const { calls, fetch } = countingFetch(MAP);
+    const options = { fetch, now: () => 0, ttlMs: 60_000 };
+
+    for (let index = 0; index <= 200; index += 1) {
+      await loadRemoteDerpMap(`https://example.com/map-${index}.yaml`, SETTINGS, options);
+    }
+
+    expect(calls).toHaveLength(201);
+
+    // The map read last is still cached, while the map read first was evicted
+    // and is fetched again instead of the cache growing without bound.
+    await loadRemoteDerpMap("https://example.com/map-200.yaml", SETTINGS, options);
+    expect(calls).toHaveLength(201);
+
+    await loadRemoteDerpMap("https://example.com/map-0.yaml", SETTINGS, options);
+    expect(calls).toHaveLength(202);
+  });
+
   test("refetches once the success window has passed", async () => {
     const { calls, fetch } = countingFetch(MAP);
     let now = 1_000;
@@ -323,14 +342,38 @@ describe("loadDerpRegionSources", () => {
     expect(edited.local?.["902"]?.name).toBe("Amsterdam Two");
   });
 
-  test("drops a map file larger than the supported size", async () => {
-    const { fs } = createFakeFs({
-      [resolve("/maps/huge.yaml")]: { content: "x".repeat(256 * 1024 + 1) },
+  test("drops a map file larger than the supported size without reading it", async () => {
+    const huge = resolve("/maps/huge.yaml");
+    const { fs, reads } = createFakeFs({
+      [huge]: { content: "x".repeat(256 * 1024 + 1) },
     });
 
     const sources = await loadDerpRegionSources(
       {
-        paths: ["/maps/huge.yaml"],
+        paths: [huge],
+        urls: [],
+        autoUpdateEnabled: false,
+        updateFrequency: "3h",
+      },
+      { fs },
+    );
+
+    expect(sources.local).toBeUndefined();
+    // The size in the stat answer is enough; reading is what would have pulled
+    // the whole file into memory first.
+    expect(reads).toEqual([]);
+  });
+
+  test("measures a file that grew after its stat", async () => {
+    const path = resolve("/maps/grown.yaml");
+    const fs: DerpRegionFs = {
+      stat: () => Promise.resolve({ size: 10, mtimeMs: 1 }),
+      readFile: () => Promise.resolve("x".repeat(256 * 1024 + 1)),
+    };
+
+    const sources = await loadDerpRegionSources(
+      {
+        paths: [path],
         urls: [],
         autoUpdateEnabled: false,
         updateFrequency: "3h",

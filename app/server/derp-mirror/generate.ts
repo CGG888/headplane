@@ -158,8 +158,11 @@ function readLatency(latenciesMs: Record<string, number>, id: string): number | 
  * measured itself first, the machine-reported value next.
  *
  * The local probe is the newer signal and the only one that can see the
- * official regions a mirrored setup hands out, so it wins wherever it exists; a
- * region nobody probed here keeps exactly the reported value it had before.
+ * official regions a mirrored setup hands out, so it wins wherever it exists —
+ * but only while it is current: the caller passes the measured values that are
+ * still inside their TTL (see `locallyMeasuredRegionLatencies`), so an ancient
+ * measurement can never silently outrank the reported value. A region nobody
+ * probed here keeps exactly the reported value it had before.
  */
 function readRankingLatency(
   reportedMs: Record<string, number>,
@@ -206,6 +209,13 @@ function ordered(assignment: ReadonlyMap<string, number>): Record<string, number
 
 export interface RegionNumbering {
   assignment: Record<string, number>;
+  /**
+   * Selected regions the mirrored range had no free number left for, in ranking
+   * order. Empty for every map the official source describes; a caller that gets
+   * a non-empty list must not write a mirror, because the file would silently
+   * lose the regions listed here.
+   */
+  unassigned: string[];
   /** Set only when this call ranked afresh; absent when the stored one was kept. */
   rankedAt?: string;
 }
@@ -224,6 +234,10 @@ export interface RegionNumbering {
  * `latenciesMs` are the latencies the Headplane Agent's machines reported;
  * `measuredMs` are the ones this server probed itself, and a local value wins
  * over a reported one for the same region.
+ *
+ * When the selection is larger than the 97 numbers the mirrored range offers,
+ * the surplus regions are returned in `unassigned` instead of being dropped
+ * quietly: the caller turns that into a recorded reason and writes nothing.
  */
 export function assignRegionNumbers(
   selectedOfficialIds: string[],
@@ -262,7 +276,7 @@ export function assignRegionNumbers(
   // Covered: every selected region already has a number, so nothing is ranked
   // and the timestamp the caller recorded for that ranking survives untouched.
   if (existing !== undefined && selected.every((id) => kept.has(id))) {
-    return { assignment: ordered(kept) };
+    return { assignment: ordered(kept), unassigned: [] };
   }
 
   const ranked = selected
@@ -286,12 +300,15 @@ export function assignRegionNumbers(
     next = Math.max(next, number + 1);
   }
 
+  const unassigned: string[] = [];
   for (const entry of ranked) {
     const number = takeNumber(next, used);
     if (number === undefined) {
       // 97 of the 900s are usable and the official map has far fewer regions, so
-      // this is unreachable in practice; the region is left out rather than
-      // given a number outside the mirrored range.
+      // a pasted map is the only way to get here. The region is reported rather
+      // than given a number outside the mirrored range, and the caller refuses
+      // to write a map that leaves it out.
+      unassigned.push(entry.id);
       continue;
     }
 
@@ -300,7 +317,7 @@ export function assignRegionNumbers(
     next = number + 1;
   }
 
-  return { assignment: ordered(kept), rankedAt: new Date().toISOString() };
+  return { assignment: ordered(kept), unassigned, rankedAt: new Date().toISOString() };
 }
 
 /** `a`, `b`, ... `z`, `aa`, ... — the suffix of a node's `<number><letter>` name. */

@@ -82,10 +82,19 @@ interface GhosttyProps {
 export default function Ghostty({ ipn, ipAddress, username, onConnected }: GhosttyProps) {
   const divRef = useRef<HTMLDivElement>(null);
 
+  // The parent re-renders as soon as the terminal reports a connection, which
+  // handed this effect a new `onConnected` identity and made every reconnect
+  // tear the session down again. Hold the callback in a ref so the effect only
+  // depends on the values that actually identify the session.
+  const onConnectedRef = useRef(onConnected);
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+  }, [onConnected]);
+
   useEffect(() => {
     if (!divRef.current) return;
 
-    const transport = createSSHTransport(ipn, ipAddress, username, onConnected);
+    const transport = createSSHTransport(ipn, ipAddress, username, () => onConnectedRef.current());
     const restty = new Restty({
       root: divRef.current,
       surface: {
@@ -140,7 +149,7 @@ export default function Ghostty({ ipn, ipAddress, username, onConnected }: Ghost
     return () => {
       restty.destroy();
     };
-  }, [ipn, ipAddress, username, onConnected]);
+  }, [ipn, ipAddress, username]);
 
   return <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-black" ref={divRef} />;
 }

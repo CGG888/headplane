@@ -40,6 +40,7 @@ import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { computeNodeTimeline, uptimePercent, type NodeTimeline } from "~/server/history/timeline";
 import type { NodeHistoryDocument } from "~/server/history/types";
 import { buildRelayView, loadSharedRelayResolution } from "~/server/relay-dns";
+import { Capabilities } from "~/server/web/roles";
 import { getOSInfo, getTSVersion } from "~/utils/host-info";
 import { extractTagOwnerTags, isNoExpiry, mapNodes, sortAssignableTags } from "~/utils/node-info";
 import { getUserDisplayName } from "~/utils/user";
@@ -84,10 +85,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
     throw data(null, { status: 204 });
   }
 
-  // The identity is required, but nothing on this page is gated behind a
-  // capability any more: the relay card no longer offers the re-resolve control
-  // that used to need the DERP settings permission.
-  await auth.require(request);
+  // The list page hides this route from accounts without `read_machines`, but
+  // the flags it hands the header are not enforcement: a guessed node id used to
+  // reach the same node details (addresses, tags, users, history) from here.
+  const principal = await auth.require(request);
+  if (!auth.can(principal, Capabilities.read_machines)) {
+    throw data({ localized: { key: "errors.permission.view" } }, { status: 403 });
+  }
+
   const magic = headscaleConfig.getMagicDNSBaseDomain();
 
   const { api } = await getRequestApi(request);

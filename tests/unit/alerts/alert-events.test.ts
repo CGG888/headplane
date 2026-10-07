@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { detectAlertEvents, emptyAlertState, sameAlertState } from "~/server/alerts/events";
+import {
+  detectAlertEvents,
+  emptyAlertState,
+  pruneSentAlerts,
+  sameAlertState,
+} from "~/server/alerts/events";
 import { DEFAULT_ALERT_SETTINGS } from "~/server/alerts/settings";
 import type { AlertSettings, AlertSnapshot } from "~/server/alerts/types";
 
@@ -272,5 +277,40 @@ describe("sameAlertState", () => {
     ).toBe(true);
     expect(sameAlertState(base, { ...base, reachable: false })).toBe(false);
     expect(sameAlertState(base, { ...base, sent: { nodeOffline: NOW.toISOString() } })).toBe(false);
+  });
+});
+
+describe("sent alert table", () => {
+  test("forgets an entry that can no longer suppress anything", () => {
+    // Without this the table holds one entry per condition ever seen — a node
+    // that went offline once, a key that expired last year — and every writer
+    // serializes the whole map into the store.
+    const sent = {
+      "nodeOffline:gone": new Date(NOW.getTime() - 7_200_000).toISOString(),
+      "nodeOffline:alpha": NOW.toISOString(),
+    };
+
+    expect(pruneSentAlerts(sent, settings({ cooldownSeconds: 3600 }), NOW)).toEqual({
+      "nodeOffline:alpha": NOW.toISOString(),
+    });
+    // The input map belongs to the caller and is left alone.
+    expect(Object.keys(sent)).toHaveLength(2);
+  });
+
+  test("drops an entry whose timestamp cannot be read", () => {
+    expect(
+      pruneSentAlerts({ broken: "whenever" }, settings({ cooldownSeconds: 86_400 }), NOW),
+    ).toEqual({});
+  });
+
+  test("the state a tick returns carries only live cooldown entries", () => {
+    const state = {
+      ...emptyAlertState(),
+      sent: { stale: new Date(NOW.getTime() - 86_400_000).toISOString() },
+    };
+
+    const result = detectAlertEvents(state, snapshot(), settings({ cooldownSeconds: 3600 }), NOW);
+
+    expect(result.state.sent).toEqual({});
   });
 });

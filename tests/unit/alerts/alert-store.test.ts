@@ -1,8 +1,8 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { emptyAlertState } from "~/server/alerts/events";
 import { DEFAULT_ALERT_SETTINGS } from "~/server/alerts/settings";
@@ -19,6 +19,9 @@ import {
   type AlertsDocument,
 } from "~/server/alerts/store";
 import type { AlertDelivery } from "~/server/alerts/types";
+import log from "~/utils/log";
+
+vi.mock("~/utils/log");
 
 function delivery(index: number): AlertDelivery {
   return {
@@ -39,6 +42,18 @@ describe("alert document parsing", () => {
     expect(parseAlertsDocument("{not json")).toEqual(defaultAlertsDocument());
     expect(parseAlertsDocument("[1,2,3]")).toEqual(defaultAlertsDocument());
     expect(parseAlertsDocument("null")).toEqual(defaultAlertsDocument());
+  });
+
+  test("reports why a stored document was ignored", () => {
+    const reasons: string[] = [];
+    const report = (reason: string) => reasons.push(reason);
+
+    // No document at all is the normal first-run state and is not reported.
+    parseAlertsDocument(undefined, report);
+    parseAlertsDocument("{not json", report);
+    parseAlertsDocument("null", report);
+
+    expect(reasons).toEqual(["the file is not valid JSON", "the file does not hold a JSON object"]);
   });
 
   test("normalizes hand-edited settings instead of trusting them", () => {
@@ -142,6 +157,7 @@ describe("alert file", () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "headplane-alerts-"));
+    vi.clearAllMocks();
   });
 
   afterEach(async () => {
@@ -178,11 +194,41 @@ describe("alert file", () => {
 
   test("a missing file reads as the defaults", async () => {
     expect(await readAlertsDocument(dir)).toEqual(defaultAlertsDocument());
+    // A first run has no file yet, so this must not look like a problem.
+    expect(log.warn).not.toHaveBeenCalled();
   });
 
   test("a corrupt file reads as the defaults instead of throwing", async () => {
     await writeFile(alertsPath(dir), "{ half written", "utf8");
     expect(await readAlertsDocument(dir)).toEqual(defaultAlertsDocument());
+    expect(log.warn).toHaveBeenCalledWith(
+      "server",
+      "Ignoring the alerts stored in %s: %s",
+      alertsPath(dir),
+      "the file is not valid JSON",
+    );
+  });
+
+  test("an empty file reads as the defaults and says so", async () => {
+    await writeFile(alertsPath(dir), "", "utf8");
+    expect(await readAlertsDocument(dir)).toEqual(defaultAlertsDocument());
+    expect(log.warn).toHaveBeenCalledWith(
+      "server",
+      "Ignoring the alerts stored in %s: %s",
+      alertsPath(dir),
+      "the file is empty",
+    );
+  });
+
+  test("a JSON value that is not an object reads as the defaults and says so", async () => {
+    await writeFile(alertsPath(dir), "[1,2,3]", "utf8");
+    expect(await readAlertsDocument(dir)).toEqual(defaultAlertsDocument());
+    expect(log.warn).toHaveBeenCalledWith(
+      "server",
+      "Ignoring the alerts stored in %s: %s",
+      alertsPath(dir),
+      "the file does not hold a JSON object",
+    );
   });
 
   test("an unwritable data directory reports failure instead of throwing", async () => {
@@ -191,5 +237,20 @@ describe("alert file", () => {
 
     expect(await writeAlertsDocument(blocker, defaultAlertsDocument())).toBe(false);
     expect(await readAlertsDocument(blocker)).toEqual(defaultAlertsDocument());
+  });
+
+  test("an unreadable file reports why it was ignored", async () => {
+    // A directory in the place of the file fails with EISDIR on every
+    // platform, unlike a path that runs through a plain file (which Windows
+    // reports as a missing file).
+    await mkdir(alertsPath(dir), { recursive: true });
+
+    expect(await readAlertsDocument(dir)).toEqual(defaultAlertsDocument());
+    expect(log.warn).toHaveBeenCalledWith(
+      "server",
+      "Cannot read %s: %s",
+      alertsPath(dir),
+      expect.any(String),
+    );
   });
 });

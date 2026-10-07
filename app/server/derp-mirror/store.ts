@@ -8,6 +8,7 @@
 // document degrades to the defaults) and writes go through a temp file plus
 // rename so a crash never leaves a half-written document behind.
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -35,6 +36,9 @@ const REASONS: readonly DerpMirrorReason[] = [
   "selection-empty",
   "fetch-unusable",
   "no-regions",
+  "numbering-exhausted",
+  "target-not-mirror",
+  "snapshot-failed",
   "target-relative",
   "target-unsafe",
   "not-writable",
@@ -228,8 +232,6 @@ export async function readDerpMirrorSettings(dataPath: string): Promise<DerpMirr
   return (await readDerpMirrorDocument(dataPath)).settings;
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the document atomically (temp file plus rename). Throws when the write
  * could not be made: the settings action surfaces that as a localized form
@@ -241,11 +243,16 @@ export async function writeDerpMirrorDocument(
   document: DerpMirrorDocument,
 ): Promise<void> {
   const path = derpMirrorPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeDerpMirrorDocument(document), "utf8");
+    await writeFile(temp, serializeDerpMirrorDocument(document), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target.
+      flag: "wx",
+    });
     await rename(temp, path);
   } catch (error) {
     await rm(temp, { force: true }).catch(() => undefined);

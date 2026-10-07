@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { appConfigContext, authContext } from "~/server/context";
 import {
   createDataBackup,
+  type DataBackup,
   headplaneDatabasePath,
   isDataBackupError,
 } from "~/server/snapshots/data-backup.server";
@@ -27,16 +28,31 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     throw data({ localized: { key: "errors.permission.modifyIam" } }, { status: 403 });
   }
 
+  let backup: DataBackup | undefined;
+  let handedOff = false;
   try {
-    const backup = await createDataBackup({
+    const created = await createDataBackup({
       dbPath: headplaneDatabasePath(config.server.data_path),
     });
+    backup = created;
 
-    return new Response(backup.stream(), {
+    // The copy (which carries the OIDC ID tokens in the database) only has a
+    // reason to exist while the download is alive. `dispose` is idempotent, so
+    // it runs either from here when the request is aborted before the body is
+    // consumed, or from the stream closing after a normal download.
+    if (request.signal.aborted) {
+      await created.dispose();
+    } else {
+      request.signal.addEventListener("abort", () => void created.dispose(), { once: true });
+    }
+
+    const body = created.stream();
+    handedOff = true;
+    return new Response(body, {
       headers: {
         "Content-Type": "application/vnd.sqlite3",
-        "Content-Disposition": `attachment; filename="${backup.fileName}"`,
-        "Content-Length": String(backup.size),
+        "Content-Disposition": `attachment; filename="${created.fileName}"`,
+        "Content-Length": String(created.size),
         "Cache-Control": "no-store",
       },
     });
@@ -46,5 +62,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     }
 
     throw data({ localized: { key: "errors.generic.requestFailed" } }, { status: 500 });
+  } finally {
+    // A response that never reached the client must not leave its copy behind:
+    // once the body is handed over the stream owns the cleanup, but a throw
+    // before that (or a request that was already aborted) does not.
+    if (!handedOff) {
+      await backup?.dispose();
+    }
   }
 }

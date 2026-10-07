@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { versions } from "node:process";
 
 import { data } from "react-router";
@@ -30,7 +31,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   const token = bearer.slice("Bearer ".length).trim();
-  if (token !== config.server.info_secret) {
+
+  // Compare in constant time, the same way the session tokens are checked in
+  // `app/server/web/auth.ts`. `timingSafeEqual` throws when the lengths differ,
+  // so the length is compared first (the length itself is not a secret).
+  const expected = Buffer.from(config.server.info_secret, "utf8");
+  const provided = Buffer.from(token, "utf8");
+  if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
     throw data(
       {
         status: "Forbidden",

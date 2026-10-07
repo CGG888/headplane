@@ -1,4 +1,4 @@
-﻿import { createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { data } from "react-router";
 
@@ -13,7 +13,7 @@ import {
 } from "~/server/context";
 import { nodesResource, usersResource } from "~/server/headscale/live-store";
 import { isUserPrincipal } from "~/server/web/auth";
-import { Capabilities, Roles } from "~/server/web/roles";
+import { Capabilities, normalizeRole } from "~/server/web/roles";
 import type { Role } from "~/server/web/roles";
 import type { Machine, User } from "~/types";
 import { groupsForUser, parsePolicy } from "~/utils/acl-policy";
@@ -134,7 +134,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         sub: hp.sub,
         name: hp.name,
         email: hp.email,
-        role: (hp.role in Roles ? hp.role : "member") as Role,
+        // `hp.role in Roles` walked the prototype chain, so a stored role name
+        // like "constructor" survived the check; only a real role (or the owner)
+        // is kept, and anything else falls back to `member` like the DB default.
+        role: normalizeRole(hp.role),
         headscaleUserId: hp.headscale_user_id,
         createdAt: hp.created_at,
         lastLoginAt: hp.last_login_at,

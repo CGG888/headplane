@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -868,5 +868,46 @@ describe("Headscale config loader", () => {
       noisePrivateKeyPath: "",
       tuningConfigured: false,
     });
+  });
+
+  test("a separate DNS file without extra_records_path is reported, not fatal", async () => {
+    const path = join(dir, "config.yaml");
+    const recordsPath = join(dir, "extra-records.json");
+    await writeFile(path, "server_url: http://localhost:8080");
+    await writeFile(recordsPath, JSON.stringify([{ name: "json", type: "A", value: "1.1.1.1" }]));
+
+    // Headplane was pointed at a records file Headscale knows nothing about.
+    // The loader hands that back to its caller instead of taking the process
+    // down with it.
+    await expect(loadHeadscaleConfig(path, recordsPath)).rejects.toThrow(/extra_records_path/);
+  });
+
+  test("a directory is refused where a config file is required", async () => {
+    const path = join(dir, "config.yaml");
+    await mkdir(path, { recursive: true });
+
+    // Reading a directory would throw deep inside the parser; the loader
+    // reports it as unreadable instead.
+    const config = await loadHeadscaleConfig(path);
+    expect(config.readable()).toBe(false);
+  });
+
+  test("a directory is refused where a DNS records file is required", async () => {
+    const path = join(dir, "config.yaml");
+    const recordsPath = join(dir, "extra-records.json");
+    const recordsDir = join(dir, "records");
+    await writeFile(recordsPath, JSON.stringify([{ name: "json", type: "A", value: "1.1.1.1" }]));
+    await writeFile(
+      path,
+      ["server_url: http://localhost:8080", "dns:", `  extra_records_path: ${recordsPath}`].join(
+        "\n",
+      ),
+    );
+    await mkdir(recordsDir, { recursive: true });
+
+    // Headplane was pointed at a directory: it has to be reported as no records
+    // at all instead of reaching the JSON reader.
+    const config = await loadHeadscaleConfig(path, recordsDir);
+    expect(config.dnsRecords()).toEqual([]);
   });
 });

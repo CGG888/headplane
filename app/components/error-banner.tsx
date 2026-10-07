@@ -32,7 +32,7 @@ export function getErrorMessage(
 
   if (isRouteErrorResponse(error)) {
     if (isApiError(error.data)) {
-      const { statusCode, rawData, data, requestUrl } = error.data;
+      const { statusCode, detail, data, requestUrl } = error.data;
       if (statusCode >= 500) {
         return {
           jsxMessage: (
@@ -40,12 +40,12 @@ export function getErrorMessage(
               <Card.Text>
                 {tr("errors.api.serverBody", { status: <strong>{statusCode}</strong> })}
               </Card.Text>
-              {(error.data.data != null || error.data.rawData != null) && (
+              {(error.data.data != null || error.data.detail.length > 0) && (
                 <pre className="mt-2 overflow-x-auto rounded-lg bg-mist-100 p-2 dark:bg-mist-800">
                   {error.data.data != null ? (
                     <code>{JSON.stringify(error.data.data, null, 2)}</code>
                   ) : (
-                    <code>{error.data.rawData}</code>
+                    <code>{error.data.detail}</code>
                   )}
                 </pre>
               )}
@@ -74,7 +74,7 @@ export function getErrorMessage(
                   {/* @ts-expect-error */}
                   {data === null ? (
                     <>
-                      {statusCode} {rawData}
+                      {statusCode} {detail}
                     </>
                   ) : (
                     <>
@@ -86,7 +86,7 @@ export function getErrorMessage(
             </ul>
             <Card.Text className="mt-4 text-lg font-semibold">{t("errors.api.details")}</Card.Text>
             <pre className="mt-2 overflow-x-auto rounded-lg bg-mist-100 p-2 dark:bg-mist-800">
-              <code>{JSON.stringify(error.data, null, 2)}</code>
+              <code>{data != null ? JSON.stringify(data, null, 2) : detail}</code>
             </pre>
           </>
         ),
@@ -156,26 +156,50 @@ export function getErrorMessage(
     };
   }
 
-  // Traverse the error chain to find the root cause
-  let rootError = error;
-  if (error.cause != null) {
-    rootError = error.cause as Error;
-    while (rootError.cause != null) {
-      rootError = rootError.cause as Error;
-    }
+  // Traverse the error chain to find the root cause. `cause` is unknown, so it
+  // is only followed while it is an Error: a string or plain-object cause used
+  // to be dereferenced as an Error and threw during render.
+  let rootError: Error = error;
+  let cause: unknown = error.cause;
+  for (let depth = 0; depth < 8 && cause instanceof Error && cause !== rootError; depth += 1) {
+    rootError = cause;
+    cause = cause.cause;
   }
 
-  // TODO: If we are aggregate, concat into a single message
+  const titleOf = (target: Error): string =>
+    target.name.length > 0 && target.name !== "Error"
+      ? t("errors.generic.withName", { name: target.name })
+      : t("errors.generic.title");
+
+  // An AggregateError carries its members in `errors`; rendering them beats
+  // throwing inside the component that exists to render errors.
   if (rootError instanceof AggregateError) {
-    throw new Error("AggregateError handling not implemented yet");
+    const members = rootError.errors.map((item) =>
+      item instanceof Error ? item.message : String(item),
+    );
+
+    return {
+      jsxMessage: (
+        <>
+          {rootError.message}
+          {members.length > 0 ? (
+            <ul className="mt-2 list-disc pl-5">
+              {members.map((member, index) => (
+                // The list is a fixed snapshot of one error, so the index is a
+                // stable key here (members may repeat).
+                <li key={`${index}:${member}`}>{member}</li>
+              ))}
+            </ul>
+          ) : undefined}
+        </>
+      ),
+      title: titleOf(rootError),
+    };
   }
 
   return {
     jsxMessage: rootError.message,
-    title:
-      rootError.name.length > 0 && rootError.name !== "Error"
-        ? t("errors.generic.withName", { name: rootError.name })
-        : t("errors.generic.title"),
+    title: titleOf(rootError),
   };
 }
 

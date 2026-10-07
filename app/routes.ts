@@ -29,6 +29,9 @@ export default [
   route("/oidc/callback", "routes/auth/oidc-callback.ts"),
   route("/oidc/start", "routes/auth/oidc-start.ts"),
   route("/ssh/:id", "routes/ssh/page.tsx"),
+  // Mints (and revokes) the pre-auth key a console session joins with, so the
+  // secret never has to be serialized into the server-rendered page.
+  route("/ssh/:id/key", "routes/ssh/key.ts"),
 
   // All the main logged-in routes
   layout("layout/app.tsx", [

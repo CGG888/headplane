@@ -29,7 +29,9 @@ export default function BulkMove({ nodeIds, users, isOpen, setIsOpen, onComplete
   const { t } = useI18n();
   const fetcher = useFetcher<BulkResult | BulkErrorResult>();
   const submittingRef = useRef(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  // Headscale resolves the new owner by username, so the form carries the
+  // selected user's name rather than the numeric id.
+  const [userName, setUserName] = useState<string | null>(null);
 
   const error = fetcher.data && !fetcher.data.success ? bulkErrorMessage(t, fetcher.data) : null;
 
@@ -49,7 +51,7 @@ export default function BulkMove({ nodeIds, users, isOpen, setIsOpen, onComplete
 
   useEffect(() => {
     if (isOpen) {
-      setUserId(null);
+      setUserName(null);
     }
   }, [isOpen]);
 
@@ -64,17 +66,17 @@ export default function BulkMove({ nodeIds, users, isOpen, setIsOpen, onComplete
       }}
     >
       <DialogPanel
-        isDisabled={fetcher.state !== "idle" || userId === null}
+        isDisabled={fetcher.state !== "idle" || userName === null}
         onSubmit={(event) => {
           event.preventDefault();
-          if (userId === null) {
+          if (userName === null) {
             return;
           }
 
           submittingRef.current = true;
           const form = new FormData();
           form.set("action_id", "bulk_reassign");
-          form.set("user_id", userId);
+          form.set("user_name", userName);
           for (const id of nodeIds) {
             form.append("node_ids", id);
           }
@@ -91,12 +93,12 @@ export default function BulkMove({ nodeIds, users, isOpen, setIsOpen, onComplete
         ) : null}
         <Select
           label={t("machines.common.ownerLabel")}
-          onValueChange={setUserId}
+          onValueChange={setUserName}
           placeholder={t("machines.common.selectUser")}
           required
-          value={userId}
+          value={userName}
           items={users.map((user) => ({
-            value: user.id,
+            value: user.name,
             label: getUserDisplayName(user, t("machines.common.tagOwned")),
           }))}
         />

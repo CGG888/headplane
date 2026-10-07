@@ -45,7 +45,8 @@ describe.for(HS_VERSIONS)("Headscale %s: Pre-auth Keys", { concurrent: false }, 
     expect(preAuthKey.user?.id).toBe(preAuthKeyUser.id);
     expect(preAuthKey.ephemeral).toBe(true);
     expect(preAuthKey.reusable).toBe(true);
-    expect(preAuthKey.aclTags.sort()).toEqual(aclTags.sort());
+    expect(preAuthKey.aclTags).not.toBeNull();
+    expect([...(preAuthKey.aclTags ?? [])].sort()).toEqual([...aclTags].sort());
   });
 
   test("tag-only pre-auth keys (0.28+)", async (context) => {
@@ -68,7 +69,8 @@ describe.for(HS_VERSIONS)("Headscale %s: Pre-auth Keys", { concurrent: false }, 
     expect(preAuthKey.user).toBeNull();
     expect(preAuthKey.ephemeral).toBe(false);
     expect(preAuthKey.reusable).toBe(true);
-    expect(preAuthKey.aclTags.sort()).toEqual(aclTags.sort());
+    expect(preAuthKey.aclTags).not.toBeNull();
+    expect([...(preAuthKey.aclTags ?? [])].sort()).toEqual([...aclTags].sort());
   });
 
   test("pre-auth keys can be listed", async () => {

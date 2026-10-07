@@ -68,22 +68,31 @@ export async function loginOidcLoader({ request, context }: Route.LoaderArgs) {
   const appConfig = context.get(appConfigContext);
   const principal = await auth.require(request);
 
-  // The page always renders the values that would be read at the next start:
-  // the config file, the overrides saved here and the environment, merged.
+  const canEdit = auth.can(principal, Capabilities.configure_iam);
+  // The checks read the configuration file, so they are worth running even
+  // while sign-in is switched off; the notice just explains that state.
+  const oidcEnabled = oidc.state === "enabled";
+  const disabledReason = oidcEnabled ? null : oidc.reason;
+
+  if (!canEdit) {
+    // The page always renders the values that would be read at the next start:
+    // the config file, the overrides saved here and the environment, merged.
+    // That snapshot names the issuer, the client id, the scopes, which
+    // environment variables pin a field and whether a client secret is stored —
+    // IAM configuration the rest of the rail already gates behind
+    // `configure_iam`. The action below refuses to *write* without it; the
+    // loader used to hand the same account the values, so the check happens
+    // before the config file is even read.
+    return { canEdit: false as const, oidcEnabled, disabledReason, view: null };
+  }
+
   const snapshot = await readLoginOidcSnapshot({
     dataPath: appConfig.server.data_path,
     runningOidc: appConfig.oidc,
     context: signInContext(appConfig),
   });
 
-  return {
-    canEdit: auth.can(principal, Capabilities.configure_iam),
-    // The checks read the configuration file, so they are worth running even
-    // while sign-in is switched off; the notice just explains that state.
-    oidcEnabled: oidc.state === "enabled",
-    disabledReason: oidc.state === "enabled" ? null : oidc.reason,
-    view: snapshot.view,
-  };
+  return { canEdit: true as const, oidcEnabled, disabledReason, view: snapshot.view };
 }
 
 export async function loginOidcAction({ request, context }: Route.ActionArgs) {

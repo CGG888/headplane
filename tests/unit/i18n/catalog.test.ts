@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { translate, translateRich } from "~/i18n";
+import { isPlural, translate, translateRich } from "~/i18n";
 import en from "~/i18n/locales/en";
 import zhHans from "~/i18n/locales/zh-Hans";
 import zhHant from "~/i18n/locales/zh-Hant";
@@ -101,6 +101,16 @@ describe("translate", () => {
 
   test("returns the key when it cannot be resolved", () => {
     expect(translate("en", "does.not.exist" as never)).toBe("does.not.exist");
+  });
+
+  test("only treats an entry with two string forms as plural", () => {
+    expect(isPlural({ one: "1 node", other: "{count} nodes" })).toBe(true);
+    // A half-filled entry must not be rendered: `other` would be `undefined`.
+    expect(isPlural({ one: "1 node" })).toBe(false);
+    expect(isPlural({ one: "1 node", other: ["{count} nodes"] })).toBe(false);
+    expect(isPlural({ other: "{count} nodes" })).toBe(false);
+    expect(isPlural("1 node")).toBe(false);
+    expect(isPlural(null)).toBe(false);
   });
 });
 

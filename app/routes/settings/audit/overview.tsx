@@ -1,6 +1,6 @@
 import { ListFilter, ScrollText } from "lucide-react";
-import { useState } from "react";
-import { data, Form } from "react-router";
+import { useEffect, useState } from "react";
+import { data, Form, useFetcher } from "react-router";
 
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
@@ -24,6 +24,7 @@ import { AUDIT_EXPORT_LIMIT, MAX_AUDIT_ENTRIES } from "~/server/audit/constants"
 import type { AuditActorType, AuditEntry } from "~/server/audit/types";
 import { auditContext, authContext } from "~/server/context";
 import { Capabilities } from "~/server/web/roles";
+import log from "~/utils/log";
 
 import type { Route } from "./+types/overview";
 import {
@@ -41,7 +42,15 @@ const ACTION_KEYS: Record<string, TranslationKey> = {
   [AUDIT_ACTIONS.apiKeyCreate]: "settings.audit.actions.apiKeyCreate",
   [AUDIT_ACTIONS.apiKeyExpire]: "settings.audit.actions.apiKeyExpire",
   [AUDIT_ACTIONS.apiKeyDelete]: "settings.audit.actions.apiKeyDelete",
+  [AUDIT_ACTIONS.preAuthKeyCreate]: "settings.audit.actions.preAuthKeyCreate",
+  [AUDIT_ACTIONS.preAuthKeyExpire]: "settings.audit.actions.preAuthKeyExpire",
   [AUDIT_ACTIONS.preAuthKeyDelete]: "settings.audit.actions.preAuthKeyDelete",
+  [AUDIT_ACTIONS.userCreate]: "settings.audit.actions.userCreate",
+  [AUDIT_ACTIONS.userDelete]: "settings.audit.actions.userDelete",
+  [AUDIT_ACTIONS.userRename]: "settings.audit.actions.userRename",
+  [AUDIT_ACTIONS.userRoleChange]: "settings.audit.actions.userRoleChange",
+  [AUDIT_ACTIONS.userOwnershipTransfer]: "settings.audit.actions.userOwnershipTransfer",
+  [AUDIT_ACTIONS.userLink]: "settings.audit.actions.userLink",
   [AUDIT_ACTIONS.restrictionAddDomain]: "settings.audit.actions.restrictionAddDomain",
   [AUDIT_ACTIONS.restrictionRemoveDomain]: "settings.audit.actions.restrictionRemoveDomain",
   [AUDIT_ACTIONS.restrictionAddGroup]: "settings.audit.actions.restrictionAddGroup",
@@ -51,11 +60,15 @@ const ACTION_KEYS: Record<string, TranslationKey> = {
   [AUDIT_ACTIONS.registrationReject]: "settings.audit.actions.registrationReject",
   [AUDIT_ACTIONS.nodeBackfillIps]: "settings.audit.actions.nodeBackfillIps",
   [AUDIT_ACTIONS.nodeDebugCreate]: "settings.audit.actions.nodeDebugCreate",
+  [AUDIT_ACTIONS.agentSync]: "settings.audit.actions.agentSync",
   [AUDIT_ACTIONS.derpAddressSync]: "settings.audit.actions.derpAddressSync",
   [AUDIT_ACTIONS.snapshotCreate]: "settings.audit.actions.snapshotCreate",
   [AUDIT_ACTIONS.snapshotRestore]: "settings.audit.actions.snapshotRestore",
   [AUDIT_ACTIONS.loginOidcUpdate]: "settings.audit.actions.loginOidcUpdate",
   [AUDIT_ACTIONS.loginOidcChangeBlocked]: "settings.audit.actions.loginOidcChangeBlocked",
+  [AUDIT_ACTIONS.loginSuccess]: "settings.audit.actions.loginSuccess",
+  [AUDIT_ACTIONS.loginFailure]: "settings.audit.actions.loginFailure",
+  [AUDIT_ACTIONS.loginLocked]: "settings.audit.actions.loginLocked",
 };
 
 const ACTOR_TYPE_KEYS: Record<AuditActorType, TranslationKey> = {
@@ -91,18 +104,107 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     offset,
   });
 
+  // The page is where the chain matters, so it is the place that checks it. A
+  // mismatch means the stored log no longer lines up with itself.
+  const chain = await audit.verify();
+  if (chain.broken.length > 0) {
+    log.warn(
+      "server",
+      "Audit chain: %d of %d checked entries do not match (%s)",
+      chain.broken.length,
+      chain.checked,
+      chain.broken.slice(0, 5).join(", "),
+    );
+  }
+
   return {
     entries,
     total,
     filters,
     hasMore: offset + entries.length < total,
     maxEntries: audit.maxEntries ?? MAX_AUDIT_ENTRIES,
+    dropped: audit.dropped ?? 0,
+    brokenChain: chain.broken.length,
+  };
+}
+
+/** The pages a fetcher has appended below the page the loader returned. */
+interface AppendedAuditPages {
+  /** Which filter selection the appended rows belong to. */
+  key: string;
+  /** The highest page the visible list includes. */
+  page: number;
+  /** The rows of the pages after the loader's own page, oldest first. */
+  entries: AuditEntry[];
+  /** Whether the newest page has a successor left to fetch. */
+  hasMore: boolean;
+}
+
+/** The filter selection alone, so a new selection replaces the visible rows. */
+function auditSelectionKey(filters: AuditFilters): string {
+  return auditQueryString({ ...filters, page: 1 });
+}
+
+/**
+ * Appends one fetched page to the rows already shown. Anything that is not the
+ * page right after the last one — a duplicate delivery, or a response that
+ * raced a filter change — is ignored, so the list can neither double up nor go
+ * backwards.
+ */
+export function appendAuditPage(
+  current: AppendedAuditPages,
+  fetched: { filters: AuditFilters; entries: AuditEntry[]; hasMore: boolean },
+): AppendedAuditPages {
+  if (fetched.filters.page !== current.page + 1) {
+    return current;
+  }
+
+  return {
+    ...current,
+    page: fetched.filters.page,
+    entries: [...current.entries, ...fetched.entries],
+    hasMore: fetched.hasMore,
   };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { t } = useI18n();
-  const { entries, total, filters, hasMore, maxEntries } = loaderData;
+  const { entries, total, filters, hasMore, maxEntries, dropped, brokenChain } = loaderData;
+
+  // The loader returns one page at a time. "Load more" asks a fetcher for the
+  // next page and appends its rows here, so the entries already on screen stay
+  // there; the old `<Link>` replaced them and offered no way back.
+  const fetcher = useFetcher<typeof loader>();
+  const selectionKey = auditSelectionKey(filters);
+  const [appended, setAppended] = useState<AppendedAuditPages>({
+    key: selectionKey,
+    page: filters.page,
+    entries: [],
+    hasMore,
+  });
+
+  // Applying a filter (or landing on a different page) starts the list over.
+  // Adjusting state during render is React's documented way to reset state on
+  // an input change, and it happens before the stale list can be drawn.
+  if (appended.key !== selectionKey) {
+    setAppended({ key: selectionKey, page: filters.page, entries: [], hasMore });
+  }
+
+  const fetched = fetcher.data;
+  useEffect(() => {
+    if (fetcher.state !== "idle" || fetched === undefined) {
+      return;
+    }
+
+    // A response for a selection the user has already left behind.
+    if (auditSelectionKey(fetched.filters) !== selectionKey) {
+      return;
+    }
+
+    setAppended((current) => appendAuditPage(current, fetched));
+  }, [fetcher.state, fetched, selectionKey]);
+
+  const rows = appended.entries.length > 0 ? [...entries, ...appended.entries] : entries;
 
   return (
     <SettingsPage
@@ -116,9 +218,21 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       }
       description={t("settings.audit.body")}
       notices={
-        <Notice title={t("settings.audit.retentionTitle")}>
-          {t("settings.audit.retentionBody", { count: maxEntries })}
-        </Notice>
+        <>
+          <Notice title={t("settings.audit.retentionTitle")}>
+            {t("settings.audit.retentionBody", { count: maxEntries })}
+          </Notice>
+          {brokenChain > 0 ? (
+            <Notice variant="warning" title={t("settings.audit.chainBrokenTitle")}>
+              {t("settings.audit.chainBrokenBody", { count: brokenChain })}
+            </Notice>
+          ) : undefined}
+          {dropped > 0 ? (
+            <Notice variant="warning" title={t("settings.audit.droppedTitle")}>
+              {t("settings.audit.droppedBody", { count: dropped })}
+            </Notice>
+          ) : undefined}
+        </>
       }
       title={t("settings.audit.title")}
     >
@@ -130,29 +244,35 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           icon={ScrollText}
           status={{
             tone: "neutral",
-            label: t("settings.audit.showingCount", { shown: entries.length, total }),
+            label: t("settings.audit.showingCount", { shown: rows.length, total }),
           }}
           title={t("settings.audit.listTitle")}
         >
           <TableList className="border-0">
-            {entries.length === 0 ? (
+            {rows.length === 0 ? (
               <TableList.Item className="flex flex-col items-center gap-2.5 py-4 opacity-70">
                 <ScrollText />
                 <p className="font-semibold">{t("settings.audit.empty")}</p>
               </TableList.Item>
             ) : (
-              entries.map((entry) => <AuditEntryRow entry={entry} key={entry.id} />)
+              rows.map((entry) => <AuditEntryRow entry={entry} key={entry.id} />)
             )}
           </TableList>
 
-          {hasMore ? (
+          {appended.hasMore ? (
             <SettingsActions>
-              <Link
-                className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
-                to={`/settings/audit${auditQueryString({ ...filters, page: filters.page + 1 })}`}
+              <button
+                className="text-sm font-medium text-indigo-600 disabled:opacity-50 dark:text-indigo-400"
+                disabled={fetcher.state !== "idle"}
+                onClick={() => {
+                  void fetcher.load(
+                    `/settings/audit${auditQueryString({ ...filters, page: appended.page + 1 })}`,
+                  );
+                }}
+                type="button"
               >
                 {t("settings.audit.loadMore")}
-              </Link>
+              </button>
             </SettingsActions>
           ) : undefined}
         </SettingsCollapsible>
@@ -273,7 +393,9 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
     entry.result === "success"
       ? t("settings.audit.resultSuccess")
       : t("settings.audit.resultFailure");
-  const takenAt = new Date(entry.at).toLocaleString(locale);
+  // Pinned to UTC so the server-rendered timestamp matches the browser's: the
+  // two run in different time zones and otherwise disagreed on hydration.
+  const takenAt = new Date(entry.at).toLocaleString(locale, { timeZone: "UTC" });
 
   return (
     <TableList.Item className="p-0">

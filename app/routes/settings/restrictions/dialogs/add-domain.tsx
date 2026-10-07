@@ -6,6 +6,11 @@ import Input from "~/components/input";
 import { SettingsActions } from "~/components/settings-nav";
 import { useForm } from "~/hooks/use-form";
 import { useI18n } from "~/i18n/provider";
+import {
+  DOMAIN_PATTERN,
+  isValidRestrictionDomain,
+  RESTRICTION_DOMAIN_MAX_LENGTH,
+} from "~/utils/restrictions";
 
 const domainSchema = type({
   domain: "string > 0",
@@ -28,12 +33,10 @@ export default function AddDomain({ domains, isDisabled }: AddDomainProps) {
         return { domain: t("settings.addDomain.duplicate") };
       }
 
-      try {
-        const url = new URL(`http://${domain}`);
-        if (url.hostname !== domain) {
-          return { domain: t("settings.addDomain.invalid") };
-        }
-      } catch {
+      // The same rule the action applies (see `~/utils/restrictions`). The
+      // previous `URL.hostname` comparison accepted `a_b.com` and refused
+      // `EXAMPLE.com`, because the URL parser lower-cases the host.
+      if (!isValidRestrictionDomain(domain)) {
         return { domain: t("settings.addDomain.invalid") };
       }
 
@@ -53,6 +56,8 @@ export default function AddDomain({ domains, isDisabled }: AddDomainProps) {
             : t("settings.addDomain.description")
         }
         disabled={isDisabled}
+        maxLength={RESTRICTION_DOMAIN_MAX_LENGTH}
+        pattern={DOMAIN_PATTERN}
         required
         label={t("settings.addDomain.label")}
         placeholder={t("settings.addDomain.placeholder")}

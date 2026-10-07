@@ -82,7 +82,23 @@ export async function postAlertPayload(
       headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
+      // `fetch` follows up to 20 redirects by default. Only `Authorization`,
+      // `Cookie` and `Proxy-Authorization` are stripped on a cross-origin hop,
+      // so a 30x from a compromised endpoint (or its reverse proxy) would
+      // replay `X-Headplane-Secret` to a third-party host while the panel
+      // reports a successful delivery. Treat any redirect as a failure.
+      redirect: "error",
     });
+
+    // Nothing reads the body. Leaving it undrained keeps the connection in the
+    // pool with a stream nobody owns, so cancel it: undici then releases the
+    // socket instead of holding it until the keep-alive timeout.
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Cleanup only: a body that cannot be cancelled must not turn a delivered
+      // alert into a failure.
+    }
 
     return {
       ok: response.ok,

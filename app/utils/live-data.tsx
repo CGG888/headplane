@@ -16,6 +16,31 @@ interface ChangedEvent {
 }
 
 /**
+ * Whether a `hello` payload is the version map the stream promises. The payload
+ * arrives from the network, so it is checked before it is trusted rather than
+ * cast.
+ */
+export function isVersionMap(value: unknown): value is Versions {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value as Record<string, unknown>).every(
+    (entry) => typeof entry === "string",
+  );
+}
+
+/** Whether a `changed` payload names a resource and the version it changed to. */
+export function isChangedEvent(value: unknown): value is ChangedEvent {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const event = value as { resource?: unknown; version?: unknown };
+  return typeof event.resource === "string" && typeof event.version === "string";
+}
+
+/**
  * Live updates are off unless the stored value is exactly "on". Defaulting to
  * off means an upgrade stops the reload storm for everyone, and turning it on
  * stays an explicit choice.
@@ -61,6 +86,95 @@ export function shouldRevalidateForLiveChange(input: {
   revalidatorState: "idle" | "loading" | "submitting";
 }): boolean {
   return !input.paused && input.visible && input.revalidatorState === "idle";
+}
+
+/** Whether an element is somewhere the operator types or picks a value. */
+export function isTextEntryElement(element: { tagName?: string } | null | undefined): boolean {
+  return (
+    element !== null &&
+    element !== undefined &&
+    (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT")
+  );
+}
+
+export interface IdleRevalidatorOptions {
+  /** Reloads the page. */
+  revalidate: () => void;
+  /** Whether a reload is allowed right now: not paused, visible, nothing pending. */
+  canRevalidate: () => boolean;
+  /** The element that currently has focus. */
+  activeElement: () => { tagName?: string } | null;
+  /** Subscribes to focus leaving an element; returns an unsubscribe function. */
+  onFocusOut: (listener: () => void) => () => void;
+  /** Injectable for tests; defaults to the next macrotask. */
+  schedule?: (listener: () => void) => void;
+}
+
+export interface IdleRevalidator {
+  /** Reloads unless the operator is typing; otherwise remembers the request. */
+  run(): void;
+  close(): void;
+}
+
+/**
+ * Runs revalidations while keeping a change that arrives mid-typing. Skipping it
+ * outright loses it for good: the version has already been recorded, the server
+ * does not resend it, and nothing else would reload the page. The request is kept
+ * instead and replayed when focus leaves the field.
+ */
+export function createIdleRevalidator(options: IdleRevalidatorOptions): IdleRevalidator {
+  const schedule =
+    options.schedule ??
+    ((listener: () => void) => {
+      setTimeout(listener, 0);
+    });
+  let deferred = false;
+  let closed = false;
+
+  function run() {
+    if (closed) {
+      return;
+    }
+
+    if (isTextEntryElement(options.activeElement())) {
+      deferred = true;
+      return;
+    }
+
+    if (!options.canRevalidate()) {
+      // Keep the flag: a hidden tab, a pending mutation or a pause is temporary,
+      // and the next event that asks for a reload should still deliver it.
+      deferred = true;
+      return;
+    }
+
+    deferred = false;
+    options.revalidate();
+  }
+
+  const stop = options.onFocusOut(() => {
+    if (!deferred) {
+      return;
+    }
+
+    // `focusout` fires before the next element is focused, so the active element
+    // is read again on the next tick: tabbing from one field straight into
+    // another must not reload the page either.
+    schedule(() => {
+      if (deferred) {
+        run();
+      }
+    });
+  });
+
+  return {
+    run,
+    close: () => {
+      closed = true;
+      deferred = false;
+      stop();
+    },
+  };
 }
 
 /**
@@ -146,28 +260,55 @@ export function createLiveSubscription(options: LiveSubscriptionOptions): LiveSu
 
     sse.addEventListener("hello", (event) => {
       backoff = 1000;
+
+      let payload: unknown;
       try {
-        versions = JSON.parse(event.data) as Versions;
-      } catch {}
+        payload = JSON.parse(event.data);
+      } catch (error) {
+        console.warn("Ignoring an unreadable live hello event", error);
+        return;
+      }
+
+      if (isVersionMap(payload)) {
+        versions = payload;
+      } else {
+        console.warn("Ignoring a live hello event that is not a version map");
+      }
     });
 
     sse.addEventListener("changed", (event) => {
+      let payload: unknown;
       try {
-        const data = JSON.parse(event.data) as ChangedEvent;
-        const current = versions[data.resource];
-        if (current !== undefined && data.version === current) {
-          return;
-        }
+        payload = JSON.parse(event.data);
+      } catch (error) {
+        console.warn("Ignoring an unreadable live change event", error);
+        return;
+      }
 
-        versions = { ...versions, [data.resource]: data.version };
+      if (!isChangedEvent(payload)) {
+        console.warn("Ignoring a live change event without a resource and version");
+        return;
+      }
 
-        if (!options.isVisible()) {
-          options.markDirty();
-          return;
-        }
+      const current = versions[payload.resource];
+      if (current !== undefined && payload.version === current) {
+        return;
+      }
 
+      versions = { ...versions, [payload.resource]: payload.version };
+
+      if (!options.isVisible()) {
+        options.markDirty();
+        return;
+      }
+
+      try {
         options.revalidate();
-      } catch {}
+      } catch (error) {
+        // A failed reload must not take the stream down with it: the connection
+        // is still fine, and the next change carries a new version.
+        console.warn("Revalidating after a live change failed", error);
+      }
     });
 
     sse.onerror = () => {
@@ -178,6 +319,13 @@ export function createLiveSubscription(options: LiveSubscriptionOptions): LiveSu
 
       if (paused) {
         return;
+      }
+
+      // An error can be reported more than once for the same drop; a pending
+      // retry is replaced rather than left to open a second connection.
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
 
       const delay = backoff;
@@ -259,30 +407,43 @@ export function LiveDataProvider({ children }: LiveDataProps) {
 
   const isTabDirtyRef = useRef(false);
   const subscriptionRef = useRef<LiveSubscription | null>(null);
+  const idleRevalidatorRef = useRef<IdleRevalidator | null>(null);
+
+  // Nothing reloads the page out from under someone who is typing or choosing
+  // something: a revalidation would drop their focus and undo their input. Such a
+  // change used to be dropped for good — the version was already recorded and the
+  // server does not resend it — so it is held and replayed once focus leaves.
+  useEffect(() => {
+    const idle = createIdleRevalidator({
+      revalidate: () => {
+        revalidatorRef.current.revalidate();
+      },
+      canRevalidate: () => {
+        const visible = typeof document === "undefined" || document.visibilityState === "visible";
+        return shouldRevalidateForLiveChange({
+          paused: pausedRef.current,
+          visible,
+          revalidatorState: revalidatorRef.current.state,
+        });
+      },
+      activeElement: () => (typeof document === "undefined" ? null : document.activeElement),
+      onFocusOut: (listener) => {
+        document.addEventListener("focusout", listener);
+        return () => {
+          document.removeEventListener("focusout", listener);
+        };
+      },
+    });
+
+    idleRevalidatorRef.current = idle;
+    return () => {
+      idle.close();
+      idleRevalidatorRef.current = null;
+    };
+  }, []);
 
   const revalidateIfIdle = useCallback(() => {
-    // Never reload the page out from under someone who is typing or choosing
-    // something: a revalidation would drop their focus and undo their input.
-    const active = typeof document === "undefined" ? null : document.activeElement;
-    if (
-      active &&
-      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")
-    ) {
-      return;
-    }
-
-    const visible = typeof document === "undefined" || document.visibilityState === "visible";
-    if (
-      !shouldRevalidateForLiveChange({
-        paused: pausedRef.current,
-        visible,
-        revalidatorState: revalidatorRef.current.state,
-      })
-    ) {
-      return;
-    }
-
-    revalidatorRef.current.revalidate();
+    idleRevalidatorRef.current?.run();
   }, []);
 
   // Read the persisted preference once, after hydration.

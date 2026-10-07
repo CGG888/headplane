@@ -4,7 +4,7 @@ import Input from "~/components/input";
 import Text from "~/components/text";
 import Title from "~/components/title";
 import { useI18n } from "~/i18n/provider";
-import { USERNAME_PATTERN } from "~/utils/user";
+import { USERNAME_PATTERN, USER_STRING_MAX_LENGTH } from "~/utils/user";
 
 interface CreateUserProps {
   isOidc?: boolean;
@@ -25,6 +25,7 @@ export default function CreateUser({ isOidc, isDisabled }: CreateUserProps) {
         <div className="flex flex-col gap-4">
           <Input
             description={usernameRule}
+            maxLength={USER_STRING_MAX_LENGTH}
             minLength={2}
             pattern={USERNAME_PATTERN}
             required
@@ -36,12 +37,14 @@ export default function CreateUser({ isOidc, isDisabled }: CreateUserProps) {
           />
           <Input
             label={t("users.create.displayName")}
+            maxLength={USER_STRING_MAX_LENGTH}
             name="display_name"
             placeholder={t("users.create.placeholderDisplayName")}
             type="text"
           />
           <Input
             label={t("users.create.email")}
+            maxLength={USER_STRING_MAX_LENGTH}
             name="email"
             placeholder={t("users.create.placeholderEmail")}
             type="email"

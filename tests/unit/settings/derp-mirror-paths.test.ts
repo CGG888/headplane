@@ -45,10 +45,17 @@ function configPort(options: {
   writable?: boolean;
   patch?: (patches: unknown) => Promise<void>;
 }): MirrorPathConfigPort {
+  const apply = async (patches: Array<{ path: string; value: unknown }>) => {
+    await (options.patch ?? (async () => undefined))(patches);
+  };
+
   return {
     getDERPSettings: () => ({ paths: options.paths }),
     writable: () => options.writable ?? true,
-    patch: options.patch ?? (async () => undefined),
+    patch: apply,
+    // The real port rebuilds the patch inside the write queue; this mock holds a
+    // fixed `paths` array, so running the builder once is equivalent.
+    mutate: (build) => apply(build()),
   };
 }
 
@@ -197,7 +204,10 @@ describe("the region filter action keeps derp.paths loaded", () => {
 
   const onConfigChange = vi.fn().mockResolvedValue(undefined);
 
-  function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.fn>) {
+  function createMockContext(
+    options: SubmitOptions,
+    patch: (patches: Array<{ path: string; value: unknown }>) => Promise<void>,
+  ) {
     return {
       get: (context: unknown) => {
         if (context === authContext) {
@@ -225,6 +235,9 @@ describe("the region filter action keeps derp.paths loaded", () => {
           return {
             writable: () => options.writable ?? true,
             patch,
+            // The real port rebuilds the patch inside the write queue; this
+            // context is single-threaded, so building then patching is enough.
+            mutate: (build: () => Array<{ path: string; value: unknown }>) => patch(build()),
             ...(options.noDerpSettings
               ? {}
               : { getDERPSettings: () => ({ paths: options.paths ?? [] }) }),

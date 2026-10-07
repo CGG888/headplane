@@ -15,13 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: write
+  # The build and test job only reads the repository. Anything wider (for
+  # example `actions: write`, which can cancel runs and delete artifacts) is a
+  # privilege the CI job never needs.
   contents: read
 
 jobs:
   ci:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out the repo
         uses: actions/checkout@v6
@@ -55,20 +58,30 @@ jobs:
   nix:
     name: Nix Flake Check
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # The cache action exchanges an OIDC token with FlakeHub; the GitHub
+      # Actions cache it also uses is reached with the runtime token, so no
+      # `actions: write` is needed here either.
+      id-token: write
     steps:
       - name: Check out the repo
         uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        # v23
+        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa
         with:
           determinate: true
 
       - name: Cache Nix store
-        uses: DeterminateSystems/magic-nix-cache-action@main
+        # v15
+        uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7
 
       - name: Check flake inputs
-        uses: DeterminateSystems/flake-checker-action@main
+        # v14
+        uses: DeterminateSystems/flake-checker-action@786422608c7bded2bbc9741ad9f91356842bf520
 
       - name: Check flake outputs
         run: nix flake check

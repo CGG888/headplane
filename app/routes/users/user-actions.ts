@@ -1,20 +1,51 @@
-﻿import { data } from "react-router";
+import { data } from "react-router";
 
-import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
+import { AUDIT_ACTIONS, auditActorOf, type AuditAction, type AuditService } from "~/server/audit";
+import {
+  auditContext,
+  authContext,
+  headscaleLiveStoreContext,
+  requestApiContext,
+} from "~/server/context";
 import { isDataWithApiError } from "~/server/headscale/api/error-client";
 import { usersResource } from "~/server/headscale/live-store";
 import { isUserPrincipal } from "~/server/web/auth";
-import { Capabilities } from "~/server/web/roles";
-import type { Role } from "~/server/web/roles";
+import type { Principal } from "~/server/web/auth";
+import { Capabilities, isAssignableRole } from "~/server/web/roles";
 import { isValidGroupName, parsePolicy, serializePolicy, setUserGroups } from "~/utils/acl-policy";
-import { validateUsername } from "~/utils/user";
+import log from "~/utils/log";
+import { validateDisplayName, validateEmail, validateUsername } from "~/utils/user";
 
 import type { Route } from "./+types/overview";
+
+/**
+ * Records one user-management operation. User records decide who may log in and
+ * with which capabilities, so creating, renaming, deleting, re-roling or
+ * re-linking one is worth a log line; a broken audit log never breaks the
+ * mutation it describes.
+ */
+async function recordUserEvent(
+  audit: AuditService | undefined,
+  principal: Principal,
+  action: AuditAction,
+  target: string,
+  detail?: string | null,
+  result: "success" | "failure" = "success",
+) {
+  await audit?.record({
+    ...auditActorOf(principal),
+    action,
+    target,
+    detail: detail ?? null,
+    result,
+  });
+}
 
 export async function userAction({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
   const getRequestApi = context.get(requestApiContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
+  const audit: AuditService | undefined = context.get(auditContext);
 
   const principal = await auth.require(request);
   const check = await auth.can(principal, Capabilities.write_users);
@@ -53,8 +84,42 @@ export async function userAction({ request, context }: Route.ActionArgs) {
         throw data(nameError, { status: 400 });
       }
 
+      // Both fields are optional, but a value that reaches Headscale unvalidated
+      // comes back as an opaque API error — or, for an over-long one, as a
+      // truncated row. Leaving a field blank means "not set" and stays allowed.
+      if (displayName) {
+        const displayNameError = validateDisplayName(displayName);
+        if (displayNameError) {
+          throw data(displayNameError, { status: 400 });
+        }
+      }
+
+      if (email) {
+        const emailError = validateEmail(email);
+        if (emailError) {
+          throw data(emailError, { status: 400 });
+        }
+      }
+
       await api.users.create({ name, email, displayName });
-      await headscaleLiveStore.refresh(usersResource, api);
+
+      // The user exists in Headscale now, so the cache refresh must not fail the
+      // action: a 500 would send the operator back to a form whose submit would
+      // create the same user again. The list catches up on the next poll.
+      try {
+        await headscaleLiveStore.refresh(usersResource, api);
+      } catch (error) {
+        log.warn("auth", "Failed to refresh the user list: %s", String(error));
+      }
+
+      await recordUserEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.userCreate,
+        `user:${name}`,
+        email ?? displayName ?? null,
+      );
+
       return { message: "User created successfully" };
     }
     case "delete_user": {
@@ -65,20 +130,51 @@ export async function userAction({ request, context }: Route.ActionArgs) {
         });
       }
 
-      await api.users.delete(headscaleUserId);
-      await headscaleLiveStore.refresh(usersResource, api);
+      // Headscale user ids are decimal `uint64` values and are interpolated
+      // into the request path, so anything else is rejected here.
+      if (!/^\d{1,20}$/.test(headscaleUserId.trim())) {
+        throw data(`Invalid \`headscale_user_id\` in the form data.`, { status: 400 });
+      }
+
+      try {
+        await api.users.delete(headscaleUserId);
+      } catch (error) {
+        await recordUserEvent(
+          audit,
+          principal,
+          AUDIT_ACTIONS.userDelete,
+          `user:${headscaleUserId}`,
+          error instanceof Error ? error.message : String(error),
+          "failure",
+        );
+
+        throw error;
+      }
+
+      try {
+        await headscaleLiveStore.refresh(usersResource, api);
+      } catch (error) {
+        log.warn("auth", "Failed to refresh the user list: %s", String(error));
+      }
+
+      await recordUserEvent(audit, principal, AUDIT_ACTIONS.userDelete, `user:${headscaleUserId}`);
+
       return { message: "User deleted successfully" };
     }
     case "rename_user": {
       const headscaleUserId = formData.get("headscale_user_id")?.toString();
       const newName = formData.get("new_name")?.toString();
       if (!headscaleUserId || !newName) {
-        return data({ success: false }, 400);
+        throw data("Missing `headscale_user_id` or `new_name` in the form data.", { status: 400 });
       }
 
       const newNameError = validateUsername(newName);
       if (newNameError) {
         throw data(newNameError, { status: 400 });
+      }
+
+      if (!/^\d{1,20}$/.test(headscaleUserId.trim())) {
+        throw data(`Invalid \`headscale_user_id\` in the form data.`, { status: 400 });
       }
 
       const users = await api.users.list({ id: headscaleUserId });
@@ -95,7 +191,21 @@ export async function userAction({ request, context }: Route.ActionArgs) {
       }
 
       await api.users.rename(headscaleUserId, newName);
-      await headscaleLiveStore.refresh(usersResource, api);
+
+      try {
+        await headscaleLiveStore.refresh(usersResource, api);
+      } catch (error) {
+        log.warn("auth", "Failed to refresh the user list: %s", String(error));
+      }
+
+      await recordUserEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.userRename,
+        `user:${headscaleUserId}`,
+        newName,
+      );
+
       return { message: "User renamed successfully" };
     }
     case "reassign_user": {
@@ -107,10 +217,26 @@ export async function userAction({ request, context }: Route.ActionArgs) {
         });
       }
 
-      const result = await auth.reassignUser(headplaneUserId, newRole as Role);
+      // `owner` is deliberately not assignable through this action: ownership
+      // only moves via `transfer_ownership`, and a self-promotion could not be
+      // undone (owner is exempt from IdP role sync). `isAssignableRole` also
+      // rejects prototype keys, which `in` would have accepted.
+      if (!isAssignableRole(newRole)) {
+        throw data("Invalid `new_role` in the form data.", { status: 400 });
+      }
+
+      const result = await auth.reassignUser(headplaneUserId, newRole);
       if (!result) {
         throw data("Failed to reassign user role.", { status: 500 });
       }
+
+      await recordUserEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.userRoleChange,
+        `user:${headplaneUserId}`,
+        newRole,
+      );
 
       return { message: "User reassigned successfully" };
     }
@@ -129,6 +255,14 @@ export async function userAction({ request, context }: Route.ActionArgs) {
         throw data("Failed to transfer ownership.", { status: 500 });
       }
 
+      await recordUserEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.userOwnershipTransfer,
+        `user:${headplaneUserId}`,
+        `from:${principal.user.id}`,
+      );
+
       return { message: "Ownership transferred successfully" };
     }
     case "link_user": {
@@ -144,6 +278,16 @@ export async function userAction({ request, context }: Route.ActionArgs) {
       if (!linked) {
         throw data("That Headscale user is already linked to another account.", { status: 409 });
       }
+
+      // Linking decides which machines the account may act on, so it is logged
+      // as a privilege grant rather than routine bookkeeping.
+      await recordUserEvent(
+        audit,
+        principal,
+        AUDIT_ACTIONS.userLink,
+        `headscale:${headscaleUserId}`,
+        `user:${headplaneUserId}`,
+      );
 
       return { message: "Headscale user linked successfully" };
     }
@@ -179,7 +323,7 @@ export async function userAction({ request, context }: Route.ActionArgs) {
       } catch (error) {
         // Headscale refuses the write in `file` mode. The UI hides the action
         // then, but a stale page can still reach this point.
-        const message = isDataWithApiError(error) ? error.data.rawData : String(error);
+        const message = isDataWithApiError(error) ? error.data.detail : String(error);
         if (message.includes("update is disabled")) {
           // The UI translates this code; the raw API message stays in the logs.
           return data({ errorCode: "policyReadOnly" }, 403);

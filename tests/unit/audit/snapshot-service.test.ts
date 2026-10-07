@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,7 +12,12 @@ import {
   createSnapshotService,
   type SnapshotServiceOptions,
 } from "~/server/snapshots/service.server";
-import { SnapshotError, type SnapshotTarget } from "~/server/snapshots/types";
+import {
+  SNAPSHOT_INDEX_FILE,
+  SNAPSHOT_META_FILE,
+  SnapshotError,
+  type SnapshotTarget,
+} from "~/server/snapshots/types";
 
 let temp: string;
 
@@ -64,6 +69,29 @@ describe("snapshot service", () => {
     expect(listed.map((item) => item.id)).toEqual([meta.id]);
     expect(listed[0]?.files.map((file) => file.sourcePath).sort()).toEqual(
       [configPath, policyPath].sort(),
+    );
+  });
+
+  test("a copy named like the metadata file does not overwrite it", async () => {
+    const colliding = join(temp, "meta.json");
+    await writeFile(colliding, "server_url: http://source\n", "utf8");
+    const { snapshots } = await fixture({
+      getTargets: () => [{ path: colliding, kind: "headscale_config" }],
+    });
+
+    const meta = await snapshots.take("manual");
+
+    // The metadata file name is reserved, so the copy is renamed instead of
+    // being overwritten by the metadata that describes it.
+    expect(meta.files.map((file) => file.name)).toEqual(["meta-2.json"]);
+
+    const directory = join(snapshots.root(), meta.id);
+    const index = JSON.parse(await readFile(join(directory, SNAPSHOT_META_FILE), "utf8")) as {
+      files: Array<{ name: string }>;
+    };
+    expect(index.files.map((file) => file.name)).toEqual(["meta-2.json"]);
+    expect(await readFile(join(directory, "meta-2.json"), "utf8")).toBe(
+      "server_url: http://source\n",
     );
   });
 
@@ -176,5 +204,103 @@ describe("snapshot service", () => {
     const { content, file } = await snapshots.read(meta.id, "config.yaml");
     expect(file.size).toBe(content.byteLength);
     expect(content.toString("utf8")).toBe("server_url: http://headscale\n");
+  });
+
+  // Windows reports only the read-only bit through `stat`, so the modes can only
+  // be checked where they mean something.
+  test.skipIf(process.platform === "win32")(
+    "gives the snapshot files and directories an owner-only mode",
+    async () => {
+      const { snapshots } = await fixture();
+      const meta = await snapshots.take("manual");
+      const dir = join(snapshots.root(), meta.id);
+
+      expect((await stat(snapshots.root())).mode & 0o777).toBe(0o700);
+      expect((await stat(dir)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(dir, "config.yaml"))).mode & 0o777).toBe(0o600);
+      expect((await stat(join(dir, "meta.json"))).mode & 0o777).toBe(0o600);
+    },
+  );
+
+  test("refuses to read a snapshot file that links out of the snapshot root", async () => {
+    const { snapshots } = await fixture();
+    const outside = join(temp, "outside");
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, "config.yaml"), "server_url: http://evil\n", "utf8");
+
+    // A snapshot directory that is really a link: everything inside it passes the
+    // name checks and still resolves to a file Headplane never copied.
+    const id = "20261005T013000Z-linked";
+    await mkdir(snapshots.root(), { recursive: true });
+    await symlink(outside, join(snapshots.root(), id), "junction");
+    await writeFile(
+      join(snapshots.root(), SNAPSHOT_INDEX_FILE),
+      JSON.stringify([
+        {
+          id,
+          at: "2026-10-05T01:30:00.000Z",
+          reason: "linked",
+          files: [{ name: "config.yaml", sourcePath: join(outside, "config.yaml"), size: 26 }],
+          totalSize: 26,
+        },
+      ]),
+      "utf8",
+    );
+
+    await expect(snapshots.read(id, "config.yaml")).rejects.toMatchObject({
+      code: "unexpectedPath",
+    });
+  });
+
+  test("refuses to restore a snapshot file that links out of the snapshot root", async () => {
+    const outside = join(temp, "outside");
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, "config.yaml"), "server_url: http://evil\n", "utf8");
+
+    const { snapshots } = await fixture({
+      getTargets: () => [{ path: join(outside, "config.yaml"), kind: "headscale_config" }],
+    });
+
+    const id = "20261005T013000Z-linked";
+    await mkdir(snapshots.root(), { recursive: true });
+    await symlink(outside, join(snapshots.root(), id), "junction");
+    await writeFile(
+      join(snapshots.root(), SNAPSHOT_INDEX_FILE),
+      JSON.stringify([
+        {
+          id,
+          at: "2026-10-05T01:30:00.000Z",
+          reason: "linked",
+          files: [{ name: "config.yaml", sourcePath: join(outside, "config.yaml"), size: 26 }],
+          totalSize: 26,
+        },
+      ]),
+      "utf8",
+    );
+
+    await expect(snapshots.restore(id)).rejects.toMatchObject({ code: "unexpectedPath" });
+    expect(await readFile(join(outside, "config.yaml"), "utf8")).toBe("server_url: http://evil\n");
+  });
+
+  test("keeps the newest snapshots and prunes the rest", async () => {
+    let tick = 0;
+    const { snapshots } = await fixture({
+      clock: () => new Date(Date.UTC(2026, 9, 5, 1, 30, 0) + tick++ * 1000),
+    });
+
+    const ids: string[] = [];
+    for (let index = 0; index < 55; index += 1) {
+      ids.push((await snapshots.take("manual")).id);
+    }
+
+    const listed = await snapshots.list();
+    expect(listed).toHaveLength(50);
+    expect(listed[0]?.id).toBe(ids[54]);
+    expect(listed.map((entry) => entry.id)).not.toContain(ids[0]);
+
+    // Pruned means gone from disk, not just hidden from the index.
+    await expect(stat(join(snapshots.root(), ids[0]!))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });

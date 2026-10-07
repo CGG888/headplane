@@ -66,7 +66,7 @@ function apiFailure(requestUrl: string, statusCode: number, data: Record<string,
     data: {
       requestUrl,
       statusCode,
-      rawData: data == null ? "" : JSON.stringify(data),
+      detail: data == null ? "" : JSON.stringify(data),
       data,
     },
     init: { status: 502 },

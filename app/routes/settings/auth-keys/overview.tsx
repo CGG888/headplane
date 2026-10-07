@@ -1,5 +1,6 @@
 import { FileKey2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { data } from "react-router";
 
 import Code from "~/components/code";
 import Link from "~/components/link";
@@ -47,8 +48,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const { principal, api } = await getRequestApi(request);
 
+  // This page renders every pre-auth key in cleartext (`AuthKeyRow` prints
+  // `key.key`), so it is gated on the capabilities that justify seeing them —
+  // being signed in is not enough. Otherwise a `member` (0 capabilities) could
+  // read every key in the tailnet straight out of the loader payload.
+  const canGenerateAny = auth.can(principal, Capabilities.generate_authkeys);
+  const canGenerateOwn = auth.can(principal, Capabilities.generate_own_authkeys);
+  if (!canGenerateAny && !canGenerateOwn) {
+    throw data({ localized: { key: "errors.permission.managePreAuthKeys" } }, { status: 403 });
+  }
+
+  // `generate_own_authkeys` is a per-user capability, so that case is limited to
+  // the caller's own keys rather than the global list.
+  const selfServiceOnly = !canGenerateAny && canGenerateOwn;
+  const currentHeadscaleUserId = isUserPrincipal(principal)
+    ? principal.user.headscaleUserId
+    : undefined;
+
   const usersSnap = await headscaleLiveStore.get(usersResource, api);
-  const users = usersSnap.data;
+  const users = selfServiceOnly
+    ? usersSnap.data.filter((user) => user.id === currentHeadscaleUserId)
+    : usersSnap.data;
 
   let keys: { user: User | null; preAuthKeys: PreAuthKey[] }[];
   let missing: { user: User; error: unknown }[] = [];
@@ -73,7 +93,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     }
 
     keys = [];
-    const tagOnly = keysByUser.get(null);
+    const tagOnly = selfServiceOnly ? undefined : keysByUser.get(null);
     if (tagOnly?.length) {
       keys.push({ preAuthKeys: tagOnly, user: null });
     }
@@ -111,20 +131,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       .map(({ user, error }) => ({ error, user }));
   }
 
-  const canGenerateAny = auth.can(principal, Capabilities.generate_authkeys);
-  const canGenerateOwn = auth.can(principal, Capabilities.generate_own_authkeys);
-
   return {
     access: canGenerateAny || canGenerateOwn,
     // Deleting a pre-auth key needs the endpoint and the stable key id, both
     // of which start at Headscale 0.28; the API client omits the method below
     // that, so the row can follow the same boundary.
     canDeleteKeys: Boolean(api.preAuthKeys.delete),
-    currentHeadscaleUserId: isUserPrincipal(principal) ? principal.user.headscaleUserId : undefined,
+    currentHeadscaleUserId,
     currentSubject: isUserPrincipal(principal) ? principal.user.subject : undefined,
     keys,
     missing,
-    selfServiceOnly: !canGenerateAny && canGenerateOwn,
+    selfServiceOnly,
     url: config.headscale.public_url ?? config.headscale.url,
     users,
   };
@@ -232,10 +249,10 @@ export default function Page({
           <Notice title={t("settings.authKeys.missingTitle")} variant="error">
             {t("settings.authKeys.missingBody")}
             {missing.map(({ user }, index) => (
-              <>
-                <Code key={user.id}>{getUserDisplayName(user, t("machines.common.tagOwned"))}</Code>
+              <Fragment key={user.id}>
+                <Code>{getUserDisplayName(user, t("machines.common.tagOwned"))}</Code>
                 {index < missing.length - 1 ? ", " : ". "}
-              </>
+              </Fragment>
             ))}
             {t("settings.authKeys.missingFooter")}
           </Notice>

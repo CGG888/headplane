@@ -62,6 +62,11 @@ export interface MirrorPathConfigPort {
   getDERPSettings(): { paths: string[] };
   writable(): boolean;
   patch(patches: Array<{ path: string; value: unknown }>): Promise<void>;
+  /**
+   * Reads the current value and applies the patch in one queued step, so a
+   * concurrent edit of the same key cannot be overwritten with a stale list.
+   */
+  mutate(build: () => Array<{ path: string; value: unknown }>): Promise<void>;
 }
 
 export interface EnsureMirrorPathInput {
@@ -112,7 +117,17 @@ export async function ensureMirrorPathInDerpPaths(
 
   try {
     await input.beforeWrite?.();
-    await input.config.patch([{ path: "derp.paths", value: [...paths, path] }]);
+    // Compute the new list inside the write queue so a concurrent DERP path
+    // edit (add_derp_path / remove_derp_path) is not silently overwritten by
+    // the stale snapshot read above.
+    await input.config.mutate(() => {
+      const current = input.config.getDERPSettings();
+      if (isMirrorPathListed(current.paths, path, input.baseDir)) {
+        return [];
+      }
+
+      return [{ path: "derp.paths", value: [...current.paths, path] }];
+    });
   } catch (error) {
     log.warn(
       "config",

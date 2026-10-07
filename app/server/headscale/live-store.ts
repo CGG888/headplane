@@ -185,7 +185,6 @@ export function createLiveStore(
   const lastNotifiedAt = new Map<string, number>();
   const pendingNotifyTimer = new Map<string, ReturnType<typeof setTimeout>>();
   const pendingNotifyVersion = new Map<string, string>();
-  let storedApiClient: HeadscaleClient | undefined;
   let versionCounter = 0;
 
   function notifyListeners(resourceKey: string, version: string) {
@@ -276,18 +275,20 @@ export function createLiveStore(
     }
   }
 
-  function ensurePolling(resource: ResourceDefinition<unknown>) {
+  /**
+   * Starts the resource's poll with the client of the caller that got here
+   * first. The client is captured per resource instead of kept in one shared
+   * slot: a later caller with a different API key must not silently take over
+   * the poll of a resource it never primed.
+   */
+  function ensurePolling(resource: ResourceDefinition<unknown>, apiClient: HeadscaleClient) {
     if (intervals.has(resource.key)) {
       return;
     }
 
     const interval = setInterval(async () => {
-      if (!storedApiClient) {
-        return;
-      }
-
       try {
-        await fetchResource(resource, storedApiClient);
+        await fetchResource(resource, apiClient);
       } catch (error) {
         log.error("api", "Live store: failed to poll %s", resource.key, error);
       }
@@ -315,7 +316,6 @@ export function createLiveStore(
       resource: ResourceDefinition<T>,
       apiClient: HeadscaleClient,
     ): Promise<Snapshot<T>> {
-      storedApiClient = apiClient;
       const def = findResource(resource.key);
       if (!def) {
         throw new Error(`LiveStore: unknown resource "${resource.key}"`);
@@ -325,7 +325,7 @@ export function createLiveStore(
         await fetchResource(def, apiClient);
       }
 
-      ensurePolling(def);
+      ensurePolling(def, apiClient);
       return snapshotFor(resource);
     },
 
@@ -333,7 +333,6 @@ export function createLiveStore(
       resource: ResourceDefinition<T>,
       apiClient: HeadscaleClient,
     ): Promise<Snapshot<T>> {
-      storedApiClient = apiClient;
       const def = findResource(resource.key);
       if (!def) {
         throw new Error(`LiveStore: unknown resource "${resource.key}"`);
@@ -346,12 +345,11 @@ export function createLiveStore(
         await fetchResource(def, apiClient, { silent: true });
       }
 
-      ensurePolling(def);
+      ensurePolling(def, apiClient);
       return snapshotFor(resource);
     },
 
     async refresh<T>(resource: ResourceDefinition<T>, apiClient: HeadscaleClient): Promise<void> {
-      storedApiClient = apiClient;
       const def = findResource(resource.key);
       if (!def) {
         throw new Error(`LiveStore: unknown resource "${resource.key}"`);
@@ -391,7 +389,6 @@ export function createLiveStore(
       snapshots.clear();
       serializedCache.clear();
       listeners.clear();
-      storedApiClient = undefined;
     },
   };
 }

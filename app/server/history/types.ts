@@ -23,6 +23,13 @@ export const HISTORY_MAX_TICKS = 2016;
 /** Upper bound per node, so a flapping node cannot grow the document forever. */
 export const HISTORY_MAX_SAMPLES_PER_NODE = 512;
 
+/**
+ * Upper bound on the per-tick node list. A removed node ages out on its own, but
+ * an unusually large tailnet (or a hand-edited document) could still make the
+ * list — and every sample it carries — unbounded.
+ */
+export const HISTORY_MAX_NODES = 4096;
+
 /** Document format version; a document written by another shape is discarded. */
 export const HISTORY_VERSION = 1;
 

@@ -220,7 +220,7 @@ determine what each user can do in the UI.
 | **IT Admin**      | Can manage machines, users, and feature settings. Can configure IAM. Cannot modify ACLs or DNS.        |
 | **Auditor**       | Read-only access to everything. Can generate their own pre-auth keys.                                  |
 | **Viewer**        | Can view machines and users. Can generate their own pre-auth keys.                                     |
-| **Member**        | No UI access. The user exists in HeadplaneCN's database but has not been granted any permissions.        |
+| **Member**        | No UI access. The user exists in HeadplaneCN's database but has not been granted any permissions.      |
 
 ### First Login (Owner Bootstrap)
 
@@ -349,8 +349,9 @@ own session and returns the user to the login page.
 - **Redirect URI Mismatch**: Ensure the redirect URI registered in your IdP
   matches `{server.base_url}/admin/oidc/callback` exactly.
 
-- **PKCE errors**: If your IdP requires PKCE, set `oidc.use_pkce: true`. If
-  you see errors mentioning `code_verifier`, this is almost always the cause.
+- **PKCE errors**: PKCE is enabled by default. If your IdP does not support it,
+  set `oidc.use_pkce: false`. If you see errors mentioning `code_verifier`, this
+  is almost always the cause.
 
 - **Missing endpoints**: If your IdP does not support OIDC discovery, you'll
   need to set `authorization_endpoint`, `token_endpoint`,

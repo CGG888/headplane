@@ -47,6 +47,7 @@ import {
   buildIpv4Candidates,
   buildIpv6ExcludedCandidates,
   buildIpv6HostCandidates,
+  isIpLiteralHost,
   isPublicSyncIpv4,
   isPublicSyncIpv6,
   literalSyncIpv4,
@@ -174,9 +175,11 @@ interface FamilyDetection {
 
 /**
  * Why a finished run counts as failed: an unexpected error, a reload that did
- * not happen, a write that could not be made, or a family that yielded nothing
- * usable. A run that only found a disabled family, or nothing at all to change,
- * is not a failure.
+ * not happen, a write that could not be made, or a run that yielded no usable
+ * address at all. A run that one family skipped while the other was detected
+ * still did its job; only when nothing usable remains is the detection itself
+ * the failure. A run that only found a disabled family, or nothing at all to
+ * change, is not a failure.
  */
 export function derpSyncFailureReason(run: DerpSyncRun): DerpSyncFailureReason | undefined {
   if (run.outcome === "failed") {
@@ -191,7 +194,11 @@ export function derpSyncFailureReason(run: DerpSyncRun): DerpSyncFailureReason |
     return "not-writable";
   }
 
-  if (run.skipped.some((skip) => skip.reason !== "family-disabled")) {
+  // One family can be skipped for a reason of its own (no A record, a container
+  // namespace, an address that is not public) while the other was detected and
+  // written. That is not a failed detection, so it must not raise the alert.
+  const usable = Object.keys(run.detected).length > 0;
+  if (!usable && run.skipped.some((skip) => skip.reason !== "family-disabled")) {
     return "detection-unusable";
   }
 
@@ -204,6 +211,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
   let writeChain: Promise<boolean> = Promise.resolve(true);
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking = false;
+  let disposed = false;
 
   const now = () => options.now?.() ?? new Date();
   const resolveRelay = options.resolveRelay ?? ((host: string) => loadSharedRelayResolution(host));
@@ -240,7 +248,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
   function schedule() {
     clearTimer();
-    if (!document.settings.enabled) {
+    if (disposed || !document.settings.enabled) {
       // The inert state: nothing is scheduled, and no probe runs on its own.
       return;
     }
@@ -280,6 +288,13 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
       return isPublicSyncIpv4(literal)
         ? { value: { address: literal, source: "literal" }, candidates }
         : { skip: { family: "ipv4", reason: "not-public", detail: literal }, candidates };
+    }
+
+    if (isIpLiteralHost(host)) {
+      // The relay is named by an address literal, not by a name, so there is no
+      // A record to read: IPv4 has no answer here. Reported without a lookup,
+      // because a lookup on a bracketed literal would fail for the wrong reason.
+      return { skip: { family: "ipv4", reason: "no-records", detail: host }, candidates: [] };
     }
 
     const resolution = await resolveRelay(host);
@@ -511,6 +526,12 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
     ticking = true;
     try {
       await ensureLoaded();
+      if (disposed) {
+        // Disposal abandons the run: once the service is gone, nothing may
+        // touch the configuration, the audit log or the store.
+        return undefined;
+      }
+
       const settings = document.settings;
       if (!manual && !settings.enabled) {
         return undefined;
@@ -571,6 +592,10 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         // The check reports what a run would write and leaves the configuration
         // file, the snapshots and the audit log exactly as they were.
         outcome = "changed";
+      } else if (disposed) {
+        // Disposed while the detections were in flight: the write must not
+        // start at all, so the run is abandoned instead of persisted.
+        return undefined;
       } else {
         snapshotId = await takeSnapshot();
         await options.config.patch(plan.patches);
@@ -598,7 +623,10 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         ...(failure === undefined ? {} : { failure }),
       };
 
-      document = { settings, last: settled };
+      // The settings read at the top only decide what this run does. Committing
+      // them back would roll back a save the operator made while the run waited
+      // on DNS, in memory and then on disk, so the current settings are kept.
+      document = { settings: document.settings, last: settled };
       await persist();
 
       log.info(
@@ -628,6 +656,11 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         ...(mode === "run" ? { failure: "unexpected" as const } : {}),
         error: errorMessage(error),
       };
+
+      if (disposed) {
+        // The service is gone; a failure it can no longer report is not stored.
+        return undefined;
+      }
 
       document = { settings: document.settings, last: run };
       await persist();
@@ -691,6 +724,9 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
     },
 
     dispose() {
+      // Cancels the timer and abandons any run still in flight: its remaining
+      // awaits check this flag before they write anything.
+      disposed = true;
       clearTimer();
     },
   };

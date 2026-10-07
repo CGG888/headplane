@@ -181,3 +181,43 @@ describe("notifyAlert", () => {
     expect(delivery.error?.length).toBeLessThanOrEqual(ALERT_ERROR_MAX_LENGTH + 1);
   });
 });
+
+describe("response body cleanup", () => {
+  test("cancels the body nobody reads", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(
+      async () => ({ ok: true, status: 204, body: { cancel } }) as unknown as Response,
+    );
+
+    const outcome = await postAlertPayload(settings(), buildAlertPayload(event(), "0.19.0"), {
+      fetchImpl,
+    });
+
+    // The alert is delivered either way; cancelling only releases the socket
+    // instead of leaving the connection in the pool with an unread stream.
+    expect(outcome).toEqual({ ok: true, status: 204, error: null });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  test("cancels the body of a rejected request too", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(
+      async () => ({ ok: false, status: 500, body: { cancel } }) as unknown as Response,
+    );
+
+    const outcome = await postAlertPayload(settings(), buildAlertPayload(event(), "0.19.0"), {
+      fetchImpl,
+    });
+
+    expect(outcome).toEqual({ ok: false, status: 500, error: "HTTP 500" });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  test("a response without a body does not fail the delivery", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 204 }) as unknown as Response);
+
+    await expect(
+      postAlertPayload(settings(), buildAlertPayload(event(), "0.19.0"), { fetchImpl }),
+    ).resolves.toEqual({ ok: true, status: 204, error: null });
+  });
+});

@@ -6,7 +6,10 @@ on:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  # A canceled release leaves the multi-arch push half-finished (one image
+  # pushed, the other missing) and no GitHub Release. Queue instead of
+  # canceling, the same way the docs deploy does.
+  cancel-in-progress: false
 
 permissions:
   actions: write
@@ -19,6 +22,9 @@ jobs:
   docker:
     name: Docker Release (${{ matrix.target }})
     runs-on: ubuntu-latest
+    # Building two images for two architectures is the slowest part of a
+    # release; without a cap a stuck push holds the concurrency group forever.
+    timeout-minutes: 120
     strategy:
       matrix:
         include:
@@ -82,6 +88,12 @@ jobs:
     name: GitHub Release
     needs: docker
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Publishing a release is what makes the published images official. An
+    # environment without protection rules behaves exactly like today, but it
+    # gives the repository a place to require a reviewer before the release is
+    # created.
+    environment: release
     permissions:
       contents: write
     steps:

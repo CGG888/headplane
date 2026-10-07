@@ -210,6 +210,26 @@ describe("mirror region numbering", () => {
     expect(assignment[FRA]).toBe(904);
     expect(assignment[TOK]).toBe(905);
   });
+
+  test("reports the regions the 900s cannot number instead of dropping them", () => {
+    // 900 and 903-998 are the only numbers ranking may hand out (901, 902 and
+    // 999 are reserved), so a selection of 100 regions leaves three over.
+    const ids = Array.from({ length: 100 }, (_, index) => String(1000 + index));
+    const latencies = Object.fromEntries(ids.map((id) => [id, 10]));
+    const { assignment, unassigned } = assignRegionNumbers(ids, latencies);
+
+    expect(Object.keys(assignment)).toHaveLength(97);
+    // Equal latencies are settled by official id, so the highest ids lose out.
+    expect(unassigned).toEqual(["1097", "1098", "1099"]);
+  });
+
+  test("reports nothing unassigned for a selection the stored assignment covers", () => {
+    const stored = { [HKG]: 901, [SIN]: 902, [FRA]: 903 };
+    const { assignment, unassigned } = assignRegionNumbers([HKG, SIN, FRA], {}, stored);
+
+    expect(assignment).toEqual(stored);
+    expect(unassigned).toEqual([]);
+  });
 });
 
 describe("chinese region names", () => {

@@ -53,7 +53,7 @@ bash dual-image-install.sh             # the real install
   make and every follow-up command, and changes nothing. A real run prints the same plan and only
   writes after you confirm it — and it never starts a container without asking.
 - **It never deletes your data**: an existing configuration is patched key by key with the
-  original kept as `.bak`, and migration only ever *copies*, after a timestamped backup.
+  original kept as `.bak`, and migration only ever _copies_, after a timestamped backup.
 - Afterwards it offers to run `docker compose up -d` and then runs the verification commands
   (`docker compose ps`, the Headscale log, `headscale version`).
 
@@ -78,15 +78,15 @@ bash dual-image-install.sh             # the real install
 
 All paths use `/vol1/1000/APP/` as an example; substitute your own storage location.
 
-| Host path                              | Role                                                                    | Path inside both containers          |
-| -------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------ |
-| `/vol1/1000/APP/headplane/`            | Compose file, HeadplaneCN configuration, HeadplaneCN data               | —                                    |
-| `/vol1/1000/APP/headplane/config.yaml` | HeadplaneCN's own configuration                                         | `/etc/headplane/config.yaml` (read-only) |
-| `/vol1/1000/APP/headplane/data/`       | Sessions, internal database, config snapshots, agent state              | `/var/lib/headplane`                 |
-| `/vol1/1000/APP/headscale/etc/`        | Headscale's configuration directory (mounted into both containers)      | `/etc/headscale` (read-write)        |
-| `/vol1/1000/APP/headscale/etc/config.yaml` | Headscale's effective configuration                                     | `/etc/headscale/config.yaml` (read-write) |
-| `/vol1/1000/APP/headscale/etc/derp-maps/`  | Local DERP maps, including the one the region filter writes             | `/etc/headscale/derp-maps/` (read-write) |
-| `/vol1/1000/APP/headscale/data/`       | `db.sqlite`, `noise_private.key`, `derp_server_private.key`             | `/var/lib/headscale` (read-write / read-only) |
+| Host path                                  | Role                                                               | Path inside both containers                   |
+| ------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------- |
+| `/vol1/1000/APP/headplane/`                | Compose file, HeadplaneCN configuration, HeadplaneCN data          | —                                             |
+| `/vol1/1000/APP/headplane/config.yaml`     | HeadplaneCN's own configuration                                    | `/etc/headplane/config.yaml` (read-only)      |
+| `/vol1/1000/APP/headplane/data/`           | Sessions, internal database, config snapshots, agent state         | `/var/lib/headplane`                          |
+| `/vol1/1000/APP/headscale/etc/`            | Headscale's configuration directory (mounted into both containers) | `/etc/headscale` (read-write)                 |
+| `/vol1/1000/APP/headscale/etc/config.yaml` | Headscale's effective configuration                                | `/etc/headscale/config.yaml` (read-write)     |
+| `/vol1/1000/APP/headscale/etc/derp-maps/`  | Local DERP maps, including the one the region filter writes        | `/etc/headscale/derp-maps/` (read-write)      |
+| `/vol1/1000/APP/headscale/data/`           | `db.sqlite`, `noise_private.key`, `derp_server_private.key`        | `/var/lib/headscale` (read-write / read-only) |
 
 ```bash
 mkdir -p /vol1/1000/APP/headplane/data \
@@ -108,8 +108,9 @@ services:
     command: serve
     # Host networking: the container uses the NAS's 8080 / 9090 / udp 3478 directly, no port mapping
     network_mode: host
-    # One PID namespace with HeadplaneCN so the proc integration can find headscale serve
-    pid: host
+    # No pid: host here: the proc integration runs inside the HeadplaneCN container,
+    # which already shares the host PID namespace and sees headscale serve (only the
+    # headplane service needs that line)
     volumes:
       # Configuration and local DERP maps. Both containers see them at /etc/headscale,
       # and HeadplaneCN has to be able to rewrite them
@@ -156,14 +157,14 @@ services:
 
 ### What each mount is for (one line each)
 
-| Mount                                                                 | Purpose                                                                                                                        |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `/vol1/1000/APP/headscale/etc` (headscale)                            | Configuration directory: `config.yaml`, `derp-maps/`, DNS records file; read-write                                              |
-| `/vol1/1000/APP/headscale/data:/var/lib/headscale` (headscale)        | Read-write home of the database and the private keys, so recreating the container loses nothing                                 |
-| `/vol1/1000/APP/headplane/config.yaml:/etc/headplane/config.yaml:ro`  | HeadplaneCN's own configuration; read-only is enough                                                                            |
-| `/vol1/1000/APP/headplane/data:/var/lib/headplane`                    | HeadplaneCN's persisted data (sessions, internal database, snapshots, agent state)                                              |
-| `/vol1/1000/APP/headscale/etc:/etc/headscale` (headplane)             | The **same absolute path**: `headscale.config_path`, configuration saves and DERP map view/edit/save all land on these files     |
-| `/vol1/1000/APP/headscale/data:/var/lib/headscale:ro` (headplane)     | **Same absolute path, read-only**: path checks and snapshots can see `db.sqlite` and `noise_private.key` without risk of writes  |
+| Mount                                                                | Purpose                                                                                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `/vol1/1000/APP/headscale/etc` (headscale)                           | Configuration directory: `config.yaml`, `derp-maps/`, DNS records file; read-write                                              |
+| `/vol1/1000/APP/headscale/data:/var/lib/headscale` (headscale)       | Read-write home of the database and the private keys, so recreating the container loses nothing                                 |
+| `/vol1/1000/APP/headplane/config.yaml:/etc/headplane/config.yaml:ro` | HeadplaneCN's own configuration; read-only is enough                                                                            |
+| `/vol1/1000/APP/headplane/data:/var/lib/headplane`                   | HeadplaneCN's persisted data (sessions, internal database, snapshots, agent state)                                              |
+| `/vol1/1000/APP/headscale/etc:/etc/headscale` (headplane)            | The **same absolute path**: `headscale.config_path`, configuration saves and DERP map view/edit/save all land on these files    |
+| `/vol1/1000/APP/headscale/data:/var/lib/headscale:ro` (headplane)    | **Same absolute path, read-only**: path checks and snapshots can see `db.sqlite` and `noise_private.key` without risk of writes |
 
 ::: info The read-only data directory is deliberate
 HeadplaneCN's user is not Headscale's user. Mounting the data directory read-only makes the
@@ -181,12 +182,21 @@ networking the container shares the host's network namespace, so port mappings a
 
 The reachable ports are therefore decided entirely by what each container listens on:
 
-| Port       | Listener                        | How it is published                                                                |
-| ---------- | ------------------------------- | ---------------------------------------------------------------------------------- |
-| `tcp/8080` | Headscale control service       | Lucky points at `127.0.0.1:8080` (both the control paths and `/derp` live here)     |
-| `tcp/9090` | Headscale metrics               | Keep it local; do not expose it to the internet                                     |
-| `udp/3478` | STUN of the embedded DERP       | Open `udp/3478` straight to this NAS on the router/firewall — **never** via HTTP proxy |
-| `tcp/4100` | HeadplaneCN                     | Lucky points at `127.0.0.1:4100` (the default is `3000`; change both together)       |
+| Port       | Listener                  | How it is published                                                                    |
+| ---------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| `tcp/8080` | Headscale control service | Lucky points at `127.0.0.1:8080` (both the control paths and `/derp` live here)        |
+| `tcp/9090` | Headscale metrics         | Keep it local; do not expose it to the internet                                        |
+| `udp/3478` | STUN of the embedded DERP | Open `udp/3478` straight to this NAS on the router/firewall — **never** via HTTP proxy |
+| `tcp/4100` | HeadplaneCN               | Lucky points at `127.0.0.1:4100` (the default is `3000`; change both together)         |
+
+> [!IMPORTANT]
+> `tcp/4100` is the admin console, so it has the largest exposure: `server.host` defaults to
+> `0.0.0.0`, which makes it reachable from the whole LAN. When the reverse proxy runs on this
+> machine, narrowing it to `127.0.0.1` is safer — the installer's `--admin-bind 127.0.0.1` writes
+> `server.host: "127.0.0.1"` under host networking and, under bridge networking, publishes the port
+> as `127.0.0.1:4100` instead (inside the container it still listens on `0.0.0.0`, otherwise docker
+> could not forward it). Either way, never expose `tcp/4100` to the internet: put a TLS reverse
+> proxy or a firewall in front of it.
 
 ## Configuration deltas on both sides
 
@@ -269,16 +279,16 @@ derp:
     - /etc/headscale/derp-maps/official-mirror.yaml
 ```
 
-| Change                                                                     | Why                                                                                                                                    |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `listen_addr: 0.0.0.0:8080`                                                | Inside the container; with host networking it is directly the NAS's `8080`. Clients never care about this port, only about `server_url` |
-| `server_url` **stays the same**                                            | Clients registered against it and verify it. Changing it forces every registered node to log in again                                   |
-| `noise_private_key_path` / `database.sqlite.path` under `/var/lib/headscale/...` | Both files now come from the mounted data directory, so the paths must be container paths                                                |
-| `derp.paths` rewritten as **container paths**                              | Headscale runs in a container and sees the paths it was given; `/etc/headscale/derp-maps/...` is the same file HeadplaneCN sees         |
-| `stun_listen_addr: 0.0.0.0:3478`                                           | STUN of the embedded DERP; with host networking it takes the NAS's `udp/3478` directly                                                  |
-| `derp.server.enabled: true` plus `private_key_path`                        | The self-hosted embedded relay; the key lives in the writable data directory and is generated if missing                                |
-| `derp.urls`                                                                | Keep your current value (keep `[]` if the embedded relay is the only relay)                                                             |
-| `policy.mode`                                                              | Keep it as it is (`database` is required to edit ACLs in the web UI)                                                                    |
+| Change                                                                           | Why                                                                                                                                     |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `listen_addr: 0.0.0.0:8080`                                                      | Inside the container; with host networking it is directly the NAS's `8080`. Clients never care about this port, only about `server_url` |
+| `server_url` **stays the same**                                                  | Clients registered against it and verify it. Changing it forces every registered node to log in again                                   |
+| `noise_private_key_path` / `database.sqlite.path` under `/var/lib/headscale/...` | Both files now come from the mounted data directory, so the paths must be container paths                                               |
+| `derp.paths` rewritten as **container paths**                                    | Headscale runs in a container and sees the paths it was given; `/etc/headscale/derp-maps/...` is the same file HeadplaneCN sees         |
+| `stun_listen_addr: 0.0.0.0:3478`                                                 | STUN of the embedded DERP; with host networking it takes the NAS's `udp/3478` directly                                                  |
+| `derp.server.enabled: true` plus `private_key_path`                              | The self-hosted embedded relay; the key lives in the writable data directory and is generated if missing                                |
+| `derp.urls`                                                                      | Keep your current value (keep `[]` if the embedded relay is the only relay)                                                             |
+| `policy.mode`                                                                    | Keep it as it is (`database` is required to edit ACLs in the web UI)                                                                    |
 
 ### Why the old "host path + identical absolute path" rule disappears
 
@@ -292,10 +302,10 @@ Now that **Headscale is containerised too**, it reads the container path it was 
 
 - `derp.paths` holds **container paths** (`/etc/headscale/derp-maps/official-mirror.yaml`);
 - both containers mount the shared directories at the **same absolute path** (`/etc/headscale`,
-  `/var/lib/headscale`) — that is agreement *between the two containers*, no longer "the container
+  `/var/lib/headscale`) — that is agreement _between the two containers_, no longer "the container
   path must equal the host path";
 - the old failure `getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or
-  directory` was then **guaranteed**; today it only appears when the file genuinely does not exist
+directory` was then **guaranteed**; today it only appears when the file genuinely does not exist
   in the container (never created, mount missing, path mistyped). See troubleshooting.
 
 ::: warning The DERP region filter's target path changes too
@@ -431,7 +441,7 @@ docker compose exec headscale headscale version
   version already ran database migrations, swapping the image back is not enough** — run
   `docker compose down`, overwrite `headscale/data/db.sqlite` with the copy from the backup (while
   the container is stopped), then `docker compose up -d`.
-- The pinned tags in the compose file *are* the version lock. Do not give it up to let `latest`
+- The pinned tags in the compose file _are_ the version lock. Do not give it up to let `latest`
   upgrade itself.
 
 ## Reverse proxy notes
@@ -439,12 +449,12 @@ docker compose exec headscale headscale version
 There is a single public port, `8443`, with two hostnames (plus an optional `admin.`). Lucky splits
 them by Host header, and every route points back at this NAS:
 
-| Public hostname           | Backend                    | Traffic it carries                                                                                                       |
-| ------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `ha.<domain>:8443`        | `http://127.0.0.1:8080`    | The `server_url` hostname: client control traffic (`/key`, `/ts2021`, `/api/v1/*`, `/health`) and `/derp`                  |
-| `derp.<domain>:8443`      | `http://127.0.0.1:8080`    | A second entrance to `/derp` relay traffic on the same container                                                          |
-| `admin.<domain>:8443`     | `http://127.0.0.1:4100`    | The HeadplaneCN UI (`/admin`, including the browser SSH WebSocket)                                                        |
-| `udp/3478` (not proxied)  | the NAS's `udp/3478`       | STUN, which must be reachable directly                                                                                    |
+| Public hostname          | Backend                 | Traffic it carries                                                                                        |
+| ------------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ha.<domain>:8443`       | `http://127.0.0.1:8080` | The `server_url` hostname: client control traffic (`/key`, `/ts2021`, `/api/v1/*`, `/health`) and `/derp` |
+| `derp.<domain>:8443`     | `http://127.0.0.1:8080` | A second entrance to `/derp` relay traffic on the same container                                          |
+| `admin.<domain>:8443`    | `http://127.0.0.1:4100` | The HeadplaneCN UI (`/admin`, including the browser SSH WebSocket)                                        |
+| `udp/3478` (not proxied) | the NAS's `udp/3478`    | STUN, which must be reachable directly                                                                    |
 
 ### Client control traffic (`ha.`)
 
@@ -548,15 +558,15 @@ create the file in the shared host directory, confirm the mount, put the path in
 
 Work down this list, most likely first:
 
-| Check                             | Command / place                                                                                | What it means                                                                       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Was `server_url` changed?         | `docker compose exec headscale grep server_url /etc/headscale/config.yaml`                      | It must match the pre-migration value byte for byte; if it changed, re-register nodes |
-| Hostname and certificate          | From outside: `curl -sI https://ha.<domain>:8443/health`                                        | The certificate must be trusted and the hostname must match `server_url`             |
-| Is the proxy passing long connections? | In Lucky: HTTP/2 enabled, buffering off, timeouts ≥300 seconds                             | A buffered or downgraded `/ts2021` makes nodes fail or flap                          |
-| Was the noise key carried over?   | `docker compose exec headscale ls -l /var/lib/headscale/`                                       | If it was regenerated, every registered node stops communicating (restore the backup) |
-| Was the database carried over?    | `docker compose exec headscale headscale nodes list`                                            | An empty list means `db.sqlite` was not copied correctly or points elsewhere          |
-| Node is registered but offline    | The last-seen value in `headscale nodes list`                                                   | Registration is fine; the problem is the network/proxy path — back to the rows above  |
-| Is the service itself alive?      | `curl -s http://127.0.0.1:8080/health`, `docker compose logs headscale`                         | Anything other than `{"status":"pass"}` means reading the first error in the log      |
+| Check                                  | Command / place                                                            | What it means                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Was `server_url` changed?              | `docker compose exec headscale grep server_url /etc/headscale/config.yaml` | It must match the pre-migration value byte for byte; if it changed, re-register nodes |
+| Hostname and certificate               | From outside: `curl -sI https://ha.<domain>:8443/health`                   | The certificate must be trusted and the hostname must match `server_url`              |
+| Is the proxy passing long connections? | In Lucky: HTTP/2 enabled, buffering off, timeouts ≥300 seconds             | A buffered or downgraded `/ts2021` makes nodes fail or flap                           |
+| Was the noise key carried over?        | `docker compose exec headscale ls -l /var/lib/headscale/`                  | If it was regenerated, every registered node stops communicating (restore the backup) |
+| Was the database carried over?         | `docker compose exec headscale headscale nodes list`                       | An empty list means `db.sqlite` was not copied correctly or points elsewhere          |
+| Node is registered but offline         | The last-seen value in `headscale nodes list`                              | Registration is fine; the problem is the network/proxy path — back to the rows above  |
+| Is the service itself alive?           | `curl -s http://127.0.0.1:8080/health`, `docker compose logs headscale`    | Anything other than `{"status":"pass"}` means reading the first error in the log      |
 
 ::: tip In one sentence
 Clients only trust `server_url` plus the certificate and path behind it; the database and the noise

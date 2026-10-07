@@ -93,6 +93,13 @@ export interface DerpMapResponse {
   ok: boolean;
   status: number;
   text: () => Promise<string>;
+  /**
+   * The streaming halves of a real `fetch` answer. They are optional so a
+   * caller can hand in a plain `{ ok, status, text }` stub; when they are
+   * missing the body is read whole and measured afterwards instead.
+   */
+  headers?: Headers;
+  body?: ReadableStream<Uint8Array> | null;
 }
 
 /** `fetch`, narrowed to what a DERP map download needs. */
@@ -133,9 +140,31 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+/**
+ * The most URLs one process keeps answers for. The keys are operator-supplied
+ * URLs and a removed one would otherwise stay in the map forever; entries beyond
+ * the cap are evicted least-recently-used first.
+ */
+const DERP_MAP_CACHE_MAX_ENTRIES = 200;
+
 /** One process-wide cache: both DERP cards and the Overview share the fetches. */
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<RemoteDerpMapOutcome>>();
+
+/** Inserts an answer, refreshing its recency and evicting the oldest beyond the cap. */
+function rememberOutcome(url: string, entry: CacheEntry): void {
+  cache.delete(url);
+  cache.set(url, entry);
+
+  while (cache.size > DERP_MAP_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+
+    cache.delete(oldest);
+  }
+}
 
 /** Drops every cached answer, so the next lookup dials the URL again. */
 export function clearRemoteDerpMapCache(): void {
@@ -176,6 +205,55 @@ function resolveOptions(
 }
 
 /**
+ * Reads a response body as text without buffering much more than `limit` bytes.
+ *
+ * `Content-Length` is checked first because it costs nothing, but it is only a
+ * hint: a chunked response, or one whose header understates the body, is cut off
+ * mid-stream instead of being materialized and measured afterwards. Returns
+ * `null` when the body is over the limit.
+ */
+async function readBodyWithin(response: DerpMapResponse, limit: number): Promise<string | null> {
+  const declared = response.headers?.get("content-length") ?? null;
+  const declaredBytes = declared === null ? Number.NaN : Number(declared);
+  if (Number.isFinite(declaredBytes) && declaredBytes > limit) {
+    return null;
+  }
+
+  // A `fetch` answer without a stream — a test stub, or an adapter that only
+  // implements `text` — is read whole and measured afterwards. The cap still
+  // applies, it just lands once the body is already in memory.
+  if (response.body === undefined) {
+    const body = await response.text();
+    return Buffer.byteLength(body, "utf8") > limit ? null : body;
+  }
+
+  if (response.body === null) {
+    return "";
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      return null;
+    }
+
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
  * Downloads one map once, under the deadline, and parses its regions with the
  * nodes they list. Every failure — a rejected fetch, a timeout, a non-200
  * status, an oversized body, a body that is not a DERP map, a map with no usable
@@ -199,8 +277,10 @@ async function downloadDerpMapOnce(
       return { reason: "status" };
     }
 
-    const body = await response.text();
-    if (Buffer.byteLength(body, "utf8") > MAX_DERP_MAP_BYTES) {
+    // Read under the ceiling rather than reading and then measuring: a hostile
+    // or misconfigured URL must not be able to make the server hold it all.
+    const body = await readBodyWithin(response, MAX_DERP_MAP_BYTES);
+    if (body === null) {
       log.debug("config", `DERP map ${url} is larger than the supported size`);
       return { reason: "too-large" };
     }
@@ -271,6 +351,9 @@ export async function loadRemoteDerpMapOutcome(
   const deps = resolveOptions(settings, options);
   const cached = cache.get(trimmed);
   if (cached !== undefined && cached.expiresAt > deps.now()) {
+    // A hit still counts as a use, so the least-recently-used entry is the one
+    // that goes when the cap is reached.
+    rememberOutcome(trimmed, cached);
     return cached.outcome;
   }
 
@@ -285,7 +368,7 @@ export async function loadRemoteDerpMapOutcome(
 
   const started = (async () => {
     const outcome = await downloadDerpMap(trimmed, deps);
-    cache.set(trimmed, {
+    rememberOutcome(trimmed, {
       outcome,
       expiresAt: deps.now() + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
     });

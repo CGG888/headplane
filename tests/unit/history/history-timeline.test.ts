@@ -148,6 +148,47 @@ describe("computeNodeTimeline", () => {
   });
 });
 
+describe("bucket coverage boundaries", () => {
+  test("a tick exactly at the window end is counted in the last bucket, once", () => {
+    // Ticks sit exactly on the first and last boundaries of the window: the
+    // interior boundaries are already covered by the hourly fixtures above.
+    const document = buildDocument([
+      { at: FROM_24H, nodes: [{ id: "1", name: "alpha", online: true }] },
+      { at: NOW, nodes: [{ id: "1", name: "alpha", online: true }] },
+    ]);
+
+    const timeline = computeNodeTimeline(document, "1", "24h", NOW);
+
+    // The tick at `now` lands in the last bucket and nowhere else: if the
+    // window end were dropped, that bucket would read as a gap.
+    expect(timeline.buckets[23]).toBe("online");
+    expect(timeline.buckets.slice(1, 23)).toEqual(Array.from({ length: 22 }, () => "unknown"));
+    expect(timeline.uptime).toEqual({ online: 2, offline: 0, unknown: 22, total: 24, ratio: 1 });
+    expect(timeline.to).toBe(iso(NOW));
+
+    const trend = computeFleetTrend(document, "24h", NOW);
+    expect(trend.buckets[22].covered).toBe(false);
+    expect(trend.buckets[23]).toEqual({
+      from: iso(FROM_24H + 23 * HOUR),
+      covered: true,
+      online: 1,
+      known: 1,
+    });
+  });
+
+  test("a tick on an interior boundary is counted in the bucket it starts", () => {
+    const document = buildDocument([
+      { at: FROM_24H + 5 * HOUR, nodes: [{ id: "1", name: "alpha", online: false }] },
+      { at: FROM_24H + 6 * HOUR, nodes: [{ id: "1", name: "alpha", online: true }] },
+    ]);
+
+    const timeline = computeNodeTimeline(document, "1", "24h", NOW);
+
+    expect(timeline.buckets[5]).toBe("offline");
+    expect(timeline.buckets[6]).toBe("online");
+  });
+});
+
 describe("computeFleetTrend", () => {
   test("counts the nodes online in every covered bucket", () => {
     const document = buildDocument(

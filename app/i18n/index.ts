@@ -30,13 +30,20 @@ function lookup(catalog: Catalog | undefined, key: string): unknown {
   }, catalog);
 }
 
-function isPlural(value: unknown): value is { one: string; other: string } {
+/**
+ * A catalog entry is only usable as a plural when *both* forms are strings.
+ * Checking just `one` used to be enough for the catalogs we ship, but a
+ * half-filled entry would then render `undefined` in the UI instead of falling
+ * back to the key.
+ */
+export function isPlural(value: unknown): value is { one: string; other: string } {
   return (
     typeof value === "object" &&
     value !== null &&
     "one" in value &&
     "other" in value &&
-    typeof (value as { one: unknown }).one === "string"
+    typeof (value as { one: unknown }).one === "string" &&
+    typeof (value as { other: unknown }).other === "string"
   );
 }
 

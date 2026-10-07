@@ -82,10 +82,9 @@ function logLoginOidcError(context: string, error: OidcError): void {
 const LOGIN_ERROR_KEYS: Record<LoginErrorCode, TranslationKey> = {
   missingKey: "login.errors.missingKey",
   emptyKey: "login.errors.emptyKey",
-  notFound: "login.errors.notFound",
-  malformed: "login.errors.malformed",
-  expired: "login.errors.expired",
   invalid: "login.errors.invalid",
+  rateLimited: "login.errors.rateLimited",
+  disabled: "login.errors.disabled",
   unknown: "login.errors.unknown",
 };
 
@@ -109,7 +108,9 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   useEffect(() => {
     // State is a one time thing, we need to remove it after it has
     // Been consumed to prevent logic loops.
-    if (urlState !== null) {
+    // The loader reports an absent `s` parameter as `undefined` (never `null`),
+    // so `null` here would have run the cleanup on every visit.
+    if (urlState !== undefined) {
       const searchParams = new URLSearchParams(params);
       searchParams.delete("s");
 
@@ -117,7 +118,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       // We can't use the useSearchParams method since it revalidates
       // Which will trigger a full reload
       const newUrl = searchParams.toString()
-        ? `{${window.location.pathname}?${searchParams.toString()}`
+        ? `${window.location.pathname}?${searchParams.toString()}`
         : window.location.pathname;
 
       window.history.replaceState(null, "", newUrl);

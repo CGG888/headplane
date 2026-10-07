@@ -10,6 +10,7 @@
 // missing or corrupt document degrades to "no servers") and writes go through a
 // temp file plus rename so a crash never leaves a half-written document behind.
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -81,8 +82,6 @@ export async function readRelayDnsServers(dataPath: string): Promise<string[]> {
   }
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the list atomically (temp file plus rename). Returns false instead of
  * throwing, because the settings card surfaces the failure as a localized form
@@ -93,11 +92,16 @@ export async function writeRelayDnsServers(
   servers: readonly string[],
 ): Promise<boolean> {
   const path = relayDnsServersPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeRelayDnsServersDocument({ servers: [...servers] }), "utf8");
+    await writeFile(temp, serializeRelayDnsServersDocument({ servers: [...servers] }), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target.
+      flag: "wx",
+    });
     await rename(temp, path);
     return true;
   } catch (error) {

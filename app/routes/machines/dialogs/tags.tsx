@@ -42,10 +42,10 @@ export default function Tags({ machine, isOpen, setIsOpen, existingTags, policyT
   );
 
   const error =
-    fetcher.data && !fetcher.data.success
-      ? fetcher.data.errorCode
+    fetcher.state === "idle" && fetcher.data && !fetcher.data.success
+      ? fetcher.data.errorCode === "tagsNotInPolicy"
         ? t("machines.tags.notInPolicy")
-        : fetcher.data.error
+        : (fetcher.data.error ?? t("machines.common.errors.apiFailed"))
       : null;
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   canonicalSyncAddress,
   classifySyncIpv4,
+  isIpLiteralHost,
   isPublicSyncIpv4,
   isPublicSyncIpv6,
   literalSyncIpv4,
@@ -100,6 +101,15 @@ describe("server_url host", () => {
     expect(literalSyncIpv4("1.2.3.4")).toBe("1.2.3.4");
     expect(literalSyncIpv4("relay.example.com")).toBeUndefined();
     expect(literalSyncIpv4("[2001:db8::1]")).toBeUndefined();
+  });
+
+  test("an address literal is recognised with or without brackets", () => {
+    expect(isIpLiteralHost("[2001:db8::1]")).toBe(true);
+    expect(isIpLiteralHost("2001:db8::1")).toBe(true);
+    expect(isIpLiteralHost("1.2.3.4")).toBe(true);
+    expect(isIpLiteralHost("relay.example.com")).toBe(false);
+    expect(isIpLiteralHost("")).toBe(false);
+    expect(isIpLiteralHost(undefined)).toBe(false);
   });
 });
 

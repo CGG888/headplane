@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 
 import androidSvg from "~/assets/android.svg";
 import iosSvg from "~/assets/ios.svg";
@@ -90,6 +90,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
   const auth = context.get(authContext);
+  const getRequestApi = context.get(requestApiContext);
+  const headscaleLiveStore = context.get(headscaleLiveStoreContext);
 
   const principal = await auth.require(request);
   if (!isUserPrincipal(principal)) {
@@ -97,10 +99,35 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
 
   const formData = await request.formData();
-  const headscaleUserId = formData.get("headscale_user_id")?.toString();
+  const headscaleUserId = formData.get("headscale_user_id")?.toString().trim();
 
   if (headscaleUserId) {
-    await auth.linkHeadscaleUser(principal.user.id, headscaleUserId);
+    // Linking grants ownership of every node that belongs to the Headscale user
+    // (`canManageNode`), so the picker is not a free-form id: the id has to be a
+    // real Headscale user, it must still be unclaimed, and when both sides carry
+    // an email address they have to match. Otherwise any signed-in account could
+    // bind somebody else's Headscale user id and then rename, expire or delete
+    // that person's machines.
+    const { api } = await getRequestApi(request);
+    const [usersSnap, claimed] = await Promise.all([
+      headscaleLiveStore.get(usersResource, api),
+      auth.claimedHeadscaleUserIds(),
+    ]);
+
+    const target = usersSnap.data.find((user) => user.id === headscaleUserId);
+    if (!target || claimed.has(headscaleUserId)) {
+      throw data({ localized: { key: "home.link.invalidSelection" } }, { status: 400 });
+    }
+
+    const targetEmail = target.email?.trim().toLowerCase();
+    const principalEmail = principal.profile.email?.trim().toLowerCase();
+    if (targetEmail && principalEmail && targetEmail !== principalEmail) {
+      throw data({ localized: { key: "home.link.emailMismatch" } }, { status: 403 });
+    }
+
+    if (!(await auth.linkHeadscaleUser(principal.user.id, headscaleUserId))) {
+      throw data({ localized: { key: "home.link.invalidSelection" } }, { status: 409 });
+    }
   }
 
   return redirect("/");

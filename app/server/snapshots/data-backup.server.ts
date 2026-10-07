@@ -34,6 +34,13 @@ export function dataBackupFileName(at: Date): string {
 /** Error codes the download route turns into a localized message. */
 export type DataBackupErrorCode = "copyFailed" | "unavailable";
 
+/**
+ * How long a copy may sit on disk when its download is never consumed at all.
+ * A caller that forgets the body would otherwise leave the database copy — and
+ * the OIDC ID tokens in it — behind for as long as the process lives.
+ */
+const DATA_BACKUP_ABANDONED_MS = 15 * 60 * 1000;
+
 export class DataBackupError extends Error {
   readonly code: DataBackupErrorCode;
 
@@ -66,6 +73,8 @@ export interface DataBackupOptions {
   /** Directory the temporary copy goes into; the system temp directory by default. */
   directory?: string;
   clock?: () => Date;
+  /** How long an unconsumed download keeps its copy; the default is generous. */
+  abandonedMs?: number;
 }
 
 function messageOf(error: unknown): string {
@@ -149,8 +158,35 @@ export async function createDataBackup(options: DataBackupOptions): Promise<Data
       stream: () => {
         const file = createReadStream(path);
         // A download that is abandoned half way still has to take its copy with
-        // it, so cleanup hangs off the stream closing either way.
-        file.once("close", () => void dispose());
+        // it, so cleanup hangs off the stream closing either way. Cancelling the
+        // web stream destroys the file stream (and so closes it), while a read
+        // failure destroys it without a normal end, hence both handlers.
+        let finished = false;
+        const finish = () => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+          clearTimeout(abandoned);
+          file.destroy();
+          void dispose();
+        };
+
+        // A stream nobody ever reads is never closed by the runtime, so its copy
+        // would sit on disk until the process exits. This fallback only fires
+        // while not a single byte has been read, so a download that is merely
+        // slow keeps its file, and it is cleared the moment the stream finishes.
+        const abandoned = setTimeout(() => {
+          if (!finished && file.bytesRead === 0) {
+            finish();
+          }
+        }, options.abandonedMs ?? DATA_BACKUP_ABANDONED_MS);
+        abandoned.unref?.();
+
+        file.once("close", finish);
+        file.once("error", finish);
+
         return Readable.toWeb(file) as ReadableStream<Uint8Array>;
       },
       dispose,

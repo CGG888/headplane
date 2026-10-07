@@ -54,7 +54,10 @@ import MachineRow from "./components/machine-row";
 import SelectCheckbox from "./components/select-checkbox";
 import BackfillIps from "./dialogs/backfill-ips";
 import NewMachine from "./dialogs/new";
-import { useMachineFilterParams } from "./hooks/use-machine-filter-params";
+import {
+  useMachineFilterParams,
+  type MachineFilterParams,
+} from "./hooks/use-machine-filter-params";
 import { machineAction } from "./machine-actions";
 import { shouldRevalidateMachines } from "./should-revalidate";
 
@@ -163,13 +166,19 @@ export const shouldRevalidate: ShouldRevalidateFunction = shouldRevalidateMachin
 
 type SortField = "name" | "ip" | "version" | "lastSeen";
 
-const STATUS_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
+const STATUS_MATCH: Record<
+  NonNullable<MachineFilterParams["filterStatus"]>,
+  (n: PopulatedNode) => boolean
+> = {
   online: (n) => n.online && !n.expired,
   offline: (n) => !n.online && !n.expired,
   expired: (n) => n.expired,
 };
 
-const ROUTE_MATCH: Record<string, (n: PopulatedNode) => boolean> = {
+const ROUTE_MATCH: Record<
+  NonNullable<MachineFilterParams["filterRoute"]>,
+  (n: PopulatedNode) => boolean
+> = {
   "exit-node": (n) => n.customRouting.exitRoutes.length > 0,
   subnet: (n) =>
     n.customRouting.subnetApprovedRoutes.length > 0 ||

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
+import { MAX_DERP_MAP_BYTES } from "~/routes/settings/headscale/derp-map-limits";
 import {
   readAnyDerpMapRegions,
   readDerpMapRegions,
@@ -296,6 +297,73 @@ describe("remote reading of a wire-format official map", () => {
     await expect(loadRemoteDerpMapDetail(url, SETTINGS, { fetch })).resolves.toBeUndefined();
     await expect(loadRemoteDerpMap(url, SETTINGS, { fetch })).resolves.toBeUndefined();
     expect(calls).toHaveLength(1);
+  });
+
+  test("refuses an over-cap body from its declared length without touching the stream", async () => {
+    let streamed = false;
+    const response: DerpMapResponse = {
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(""),
+      headers: new Headers({ "content-length": String(MAX_DERP_MAP_BYTES + 1) }),
+      get body(): ReadableStream<Uint8Array> | null {
+        streamed = true;
+        return null;
+      },
+    };
+    const fetch: DerpMapFetch = () => Promise.resolve(response);
+
+    const outcome = await loadRemoteDerpMapOutcome(
+      "https://example.com/declared-huge.yaml",
+      SETTINGS,
+      {
+        fetch,
+      },
+    );
+
+    expect(outcome).toEqual({ reason: "too-large" });
+    // The header alone settled it, so the body was never opened.
+    expect(streamed).toBe(false);
+  });
+
+  test("stops reading a chunked body once it passes the cap", async () => {
+    const chunkBytes = 64 * 1024;
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 64) {
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(new Uint8Array(chunkBytes));
+      },
+    });
+    const fetch: DerpMapFetch = () => Promise.resolve(new Response(stream, { status: 200 }));
+
+    const outcome = await loadRemoteDerpMapOutcome(
+      "https://example.com/chunked-huge.yaml",
+      SETTINGS,
+      {
+        fetch,
+      },
+    );
+
+    expect(outcome).toEqual({ reason: "too-large" });
+    // 256 KiB across 64 KiB chunks crosses the cap in five reads; anything near
+    // the 64 pulls a full drain would need means the cap was applied too late.
+    expect(pulls).toBeLessThan(10);
+  });
+
+  test("measures a streamless body once it has been read", async () => {
+    const { fetch } = countingFetch("x".repeat(MAX_DERP_MAP_BYTES + 1));
+
+    const outcome = await loadRemoteDerpMapOutcome("https://example.com/stub-huge.yaml", SETTINGS, {
+      fetch,
+    });
+
+    expect(outcome).toEqual({ reason: "too-large" });
   });
 
   test("caches a failure's reason for the short window", async () => {

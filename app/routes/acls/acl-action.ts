@@ -24,7 +24,8 @@ export interface AclActionData {
   /** Headscale's own message for a policy it refused to accept. */
   detail?: string;
   policy?: string;
-  updatedAt?: Date;
+  /** `null` when Headscale did not report a usable timestamp. */
+  updatedAt?: Date | null;
 }
 
 /**
@@ -38,7 +39,7 @@ function apiMessage(error: unknown): string | null {
     return null;
   }
 
-  const { data: payload, rawData } = error.data;
+  const { data: payload, detail } = error.data;
   if (payload != null) {
     const message = payload.message;
     if (typeof message === "string" && message.trim().length > 0) {
@@ -54,7 +55,7 @@ function apiMessage(error: unknown): string | null {
     }
   }
 
-  const raw = rawData.trim();
+  const raw = detail.trim();
   return raw.length > 0 ? raw : null;
 }
 
@@ -182,9 +183,9 @@ export async function aclAction({ request, context }: Route.ActionArgs) {
     });
   } catch (error) {
     if (isDataWithApiError(error)) {
-      const rawData = error.data.rawData;
+      const apiDetail = error.data.detail;
       // https://github.com/juanfont/headscale/blob/c4600346f9c29b514dc9725ac103efb9d0381f23/hscontrol/types/policy.go#L11
-      if (rawData.includes("update is disabled")) {
+      if (apiDetail.includes("update is disabled")) {
         throw data({ localized: { key: "errors.policyNotWritable" } }, { status: 403 });
       }
 

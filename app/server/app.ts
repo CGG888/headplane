@@ -127,12 +127,18 @@ const listener = createRequestListener({
 });
 
 export default function handleRequest(req: IncomingMessage, res: ServerResponse) {
-  if (shouldDefaultToFormBody(req.method, req.headers["content-type"])) {
+  if (
+    shouldDefaultToFormBody(req.method, req.headers["content-type"], {
+      origin: req.headers.origin,
+      baseUrl: config.server.base_url,
+    })
+  ) {
     log.warn(
       "server",
-      "Request %s %s arrived without a form Content-Type, defaulting to urlencoded",
+      "Request %s %s arrived without a usable form Content-Type (%s), defaulting to urlencoded",
       req.method,
       req.url,
+      req.headers["content-type"] ?? "none",
     );
 
     req.headers["content-type"] = "application/x-www-form-urlencoded";

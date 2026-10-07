@@ -48,7 +48,9 @@ export type AuthSessionInsert = typeof authSessions.$inferInsert;
 /**
  * Append-only operation log. Rows are trimmed to the newest
  * `MAX_AUDIT_ENTRIES` after every insert, so the table cannot grow without
- * bound.
+ * bound. `hash` carries the entry's link in the audit chain (see
+ * `app/server/audit/chain.ts`), which lets a reader tell an edited or deleted
+ * row from an untouched one.
  */
 export const auditLog = sqliteTable("audit_log", {
   id: text("id").primaryKey(),
@@ -59,6 +61,7 @@ export const auditLog = sqliteTable("audit_log", {
   target: text("target").notNull(),
   detail: text("detail"),
   result: text("result").$type<AuditResult>().notNull(),
+  hash: text("hash"),
 });
 
 export type AuditLogRecord = typeof auditLog.$inferSelect;

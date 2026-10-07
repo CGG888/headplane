@@ -12,6 +12,10 @@ import { createTransport, type Transport } from "~/server/headscale/api/transpor
 // travel in a JSON `policy` field, because a query parameter or a differently
 // named field would let Headscale check a policy other than the one being
 // saved.
+//
+// `GET`/`PUT v1/policy` also carry `updatedAt`, which Headscale may omit or
+// send in a shape `new Date()` cannot read; the api turns anything unusable
+// into `null` so the policy pages do not throw while formatting it.
 
 interface Recorded {
   method: string;
@@ -30,6 +34,8 @@ let server: Server;
 let transport: Transport;
 let recorded: Recorded[] = [];
 let rejectPolicy = false;
+/** When set, the next response answers with this body instead of `{}`. */
+let policyAnswer: unknown;
 
 beforeAll(async () => {
   server = createServer((request, response) => {
@@ -53,7 +59,7 @@ beforeAll(async () => {
       }
 
       // Headscale answers a successful check with an empty object.
-      response.end(JSON.stringify({}));
+      response.end(JSON.stringify(policyAnswer ?? {}));
     });
   });
 
@@ -105,5 +111,39 @@ describe("Policy check request", () => {
     }
 
     expect(lastRequest().url).toBe("/api/v1/policy/check");
+  });
+});
+
+describe("Policy updatedAt", () => {
+  test("reads a timestamp headscale sends and resolves it", async () => {
+    const policy = makePolicyApi(transport, capabilities, API_KEY);
+    recorded = [];
+    policyAnswer = { policy: POLICY, updatedAt: "2026-01-02T03:04:05Z" };
+
+    try {
+      const result = await policy.get();
+      expect(result.updatedAt?.toISOString()).toBe("2026-01-02T03:04:05.000Z");
+      expect(lastRequest().url).toBe("/api/v1/policy");
+    } finally {
+      policyAnswer = undefined;
+    }
+  });
+
+  test("reads a missing or unusable updatedAt as null instead of throwing", async () => {
+    const policy = makePolicyApi(transport, capabilities, API_KEY);
+    recorded = [];
+
+    // `undefined` stands for the field being absent from the response.
+    for (const updatedAt of [undefined, null, "", "   ", "not a date", 42]) {
+      policyAnswer = updatedAt === undefined ? { policy: POLICY } : { policy: POLICY, updatedAt };
+
+      try {
+        const result = await policy.get();
+        expect(result.updatedAt).toBeNull();
+        expect(result.policy).toBe(POLICY);
+      } finally {
+        policyAnswer = undefined;
+      }
+    }
   });
 });

@@ -29,9 +29,13 @@ export default function StatusBanner({
   className,
 }: StatusBannerProps) {
   const { t } = useI18n();
-  const [dismissed, setDismissed] = useState(false);
+  // The dismissal belongs to one message, not to the component instance: a
+  // banner that changes variant or title (the live connection status does) is a
+  // new message and has to be shown again.
+  const signature = `${variant}:${title}`;
+  const [dismissedSignature, setDismissedSignature] = useState<string | null>(null);
 
-  if (dismissed) {
+  if (dismissedSignature === signature) {
     return null;
   }
 
@@ -68,7 +72,7 @@ export default function StatusBanner({
         <button
           type="button"
           aria-label={t("common.dismiss")}
-          onClick={() => setDismissed(true)}
+          onClick={() => setDismissedSignature(signature)}
           className={cn(
             "shrink-0 rounded p-0.5 transition-colors",
             "hover:bg-black/10 dark:hover:bg-white/10",

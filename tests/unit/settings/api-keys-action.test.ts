@@ -165,7 +165,7 @@ describe("API key action", () => {
           data: {
             requestUrl: "POST v1/apikey/expire",
             statusCode: 404,
-            rawData: "not found",
+            detail: "not found",
             data: null,
           },
           init: { status: 502 },
@@ -239,7 +239,7 @@ describe("API key deletion", () => {
           data: {
             requestUrl: "DELETE v1/apikey/abcdefghijkl",
             statusCode: 404,
-            rawData: "not found",
+            detail: "not found",
             data: null,
           },
           init: { status: 502 },

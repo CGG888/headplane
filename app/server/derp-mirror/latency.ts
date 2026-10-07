@@ -33,6 +33,13 @@ import type { DerpLatencyRegionReading, DerpMirrorLatency } from "./types";
 const MS_PER_SECOND = 1000;
 
 /**
+ * How long a stored measurement stays usable. Probing is on demand, so a record
+ * can be weeks old; an ancient reading must not outrank the latency the machines
+ * report today, and the stored record must not grow forever.
+ */
+export const LATENCY_READING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * The fastest agent-reported latency per region id, in milliseconds. Keys are
  * decimal region-id strings, matching what the numbering rule reads; a sample
  * that does not name a region (a legacy `host:port` key, a code) is ignored
@@ -76,16 +83,29 @@ function usableLatency(value: unknown): number | undefined {
 }
 
 /**
+ * True while a stored reading is young enough to be ranked on. A reading without
+ * a usable timestamp is treated as stale: it cannot be shown to be current.
+ */
+function isFreshReading(reading: DerpLatencyRegionReading, now: Date): boolean {
+  const measuredMs = Date.parse(reading.measuredAt);
+  return Number.isFinite(measuredMs) && now.getTime() - measuredMs < LATENCY_READING_TTL_MS;
+}
+
+/**
  * The fastest value this server measured itself per region id, in milliseconds.
  *
  * The family bests are the intended source; the per-node values are read too, so
  * a record written without them still reduces to something rankable. A region
- * with no usable value is simply absent.
+ * with no usable value is simply absent, and neither is a reading older than
+ * {@link LATENCY_READING_TTL_MS}: the numbering then uses what the machines
+ * report instead of a measurement nobody can call current.
  */
 export function locallyMeasuredRegionLatencies(
   latency: DerpMirrorLatency | undefined,
+  now: Date = new Date(),
 ): Record<string, number> {
-  return regionLatencyBests(latency?.regions ?? []);
+  const fresh = (latency?.regions ?? []).filter((region) => isFreshReading(region, now));
+  return regionLatencyBests(fresh);
 }
 
 /**
@@ -124,9 +144,11 @@ export function regionLatencyBests(
  * ever measured some of the regions, and storing its record as it stands would
  * drop every region an earlier run had measured. So the regions this run did
  * measure replace their entries and every other entry is carried over with the
- * timestamp of the run that actually measured it. The record's own `measuredAt`
- * and `outcome` are always this run's, so the card reports the run that just
- * happened — including the honest "nothing answered" one.
+ * timestamp of the run that actually measured it — but only while that reading
+ * is still younger than {@link LATENCY_READING_TTL_MS}, so the record cannot
+ * accumulate measurements forever. The record's own `measuredAt` and `outcome`
+ * are always this run's, so the card reports the run that just happened —
+ * including the honest "nothing answered" one.
  */
 export function mergeLatencyReadings(
   previous: DerpMirrorLatency | undefined,
@@ -137,9 +159,15 @@ export function mergeLatencyReadings(
     merged.set(region.regionId, region);
   }
 
-  for (const region of previous?.regions ?? []) {
-    if (!merged.has(region.regionId)) {
-      merged.set(region.regionId, region);
+  // This run's own timestamp is the reference: an entry is carried over only
+  // while it is still fresh as of the run being stored.
+  const referenceMs = Date.parse(next.measuredAt);
+  if (Number.isFinite(referenceMs)) {
+    const reference = new Date(referenceMs);
+    for (const region of previous?.regions ?? []) {
+      if (!merged.has(region.regionId) && isFreshReading(region, reference)) {
+        merged.set(region.regionId, region);
+      }
     }
   }
 

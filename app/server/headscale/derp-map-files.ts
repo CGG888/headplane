@@ -287,6 +287,23 @@ async function inspectOne(
   if (view.readable) {
     try {
       const content = await readFile(resolved, "utf8");
+
+      // The size was measured before the file was opened, so a file that kept
+      // growing in between would have been read past the ceiling that check
+      // approved. Re-stat after reading and refuse the answer when it moved.
+      const after = await stat(resolved);
+      if (!after.isFile() || after.size !== view.size) {
+        log.warn(
+          "config",
+          "The DERP map file at %s changed while it was being read; it was not inspected",
+          resolved,
+        );
+        view.readable = false;
+        view.size = after.isFile() ? after.size : view.size;
+        view.tooLarge = view.size > MAX_DERP_MAP_BYTES;
+        return view;
+      }
+
       view.content = content;
       view.issues = validateDerpMap(content);
     } catch (error) {

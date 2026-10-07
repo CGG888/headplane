@@ -15,6 +15,7 @@ import { snapshotBeforeMutation, type SnapshotService } from "~/server/snapshots
 import type { Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
 import log from "~/utils/log";
+import { isValidRestrictionDomain, isValidRestrictionName } from "~/utils/restrictions";
 
 import type { Route } from "./+types/overview";
 
@@ -111,17 +112,35 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         });
       }
 
-      const domains = [
-        ...new Set([...(headscaleConfig.getOIDCConfig()?.allowedDomains ?? []), domain]),
-      ];
+      if (!isValidRestrictionDomain(domain)) {
+        throw data("Invalid domain provided.", {
+          status: 400,
+        });
+      }
+
+      if (!headscaleConfig.getOIDCConfig()) {
+        // The in-memory config view is the only source for the current list.
+        // Without it the old code fell back to `?? []` and rewrote
+        // `oidc.allowed_domains` as a single-entry list, dropping the rest.
+        throw data("OIDC is not configured.", {
+          status: 409,
+        });
+      }
 
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_domains",
-          value: domains,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_domains",
+            value: [...new Set([...current.allowedDomains, domain])],
+          },
+        ];
+      });
 
       await reloadHeadscale(integration, headscale);
       await recordOperation(
@@ -160,14 +179,20 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       }
 
       // Filter out the domain to remove it from the list
-      const domains = storedDomains.filter((d: string) => d !== domain);
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_domains",
-          value: domains,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_domains",
+            value: current.allowedDomains.filter((d: string) => d !== domain),
+          },
+        ];
+      });
       await reloadHeadscale(integration, headscale);
       await recordOperation(
         services,
@@ -187,17 +212,32 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         });
       }
 
-      const groups = [
-        ...new Set([...(headscaleConfig.getOIDCConfig()?.allowedGroups ?? []), group]),
-      ];
+      if (!isValidRestrictionName(group)) {
+        throw data("Invalid group provided.", {
+          status: 400,
+        });
+      }
+
+      if (!headscaleConfig.getOIDCConfig()) {
+        throw data("OIDC is not configured.", {
+          status: 409,
+        });
+      }
 
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_groups",
-          value: groups,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_groups",
+            value: [...new Set([...current.allowedGroups, group])],
+          },
+        ];
+      });
 
       await reloadHeadscale(integration, headscale);
       await recordOperation(
@@ -236,14 +276,20 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       }
 
       // Filter out the group to remove it from the list
-      const groups = storedGroups.filter((d: string) => d !== group);
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_groups",
-          value: groups,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_groups",
+            value: current.allowedGroups.filter((d: string) => d !== group),
+          },
+        ];
+      });
 
       await reloadHeadscale(integration, headscale);
       await recordOperation(
@@ -264,15 +310,32 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
         });
       }
 
-      const users = [...new Set([...(headscaleConfig.getOIDCConfig()?.allowedUsers ?? []), user])];
+      if (!isValidRestrictionName(user)) {
+        throw data("Invalid user provided.", {
+          status: 400,
+        });
+      }
+
+      if (!headscaleConfig.getOIDCConfig()) {
+        throw data("OIDC is not configured.", {
+          status: 409,
+        });
+      }
 
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_users",
-          value: users,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_users",
+            value: [...new Set([...current.allowedUsers, user])],
+          },
+        ];
+      });
 
       await reloadHeadscale(integration, headscale);
       await recordOperation(services, principal, AUDIT_ACTIONS.restrictionAddUser, user, "success");
@@ -305,14 +368,20 @@ export async function restrictionAction({ request, context }: Route.ActionArgs) 
       }
 
       // Filter out the user to remove it from the list
-      const users = storedUsers.filter((d: string) => d !== user);
       await snapshotConfig(services);
-      await headscaleConfig.patch([
-        {
-          path: "oidc.allowed_users",
-          value: users,
-        },
-      ]);
+      await headscaleConfig.mutate(() => {
+        const current = headscaleConfig.getOIDCConfig();
+        if (!current) {
+          return [];
+        }
+
+        return [
+          {
+            path: "oidc.allowed_users",
+            value: current.allowedUsers.filter((d: string) => d !== user),
+          },
+        ];
+      });
 
       await reloadHeadscale(integration, headscale);
       await recordOperation(

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { Capabilities, hasCapability, Roles, getRoleFromCapabilities } from "~/server/web/roles";
+import { ASSIGNABLE_ROLES, isAssignableRole, normalizeRole } from "~/server/web/roles";
 
 describe("Roles and Capabilities", () => {
   describe("Roles definitions", () => {
@@ -45,6 +46,46 @@ describe("Roles and Capabilities", () => {
       expect(hasCapability("owner", "owner")).toBe(true);
       expect(hasCapability("admin", "owner")).toBe(false);
       expect(hasCapability("member", "owner")).toBe(false);
+    });
+  });
+
+  describe("assignable roles", () => {
+    test("lists every role except the owner", () => {
+      expect([...ASSIGNABLE_ROLES].sort()).toEqual(
+        Object.keys(Roles)
+          .filter((role) => role !== "owner")
+          .sort(),
+      );
+    });
+
+    test("only accepts known role names", () => {
+      expect(isAssignableRole("admin")).toBe(true);
+      expect(isAssignableRole("member")).toBe(true);
+
+      // Everything that is not a role stays out: `in` would have accepted the
+      // prototype keys below, and `owner` is never handed out by a claim.
+      expect(isAssignableRole("owner")).toBe(false);
+      expect(isAssignableRole("admin ")).toBe(false);
+      expect(isAssignableRole("Admin")).toBe(false);
+      expect(isAssignableRole("superuser")).toBe(false);
+      expect(isAssignableRole("constructor")).toBe(false);
+      expect(isAssignableRole("toString")).toBe(false);
+      expect(isAssignableRole("")).toBe(false);
+    });
+  });
+
+  describe("normalizeRole function", () => {
+    test("keeps the owner and every real role", () => {
+      expect(normalizeRole("owner")).toBe("owner");
+      expect(normalizeRole("admin")).toBe("admin");
+      expect(normalizeRole("viewer")).toBe("viewer");
+    });
+
+    test("falls back to member instead of trusting prototype keys", () => {
+      expect(normalizeRole("constructor")).toBe("member");
+      expect(normalizeRole("toString")).toBe("member");
+      expect(normalizeRole("superuser")).toBe("member");
+      expect(normalizeRole("")).toBe("member");
     });
   });
 

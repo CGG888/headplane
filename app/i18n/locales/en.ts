@@ -335,6 +335,9 @@ const en = {
       no: "No",
       ownerLabel: "Owner",
       selectUser: "Select a user",
+      errors: {
+        apiFailed: "The change was not applied: Headscale refused the request.",
+      },
     },
     backfill: {
       action: "Backfill missing IPs",
@@ -841,7 +844,7 @@ const en = {
         "This creates a new user in Headscale. The user will appear in the “Unlinked Headscale Users” section until they sign in through your OIDC provider and are automatically linked to a HeadplaneCN account.",
       username: "Username",
       usernameRule:
-        "Usernames must be at least 2 characters, start with a letter, and contain only letters, numbers, dots, dashes and underscores, with at most one @ that cannot be the last character.",
+        "Usernames must be between 2 and 255 characters, start with a letter, and contain only letters, numbers, dots, dashes and underscores, with at most one @ that cannot be the last character.",
       displayName: "Display Name",
       email: "Email",
       placeholderUsername: "my-new-user",
@@ -2293,6 +2296,11 @@ const en = {
           reasonSelectionEmpty: "No region is selected, so there is nothing to mirror.",
           reasonFetchUnusable: "The official map could not be fetched, so nothing was mirrored.",
           reasonNoRegions: "The official map describes none of the selected regions.",
+          reasonNumberingExhausted:
+            "More regions are selected than the 900s can number, so nothing was written.",
+          reasonTargetNotMirror:
+            "The target file is not a DERP map, so it was left alone. Point the mirror at an empty file or at the map it should replace.",
+          reasonSnapshotFailed: "The file could not be snapshotted, so the mirror was not written.",
           reasonTargetRelative: "The target path is not absolute.",
           reasonTargetUnsafe: "The target path contains a .. segment.",
           reasonNotWritable: "The target file is not writable.",
@@ -3033,6 +3041,7 @@ const en = {
       body: "Add this group to a list of allowed groups that can authenticate with Headscale via OIDC.",
       description: "The group to allow for OIDC authentication.",
       duplicate: "This group already exists in the list.",
+      invalid: "Groups cannot contain spaces and must be at most 255 characters.",
       label: "Group",
       placeholder: "admin",
     },
@@ -3042,6 +3051,7 @@ const en = {
       body: "Add this user to a list of allowed users that can authenticate with Headscale via OIDC.",
       description: "The user to allow for OIDC authentication.",
       duplicate: "This user already exists in the list.",
+      invalid: "Users cannot contain spaces and must be at most 255 characters.",
       label: "User",
       placeholder: "john_doe",
     },
@@ -3054,6 +3064,12 @@ const en = {
       retentionTitle: "Retention",
       retentionBody:
         "Only the newest {count} operations are kept; older entries are dropped automatically.",
+      chainBrokenTitle: "Audit chain",
+      chainBrokenBody:
+        "{count} stored operations no longer match the audit chain. Something other than HeadplaneCN changed the audit log.",
+      droppedTitle: "Missing operations",
+      droppedBody:
+        "{count} operations could not be written to the audit log. They are not included here, and the actions they describe did happen.",
       showingCount: "Showing {shown} of {total} operations",
       empty: "No operations match these filters.",
       loadMore: "Load more",
@@ -3080,10 +3096,19 @@ const en = {
         apiKeyCreate: "Create API key",
         apiKeyExpire: "Expire API key",
         apiKeyDelete: "Delete API key",
+        preAuthKeyCreate: "Create pre-auth key",
+        preAuthKeyExpire: "Expire pre-auth key",
         preAuthKeyDelete: "Delete pre-auth key",
+        userCreate: "Create user",
+        userDelete: "Delete user",
+        userRename: "Rename user",
+        userRoleChange: "Change user role",
+        userOwnershipTransfer: "Transfer ownership",
+        userLink: "Link Headscale user",
         registrationReject: "Reject registration",
         nodeBackfillIps: "Backfill node IPs",
         nodeDebugCreate: "Create debug node",
+        agentSync: "Sync the agent",
         restrictionAddDomain: "Allow domain",
         restrictionRemoveDomain: "Remove domain",
         restrictionAddGroup: "Allow group",
@@ -3095,6 +3120,9 @@ const en = {
         snapshotRestore: "Restore snapshot",
         loginOidcUpdate: "Update console login",
         loginOidcChangeBlocked: "Blocked console login change",
+        loginSuccess: "Sign in",
+        loginFailure: "Failed sign in",
+        loginLocked: "Sign-in locked out",
       },
       filtersTitle: "Filters",
       filtersDescription: "Choose which operations are listed.",
@@ -3339,6 +3367,7 @@ const en = {
     connecting: "Connecting to {hostname}…",
     nodeStopped: "Tailnet node stopped: {error}",
     joinFailed: "Failed to join Tailnet: {error}",
+    retry: "Retry",
     prompt: {
       title: "Enter Username",
       body: "Enter the username you want to use to connect to {hostname}. SSH via the web follows the same ACL rules as regular SSH access in Headscale, so only permitted usernames will work. See the {link} for common errors.",
@@ -3384,6 +3413,10 @@ const en = {
       body: "HeadplaneCN could not automatically match your SSO identity to an existing Headscale user. Please select your user from the list below to link your account and continue.",
       selectPlaceholder: "Select a user...",
       button: "Link and Continue",
+      invalidSelection:
+        "That Headscale user can no longer be linked. Pick a user from the list and try again.",
+      emailMismatch:
+        "That Headscale user belongs to a different account. Pick your own user from the list.",
       footer:
         "If you don't see your user listed, please contact your administrator. To automatically link new users in the future, ensure that the Headscale user has the same email address as the SSO identity.",
     },
@@ -3416,10 +3449,9 @@ const en = {
     errors: {
       missingKey: "Missing API key. Please enter your API key.",
       emptyKey: "API key cannot be empty. Please enter a valid API key.",
-      notFound: "API key was not found in the Headscale database",
-      malformed: "API key is malformed (missing expiration). Please generate a new API key.",
-      expired: "API key has expired",
       invalid: "API key is invalid (it may be incorrect or expired)",
+      rateLimited: "Too many failed login attempts. Please wait and try again.",
+      disabled: "API key sign-in is disabled on this instance. Please sign in with SSO.",
       unknown: "Error while validating API key (see logs for details)",
     },
     oidcNotice: {

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   locallyMeasuredRegionLatencies,
+  mergeLatencyReadings,
   officialRegionLatencies,
   preferredRegionLatencies,
 } from "~/server/derp-mirror/latency";
@@ -81,7 +82,10 @@ describe("latencies measured on this server", () => {
       regions: [measuredRegion(20, { bestV4: 30, bestV6: 12 }), measuredRegion(3, { bestV4: 45 })],
     };
 
-    expect(locallyMeasuredRegionLatencies(latency)).toEqual({ "20": 12, "3": 45 });
+    expect(locallyMeasuredRegionLatencies(latency, new Date("2026-01-03T00:00:00.000Z"))).toEqual({
+      "20": 12,
+      "3": 45,
+    });
   });
 
   test("reads the per-node values of a record written without family bests", () => {
@@ -91,7 +95,9 @@ describe("latencies measured on this server", () => {
       regions: [measuredRegion(20, { nodes: [30, 12, 44] })],
     };
 
-    expect(locallyMeasuredRegionLatencies(latency)).toEqual({ "20": 12 });
+    expect(locallyMeasuredRegionLatencies(latency, new Date("2026-01-03T00:00:00.000Z"))).toEqual({
+      "20": 12,
+    });
   });
 
   test("reads nothing from a record that has none", () => {
@@ -110,5 +116,44 @@ describe("latencies measured on this server", () => {
       "20": 12,
       "3": 45,
     });
+  });
+});
+
+describe("stored latency age", () => {
+  test("a reading older than the TTL is no longer a measurement", () => {
+    const latency: DerpMirrorLatency = {
+      measuredAt: "2026-01-02T03:04:05.000Z",
+      outcome: "complete",
+      regions: [measuredRegion(20, { bestV4: 30 })],
+    };
+
+    // Probing happens on demand, so a reading from weeks ago must not outrank
+    // the latency the relay reports today.
+    expect(locallyMeasuredRegionLatencies(latency, new Date("2026-01-20T00:00:00.000Z"))).toEqual(
+      {},
+    );
+    expect(locallyMeasuredRegionLatencies(latency, new Date("2026-01-03T00:00:00.000Z"))).toEqual({
+      "20": 30,
+    });
+  });
+
+  test("merging drops an entry older than the run being stored", () => {
+    const previous: DerpMirrorLatency = {
+      measuredAt: "2026-01-02T03:04:05.000Z",
+      outcome: "complete",
+      regions: [measuredRegion(20, { bestV4: 30 }), measuredRegion(21, { bestV4: 40 })],
+    };
+
+    const merged = mergeLatencyReadings(previous, {
+      measuredAt: "2026-02-02T03:04:05.000Z",
+      outcome: "partial",
+      regions: [measuredRegion(20, { bestV4: 12 })],
+    });
+
+    expect(merged.measuredAt).toBe("2026-02-02T03:04:05.000Z");
+    // Region 21 was measured by a run that is now stale, so it is not carried
+    // forward; region 20 is this run's own value.
+    expect(merged.regions.map((region) => region.regionId)).toEqual([20]);
+    expect(merged.regions[0]?.bestV4).toBe(12);
   });
 });

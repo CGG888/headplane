@@ -304,4 +304,12 @@ describe("Node expiry requests", () => {
 
     expect(lastRequest().url).toBe("/api/v1/node/7/expire?disableExpiry=false");
   });
+
+  test("a node list without a nodes array is reported, not read as empty", async () => {
+    const nodes = makeNodeApi(transport, capabilities, API_KEY);
+
+    // The transport hands back `undefined` for an empty body, so an answer in
+    // the wrong shape must fail loudly instead of looking like an empty tailnet.
+    await expect(nodes.list()).rejects.toThrow(/unexpected node list/);
+  });
 });

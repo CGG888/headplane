@@ -21,11 +21,14 @@ interface ExpireProps {
   setIsOpen: (isOpen: boolean) => void;
 }
 
-type ExpiryResult = { success: true } | { success: false; errorCode: MachineExpiryErrorCode };
+type ExpiryResult =
+  | { success: true }
+  | { success: false; errorCode: MachineExpiryErrorCode; error?: string };
 
 const ERROR_KEYS: Record<MachineExpiryErrorCode, TranslationKey> = {
   invalidExpiry: "machines.expire.errors.invalidDate",
   expiryInPast: "machines.expire.errors.pastDate",
+  failed: "machines.common.errors.apiFailed",
 };
 
 /** Formats an expiry for a `<input type="datetime-local">`, in local time. */
@@ -62,7 +65,9 @@ export default function Expire({ machine, isOpen, setIsOpen }: ExpireProps) {
   const [expiry, setExpiry] = useState(() => toLocalInputValue(machine.expiry));
 
   const error =
-    fetcher.data && !fetcher.data.success ? t(ERROR_KEYS[fetcher.data.errorCode]) : null;
+    fetcher.state === "idle" && fetcher.data && !fetcher.data.success
+      ? (fetcher.data.error ?? t(ERROR_KEYS[fetcher.data.errorCode]))
+      : null;
   const customDate = mode === "custom" ? parseLocalValue(expiry) : null;
   const isDisabled = fetcher.state !== "idle" || (mode === "custom" && customDate === null);
 

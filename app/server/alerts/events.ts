@@ -62,6 +62,32 @@ function conditionKey(event: AlertEvent): string {
 }
 
 /**
+ * Keeps only the cooldown entries that can still suppress something. Without
+ * this the map holds one entry per condition ever seen — a node that went
+ * offline once, a key that expired last year — and every writer serializes the
+ * whole map into the store.
+ */
+export function pruneSentAlerts(
+  sent: Record<string, string>,
+  settings: AlertSettings,
+  now: Date,
+): Record<string, string> {
+  const cooldownMs = settings.cooldownSeconds * 1000;
+  const nowMs = now.getTime();
+  const pruned: Record<string, string> = {};
+
+  for (const [key, at] of Object.entries(sent)) {
+    const atMs = Date.parse(at);
+    // An entry without a usable timestamp cannot cool anything down either.
+    if (Number.isFinite(atMs) && nowMs - atMs < cooldownMs) {
+      pruned[key] = at;
+    }
+  }
+
+  return pruned;
+}
+
+/**
  * Applies the two guards that keep the stream quiet, for one candidate event:
  * the enabled/selected filter, and the cooldown against the same condition.
  * Records the send in `sent` and returns the event, or `undefined` when the
@@ -210,7 +236,7 @@ export function detectAlertEvents(
       // The DERP sync reports its own outcome out of band, so a tick must not
       // clear the flag that remembers whether the last run failed.
       derpSyncFailed: previous.derpSyncFailed,
-      sent,
+      sent: pruneSentAlerts(sent, settings, now),
     },
   };
 }

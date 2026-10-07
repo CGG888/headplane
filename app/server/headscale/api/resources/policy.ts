@@ -8,7 +8,22 @@ export interface PolicyApi {
    * policy parses and throws the parser's own error when it does not.
    */
   check(policy: string): Promise<void>;
-  set(policy: string): Promise<{ policy: string; updatedAt: Date }>;
+  set(policy: string): Promise<{ policy: string; updatedAt: Date | null }>;
+}
+
+/**
+ * Headscale reports `updatedAt` as a string, but a partial response can omit it
+ * (the old `updatedAt !== null` test let `undefined` through, and
+ * `new Date(undefined)` is an invalid date whose `toISOString()` throws — a 500
+ * on the policy pages). Anything unusable becomes `null` instead.
+ */
+function parseUpdatedAt(value: unknown): Date | null {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function makePolicyApi(
@@ -20,11 +35,11 @@ export function makePolicyApi(
     get: async () => {
       const { policy, updatedAt } = await transport.request<{
         policy: string;
-        updatedAt: string;
+        updatedAt?: string | null;
       }>({ method: "GET", path: "v1/policy", apiKey });
       return {
         policy,
-        updatedAt: updatedAt !== null ? new Date(updatedAt) : null,
+        updatedAt: parseUpdatedAt(updatedAt),
       };
     },
     check: async (policy) => {
@@ -38,9 +53,9 @@ export function makePolicyApi(
     set: async (policy) => {
       const { policy: newPolicy, updatedAt } = await transport.request<{
         policy: string;
-        updatedAt: string;
+        updatedAt?: string | null;
       }>({ method: "PUT", path: "v1/policy", apiKey, body: { policy } });
-      return { policy: newPolicy, updatedAt: new Date(updatedAt) };
+      return { policy: newPolicy, updatedAt: parseUpdatedAt(updatedAt) };
     },
   };
 }

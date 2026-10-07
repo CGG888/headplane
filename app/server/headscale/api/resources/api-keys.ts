@@ -35,11 +35,18 @@ export function makeApiKeyApi(
 ): ApiKeyApi {
   return {
     list: async () => {
-      const { apiKeys } = await transport.request<{ apiKeys: Key[] }>({
+      const result = await transport.request<{ apiKeys?: Key[] }>({
         method: "GET",
         path: "v1/apikey",
         apiKey,
       });
+      const apiKeys = result?.apiKeys;
+      if (!Array.isArray(apiKeys)) {
+        throw new Error(
+          "Headscale returned an unexpected API key list: the response has no `apiKeys` array",
+        );
+      }
+
       return apiKeys;
     },
 

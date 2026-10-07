@@ -21,6 +21,7 @@
  * and a garbage body are all reported as a reason.
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest, type RequestOptions } from "node:https";
@@ -146,8 +147,6 @@ export async function readHostEchoSettings(dataPath: string): Promise<HostEchoSe
   }
 }
 
-let tempCounter = 0;
-
 /**
  * Writes the settings atomically (temp file plus rename). Returns false instead
  * of throwing, because the settings form surfaces the failure as a localized
@@ -158,11 +157,16 @@ export async function writeHostEchoSettings(
   settings: HostEchoSettings,
 ): Promise<boolean> {
   const path = hostEchoPath(dataPath);
-  const temp = `${path}.${process.pid}.${tempCounter++}.tmp`;
+  const temp = `${path}.${randomUUID()}.tmp`;
 
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temp, serializeHostEchoSettingsDocument(settings), "utf8");
+    await writeFile(temp, serializeHostEchoSettingsDocument(settings), {
+      encoding: "utf8",
+      // `wx` refuses a pre-existing path, so a planted symlink cannot make this
+      // write reach the target.
+      flag: "wx",
+    });
     await rename(temp, path);
     return true;
   } catch (error) {

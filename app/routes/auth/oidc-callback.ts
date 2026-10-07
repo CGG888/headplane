@@ -9,7 +9,7 @@ import {
 } from "~/server/context";
 import { logOidcError } from "~/server/oidc/provider";
 import { findHeadscaleUserBySubject } from "~/server/web/headscale-identity";
-import { Roles } from "~/server/web/roles";
+import { isAssignableRole } from "~/server/web/roles";
 import log from "~/utils/log";
 import { createOidcStateCookie } from "~/utils/oidc-state";
 
@@ -34,17 +34,28 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
   }
 
   const cookie = createOidcStateCookie(config);
+  // Every exit from this loader clears the state cookie. It carries the nonce,
+  // the PKCE verifier and the redirect URI, all of which are single-use, so it
+  // must not survive the callback — not even the failing ones.
+  const clearStateCookie = await cookie.clear();
+  const stateCookieHeader = { "Set-Cookie": clearStateCookie };
+
+  if (url.searchParams.toString().length === 0) {
+    log.warn("auth", "Called OIDC callback without query parameters");
+    return redirect("/login?s=error_no_query", { headers: stateCookieHeader });
+  }
+
   const oidcCookieState = await cookie.parse(request.headers.get("Cookie"));
 
   if (oidcCookieState == null) {
     log.warn("auth", "Called OIDC callback without session cookie");
-    return redirect("/login?s=error_no_session");
+    return redirect("/login?s=error_no_session", { headers: stateCookieHeader });
   }
 
   const { state, nonce, redirect_uri, verifier } = oidcCookieState;
   if (!state || !nonce || !redirect_uri || !verifier) {
     log.warn("auth", "OIDC session cookie is missing required fields");
-    return redirect("/login?s=error_invalid_session");
+    return redirect("/login?s=error_invalid_session", { headers: stateCookieHeader });
   }
 
   const flowState = {
@@ -57,14 +68,14 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
   const result = await service.handleCallback(url.searchParams, flowState);
   if (!result.ok) {
     logOidcError("OIDC callback failed", result.error);
-    return redirect("/login?s=error_auth_failed");
+    return redirect("/login?s=error_auth_failed", { headers: stateCookieHeader });
   }
 
   const identity = result.value;
-  const claimedRole =
-    identity.role && identity.role !== "owner" && identity.role in Roles
-      ? identity.role
-      : undefined;
+  // `owner` is never taken from a claim (role ownership only changes inside
+  // HeadplaneCN), and anything that is not a role at all is dropped here rather
+  // than stored and looked up later.
+  const claimedRole = identity.role && isAssignableRole(identity.role) ? identity.role : undefined;
 
   const userId = await auth.findOrCreateUser(
     identity.subject,
@@ -85,7 +96,19 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
     // there is no per-request key yet (the session is being created).
     const hsApi = headscale.client(headscaleApiKey!);
     const hsUsers = await hsApi.users.list();
-    const hsUser = findHeadscaleUserBySubject(hsUsers, identity.subject, identity.email);
+    // The email fallback matches a Headscale user by address, so it is only safe
+    // while the provider vouches for that address: an unverified email is one the
+    // account holder typed in, which turns this convenience into a way to claim
+    // someone else's Headscale row.
+    const emailForMatching = identity.emailVerified === false ? undefined : identity.email;
+    if (identity.email !== undefined && emailForMatching === undefined) {
+      log.warn(
+        "auth",
+        "Not matching Headscale users by email: the provider reports it as unverified",
+      );
+    }
+
+    const hsUser = findHeadscaleUserBySubject(hsUsers, identity.subject, emailForMatching);
     if (hsUser) {
       await auth.linkHeadscaleUser(userId, hsUser.id);
     }
@@ -98,17 +121,23 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
   // `logout_idp` switch and its older spelling enable it.
   const idToken = isIdpLogoutEnabled(config.oidc) ? identity.idToken : undefined;
 
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": await auth.createOidcSession(
-        userId,
-        {
-          name: identity.name,
-          email: identity.email,
-          username: identity.username,
-        },
-        { idToken },
-      ),
-    },
-  });
+  // Two cookies, two `Set-Cookie` headers: `Headers.append` keeps them separate
+  // (a plain object or a tuple array would collapse them into one line and the
+  // browser would drop one of the two).
+  const headers = new Headers();
+  headers.append("Set-Cookie", clearStateCookie);
+  headers.append(
+    "Set-Cookie",
+    await auth.createOidcSession(
+      userId,
+      {
+        name: identity.name,
+        email: identity.email,
+        username: identity.username,
+      },
+      { idToken },
+    ),
+  );
+
+  return redirect("/", { headers });
 }

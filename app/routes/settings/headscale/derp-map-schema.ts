@@ -140,6 +140,24 @@ function getAny(map: KeyedMap, ...names: readonly string[]): unknown {
 }
 
 /**
+ * Whether a document is a DERP map at all: a YAML map whose `regions` is a map.
+ *
+ * Only the document's shape is checked, so a map with broken regions still
+ * counts. That is the question worth asking before replacing an existing file —
+ * a hand-broken mirror may be repaired, Headscale's own configuration file may
+ * not be overwritten with a map.
+ */
+export function isDerpMapDocument(source: string): boolean {
+  const document = parseDocument(source);
+  if (document.errors.length > 0) {
+    return false;
+  }
+
+  const root = document.contents;
+  return isMap(root) && isMap(root.get("regions", true));
+}
+
+/**
  * Validates a DERP map file. Returns every problem found (up to
  * `MAX_DERP_MAP_ISSUES`); an empty list means Headscale can load the file.
  */

@@ -112,7 +112,8 @@ describe("saving console login overrides", () => {
         client_id: FILE_OIDC.client_id,
         client_secret: FILE_OIDC.client_secret,
         scope: FILE_OIDC.scope,
-        use_pkce: false,
+        // PKCE defaults to on, so this is what a running process has.
+        use_pkce: true,
         default_role: "member",
         logout_idp: false,
       },

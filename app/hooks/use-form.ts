@@ -1,5 +1,5 @@
 import { type, type Type } from "arktype";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type FormValue = string | number | boolean | null;
 
@@ -32,22 +32,37 @@ function schemaKeys(schema: Type): string[] {
   return props?.map((p) => p.key) ?? [];
 }
 
+/**
+ * Seeds every field the schema declares, taking the caller's default where it
+ * supplies one. Kept apart from the hook so the seeding rules can be tested
+ * without a renderer.
+ */
+export function buildInitialValues<T extends Record<string, unknown>>(
+  schema: Type<T>,
+  defaultValues?: Partial<Record<keyof T & string, FormValue>>,
+): Record<string, FormValue> {
+  const values: Record<string, FormValue> = {};
+  for (const key of schemaKeys(schema)) {
+    values[key] =
+      defaultValues && key in defaultValues
+        ? (defaultValues[key as keyof T & string] as FormValue)
+        : "";
+  }
+
+  return values;
+}
+
 export function useForm<T extends Record<string, unknown>>(options: UseFormOptions<T>) {
   const { schema, actionData, validate } = options;
-  const keys = schemaKeys(schema);
   const validateRef = useRef(validate);
   validateRef.current = validate;
 
-  const initialValues = useMemo(() => {
-    const values: Record<string, FormValue> = {};
-    for (const key of keys) {
-      values[key] =
-        options.defaultValues && key in options.defaultValues
-          ? (options.defaultValues[key as keyof T & string] as FormValue)
-          : "";
-    }
-    return values;
-  }, []);
+  // The defaults are read once, when the form mounts. Callers hand over a fresh
+  // object literal (or freshly loaded data) on later renders, so re-seeding the
+  // values then would wipe out what the user has already typed; the lazy
+  // initializer states that once-only read instead of an empty `useMemo` deps
+  // list that hides it.
+  const [initialValues] = useState(() => buildInitialValues(schema, options.defaultValues));
 
   const [state, setState] = useState<FormState>({
     values: initialValues,

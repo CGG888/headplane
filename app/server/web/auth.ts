@@ -1,15 +1,42 @@
-import { createHash, createHmac } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import { isIP } from "node:net";
 
-import { eq, lt, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
-import { createCookie } from "react-router";
+import { createCookie, redirect } from "react-router";
 import { ulid } from "ulidx";
 
 import type { Machine } from "~/types";
+import log from "~/utils/log";
 
 import { type HeadplaneUser, authSessions, users } from "../db/schema";
-import { Capabilities, type Role, Roles, capsForRole } from "./roles";
+import {
+  Capabilities,
+  type Role,
+  Roles,
+  capsForRole,
+  isAssignableRole,
+  normalizeRole,
+} from "./roles";
+
+/**
+ * Raised when a request simply carries no usable session — a missing, malformed or
+ * expired cookie, or a session row that is gone. `require` turns this into a
+ * redirect to the login page, while every other failure keeps propagating as a 500
+ * so that a database or Headscale outage is not reported as "please sign in".
+ */
+class UnauthenticatedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnauthenticatedError";
+  }
+}
 
 export type Principal =
   | {
@@ -74,6 +101,8 @@ export interface AuthServiceOptions {
 
 export interface AuthService {
   registerRequestClientAddress(request: Request, address: string | undefined): void;
+  /** The verified client address, honouring a trusted reverse proxy. */
+  getClientAddress(request: Request): string | undefined;
   require(request: Request): Promise<Principal>;
   can(principal: Principal, capabilities: Capabilities): boolean;
   canManageNode(principal: Principal, node: Machine): boolean;
@@ -81,10 +110,10 @@ export interface AuthService {
   createOidcSession(
     userId: string,
     profile: NonNullable<CookiePayload["profile"]>,
-    options?: { idToken?: string; maxAge?: number },
+    options?: { idToken?: string; maxAgeMs?: number },
   ): Promise<string>;
 
-  createApiKeySession(apiKey: string, displayName: string, maxAge: number): Promise<string>;
+  createApiKeySession(apiKey: string, displayName: string, maxAgeMs: number): Promise<string>;
   destroySession(request?: Request): Promise<string>;
   findOrCreateUser(
     subject: string,
@@ -253,52 +282,99 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
     : [];
   let pruneTimer: ReturnType<typeof setInterval> | undefined;
 
+  // The cookie payload can carry a Headscale API key, so it is encrypted with a
+  // key derived from the configured secret (see encodeCookie/decodeCookie).
+  const cookieKey = createHash("sha256").update(`headplane-cookie:${opts.secret}`).digest();
+
   async function encodeCookie(payload: CookiePayload, maxAge: number): Promise<string> {
     const cookie = createCookie(opts.cookie.name, {
       ...opts.cookie,
+      httpOnly: true,
       path: __PREFIX__,
       maxAge,
     });
 
-    const signed = Buffer.from(JSON.stringify(payload)).toString("base64url");
-    const hmac = createHmac("sha256", opts.secret).update(signed).digest("base64url");
-    return cookie.serialize(`${signed}.${hmac}`);
+    // An API key session carries the Headscale API key in this payload, so it is
+    // encrypted rather than only signed: a signed cookie stays readable to anyone
+    // who can see it (browser storage, a proxy or a backup that records cookies)
+    // while the credential is only ever needed by this server. AES-256-GCM also
+    // authenticates the payload, so the previous HMAC is no longer needed.
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", cookieKey, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(Buffer.from(JSON.stringify(payload)), "utf8"),
+      cipher.final(),
+    ]);
+
+    const value = [
+      "v2",
+      iv.toString("base64url"),
+      ciphertext.toString("base64url"),
+      cipher.getAuthTag().toString("base64url"),
+    ].join(".");
+
+    return cookie.serialize(value);
   }
 
   async function decodeCookie(request: Request): Promise<CookiePayload> {
     const cookieHeader = request.headers.get("cookie");
     if (!cookieHeader) {
-      throw new Error("No session cookie found");
+      throw new UnauthenticatedError("No session cookie found");
     }
 
     const cookie = createCookie(opts.cookie.name, {
       ...opts.cookie,
+      httpOnly: true,
       path: __PREFIX__,
     });
 
     const raw = (await cookie.parse(cookieHeader)) as string | null;
     if (!raw) {
-      throw new Error("Session cookie is empty");
+      throw new UnauthenticatedError("Session cookie is empty");
     }
 
-    const dotIndex = raw.lastIndexOf(".");
-    if (dotIndex === -1) {
-      throw new Error("Malformed session cookie");
+    // Cookies issued before the encrypted format are rejected outright rather
+    // than parsed in cleartext: those sessions are simply gone and the user signs
+    // in again.
+    const [version, ivPart, ciphertextPart, tagPart] = raw.split(".");
+    if (version !== "v2" || !ivPart || !ciphertextPart || !tagPart) {
+      throw new UnauthenticatedError("Malformed session cookie");
     }
 
-    const signed = raw.slice(0, dotIndex);
-    const hmac = raw.slice(dotIndex + 1);
-    const expected = createHmac("sha256", opts.secret).update(signed).digest("base64url");
+    let plaintext: Buffer;
+    try {
+      const decipher = createDecipheriv("aes-256-gcm", cookieKey, Buffer.from(ivPart, "base64url"));
 
-    if (hmac !== expected) {
-      throw new Error("Invalid session cookie signature");
+      decipher.setAuthTag(Buffer.from(tagPart, "base64url"));
+      plaintext = Buffer.concat([
+        decipher.update(Buffer.from(ciphertextPart, "base64url")),
+        decipher.final(),
+      ]);
+    } catch {
+      throw new UnauthenticatedError("Invalid session cookie");
     }
 
-    return JSON.parse(Buffer.from(signed, "base64url").toString("utf-8")) as CookiePayload;
+    return JSON.parse(plaintext.toString("utf-8")) as CookiePayload;
   }
 
   function hashApiKey(key: string): string {
     return createHash("sha256").update(key).digest("hex");
+  }
+
+  /**
+   * Compares the credential carried in the cookie against the hash stored with
+   * the session row. The row is what makes an API key session revocable:
+   * deleting the row, or clearing the hash on it, takes the session out of
+   * service on the next request instead of trusting the cookie on its own.
+   */
+  function apiKeyMatches(storedHash: string | null, apiKey: string): boolean {
+    if (!storedHash) {
+      return false;
+    }
+
+    const expected = Buffer.from(storedHash, "utf8");
+    const actual = Buffer.from(hashApiKey(apiKey), "utf8");
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
 
   function registerRequestClientAddress(request: Request, address: string | undefined): void {
@@ -307,7 +383,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
     }
   }
 
-  function getForwardedClientAddress(request: Request): string | undefined {
+  function getForwardedClientAddress(request: Request, directAddress: string): string | undefined {
     const headerName = opts.proxyAuth?.ipHeader;
     if (!headerName) {
       return;
@@ -318,12 +394,34 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       return;
     }
 
-    const first = value.split(",")[0]?.trim();
-    if (!first) {
-      return;
+    // Every hop appends to the forwarded header, so the leftmost entry is
+    // whatever the client sent and can be spoofed freely. Walk from the
+    // rightmost entry leftwards and stop at the first address we cannot vouch
+    // for: that is the closest hop that is not one of our proxies. If every
+    // entry is a trusted proxy (a local single-host setup where the client is
+    // the proxy itself, for example), fall back to the socket peer we verified
+    // in getProxyAuthClientAddress.
+    const entries = value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+
+    let sawAddress = false;
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (!parseIpAddress(entry)) {
+        continue;
+      }
+
+      sawAddress = true;
+      if (trustedProxyCidrs.some((cidr) => cidrContains(cidr, entry))) {
+        continue;
+      }
+
+      return entry;
     }
 
-    return parseIpAddress(first) ? first : undefined;
+    return sawAddress ? directAddress : undefined;
   }
 
   function getProxyAuthClientAddress(request: Request): string | undefined {
@@ -341,7 +439,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       return;
     }
 
-    return getForwardedClientAddress(request);
+    return getForwardedClientAddress(request, directAddress);
   }
 
   async function resolveUserPrincipal(options: {
@@ -361,7 +459,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       throw new Error("User record not found");
     }
 
-    const role = (user.role in Roles ? user.role : "member") as Role;
+    const role = normalizeRole(user.role);
     return {
       kind: options.kind,
       sessionId: options.sessionId,
@@ -443,17 +541,25 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       .limit(1);
 
     if (!session) {
-      throw new Error("Session not found");
+      throw new UnauthenticatedError("Session not found");
     }
 
     if (session.expires_at < new Date()) {
       await opts.db.delete(authSessions).where(eq(authSessions.id, session.id));
-      throw new Error("Session expired");
+      throw new UnauthenticatedError("Session expired");
     }
 
     if (session.kind === "api_key") {
       if (!payload.api_key) {
-        throw new Error("API key session missing credential");
+        throw new UnauthenticatedError("API key session missing credential");
+      }
+
+      if (!apiKeyMatches(session.api_key_hash, payload.api_key)) {
+        // The stored hash no longer matches the credential in the cookie, which
+        // means the session was revoked (its row cleared or re-issued): drop the
+        // row and treat the cookie as dead rather than trusting it alone.
+        await opts.db.delete(authSessions).where(eq(authSessions.id, session.id));
+        throw new UnauthenticatedError("API key session revoked");
       }
 
       return {
@@ -465,7 +571,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
     }
 
     if (!session.user_id) {
-      throw new Error("OIDC session missing user_id");
+      throw new UnauthenticatedError("OIDC session missing user_id");
     }
 
     return resolveUserPrincipal({
@@ -481,19 +587,41 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
     });
   }
 
-  function require(request: Request): Promise<Principal> {
+  /**
+   * Resolves the request principal, redirecting to the login page when the request
+   * has no session at all. Routes outside the layout call this directly, and the
+   * bare `Error` it used to throw surfaced there as a 500 page with no way forward;
+   * a redirect is the answer the user can act on. Failures that are not about the
+   * session (a database error, a misconfigured `proxy_auth`) still propagate.
+   */
+  async function require(request: Request): Promise<Principal> {
     const cached = requestCache.get(request);
     if (cached) {
       return cached;
     }
 
-    const promise = resolve(request);
+    const promise = resolve(request).catch((error: unknown) => {
+      if (error instanceof UnauthenticatedError) {
+        log.debug(
+          "auth",
+          "No session on %s, redirecting to the login page",
+          new URL(request.url).pathname,
+        );
+        throw redirect("/login");
+      }
+
+      throw error;
+    });
+
     requestCache.set(request, promise);
     return promise;
   }
 
   function can(principal: Principal, capabilities: Capabilities): boolean {
     if (principal.kind === "api_key") {
+      // Deliberate: Headscale has no scopes or roles for API keys, so a valid
+      // key is admin level for everything the API allows (see
+      // docs/en/features/api-keys.md). The key's own expiry bounds the session.
       return true;
     }
 
@@ -530,25 +658,30 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
   async function createOidcSession(
     userId: string,
     profile: NonNullable<CookiePayload["profile"]>,
-    options?: { idToken?: string; maxAge?: number },
+    options?: { idToken?: string; maxAgeMs?: number },
   ): Promise<string> {
-    const maxAge = options?.maxAge ?? opts.cookie.maxAge;
+    // Both session kinds take their lifetime in milliseconds and only convert to
+    // the seconds `createCookie` wants at the cookie: the two used different
+    // units before, so handing a millisecond value to the seconds parameter
+    // silently produced a session valid for tens of thousands of years instead
+    // of failing loudly.
+    const maxAgeMs = options?.maxAgeMs ?? opts.cookie.maxAge * 1000;
     const sid = ulid();
     await opts.db.insert(authSessions).values({
       id: sid,
       kind: "oidc",
       user_id: userId,
       oidc_id_token: options?.idToken,
-      expires_at: new Date(Date.now() + maxAge * 1000),
+      expires_at: new Date(Date.now() + maxAgeMs),
     });
 
-    return encodeCookie({ sid, profile }, maxAge);
+    return encodeCookie({ sid, profile }, Math.floor(maxAgeMs / 1000));
   }
 
   async function createApiKeySession(
     apiKey: string,
     displayName: string,
-    maxAge: number,
+    maxAgeMs: number,
   ): Promise<string> {
     const sid = ulid();
     await opts.db.insert(authSessions).values({
@@ -556,10 +689,10 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       kind: "api_key",
       api_key_hash: hashApiKey(apiKey),
       api_key_display: displayName,
-      expires_at: new Date(Date.now() + maxAge),
+      expires_at: new Date(Date.now() + maxAgeMs),
     });
 
-    return encodeCookie({ sid, api_key: apiKey }, Math.floor(maxAge / 1000));
+    return encodeCookie({ sid, api_key: apiKey }, Math.floor(maxAgeMs / 1000));
   }
 
   async function destroySession(request?: Request): Promise<string> {
@@ -574,6 +707,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
 
     const cookie = createCookie(opts.cookie.name, {
       ...opts.cookie,
+      httpOnly: true,
       path: __PREFIX__,
     });
 
@@ -617,24 +751,24 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       caps: capsForRole(initialRole),
     });
 
-    const [{ count }] = await opts.db.select({ count: sql<number>`count(*)` }).from(users);
-
-    if (count === 1) {
-      await opts.db
-        .update(users)
-        .set({ role: "owner", caps: capsForRole("owner") })
-        .where(eq(users.id, id));
-    }
+    // The first account to ever log in becomes the owner. Counting first and
+    // updating second left a window where two concurrent first logins each saw
+    // `count === 1` and were both promoted — and `owner` can neither be demoted
+    // nor re-synced from the IdP. One conditional UPDATE evaluates the count and
+    // the promotion together, so only a genuinely single-row table is promoted.
+    await opts.db
+      .update(users)
+      .set({ role: "owner", caps: capsForRole("owner") })
+      .where(and(eq(users.id, id), sql`(select count(*) from ${users}) = 1`));
 
     return id;
   }
 
   function normalizeInitialRole(role: string | undefined): Exclude<Role, "owner"> | undefined {
-    if (role && role !== "owner" && role in Roles) {
-      return role as Exclude<Role, "owner">;
-    }
-
-    return undefined;
+    // `isAssignableRole` lists the known roles explicitly rather than walking the
+    // prototype chain (so `"toString"` or `"constructor"` cannot pass as a role
+    // name) and never accepts `owner`, which only the promotion below hands out.
+    return role !== undefined && isAssignableRole(role) ? role : undefined;
   }
 
   async function linkHeadscaleUser(userId: string, headscaleUserId: string): Promise<boolean> {
@@ -686,7 +820,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       return;
     }
 
-    return (user.role in Roles ? user.role : "member") as Role;
+    return normalizeRole(user.role);
   }
 
   async function roleForHeadscaleUser(headscaleUserId: string): Promise<Role | undefined> {
@@ -700,7 +834,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       return;
     }
 
-    return (user.role in Roles ? user.role : "member") as Role;
+    return normalizeRole(user.role);
   }
 
   async function transferOwnership(
@@ -731,20 +865,36 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
       return false;
     }
 
-    await opts.db
-      .update(users)
-      .set({ role: "admin", caps: capsForRole("admin"), updated_at: new Date() })
-      .where(eq(users.id, current.id));
+    // Demote and promote inside one transaction. Two separate statements left a
+    // window where the table had no owner at all, and a crash between them made
+    // that permanent: `owner` is the only role that can hand ownership on, so
+    // nobody could have repaired it from the UI afterwards.
+    opts.db.transaction((tx) => {
+      tx.update(users)
+        .set({ role: "admin", caps: capsForRole("admin"), updated_at: new Date() })
+        .where(eq(users.id, current.id))
+        .run();
 
-    await opts.db
-      .update(users)
-      .set({ role: "owner", caps: capsForRole("owner"), updated_at: new Date() })
-      .where(eq(users.id, target.id));
+      tx.update(users)
+        .set({ role: "owner", caps: capsForRole("owner"), updated_at: new Date() })
+        .where(eq(users.id, target.id))
+        .run();
+    });
 
     return true;
   }
 
   async function reassignUser(userId: string, role: Role): Promise<boolean> {
+    // The role arrives from form data, so it is validated here too: only a real
+    // role other than `owner` may be assigned. Without this, prototype keys
+    // ("toString", "constructor", …) would reach the database, and any
+    // `write_users` holder could promote themselves to `owner` — a role that
+    // cannot be demoted afterwards and permanently detaches the account from IdP
+    // role sync.
+    if (!isAssignableRole(role)) {
+      return false;
+    }
+
     const [user] = await opts.db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user || user.role === "owner") {
       return false;
@@ -764,6 +914,12 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
 
   function start(): void {
     pruneTimer = setInterval(() => void pruneExpiredSessions(), 15 * 60 * 1000);
+
+    // Session pruning is housekeeping, so the timer must not be what keeps the
+    // process alive: without this a short-lived run that built the auth service
+    // would sit idle until the first tick. `stop()` (wired into the shutdown
+    // disposer in `app/server/context.ts`) still clears it.
+    pruneTimer.unref();
   }
 
   function stop(): void {
@@ -775,6 +931,7 @@ export function createAuthService(opts: AuthServiceOptions): AuthService {
 
   return {
     registerRequestClientAddress,
+    getClientAddress: getProxyAuthClientAddress,
     require: require,
     can,
     canManageNode,
