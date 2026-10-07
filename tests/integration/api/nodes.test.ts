@@ -2,7 +2,12 @@ import { RouterContextProvider } from "react-router";
 import { describe, expect, test, vi } from "vitest";
 
 import { machineAction } from "~/routes/machines/machine-actions";
-import { authContext, headscaleLiveStoreContext, requestApiContext } from "~/server/context";
+import {
+  auditContext,
+  authContext,
+  headscaleLiveStoreContext,
+  requestApiContext,
+} from "~/server/context";
 import { Capabilities } from "~/server/web/roles";
 
 import { getBootstrapClient, getNode, getRuntimeClient, HS_VERSIONS } from "../setup/env";
@@ -28,6 +33,10 @@ function actionContext(api: Awaited<ReturnType<typeof getRuntimeClient>>) {
   context.set(authContext, auth as never);
   context.set(headscaleLiveStoreContext, liveStore as never);
   context.set(requestApiContext, vi.fn(async () => ({ principal, api })) as never);
+  // `machineAction` reads the audit service unconditionally, and React Router
+  // throws "No value found for context" for a context the provider never set,
+  // so this has to be registered even though these tests never read it back.
+  context.set(auditContext, { record: vi.fn() } as never);
 
   return { auth, context, liveStore };
 }
