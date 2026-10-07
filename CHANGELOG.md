@@ -1,11 +1,15 @@
 # Next
 
+# 0.22.20 (October 8, 2026)
+
 ## Fixes
 
 - **Several places that trusted upstream data now check it instead.** A Headscale response that is missing its node or API-key array, a remote DERP map cache that could grow without bound, a DERP map file swapped between its size check and its read, and a configured DNS records path that is actually a directory are now reported and refused instead of silently treated as empty or read anyway. A misconfigured `dns.extra_records_path` reports a normal error instead of terminating the process from inside a library function.
 - **Long-running services stop leaking and stop writing after shutdown.** Alert cooldown state is pruned instead of growing forever, the audit log cannot be asked for an unbounded number of rows, stored latency readings expire after a week, a DERP "check" no longer records the run it only inspected, and a disposed mirror or sync service abandons the run it was in the middle of instead of persisting it.
 - **The console login's OIDC path is stricter.** The `info` endpoint's secret is compared in constant time, a UserInfo response whose subject disagrees with the ID token is ignored instead of trusted, the self-test judges `client_secret_jwt` by the value the runtime actually uses, and the login page no longer treats a missing error state or an unparseable session expiration as valid.
 - **Smaller corrections.** An API key whose expiration cannot be parsed is treated as expired; the policy editor's comment and trailing-comma stripping no longer corrupts content inside strings; the audit log's "Load more" appends the next page instead of replacing the rows on screen; a machine rename submits the name it validated; bulk machine actions say which machines failed and why; the key-expiry toggle distinguishes "disabled" from "restored" and the uptime history counts the last sample in its window; the notification settings no longer send the stored webhook secret to the browser; and the install script writes its migration backup mode 600, no longer probes the base directory before the plan is confirmed, and can bind the admin UI to `127.0.0.1` with `--admin-bind`.
+
+---
 
 # 0.22.19 (October 6, 2026)
 
