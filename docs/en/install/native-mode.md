@@ -24,7 +24,7 @@ or prefer to avoid containers.
   checked-out release's `package.json`. For v0.7.1, use Node.js `>=24.2 <25`
   and pnpm `>=10.4 <11`; `packageManager` pins pnpm to `10.4.0`.
 - Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for HeadplaneCN.
+- A [completed configuration file](./index.md#what-to-prepare-before-installing) for HeadplaneCN.
 
 Before building and running HeadplaneCN, ensure that the directory defined in
 `server.data_path` in your configuration exists and is writable by the user who

@@ -1,5 +1,10 @@
 # Next
 
+## Changes
+
+- **The install guides are split by the decision you are actually making.** `/install` now opens with the three choices that decide everything else — deployment shape, domain scheme and reverse proxy route — and answers each one with a table before linking out. The fnOS pages become install-only (`fnOS · native mode`, `fnOS · dual-image mode`); migration in both directions moved to a new `/install/migration`, the domain question (one domain with a path split, one domain on two ports, two domains, DNS records, where the certificate lives, ICP filing in mainland China) to `/install/domains`, and the two proxy routes to `/install/reverse-proxy-lucky` (home NAS: Lucky terminates TLS, Caddy inside the NAS splits `/admin`) and `/install/reverse-proxy-caddy` (cloud server: Caddy does both, with automatic certificates). Every guide states which values you **must** change, which you **may** change and which to leave alone, and all example domains, addresses, keys and certificate paths have been replaced with placeholders. Both languages were kept in step.
+- **DERP lives on its own page.** The embedded relay, the local map file listed in `derp.paths`, the online editor, the official region mirror and the `udp/3478` STUN requirement are no longer spread across the two NAS guides: they are collected in `/configuration/derp`, with the deployment-specific paths and mounts for both shapes, and the NAS pages link to it instead of repeating it.
+
 # 0.22.22 (October 8, 2026)
 
 ## Changes

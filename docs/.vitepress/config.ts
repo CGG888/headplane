@@ -25,8 +25,12 @@ const zhHansSidebar = [
           { text: "受限模式", link: "/install/limited-mode" },
           { text: "原生模式", link: "/install/native-mode" },
           { text: "Docker", link: "/install/docker" },
-          { text: "双镜像部署", link: "/install/dual-image" },
-          { text: "fnOS（飞牛）", link: "/install/fnos" },
+          { text: "fnOS（飞牛）· 原生模式", link: "/install/fnos" },
+          { text: "fnOS（飞牛）· 双镜像模式", link: "/install/dual-image" },
+          { text: "模式迁移与回退", link: "/install/migration" },
+          { text: "域名与访问方式", link: "/install/domains" },
+          { text: "反向代理：Lucky + Caddy", link: "/install/reverse-proxy-lucky" },
+          { text: "反向代理：Caddy（云服务器）", link: "/install/reverse-proxy-caddy" },
         ],
       },
       { text: "与上游的差异", link: "/differences" },
@@ -36,6 +40,7 @@ const zhHansSidebar = [
         items: [
           { text: "常见问题", link: "/configuration/common-issues" },
           { text: "TLS 与证书", link: "/configuration/tls" },
+          { text: "DERP 与中继", link: "/configuration/derp" },
           {
             text: "敏感值",
             link: "/configuration#敏感值",
@@ -105,8 +110,15 @@ const enSidebar = [
           { text: "Limited Mode", link: "/en/install/limited-mode" },
           { text: "Native Mode", link: "/en/install/native-mode" },
           { text: "Docker", link: "/en/install/docker" },
-          { text: "Dual-Image Deployment", link: "/en/install/dual-image" },
-          { text: "fnOS (飞牛)", link: "/en/install/fnos" },
+          { text: "fnOS (飞牛) · Native Mode", link: "/en/install/fnos" },
+          { text: "fnOS (飞牛) · Dual-Image Mode", link: "/en/install/dual-image" },
+          { text: "Migration & Rollback", link: "/en/install/migration" },
+          { text: "Domains & Access", link: "/en/install/domains" },
+          {
+            text: "Reverse Proxy: Lucky + Caddy (Home NAS)",
+            link: "/en/install/reverse-proxy-lucky",
+          },
+          { text: "Reverse Proxy: Caddy (Cloud Server)", link: "/en/install/reverse-proxy-caddy" },
         ],
       },
       { text: "Differences from upstream", link: "/en/differences" },
@@ -116,6 +128,7 @@ const enSidebar = [
         items: [
           { text: "Common Issues", link: "/en/configuration/common-issues" },
           { text: "TLS & Certificates", link: "/en/configuration/tls" },
+          { text: "DERP & Relays", link: "/en/configuration/derp" },
           {
             text: "Sensitive Values",
             link: "/en/configuration#sensitive-values",

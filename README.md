@@ -71,6 +71,15 @@ HeadplaneCN 给它补上前端：机器、用户、访问控制（ACL）、DNS �
 - **fnOS 原生形态**：[fnOS（飞牛）安装指南](https://cgg888.github.io/headplaneCN/install/fnos)：
   Headscale 由 fnOS 应用原生运行，面板容器用 `integration.proc`（SIGHUP）重载。
 
+两种形态可以互转（含双向步骤与失败回退），见[模式迁移与回退](https://cgg888.github.io/headplaneCN/install/migration)。
+
+对外怎么访问，按你的环境选一条路：家庭 NAS 用
+[Lucky + NAS 内 Caddy](https://cgg888.github.io/headplaneCN/install/reverse-proxy-lucky)
+（家宽无法备案，TLS 在路由器上的 Lucky 终止，NAS 里的 Caddy 按路径把 `/admin` 分给面板）；有公网 IP 的云服务器直接用
+[Caddy](https://cgg888.github.io/headplaneCN/install/reverse-proxy-caddy)
+（一台机器全包，中国大陆服务器需先完成 ICP 备案，境外服务器不需要）。单域名、单域名两个端口、多域名怎么选，
+DNS 与证书放在哪一层，见[域名与访问方式](https://cgg888.github.io/headplaneCN/install/domains)。
+
 双镜像形态配套了交互式安装脚本 [`scripts/dual-image-install.sh`](./scripts/dual-image-install.sh)：所有环境相关的值
 （含各目录布局）都会逐个询问并校验，`--dry-run` 只打印计划不写文件，也不会有任何删除数据的动作。
 

@@ -145,6 +145,13 @@ headscale apikeys create --expiration 90d
 生产环境**应该**把 HeadplaneCN 放在 Nginx 或 Caddy 这类反向代理后面。此外，把 Headscale 也放到
 反向代理后面，可以让两个服务共用同一个域名和 TLS 证书。
 
+::: tip 先想清楚域名与路线
+`server_url` 不能带路径前缀，所以面板只能另开位置。单域名、两个端口、多域名怎么选自不必说，
+DNS 与证书放在哪一层见[域名与访问方式](/install/domains)。家庭 NAS 推荐
+[Lucky + NAS 内 Caddy](/install/reverse-proxy-lucky)，有公网 IP 的云服务器直接用
+[Caddy](/install/reverse-proxy-caddy)；下面这份 Nginx 示例适合已经跑着 Nginx 的情况。
+:::
+
 #### 配置
 
 ::: tip

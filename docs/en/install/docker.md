@@ -19,7 +19,7 @@ with Docker.
 
 - Docker and Docker Compose
 - Headscale version 0.27.0 or later installed and running
-- A [completed configuration file](./index.md#configuration) for HeadplaneCN.
+- A [completed configuration file](./index.md#what-to-prepare-before-installing) for HeadplaneCN.
 
 ## Installation
 
