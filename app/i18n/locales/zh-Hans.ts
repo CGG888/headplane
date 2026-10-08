@@ -985,6 +985,32 @@ const zhHans = {
       checkLabel: "检查周期",
       checkPlaceholder: "12h",
     },
+    issues: {
+      title: "Headscale 不会接受这条规则",
+      aclAutogroupSelfSource:
+        "{value} 不能访问 autogroup:self 目的地。请使用用户、组、* 或 autogroup:member。",
+      sshAutogroupDestination:
+        "{value} 不是有效的 SSH 目的地。请使用 autogroup:self、autogroup:member 或 autogroup:tagged。",
+      sshAutogroupSource:
+        "{value} 不是有效的 SSH 来源。请使用 autogroup:member 或 autogroup:tagged。",
+      sshCheckPeriodInvalid: "{value} 不是有效的检查周期。请使用不超过 168h 的正数时长，例如 12h。",
+      sshCheckPeriodOnAccept:
+        "checkPeriod 只适用于 check 规则。请把动作改为 check，或删除 {value}。",
+      sshDestinationAlias: "{value} 不能作为 SSH 目的地。请使用用户、标签或 SSH 自动组。",
+      sshDestinationHost: "{value} 是主机（host），Headscale 不允许把主机当作 SSH 目的地。",
+      sshGroupMissing: "策略中没有定义组 {value}。",
+      sshSourceAlias: "{value} 不能作为 SSH 来源。请使用用户（name@）、组、标签或 SSH 自动组。",
+      sshTagMissing: "策略中没有定义标签 {value}。",
+      sshTagSourceToAutogroupMember:
+        "autogroup:member 属于用户设备，标签来源无法访问。请改用 autogroup:tagged 或标签目的地。",
+      sshTagSourceToAutogroupSelf: "autogroup:self 只接受用户和组，不接受标签来源。",
+      sshTagSourceToUser:
+        "{value} 属于用户设备，标签来源无法访问。请改用 autogroup:tagged 或标签目的地。",
+      sshUserDestinationRequiresSameUser:
+        "用户目的地要求来源只有该用户本身。请把 {value} 加为来源，或改用 autogroup:self。",
+      sshUserInvalid:
+        "{value} 不是有效的 SSH 用户。请使用用户名，或 autogroup:nonroot 之类的自动组。",
+    },
     host: {
       editTitle: "编辑主机 {name}",
       newTitle: "新建主机",

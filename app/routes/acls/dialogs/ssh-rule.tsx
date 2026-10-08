@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
@@ -8,12 +8,15 @@ import Text from "~/components/text";
 import Title from "~/components/title";
 import TokenList from "~/components/token-list";
 import { useI18n } from "~/i18n/provider";
-import { KNOWN_SSH_ACTIONS, type SshRule } from "~/utils/acl-policy";
+import { KNOWN_SSH_ACTIONS, sshRuleIssues, type Policy, type SshRule } from "~/utils/acl-policy";
+
+import RuleIssues from "../components/rule-issues";
 
 interface SshRuleDialogProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   rule?: SshRule;
+  policy: Policy;
   sources: string[];
   destinations: string[];
   onSave: (rule: SshRule) => void;
@@ -26,6 +29,7 @@ export default function SshRuleDialog({
   isOpen,
   setIsOpen,
   rule,
+  policy,
   sources,
   destinations,
   onSave,
@@ -39,7 +43,17 @@ export default function SshRuleDialog({
     }
   }, [isOpen, rule]);
 
-  const isInvalid = draft.src.length === 0 || draft.dst.length === 0 || draft.users.length === 0;
+  // Headscale refuses most of what the generic Access Control catalog suggests
+  // (hosts, `*`, group destinations, `autogroup:admin`). The checks below are
+  // the ones it runs itself, so the rule is known to be acceptable before it is
+  // saved: a rejected rule would otherwise come back as an HTTP 500.
+  const issues = useMemo(() => sshRuleIssues(draft, policy), [draft, policy]);
+
+  const isInvalid =
+    draft.src.length === 0 ||
+    draft.dst.length === 0 ||
+    draft.users.length === 0 ||
+    issues.length > 0;
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
@@ -117,6 +131,7 @@ export default function SshRuleDialog({
             value={draft.checkPeriod ?? ""}
           />
         ) : null}
+        <RuleIssues issues={issues} />
       </DialogPanel>
     </Dialog>
   );

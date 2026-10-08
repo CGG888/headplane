@@ -17,6 +17,10 @@ interface RulesEditorProps {
   isDisabled: boolean;
   sources: string[];
   destinations: string[];
+  // The SSH editor needs its own catalogs: Headscale accepts far fewer sources
+  // and destinations for SSH than it does for plain access rules.
+  sshSources: string[];
+  sshDestinations: string[];
 }
 
 type Editing =
@@ -31,6 +35,8 @@ export default function RulesEditor({
   isDisabled,
   sources,
   destinations,
+  sshSources,
+  sshDestinations,
 }: RulesEditorProps) {
   const { t } = useI18n();
   const [editing, setEditing] = useState<Editing>(null);
@@ -88,14 +94,15 @@ export default function RulesEditor({
       ) : null}
       {editing?.kind === "ssh" ? (
         <SshRuleDialog
-          destinations={destinations}
+          destinations={sshDestinations}
           isOpen
           onSave={saveSsh}
+          policy={policy}
           rule={sshRule}
           setIsOpen={(open) => {
             if (!open) setEditing(null);
           }}
-          sources={sources}
+          sources={sshSources}
         />
       ) : null}
       {editing?.kind === "host" ? (

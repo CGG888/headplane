@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
@@ -7,7 +7,9 @@ import Text from "~/components/text";
 import Title from "~/components/title";
 import TokenList from "~/components/token-list";
 import { useI18n } from "~/i18n/provider";
-import { withDefaultPort, type AclRule } from "~/utils/acl-policy";
+import { aclRuleIssues, withDefaultPort, type AclRule } from "~/utils/acl-policy";
+
+import RuleIssues from "../components/rule-issues";
 
 interface AclRuleDialogProps {
   isOpen: boolean;
@@ -37,7 +39,10 @@ export default function AclRuleDialog({
     }
   }, [isOpen, rule]);
 
-  const isInvalid = draft.src.length === 0 || draft.dst.length === 0;
+  // An `autogroup:self` destination only accepts users, groups, `*` and
+  // `autogroup:member` as sources; anything else is rejected by Headscale.
+  const issues = useMemo(() => aclRuleIssues(draft), [draft]);
+  const isInvalid = draft.src.length === 0 || draft.dst.length === 0 || issues.length > 0;
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={setIsOpen}>
@@ -88,6 +93,7 @@ export default function AclRuleDialog({
           placeholder={t("acls.aclRule.protocolPlaceholder")}
           value={draft.proto ?? ""}
         />
+        <RuleIssues issues={issues} />
       </DialogPanel>
     </Dialog>
   );

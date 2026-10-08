@@ -233,6 +233,38 @@ export function policyDestinations(policy: Policy, users: string[]): string[] {
   ]);
 }
 
+// Headscale's `SSHSrcAliases` only unmarshals users, groups, tags and these two
+// autogroups: hosts, addresses and `*` fail while the policy is parsed, so they
+// are never offered as SSH sources.
+export const SSH_SOURCE_AUTOGROUPS = ["autogroup:member", "autogroup:tagged"];
+
+// `SSHDstAliases` additionally parses hosts, but `validateSSH` then rejects any
+// host destination, so only these three autogroups are useful in the editor.
+export const SSH_DESTINATION_AUTOGROUPS = [
+  "autogroup:self",
+  "autogroup:member",
+  "autogroup:tagged",
+];
+
+export function policySshSources(policy: Policy, users: string[]): string[] {
+  return unique([
+    ...SSH_SOURCE_AUTOGROUPS,
+    ...Object.keys(policy.groups),
+    ...Object.keys(policy.tagOwners),
+    ...users.map(asUserReference),
+  ]);
+}
+
+// SSH destinations take tags, users and autogroups. Groups and hosts are left
+// out because Headscale refuses both of them for the SSH destination.
+export function policySshDestinations(policy: Policy, users: string[]): string[] {
+  return unique([
+    ...SSH_DESTINATION_AUTOGROUPS,
+    ...Object.keys(policy.tagOwners),
+    ...users.map(asUserReference),
+  ]);
+}
+
 // Headscale references users as "name@" in policies.
 export function asUserReference(user: string): string {
   return user.endsWith("@") ? user : `${user}@`;
@@ -369,6 +401,210 @@ export function isValidTagName(name: string): boolean {
 
 export function isValidHostName(name: string): boolean {
   return /^[a-z0-9][a-z0-9-]*$/.test(name);
+}
+
+// MARK: Rule checks
+
+/**
+ * Why Headscale would refuse a rule. Codes rather than sentences so the dialogs
+ * can translate them; the offending value travels beside the code.
+ */
+export type PolicyIssueCode =
+  | "aclAutogroupSelfSource"
+  | "sshAutogroupDestination"
+  | "sshAutogroupSource"
+  | "sshCheckPeriodInvalid"
+  | "sshCheckPeriodOnAccept"
+  | "sshDestinationAlias"
+  | "sshDestinationHost"
+  | "sshGroupMissing"
+  | "sshSourceAlias"
+  | "sshTagMissing"
+  | "sshTagSourceToAutogroupMember"
+  | "sshTagSourceToAutogroupSelf"
+  | "sshTagSourceToUser"
+  | "sshUserDestinationRequiresSameUser"
+  | "sshUserInvalid";
+
+export interface PolicyIssue {
+  code: PolicyIssueCode;
+  value: string;
+}
+
+function isUserReference(value: string): boolean {
+  return value.length > 1 && value.endsWith("@");
+}
+
+function isGroupReference(value: string): boolean {
+  return value.startsWith("group:");
+}
+
+function isTagReference(value: string): boolean {
+  return value.startsWith("tag:");
+}
+
+function isAutogroupReference(value: string): boolean {
+  return value.startsWith("autogroup:");
+}
+
+function isSelfDestination(destination: string): boolean {
+  return destination === "autogroup:self" || destination.startsWith("autogroup:self:");
+}
+
+/** Headscale's `SSHCheckPeriodMax`: anything longer is refused. */
+export const SSH_CHECK_PERIOD_MAX_HOURS = 168;
+
+const DURATION_UNIT_HOURS: Record<string, number> = {
+  h: 1,
+  m: 1 / 60,
+  s: 1 / 3600,
+  ms: 1 / 3_600_000,
+  us: 1 / 3_600_000_000,
+  µs: 1 / 3_600_000_000,
+  ns: 1 / 3_600_000_000_000,
+};
+
+const DURATION_PART = /([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)/g;
+
+/**
+ * Hours described by a Go duration string such as `12h` or `1h30m`, or null
+ * when the string is not a duration at all (`12`, `-1h`).
+ */
+function durationHours(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  let hours = 0;
+  let consumed = 0;
+  for (const match of trimmed.matchAll(DURATION_PART)) {
+    hours += Number(match[1]) * (DURATION_UNIT_HOURS[match[2]] ?? 0);
+    consumed += match[0].length;
+  }
+
+  return consumed === trimmed.length ? hours : null;
+}
+
+/**
+ * Mirrors the checks `validateSSH` applies to one SSH rule. Headscale reports
+ * the first problem it finds; collecting them all keeps the editor from
+ * revealing one mistake per save attempt.
+ */
+export function sshRuleIssues(rule: SshRule, policy: Policy): PolicyIssue[] {
+  const issues: PolicyIssue[] = [];
+  const tagSources = rule.src.filter(
+    (source) => isTagReference(source) || source === "autogroup:tagged",
+  );
+  const userSources = rule.src.filter(isUserReference);
+
+  for (const user of rule.users) {
+    // Headscale only refuses an empty or wildcard SSH user; anything else is
+    // passed through to the node.
+    if (user.trim().length === 0 || user === "*") {
+      issues.push({ code: "sshUserInvalid", value: user });
+    }
+  }
+
+  for (const source of rule.src) {
+    if (isAutogroupReference(source)) {
+      if (!SSH_SOURCE_AUTOGROUPS.includes(source)) {
+        issues.push({ code: "sshAutogroupSource", value: source });
+      }
+      continue;
+    }
+
+    if (isGroupReference(source)) {
+      if (!(source in policy.groups)) {
+        issues.push({ code: "sshGroupMissing", value: source });
+      }
+      continue;
+    }
+
+    if (isTagReference(source)) {
+      if (!(source in policy.tagOwners)) {
+        issues.push({ code: "sshTagMissing", value: source });
+      }
+      continue;
+    }
+
+    if (!isUserReference(source)) {
+      // `*`, a host alias, an address or a bare name: the SSH source parser
+      // accepts users, groups, tags and the two SSH autogroups only.
+      issues.push({ code: "sshSourceAlias", value: source });
+    }
+  }
+
+  for (const destination of rule.dst) {
+    if (isAutogroupReference(destination)) {
+      if (!SSH_DESTINATION_AUTOGROUPS.includes(destination)) {
+        issues.push({ code: "sshAutogroupDestination", value: destination });
+      } else if (tagSources.length > 0 && destination === "autogroup:self") {
+        issues.push({ code: "sshTagSourceToAutogroupSelf", value: destination });
+      } else if (tagSources.length > 0 && destination === "autogroup:member") {
+        issues.push({ code: "sshTagSourceToAutogroupMember", value: destination });
+      }
+      continue;
+    }
+
+    if (isTagReference(destination)) {
+      if (!(destination in policy.tagOwners)) {
+        issues.push({ code: "sshTagMissing", value: destination });
+      }
+      continue;
+    }
+
+    if (isUserReference(destination)) {
+      if (tagSources.length > 0) {
+        issues.push({ code: "sshTagSourceToUser", value: destination });
+      } else if (userSources.length !== 1 || userSources[0] !== destination) {
+        issues.push({ code: "sshUserDestinationRequiresSameUser", value: destination });
+      }
+      continue;
+    }
+
+    if (destination === "*" || isGroupReference(destination)) {
+      issues.push({ code: "sshDestinationAlias", value: destination });
+      continue;
+    }
+
+    // A host alias parses, but `validateSSH` refuses it with `invalid dst`.
+    issues.push({ code: "sshDestinationHost", value: destination });
+  }
+
+  if (rule.checkPeriod !== undefined) {
+    if (rule.action !== "check") {
+      issues.push({ code: "sshCheckPeriodOnAccept", value: rule.checkPeriod });
+    } else {
+      const hours = durationHours(rule.checkPeriod);
+      if (hours === null || hours <= 0 || hours > SSH_CHECK_PERIOD_MAX_HOURS) {
+        issues.push({ code: "sshCheckPeriodInvalid", value: rule.checkPeriod });
+      }
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * `autogroup:self` destinations only accept users, groups, `*` and
+ * `autogroup:member` as sources (`validateACLSrcDstCombination`). Every other
+ * combination is rejected, including tags and hosts.
+ */
+export function aclRuleIssues(rule: AclRule): PolicyIssue[] {
+  if (!rule.dst.some(isSelfDestination)) {
+    return [];
+  }
+
+  return rule.src
+    .filter(
+      (source) =>
+        source !== "*" &&
+        !isUserReference(source) &&
+        source !== "autogroup:member" &&
+        !isGroupReference(source),
+    )
+    .map((source) => ({ code: "aclAutogroupSelfSource", value: source }) as const);
 }
 
 // MARK: Internals

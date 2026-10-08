@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  aclRuleIssues,
   asUserReference,
   EMPTY_POLICY,
   groupsForUser,
@@ -10,11 +11,16 @@ import {
   isValidTagName,
   parsePolicy,
   policyDestinations,
+  policySshDestinations,
+  policySshSources,
   policySources,
   serializePolicy,
   setUserGroups,
+  sshRuleIssues,
   unsupportedPolicySections,
   withDefaultPort,
+  type AclRule,
+  type SshRule,
 } from "~/utils/acl-policy";
 
 const POLICY = `{
@@ -494,5 +500,198 @@ describe("validation", () => {
     expect(isValidGroupName("group:Eng")).toBe(false);
     expect(isValidTagName("group:eng")).toBe(false);
     expect(isValidHostName("tag:web")).toBe(false);
+  });
+});
+
+function sshRule(overrides: Partial<SshRule>): SshRule {
+  return {
+    action: "accept",
+    src: ["group:ops"],
+    dst: ["tag:server"],
+    users: ["root"],
+    extra: {},
+    ...overrides,
+  };
+}
+
+function aclRule(overrides: Partial<AclRule>): AclRule {
+  return { action: "accept", src: ["group:eng"], dst: ["tag:server:22"], extra: {}, ...overrides };
+}
+
+function codes(issues: ReturnType<typeof sshRuleIssues>): string[] {
+  return issues.map((issue) => issue.code);
+}
+
+describe("SSH catalogs", () => {
+  test("only suggests sources the SSH parser can read", () => {
+    const { policy } = parseOrThrow(POLICY);
+    const sources = policySshSources(policy, ["alice"]);
+
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        "group:eng",
+        "tag:server",
+        "alice@",
+        "autogroup:member",
+        "autogroup:tagged",
+      ]),
+    );
+    // Hosts, addresses and `*` fail while Headscale parses an SSH source.
+    expect(sources).not.toContain("office");
+    expect(sources).not.toContain("*");
+    expect(sources).not.toContain("autogroup:admin");
+    expect(sources).not.toContain("autogroup:internet");
+  });
+
+  test("only suggests destinations SSH rules can use", () => {
+    const { policy } = parseOrThrow(POLICY);
+    const destinations = policySshDestinations(policy, ["alice"]);
+
+    expect(destinations).toEqual(
+      expect.arrayContaining([
+        "tag:server",
+        "alice@",
+        "autogroup:self",
+        "autogroup:member",
+        "autogroup:tagged",
+      ]),
+    );
+    expect(destinations).not.toContain("group:eng");
+    expect(destinations).not.toContain("office");
+    expect(destinations).not.toContain("*");
+    expect(destinations).not.toContain("autogroup:internet");
+  });
+});
+
+describe("SSH rule checks", () => {
+  const { policy } = parseOrThrow(POLICY);
+
+  test("accepts rules Headscale accepts", () => {
+    expect(sshRuleIssues(sshRule({}), policy)).toEqual([]);
+    expect(sshRuleIssues(sshRule({ src: ["alice@"], dst: ["autogroup:self"] }), policy)).toEqual(
+      [],
+    );
+    expect(
+      sshRuleIssues(sshRule({ src: ["autogroup:tagged"], dst: ["autogroup:tagged"] }), policy),
+    ).toEqual([]);
+  });
+
+  test("rejects sources the SSH parser cannot read", () => {
+    expect(codes(sshRuleIssues(sshRule({ src: ["*"] }), policy))).toEqual(["sshSourceAlias"]);
+    expect(codes(sshRuleIssues(sshRule({ src: ["office"] }), policy))).toEqual(["sshSourceAlias"]);
+    expect(codes(sshRuleIssues(sshRule({ src: ["100.64.0.1/32"] }), policy))).toEqual([
+      "sshSourceAlias",
+    ]);
+  });
+
+  test("rejects autogroups that are not SSH sources", () => {
+    expect(codes(sshRuleIssues(sshRule({ src: ["autogroup:admin"] }), policy))).toEqual([
+      "sshAutogroupSource",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ src: ["autogroup:internet"] }), policy))).toEqual([
+      "sshAutogroupSource",
+    ]);
+  });
+
+  test("rejects destinations SSH rules cannot use", () => {
+    expect(codes(sshRuleIssues(sshRule({ dst: ["*"] }), policy))).toEqual(["sshDestinationAlias"]);
+    expect(codes(sshRuleIssues(sshRule({ dst: ["group:eng"] }), policy))).toEqual([
+      "sshDestinationAlias",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ dst: ["office"] }), policy))).toEqual([
+      "sshDestinationHost",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ dst: ["autogroup:internet"] }), policy))).toEqual([
+      "sshAutogroupDestination",
+    ]);
+  });
+
+  test("reports groups and tags that are not defined", () => {
+    expect(codes(sshRuleIssues(sshRule({ src: ["group:missing"] }), policy))).toEqual([
+      "sshGroupMissing",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ src: ["tag:missing"] }), policy))).toEqual([
+      "sshTagMissing",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ dst: ["tag:missing"] }), policy))).toEqual([
+      "sshTagMissing",
+    ]);
+  });
+
+  test("keeps a tag source away from user-owned destinations", () => {
+    expect(codes(sshRuleIssues(sshRule({ src: ["tag:server"], dst: ["alice@"] }), policy))).toEqual(
+      ["sshTagSourceToUser"],
+    );
+    expect(
+      codes(sshRuleIssues(sshRule({ src: ["autogroup:tagged"], dst: ["alice@"] }), policy)),
+    ).toEqual(["sshTagSourceToUser"]);
+    expect(
+      codes(sshRuleIssues(sshRule({ src: ["tag:server"], dst: ["autogroup:self"] }), policy)),
+    ).toEqual(["sshTagSourceToAutogroupSelf"]);
+    expect(
+      codes(sshRuleIssues(sshRule({ src: ["tag:server"], dst: ["autogroup:member"] }), policy)),
+    ).toEqual(["sshTagSourceToAutogroupMember"]);
+  });
+
+  test("requires a user destination to be its own single source", () => {
+    expect(
+      codes(sshRuleIssues(sshRule({ src: ["autogroup:member"], dst: ["alice@"] }), policy)),
+    ).toEqual(["sshUserDestinationRequiresSameUser"]);
+    expect(
+      codes(sshRuleIssues(sshRule({ src: ["alice@", "bob@"], dst: ["alice@"] }), policy)),
+    ).toEqual(["sshUserDestinationRequiresSameUser"]);
+  });
+
+  test("rejects an empty or wildcard SSH user", () => {
+    expect(codes(sshRuleIssues(sshRule({ users: ["*"] }), policy))).toEqual(["sshUserInvalid"]);
+    expect(codes(sshRuleIssues(sshRule({ users: ["root", "*"] }), policy))).toEqual([
+      "sshUserInvalid",
+    ]);
+  });
+
+  test("validates the check period", () => {
+    expect(codes(sshRuleIssues(sshRule({ checkPeriod: "12h" }), policy))).toEqual([
+      "sshCheckPeriodOnAccept",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "12h" }), policy))).toEqual(
+      [],
+    );
+    expect(
+      codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "1h30m" }), policy)),
+    ).toEqual([]);
+    expect(codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "168h" }), policy))).toEqual(
+      [],
+    );
+    expect(codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "169h" }), policy))).toEqual(
+      ["sshCheckPeriodInvalid"],
+    );
+    expect(codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "12" }), policy))).toEqual([
+      "sshCheckPeriodInvalid",
+    ]);
+    expect(codes(sshRuleIssues(sshRule({ action: "check", checkPeriod: "-1h" }), policy))).toEqual([
+      "sshCheckPeriodInvalid",
+    ]);
+  });
+});
+
+describe("ACL rule checks", () => {
+  test("only lets users, groups, * and autogroup:member reach autogroup:self", () => {
+    expect(
+      codes(aclRuleIssues(aclRule({ src: ["autogroup:tagged"], dst: ["autogroup:self:*"] }))),
+    ).toEqual(["aclAutogroupSelfSource"]);
+    expect(codes(aclRuleIssues(aclRule({ src: ["office"], dst: ["autogroup:self"] })))).toEqual([
+      "aclAutogroupSelfSource",
+    ]);
+    expect(
+      codes(aclRuleIssues(aclRule({ src: ["autogroup:member"], dst: ["autogroup:self:*"] }))),
+    ).toEqual([]);
+    expect(codes(aclRuleIssues(aclRule({ src: ["*"], dst: ["autogroup:self:*"] })))).toEqual([]);
+    expect(
+      codes(aclRuleIssues(aclRule({ src: ["group:eng"], dst: ["autogroup:self:*"] }))),
+    ).toEqual([]);
+  });
+
+  test("leaves rules without an autogroup:self destination alone", () => {
+    expect(codes(aclRuleIssues(aclRule({ src: ["tag:server"] })))).toEqual([]);
   });
 });

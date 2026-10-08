@@ -1046,6 +1046,35 @@ const en = {
       checkLabel: "Check period",
       checkPlaceholder: "12h",
     },
+    issues: {
+      title: "Headscale will not accept this rule",
+      aclAutogroupSelfSource:
+        "{value} cannot reach an autogroup:self destination. Use a user, a group, * or autogroup:member.",
+      sshAutogroupDestination:
+        "{value} is not a valid SSH destination. Use autogroup:self, autogroup:member or autogroup:tagged.",
+      sshAutogroupSource:
+        "{value} is not a valid SSH source. Use autogroup:member or autogroup:tagged.",
+      sshCheckPeriodInvalid:
+        "{value} is not a valid check period. Use a positive duration up to 168h, for example 12h.",
+      sshCheckPeriodOnAccept:
+        "checkPeriod only applies to check rules. Change the action to check, or remove {value}.",
+      sshDestinationAlias:
+        "{value} cannot be an SSH destination. Use a user, a tag or an SSH autogroup.",
+      sshDestinationHost: "{value} is a host, and Headscale rejects hosts as SSH destinations.",
+      sshGroupMissing: "The group {value} is not defined in this policy.",
+      sshSourceAlias:
+        "{value} cannot be an SSH source. Use a user (name@), a group, a tag or an SSH autogroup.",
+      sshTagMissing: "The tag {value} is not defined in this policy.",
+      sshTagSourceToAutogroupMember:
+        "autogroup:member is user-owned, so a tag source cannot reach it. Use autogroup:tagged or a tag destination.",
+      sshTagSourceToAutogroupSelf: "autogroup:self only accepts users and groups, not tag sources.",
+      sshTagSourceToUser:
+        "{value} is user-owned, so a tag source cannot reach it. Use autogroup:tagged or a tag destination.",
+      sshUserDestinationRequiresSameUser:
+        "A user destination requires that same user as the only source. Add {value} as a source, or use autogroup:self.",
+      sshUserInvalid:
+        "{value} is not a valid SSH user. Use a user name, or an autogroup such as autogroup:nonroot.",
+    },
     host: {
       editTitle: "Edit host {name}",
       newTitle: "New host",

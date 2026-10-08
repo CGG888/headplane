@@ -30,6 +30,8 @@ import { isApiError } from "~/server/headscale/api/error-client";
 import {
   parsePolicy,
   policyDestinations,
+  policySshDestinations,
+  policySshSources,
   policySources,
   serializePolicy,
   unsupportedPolicySections,
@@ -82,6 +84,16 @@ export default function Page({
   );
   const destinations = useMemo(
     () => (parsed.ok ? policyDestinations(parsed.policy, users) : []),
+    [parsed, users],
+  );
+  // SSH rules take a much smaller set of sources and destinations than plain
+  // access rules, so the SSH dialog gets its own catalogs.
+  const sshSources = useMemo(
+    () => (parsed.ok ? policySshSources(parsed.policy, users) : []),
+    [parsed, users],
+  );
+  const sshDestinations = useMemo(
+    () => (parsed.ok ? policySshDestinations(parsed.policy, users) : []),
     [parsed, users],
   );
   // Sections such as postures or ipSets that Headscale rejects but that the
@@ -269,6 +281,8 @@ export default function Page({
               onChange={applyPolicy}
               policy={value}
               sources={sources}
+              sshDestinations={sshDestinations}
+              sshSources={sshSources}
             />
           ))}
         </TabsPanel>

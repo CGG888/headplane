@@ -984,6 +984,33 @@ const zhHant = {
       checkLabel: "檢查週期",
       checkPlaceholder: "12h",
     },
+    issues: {
+      title: "Headscale 不會接受這條規則",
+      aclAutogroupSelfSource:
+        "{value} 不能存取 autogroup:self 目的地。請使用使用者、群組、* 或 autogroup:member。",
+      sshAutogroupDestination:
+        "{value} 不是有效的 SSH 目的地。請使用 autogroup:self、autogroup:member 或 autogroup:tagged。",
+      sshAutogroupSource:
+        "{value} 不是有效的 SSH 來源。請使用 autogroup:member 或 autogroup:tagged。",
+      sshCheckPeriodInvalid: "{value} 不是有效的檢查週期。請使用不超過 168h 的正數時長，例如 12h。",
+      sshCheckPeriodOnAccept:
+        "checkPeriod 只適用於 check 規則。請把動作改為 check，或刪除 {value}。",
+      sshDestinationAlias: "{value} 不能作為 SSH 目的地。請使用使用者、標籤或 SSH 自動群組。",
+      sshDestinationHost: "{value} 是主機（host），Headscale 不允許把主機當作 SSH 目的地。",
+      sshGroupMissing: "策略中沒有定義群組 {value}。",
+      sshSourceAlias:
+        "{value} 不能作為 SSH 來源。請使用使用者（name@）、群組、標籤或 SSH 自動群組。",
+      sshTagMissing: "策略中沒有定義標籤 {value}。",
+      sshTagSourceToAutogroupMember:
+        "autogroup:member 屬於使用者裝置，標籤來源無法存取。請改用 autogroup:tagged 或標籤目的地。",
+      sshTagSourceToAutogroupSelf: "autogroup:self 只接受使用者和群組，不接受標籤來源。",
+      sshTagSourceToUser:
+        "{value} 屬於使用者裝置，標籤來源無法存取。請改用 autogroup:tagged 或標籤目的地。",
+      sshUserDestinationRequiresSameUser:
+        "使用者目的地要求來源只有該使用者本身。請把 {value} 加為來源，或改用 autogroup:self。",
+      sshUserInvalid:
+        "{value} 不是有效的 SSH 使用者。請使用使用者名稱，或 autogroup:nonroot 之類的自動群組。",
+    },
     host: {
       editTitle: "編輯主機 {name}",
       newTitle: "新增主機",
