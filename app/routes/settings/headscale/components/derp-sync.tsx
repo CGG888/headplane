@@ -21,6 +21,7 @@ import {
   type DerpSyncFamilies,
   type DerpSyncFamily,
   type DerpSyncFailureReason,
+  type DerpSyncIpv6Preference,
   type DerpSyncOutcome,
   type DerpSyncReload,
   type DerpSyncRun,
@@ -76,6 +77,7 @@ const CANDIDATE_KEYS: Record<DerpSyncCandidateReason, TranslationKey> = {
   temporary: "settings.headscale.derp.sync.candidateTemporary",
   "not-public": "settings.headscale.derp.sync.candidateNotPublic",
   "echo-wins": "settings.headscale.derp.sync.candidateEchoWins",
+  "dns-wins": "settings.headscale.derp.sync.candidateDnsWins",
   excluded: "settings.headscale.derp.sync.candidateExcluded",
 };
 
@@ -135,6 +137,9 @@ export default function DerpSyncSettings({
   const [enabled, setEnabled] = useState(settings.enabled);
   const [intervalHours, setIntervalHours] = useState(String(settings.intervalHours));
   const [families, setFamilies] = useState<DerpSyncFamilies>(settings.families);
+  const [ipv6Preference, setIpv6Preference] = useState<DerpSyncIpv6Preference>(
+    settings.ipv6Preference,
+  );
   const [autoReload, setAutoReload] = useState(settings.autoReload);
   const [echoEnabled, setEchoEnabled] = useState(echo.enabled);
   const [echoUrl, setEchoUrl] = useState(echo.url);
@@ -191,6 +196,20 @@ export default function DerpSyncSettings({
     { value: "ipv4", label: t("settings.headscale.derp.sync.familyIpv4") },
     { value: "ipv6", label: t("settings.headscale.derp.sync.familyIpv6") },
   ];
+
+  // Which of the two IPv6 sources wins when both have an answer. The default,
+  // "host", is the behaviour every installation already had.
+  const preferenceItems = [
+    { value: "host", label: t("settings.headscale.derp.sync.preferenceHost") },
+    { value: "dns", label: t("settings.headscale.derp.sync.preferenceDns") },
+  ];
+
+  // A DNS answer is an A record for one family and an AAAA record for the other,
+  // so the candidate line says which one it read.
+  const sourceLabel = (source: DerpSyncSource, family: DerpSyncFamily) =>
+    source === "dns" && family === "ipv6"
+      ? t("settings.headscale.derp.sync.sourceDnsIpv6")
+      : t(SOURCE_KEYS[source]);
 
   // The loader sends a plain value, so the two families are listed explicitly
   // rather than by key order.
@@ -283,6 +302,21 @@ export default function DerpSyncSettings({
             />
           </SettingsField>
           <input name="derp_sync_families" type="hidden" value={families} />
+
+          <SettingsField
+            description={t("settings.headscale.derp.sync.ipv6PreferenceDescription")}
+            label={t("settings.headscale.derp.sync.ipv6PreferenceLabel")}
+          >
+            <Select
+              disabled={isDisabled || busy}
+              items={preferenceItems}
+              onValueChange={(value) =>
+                setIpv6Preference((value ?? ipv6Preference) as DerpSyncIpv6Preference)
+              }
+              value={ipv6Preference}
+            />
+          </SettingsField>
+          <input name="derp_sync_ipv6_preference" type="hidden" value={ipv6Preference} />
 
           <SettingsField
             description={t("settings.headscale.derp.sync.autoReloadDescription")}
@@ -461,7 +495,7 @@ export default function DerpSyncSettings({
                   {t("settings.headscale.derp.sync.candidateLine", {
                     family: familyLabel(candidate.family),
                     address: candidate.address,
-                    source: t(SOURCE_KEYS[candidate.source]),
+                    source: sourceLabel(candidate.source, candidate.family),
                     reason: t(CANDIDATE_KEYS[candidate.reason]),
                   })}
                   {candidate.interfaceName === undefined ? "" : ` · ${candidate.interfaceName}`}
@@ -543,7 +577,7 @@ export default function DerpSyncSettings({
                       {t("settings.headscale.derp.sync.detectedLine", {
                         family: familyLabel(family),
                         address: value.address,
-                        source: t(SOURCE_KEYS[value.source]),
+                        source: sourceLabel(value.source, family),
                       })}
                     </li>
                   ))}

@@ -324,8 +324,9 @@ documented limitation rather than a misconfiguration.
 
 Everything that configures the relay addresses lives in one card,
 **Settings → Headscale → DERP → auto-sync**: the schedule, which families it may
-write, the **auto-reload** switch, the **external IPv6 echo** switch and its URL,
-and the detection panel below the form. The
+write, the **IPv6 address source** select, the **auto-reload** switch, the
+**external IPv6 echo** switch and its URL, and the detection panel below the
+form. The
 [Overview](/en/features/overview#relay-addresses-and-stun) relay card is
 read-only and configures nothing: it shows the resulting IPv4 and IPv6 values
 with a copy button, the STUN row, the resolver the lookups used and a one-line
@@ -368,10 +369,10 @@ The auto-sync derives one address per family, and the two families are not
 detected the same way. The detection panel in the settings card lists every
 candidate it found, where each one came from, and why it was chosen or skipped.
 
-| Family   | Detected from                                                                                                                                                                                                                                                                                            |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.                   |
-| **IPv6** | The **host machine's own global unicast address**: the interface list, plus `/proc/net/if_inet6` for the temporary/privacy flag and `/sys/class/net/.../device` to tell a real NIC from a bridge. A stable address beats one that rotates, and the address the domain's AAAA names wins when it matches. |
+| Family   | Detected from                                                                                                                                                                                                                                                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.                                                                         |
+| **IPv6** | Either the **host machine's own global unicast address** — the interface list, plus `/proc/net/if_inet6` for the temporary/privacy flag and `/sys/class/net/.../device` to tell a real NIC from a bridge — or the **AAAA record of the `server_url` hostname**, whichever the **IPv6 address source** select prefers. A stable address beats one that rotates. |
 
 IPv6 is deliberately different. There is no NAT for it: the machine itself holds
 the public address, and under `network_mode: host` the container shares the host's
@@ -380,6 +381,21 @@ a name. A domain's AAAA can be a temporary privacy address, a prefix rotated sin
 the record was written, or a different machine entirely — advertising the wrong
 one makes clients fail intermittently rather than cleanly, which is exactly the
 kind of fault that is hard to attribute afterwards.
+
+**Which of the two wins is the one choice the card asks you to make**, and the
+default — the host's own address — is what every installation did before the
+select existed.
+
+**Pick the AAAA record when the relay is not where clients connect.** If
+`server_url` names a router or a reverse proxy in front of this machine, the
+address clients must dial is the one the name resolves to; the host's own address
+is a real global unicast address and still the wrong answer, because nothing
+outside reaches it there. With the record preferred, the sync resolves the
+hostname and advertises its first usable global unicast AAAA answer. The record is
+only looked up when it is preferred — the host default does no lookup at all — and
+when the record has no usable answer the host probe is still the fallback, so the
+family keeps working either way and the panel's candidate list says which rule
+decided.
 
 **The optional external IPv6 echo is the authority when a router forwards or
 translates IPv6.** Off by default, because it makes HeadplaneCN contact a third

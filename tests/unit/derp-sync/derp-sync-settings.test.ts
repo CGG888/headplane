@@ -5,6 +5,7 @@ import {
   derpSyncIntervalMs,
   isDerpSyncFamilies,
   isDerpSyncIntervalHours,
+  isDerpSyncIpv6Preference,
   normalizeDerpSyncSettings,
   parseDerpSyncIntervalHours,
   selectedFamilies,
@@ -92,9 +93,31 @@ describe("settings normalization", () => {
         enabled: true,
         intervalHours: 24,
         families: "ipv6",
+        ipv6Preference: "dns",
         autoReload: true,
       }),
-    ).toEqual({ enabled: true, intervalHours: 24, families: "ipv6", autoReload: true });
+    ).toEqual({
+      enabled: true,
+      intervalHours: 24,
+      families: "ipv6",
+      ipv6Preference: "dns",
+      autoReload: true,
+    });
+  });
+
+  test("accepts the two IPv6 sources and nothing else", () => {
+    expect(isDerpSyncIpv6Preference("host")).toBe(true);
+    expect(isDerpSyncIpv6Preference("dns")).toBe(true);
+    expect(isDerpSyncIpv6Preference("interface")).toBe(false);
+    expect(isDerpSyncIpv6Preference("")).toBe(false);
+    expect(isDerpSyncIpv6Preference(undefined)).toBe(false);
+  });
+
+  test("defaults the IPv6 source to the host, so upgrades keep today's behaviour", () => {
+    expect(DEFAULT_DERP_SYNC_SETTINGS.ipv6Preference).toBe("host");
+    // A document written before the setting existed has no key at all.
+    expect(normalizeDerpSyncSettings({ families: "ipv6" }).ipv6Preference).toBe("host");
+    expect(normalizeDerpSyncSettings({ ipv6Preference: "interface" }).ipv6Preference).toBe("host");
   });
 
   test("only an explicit false turns the automatic reload off", () => {

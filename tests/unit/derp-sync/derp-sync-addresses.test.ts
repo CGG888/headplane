@@ -1,13 +1,16 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  buildIpv6DnsCandidates,
   canonicalSyncAddress,
   classifySyncIpv4,
   isIpLiteralHost,
   isPublicSyncIpv4,
   isPublicSyncIpv6,
   literalSyncIpv4,
+  literalSyncIpv6,
   pickPublicSyncIpv4,
+  pickPublicSyncIpv6,
   planDerpSync,
   relayHostnameFromServerUrl,
   syncAddressesMatch,
@@ -78,6 +81,83 @@ describe("IPv6 acceptance", () => {
     expect(isPublicSyncIpv6("ff02::1")).toBe(false);
     expect(isPublicSyncIpv6("::ffff:8.8.8.8")).toBe(false);
     expect(isPublicSyncIpv6("192.168.1.1")).toBe(false);
+  });
+
+  test("picks the first usable answer out of a mixed record set", () => {
+    expect(pickPublicSyncIpv6(["fd00::1", "2606:4700::1111", "2001:db8::1"])).toBe(
+      "2606:4700::1111",
+    );
+    expect(pickPublicSyncIpv6(["fd00::1", "fe80::1"])).toBeUndefined();
+    expect(pickPublicSyncIpv6([])).toBeUndefined();
+  });
+
+  test("an address literal is its own answer, and only when it is an address", () => {
+    expect(literalSyncIpv6("2606:4700::1111")).toBe("2606:4700::1111");
+    expect(literalSyncIpv6("[2606:4700::1111]")).toBe("2606:4700::1111");
+    expect(literalSyncIpv6("relay.example.com")).toBeUndefined();
+    expect(literalSyncIpv6("8.8.8.8")).toBeUndefined();
+    expect(literalSyncIpv6(undefined)).toBeUndefined();
+  });
+});
+
+describe("IPv6 record rows", () => {
+  test("the chosen answer is selected and the rest say why not", () => {
+    expect(
+      buildIpv6DnsCandidates(
+        [
+          { address: "fd00::1", source: "dns" },
+          { address: "2606:4700::1111", source: "dns" },
+        ],
+        "2606:4700::1111",
+      ),
+    ).toEqual([
+      {
+        family: "ipv6",
+        address: "fd00::1",
+        source: "dns",
+        chosen: false,
+        reason: "not-public",
+        detail: "ula",
+      },
+      {
+        family: "ipv6",
+        address: "2606:4700::1111",
+        source: "dns",
+        chosen: true,
+        reason: "selected",
+      },
+    ]);
+  });
+
+  test("an echo that won leaves every record row overridden", () => {
+    expect(
+      buildIpv6DnsCandidates([{ address: "2606:4700::1111", source: "dns" }], undefined, true),
+    ).toEqual([
+      {
+        family: "ipv6",
+        address: "2606:4700::1111",
+        source: "dns",
+        chosen: false,
+        reason: "echo-wins",
+      },
+    ]);
+    // Even an answer that spells the echo address is not the chosen row: the
+    // echo is, and the row says which rule decided.
+    expect(
+      buildIpv6DnsCandidates(
+        [{ address: "2606:4700::1111", source: "dns" }],
+        "2606:4700::1111",
+        true,
+      ),
+    ).toEqual([
+      {
+        family: "ipv6",
+        address: "2606:4700::1111",
+        source: "dns",
+        chosen: false,
+        reason: "echo-wins",
+      },
+    ]);
   });
 });
 

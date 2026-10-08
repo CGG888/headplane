@@ -64,6 +64,7 @@ const CANDIDATE_REASONS: readonly DerpSyncCandidateReason[] = [
   "temporary",
   "not-public",
   "echo-wins",
+  "dns-wins",
   "excluded",
 ];
 const SKIP_REASONS: readonly DerpSyncSkipReason[] = [

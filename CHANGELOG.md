@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **The DERP address sync can now take IPv6 from the relay hostname instead of the host.** The new **IPv6 address source** select in **Settings → Headscale → DERP → auto-sync** chooses between the host machine's own global unicast address (the default, and exactly what every installation did before the select existed — that mode still does no DNS lookup at all) and the first usable global unicast AAAA answer of `server_url`. Pick the record when the relay is not where clients connect — a router or reverse proxy terminating TLS in front of this machine makes the host's own address unreachable even though it is a real global unicast address — and the candidate list then says which rule decided: an address that lost to the record reads `usable, but the relay hostname's AAAA record was preferred` (`dns-wins`), one that lost to the external echo still reads `echo-wins`, and the echo outranks both. A preferred record with no usable answer leaves the host probe as the fallback, so the family keeps working and the configured value is only left alone when neither source has anything usable. Stored settings written before the option existed normalize to the host source.
+
 # 0.22.24 (October 8, 2026)
 
 ## Changes

@@ -22,11 +22,34 @@ export const DERP_SYNC_INTERVAL_HOURS = [6, 12, 24] as const;
 
 export type DerpSyncIntervalHours = (typeof DERP_SYNC_INTERVAL_HOURS)[number];
 
+/**
+ * Which source outranks the other for the advertised IPv6 address when both have
+ * a usable answer: the machine running the embedded relay (`host`) or the AAAA
+ * record of the relay hostname in `server_url` (`dns`).
+ *
+ * `host` is the historical behaviour and stays the default. It is right when the
+ * host really is the endpoint clients connect to. `dns` is for the other layout:
+ * the hostname points at whatever terminates the connection — a router, a
+ * reverse proxy, a load balancer — so the address clients must dial is the one
+ * the name resolves to, and the relay machine's own address may be unreachable
+ * (a private address, or one behind NAT66). In either mode the external echo
+ * still wins while it is enabled, because it is the one source that knows what
+ * the internet sees.
+ */
+export type DerpSyncIpv6Preference = "host" | "dns";
+
 export interface DerpSyncSettings {
   /** When false the scheduled tick does nothing; a manual run still works. */
   enabled: boolean;
   intervalHours: DerpSyncIntervalHours;
   families: DerpSyncFamilies;
+  /**
+   * Which IPv6 source wins when both this host and the relay hostname have a
+   * usable address. `host` keeps the pre-existing behaviour exactly; `dns`
+   * prefers the AAAA record and falls back to the host's own address when the
+   * name has no usable one.
+   */
+  ipv6Preference: DerpSyncIpv6Preference;
   /**
    * Whether a write may trigger the configured reload/restart integration. On
    * by default, because a written address that never takes effect is worse than
@@ -65,6 +88,8 @@ export type DerpSyncCandidateReason =
   | "temporary"
   | "not-public"
   | "echo-wins"
+  /** Usable, but the AAAA record of the relay hostname was preferred. */
+  | "dns-wins"
   | "excluded";
 
 /**

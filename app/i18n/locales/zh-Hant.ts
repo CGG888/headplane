@@ -2391,7 +2391,7 @@ const zhHant = {
         sync: {
           title: "位址自動同步",
           body: "讓 derp.server.ipv4 與 derp.server.ipv6 一律指向用戶端可連線的位址。HeadplaneCN 會依排程檢查，只有在位址確實變更時才寫入 Headscale 設定檔。",
-          note: "IPv4 取自 server_url 的 A 記錄，因為位於 NAT 之後的機器無法得知自己的公網位址；IPv6 取自本機自身的全域單播位址，啟用下方外部回顯時則取自回顯結果。未能取得可用位址時會完全保留原有的設定值。",
+          note: "IPv4 取自 server_url 的 A 記錄，因為位於 NAT 之後的機器無法得知自己的公網位址；IPv6 取自本機自身的全域單播位址或 server_url 的 AAAA 記錄（取決於下方選擇的優先順序），啟用外部回顯時則取自回顯結果。未能取得可用位址時會完全保留原有的設定值。",
           overrideNote:
             "偵測到的位址一律優先。當它與 derp.server.ipv4 或 derp.server.ipv6 不一致時，執行會寫入它——依位址家族各寫一個鍵，且只寫真正變更的那一個——並在此之前建立快照、記錄稽核項目。",
           enabledLabel: "同步對外公布的位址",
@@ -2406,6 +2406,11 @@ const zhHant = {
           familyBoth: "IPv4 與 IPv6",
           familyIpv4: "僅 IPv4",
           familyIpv6: "僅 IPv6",
+          ipv6PreferenceLabel: "IPv6 位址來源",
+          ipv6PreferenceDescription:
+            "兩個 IPv6 來源都有結果時以哪個為準。若用戶端連線的就是本機，選「本機自身位址」；若 server_url 指向路由器或反向代理（DERP 在本機、入口不在本機），選「網域的 AAAA 記錄」，這樣下發給用戶端的就是網域解析出的位址。只有選擇 AAAA 記錄時才會去查詢它；優先來源沒有可用結果時，另一個來源仍作為後備。啟用外部回顯時，回顯結果仍優先於兩者。",
+          preferenceHost: "本機自身位址",
+          preferenceDns: "網域的 AAAA 記錄",
           autoReloadLabel: "變更後重新載入 Headscale",
           autoReloadDescription:
             "預設為開啟，寫入的位址可立即生效。觸發已設定的重新載入或重啟會短暫中斷所有已連線的用戶端；關閉後可改為手動重新載入。沒有發生變化的執行不會重新載入。",
@@ -2462,10 +2467,12 @@ const zhHant = {
           candidateTemporary: "會輪換的隱私位址，因此優先選擇了穩定位址",
           candidateNotPublic: "不是可用的公網位址，因此被拒絕",
           candidateEchoWins: "被外部回顯結果覆寫",
+          candidateDnsWins: "可用，但優先採用了網域的 AAAA 記錄",
           candidateExcluded: "在網路介面上出現，但不是全域單播位址",
           temporaryHint:
             "選中的 IPv6 位址是臨時（隱私）位址，會輪換並再次變化。建議改用同一網路介面上的穩定位址，並在其變化後檢查 derp.server.ipv6。",
           sourceDns: "DNS A 記錄",
+          sourceDnsIpv6: "DNS AAAA 記錄",
           sourceHost: "主機網路介面",
           sourceEcho: "外部 IPv6 回顯",
           sourceLiteral: "server_url",
@@ -2626,6 +2633,7 @@ const zhHant = {
           "啟用內嵌伺服器且不自動新增區域時，Headscale 要求至少設定一個 DERP 地圖路徑。",
         invalidDerpSyncInterval: "請選擇 6、12 或 24 小時作為檢查間隔。",
         invalidDerpSyncFamilies: "請選擇同步可以更新的位址家族。",
+        invalidDerpSyncIpv6Preference: "請選擇 IPv6 位址取自本機還是網域的 AAAA 記錄。",
         derpSyncSaveFailed: "同步設定無法儲存。請確認 HeadplaneCN 可以寫入其資料目錄。",
         invalidHostEchoUrl: "請輸入 IPv6 回顯端點的絕對 http 或 https URL。",
         hostEchoSaveFailed: "回顯設定無法寫入 HeadplaneCN 的資料目錄。",

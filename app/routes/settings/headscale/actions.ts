@@ -29,7 +29,11 @@ import {
   refreshDerpAfterWrite,
   type DerpChangeKind,
 } from "~/server/derp-refresh";
-import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
+import {
+  isDerpSyncFamilies,
+  isDerpSyncIpv6Preference,
+  parseDerpSyncIntervalHours,
+} from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
   DERP_REGION_NAMES_SNAPSHOT_REASON,
@@ -663,7 +667,18 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("invalidDerpSyncFamilies");
       }
 
-      const result = await derpSync.update({ enabled, intervalHours, families, autoReload });
+      const ipv6Preference = readField(formData, "derp_sync_ipv6_preference");
+      if (!isDerpSyncIpv6Preference(ipv6Preference)) {
+        return failure("invalidDerpSyncIpv6Preference");
+      }
+
+      const result = await derpSync.update({
+        enabled,
+        intervalHours,
+        families,
+        ipv6Preference,
+        autoReload,
+      });
       if (!result.success) {
         return failure("derpSyncSaveFailed");
       }

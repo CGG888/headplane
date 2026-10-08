@@ -2392,7 +2392,7 @@ const zhHans = {
         sync: {
           title: "地址自动同步",
           body: "让 derp.server.ipv4 与 derp.server.ipv6 始终指向客户端可访问的地址。HeadplaneCN 会按计划检查，仅在地址确实变化时才写入 Headscale 配置文件。",
-          note: "IPv4 取自 server_url 的 A 记录，因为位于 NAT 之后的机器无法得知自己的公网地址；IPv6 取自本机自身的全局单播地址，启用下方外部回显时则取自回显结果。未能获得可用地址时会完全保留原有配置值。",
+          note: "IPv4 取自 server_url 的 A 记录，因为位于 NAT 之后的机器无法得知自己的公网地址；IPv6 取自本机自身的全局单播地址或 server_url 的 AAAA 记录（取决于下方选择的优先级），启用外部回显时则取自回显结果。未能获得可用地址时会完全保留原有配置值。",
           overrideNote:
             "检测到的地址始终优先。当它与 derp.server.ipv4 或 derp.server.ipv6 不一致时，运行会写入它——按地址族各写一个键，且只写真正发生变化的那一个——并在此之前创建快照、记录审计条目。",
           enabledLabel: "同步对外公布的地址",
@@ -2407,6 +2407,11 @@ const zhHans = {
           familyBoth: "IPv4 与 IPv6",
           familyIpv4: "仅 IPv4",
           familyIpv6: "仅 IPv6",
+          ipv6PreferenceLabel: "IPv6 地址来源",
+          ipv6PreferenceDescription:
+            "两个 IPv6 来源都有结果时以哪个为准。若客户端连接的就是本机，选「本机自身地址」；若 server_url 指向路由器或反向代理（DERP 在本机、入口不在本机），选「域名的 AAAA 记录」，这样下发给客户端的就是域名解析出的地址。只有选择 AAAA 记录时才会去查询它；优先来源没有可用结果时，另一个来源仍作为兜底。启用外部回显时，回显结果仍优先于两者。",
+          preferenceHost: "本机自身地址",
+          preferenceDns: "域名的 AAAA 记录",
           autoReloadLabel: "变更后重载 Headscale",
           autoReloadDescription:
             "默认开启，写入的地址可立即生效。触发已配置的重载或重启会短暂中断所有已连接的客户端；关闭后可改为手动重载。没有发生变化的运行不会重载。",
@@ -2463,10 +2468,12 @@ const zhHans = {
           candidateTemporary: "会轮换的隐私地址，因此优先选择了稳定地址",
           candidateNotPublic: "不是可用的公网地址，因此被拒绝",
           candidateEchoWins: "被外部回显结果覆盖",
+          candidateDnsWins: "可用，但优先采用了域名的 AAAA 记录",
           candidateExcluded: "在网卡上出现，但不是全局单播地址",
           temporaryHint:
             "选中的 IPv6 地址是临时（隐私）地址，会轮换并再次变化。建议改用同一网卡上的稳定地址，并在其变化后检查 derp.server.ipv6。",
           sourceDns: "DNS A 记录",
+          sourceDnsIpv6: "DNS AAAA 记录",
           sourceHost: "主机网卡",
           sourceEcho: "外部 IPv6 回显",
           sourceLiteral: "server_url",
@@ -2627,6 +2634,7 @@ const zhHans = {
           "启用内嵌服务器且不自动添加区域时，Headscale 要求至少配置一个 DERP 地图路径。",
         invalidDerpSyncInterval: "请选择 6、12 或 24 小时作为检查间隔。",
         invalidDerpSyncFamilies: "请选择同步可以更新的地址族。",
+        invalidDerpSyncIpv6Preference: "请选择 IPv6 地址取自本机还是域名的 AAAA 记录。",
         derpSyncSaveFailed: "同步设置无法保存。请确认 HeadplaneCN 可以写入其数据目录。",
         invalidHostEchoUrl: "请输入 IPv6 回显端点的绝对 http 或 https URL。",
         hostEchoSaveFailed: "回显设置无法写入 HeadplaneCN 的数据目录。",

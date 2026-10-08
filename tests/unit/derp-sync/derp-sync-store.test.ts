@@ -79,6 +79,7 @@ describe("DERP sync document parsing", () => {
       enabled: true,
       intervalHours: DEFAULT_DERP_SYNC_SETTINGS.intervalHours,
       families: "ipv4",
+      ipv6Preference: "host",
       autoReload: true,
     });
 
@@ -104,6 +105,7 @@ describe("DERP sync document parsing", () => {
             { family: "ipv4", address: "8.8.8.8", source: "dns", reason: "selected" },
             { family: "ipv4", address: "8.8.8.8", source: "dns", reason: "why" },
             { family: "ipv9", address: "8.8.8.8", source: "dns", reason: "selected" },
+            { family: "ipv6", address: "2606:4700::1111", source: "host", reason: "dns-wins" },
             "junk",
           ],
           changes: [{ family: "ipv4", to: "8.8.8.8" }, { family: "ipv9", to: "x" }, "junk"],
@@ -122,6 +124,13 @@ describe("DERP sync document parsing", () => {
     expect(document.last?.detected).toEqual({ ipv4: { address: "8.8.8.8", source: "dns" } });
     expect(document.last?.candidates).toEqual([
       { family: "ipv4", address: "8.8.8.8", source: "dns", chosen: false, reason: "selected" },
+      {
+        family: "ipv6",
+        address: "2606:4700::1111",
+        source: "host",
+        chosen: false,
+        reason: "dns-wins",
+      },
     ]);
     expect(document.last?.changes).toEqual([{ family: "ipv4", to: "8.8.8.8" }]);
     expect(document.last?.skipped).toEqual([{ family: "ipv6", reason: "no-records" }]);

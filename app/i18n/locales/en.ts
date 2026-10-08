@@ -2567,7 +2567,7 @@ const en = {
         sync: {
           title: "Address auto-sync",
           body: "Keep derp.server.ipv4 and derp.server.ipv6 pointing at the addresses clients can reach. HeadplaneCN checks them on a schedule and writes Headscale's configuration file only when a value actually changed.",
-          note: "IPv4 comes from the A record of server_url, because a machine behind NAT cannot know its own public address. IPv6 comes from this host's own global unicast address, or from the external echo below while it is enabled. A detection that finds nothing usable leaves the configured value exactly as it is.",
+          note: "IPv4 comes from the A record of server_url, because a machine behind NAT cannot know its own public address. IPv6 comes from this host's own global unicast address or from the AAAA record of server_url, whichever the preference below selects, or from the external echo below while it is enabled. A detection that finds nothing usable leaves the configured value exactly as it is.",
           overrideNote:
             "The detected address always wins. When it differs from derp.server.ipv4 or derp.server.ipv6, a run writes it — one key per family, and only for the family that actually changed — after taking a snapshot and recording an audit entry.",
           enabledLabel: "Sync the advertised addresses",
@@ -2584,6 +2584,11 @@ const en = {
           familyBoth: "IPv4 and IPv6",
           familyIpv4: "IPv4 only",
           familyIpv6: "IPv6 only",
+          ipv6PreferenceLabel: "IPv6 address source",
+          ipv6PreferenceDescription:
+            "Which of the two IPv6 sources wins when both have an answer. Pick the host's own address when this machine is the one clients connect to; pick the AAAA record when server_url points at a router or a proxy in front of it, so the address clients dial is the one the name resolves to. The record is only read when it is preferred, and the other source stays the fallback whenever the preferred one has nothing usable. The external echo still wins over both while it is enabled.",
+          preferenceHost: "This host's own address",
+          preferenceDns: "The relay hostname's AAAA record",
           autoReloadLabel: "Reload Headscale after a change",
           autoReloadDescription:
             "On by default, so a written address takes effect immediately. Triggering the configured reload or restart briefly interrupts every connected client: turn this off to reload by hand instead. A run that changes nothing never reloads.",
@@ -2643,10 +2648,12 @@ const en = {
           candidateTemporary: "a rotating privacy address, so a stable one was preferred",
           candidateNotPublic: "not a usable public address, so it was rejected",
           candidateEchoWins: "overridden by the external echo answer",
+          candidateDnsWins: "usable, but the relay hostname's AAAA record was preferred",
           candidateExcluded: "seen on an interface but not a global unicast address",
           temporaryHint:
             "The selected IPv6 address is a temporary (privacy) address, so it rotates and will change again. Prefer a stable address on the same interface, and check derp.server.ipv6 after it changes.",
           sourceDns: "DNS A record",
+          sourceDnsIpv6: "DNS AAAA record",
           sourceHost: "host interface",
           sourceEcho: "external IPv6 echo",
           sourceLiteral: "server_url",
@@ -2822,6 +2829,8 @@ const en = {
           "Headscale requires at least one DERP map path when the embedded server is enabled and its region is not added automatically.",
         invalidDerpSyncInterval: "Choose 6, 12 or 24 hours as the check interval.",
         invalidDerpSyncFamilies: "Choose which address families the sync may update.",
+        invalidDerpSyncIpv6Preference:
+          "Choose whether this host or the relay hostname's AAAA record provides the IPv6 address.",
         derpSyncSaveFailed:
           "The sync settings could not be saved. Check that HeadplaneCN can write its data directory.",
         invalidHostEchoUrl: "Enter an absolute http or https URL for the IPv6 echo endpoint.",

@@ -9,6 +9,7 @@ import {
   DERP_SYNC_INTERVAL_HOURS,
   type DerpSyncFamilies,
   type DerpSyncIntervalHours,
+  type DerpSyncIpv6Preference,
   type DerpSyncSettings,
 } from "./types";
 
@@ -18,6 +19,11 @@ export const DEFAULT_DERP_SYNC_SETTINGS: DerpSyncSettings = {
   enabled: false,
   intervalHours: 12,
   families: "both",
+  // The historical behaviour: the relay machine's own global unicast address
+  // wins. Changing the default would silently repoint the advertised address of
+  // every existing installation on the first run after an upgrade, so the
+  // operator opts into the DNS preference instead.
+  ipv6Preference: "host",
   // On by default: an address written into the configuration file only reaches
   // clients after a reload, and a reload briefly interrupts them. The switch
   // exists so an operator can decide to reload by hand instead.
@@ -47,6 +53,11 @@ export function isDerpSyncFamilies(value: unknown): value is DerpSyncFamilies {
   return value === "both" || value === "ipv4" || value === "ipv6";
 }
 
+/** Only the two offered sources are accepted; anything else takes the default. */
+export function isDerpSyncIpv6Preference(value: unknown): value is DerpSyncIpv6Preference {
+  return value === "host" || value === "dns";
+}
+
 /** Turns an arbitrary value into usable settings, defaulting anything unknown. */
 export function normalizeDerpSyncSettings(value: unknown): DerpSyncSettings {
   const source =
@@ -61,6 +72,11 @@ export function normalizeDerpSyncSettings(value: unknown): DerpSyncSettings {
     families: isDerpSyncFamilies(source.families)
       ? source.families
       : DEFAULT_DERP_SYNC_SETTINGS.families,
+    // A document written before the switch existed has no key, and gets the
+    // behaviour it was written under: the host's own address wins.
+    ipv6Preference: isDerpSyncIpv6Preference(source.ipv6Preference)
+      ? source.ipv6Preference
+      : DEFAULT_DERP_SYNC_SETTINGS.ipv6Preference,
     // Only an explicit "false" turns the reload off; a document written before
     // the default changed, or one missing the key, gets the default (on).
     autoReload: source.autoReload !== false,

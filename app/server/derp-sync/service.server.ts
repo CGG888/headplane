@@ -7,16 +7,22 @@
 //
 // IPv4 is read from the A record of `server_url` because a machine behind NAT
 // cannot know its own public address; a lookup that fails leaves the configured
-// value exactly as it is. IPv6 is read from the host's own global unicast
+// value exactly as it is. IPv6 has two candidate sources and the operator picks
+// which one wins (`settings.ipv6Preference`): the host's own global unicast
 // address through `loadHostIpv6Addresses`, the same probe the relay card uses,
-// and ranked by the same selection, so a rotating privacy address is never
-// preferred over a stable one. A local address is only written when the probe
-// could confirm this process shares the host's network namespace; a bridged
-// container reads `unknown` rather than `isolated`, and is skipped rather than
-// advertising a container-only address. When the operator enabled the external
-// IPv6 echo (off by default, configured on this same settings card), its answer
-// wins: it is what the internet actually sees, so it is right even when every
-// local address is the container's or the router's.
+// ranked by the same selection so a rotating privacy address is never preferred
+// over a stable one; or the AAAA record of the relay hostname, which is what
+// clients actually dial when a router or a proxy in front of the relay
+// terminates the connection. The default, `host`, is the behaviour every
+// installation had before the switch existed. A local address is only written
+// when the probe could confirm this process shares the host's network namespace;
+// a bridged container reads `unknown` rather than `isolated`, and is skipped
+// rather than advertising a container-only address — unless the record was
+// preferred and has an answer, because then the container's own view of the host
+// does not matter. When the operator enabled the external IPv6 echo (off by
+// default, configured on this same settings card), its answer wins over both: it
+// is what the internet actually sees, so it is right even when every local
+// address is the container's or the router's.
 //
 // Override policy A: the detected address is always authoritative. If it differs
 // from `derp.server.ipv4`/`ipv6` the run writes it, per family and only for the
@@ -51,15 +57,19 @@ import log from "~/utils/log";
 
 import {
   buildIpv4Candidates,
+  buildIpv6DnsCandidates,
   buildIpv6ExcludedCandidates,
   buildIpv6HostCandidates,
   isIpLiteralHost,
   isPublicSyncIpv4,
   isPublicSyncIpv6,
   literalSyncIpv4,
+  literalSyncIpv6,
   pickPublicSyncIpv4,
+  pickPublicSyncIpv6,
   planDerpSync,
   relayHostnameFromServerUrl,
+  type DerpSyncIpv6DnsCandidateInput,
   type DerpSyncPlan,
 } from "./addresses";
 import { derpSyncIntervalMs, normalizeDerpSyncSettings, selectedFamilies } from "./settings";
@@ -69,6 +79,7 @@ import type {
   DerpSyncDocument,
   DerpSyncFailureReason,
   DerpSyncFamily,
+  DerpSyncIpv6Preference,
   DerpSyncMode,
   DerpSyncOutcome,
   DerpSyncReload,
@@ -175,6 +186,18 @@ interface FamilyDetection {
   value?: DerpSyncValue;
   skip?: DerpSyncSkip;
   candidates: DerpSyncCandidate[];
+}
+
+/**
+ * The AAAA answers of the relay hostname, and either the answer the `dns`
+ * preference would advertise or the reason there is none. Exactly one of `value`
+ * and `skip` is set, so a run that ends up with no address always has something
+ * to report.
+ */
+interface RelayIpv6Record {
+  answers: DerpSyncIpv6DnsCandidateInput[];
+  value?: DerpSyncValue;
+  skip?: DerpSyncSkip;
 }
 
 /**
@@ -328,23 +351,125 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
   }
 
   /**
+   * The AAAA answers of the relay hostname in `server_url`, and the answer the
+   * `dns` preference would advertise.
+   *
+   * Read only when that preference is selected: `host` has to keep the behaviour
+   * installations had before the switch existed, down to doing no lookup at all.
+   * A literal address in `server_url` is its own answer and needs no lookup,
+   * exactly as on the IPv4 side; anything that fails, or that has no usable
+   * global unicast answer, is reported so the caller can fall back to the host
+   * probe and still say why the record did not decide.
+   */
+  async function loadRelayIpv6Record(serverUrl: string): Promise<RelayIpv6Record> {
+    const host = relayHostnameFromServerUrl(serverUrl);
+    if (host === undefined) {
+      return {
+        answers: [],
+        skip: {
+          family: "ipv6",
+          reason: serverUrl.trim().length === 0 ? "host-missing" : "invalid-host",
+          ...(serverUrl.trim().length > 0 ? { detail: serverUrl.trim() } : {}),
+        },
+      };
+    }
+
+    const literal = literalSyncIpv6(host);
+    if (literal !== undefined) {
+      const answers: DerpSyncIpv6DnsCandidateInput[] = [{ address: literal, source: "literal" }];
+      return isPublicSyncIpv6(literal)
+        ? { answers, value: { address: literal, source: "literal" } }
+        : { answers, skip: { family: "ipv6", reason: "not-public", detail: literal } };
+    }
+
+    if (isIpLiteralHost(host)) {
+      // The relay is named by an IPv4 address, so there is no AAAA record to
+      // read: this family has no answer here. Reported without a lookup, because
+      // handing a literal to a resolver would fail for the wrong reason.
+      return { answers: [], skip: { family: "ipv6", reason: "no-records", detail: host } };
+    }
+
+    const resolution = await resolveRelay(host);
+    if (resolution === undefined) {
+      return { answers: [], skip: { family: "ipv6", reason: "lookup-failed", detail: host } };
+    }
+
+    const answers: DerpSyncIpv6DnsCandidateInput[] = resolution.ipv6.map((address) => ({
+      address,
+      source: "dns",
+    }));
+
+    if (answers.length === 0) {
+      return {
+        answers,
+        skip: {
+          family: "ipv6",
+          reason:
+            resolution.reason === "timeout" || resolution.reason === "resolver-error"
+              ? "lookup-failed"
+              : "no-records",
+          detail: host,
+        },
+      };
+    }
+
+    const accepted = pickPublicSyncIpv6(answers.map((answer) => answer.address));
+    if (accepted === undefined) {
+      return {
+        answers,
+        skip: { family: "ipv6", reason: "not-public", detail: resolution.ipv6.join(", ") },
+      };
+    }
+
+    return {
+      answers,
+      value: {
+        address: accepted,
+        // The record's own source: a literal `server_url` names the address
+        // itself rather than resolving to it, and the panel labels the row with
+        // the difference.
+        source: answers.find((answer) => answer.address.trim() === accepted)?.source ?? "dns",
+      },
+    };
+  }
+
+  /**
    * The address clients must be able to reach, IPv6 side.
+   *
+   * Two sources can answer, and `preference` says which one wins when both do:
+   * this host's own global unicast address, or the AAAA record of the relay
+   * hostname. Whichever loses is still reported as candidates with the reason it
+   * lost, so the card shows the decision rather than only its outcome. The
+   * default, `host`, reproduces the pre-existing behaviour exactly — the record
+   * is not even looked up. With `dns` the record wins when it has an answer, and
+   * the host probe remains the fallback, which is what makes the option safe for
+   * a relay whose hostname points at a router or a proxy instead of at this
+   * machine's own address.
    *
    * A local address is only advertised when the process can show it shares the
    * host's network namespace: a bridged container reads `unknown` rather than
    * `isolated` (see `classifyNetworkNamespace`), and the interfaces it sees are
    * its own, so any namespace that is not confirmed to be the host's is skipped
-   * with a reason instead of being assumed to be the host. The external echo —
-   * when the operator enabled it — wins over that rule: it is the one source
-   * that knows what the internet sees, which is exactly the NAT66 or
-   * forwarded-address case where no local address is right.
+   * with a reason instead of being assumed to be the host. A preferred record
+   * does not depend on that: it describes the relay's name, not this process's
+   * view of its interfaces. The external echo — when the operator enabled it —
+   * wins over both: it is the one source that knows what the internet sees,
+   * which is exactly the NAT66 or forwarded-address case where no local address
+   * is right.
    */
-  async function detectIpv6(): Promise<FamilyDetection> {
-    const [host, echo] = await Promise.all([loadHostIpv6(), resolveHostEcho()]);
+  async function detectIpv6(
+    serverUrl: string,
+    preference: DerpSyncIpv6Preference,
+  ): Promise<FamilyDetection> {
+    const [host, echo, record] = await Promise.all([
+      loadHostIpv6(),
+      resolveHostEcho(),
+      preference === "dns" ? loadRelayIpv6Record(serverUrl) : Promise.resolve(undefined),
+    ]);
     const echoAddress = echo.address;
     const echoUsable = echoAddress !== undefined && isPublicSyncIpv6(echoAddress);
     // Only a namespace Headplane could confirm is the host's makes a local
-    // address trustworthy; the echo below is the one exception to that.
+    // address trustworthy; the echo and a preferred record are the exceptions.
     const trusted = host.namespace === "host";
     const excluded = buildIpv6ExcludedCandidates(
       (host.excluded ?? []).map((entry) => ({
@@ -353,6 +478,15 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         kind: entry.kind,
       })),
     );
+
+    // The record's rows, including answers a rule rejected: an answer that is
+    // present but unusable is still worth showing, and it is why the record did
+    // not decide the address.
+    const recordValue = record?.value;
+    const recordCandidates =
+      record === undefined
+        ? []
+        : buildIpv6DnsCandidates(record.answers, recordValue?.address, echoUsable);
 
     // An answer that is present but unusable is still worth showing: it is why
     // the echo did not decide the address.
@@ -371,7 +505,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
 
     // The selection is built even when the namespace is not the host's, so the
     // panel can show what this process saw; it is only ever written from a
-    // namespace that could be confirmed as the host's.
+    // namespace that could be confirmed as the host's, or from the record.
     const selection = selectHostIpv6Address(host.candidates);
     const localCandidates = buildIpv6HostCandidates(
       selection.candidates.map((candidate) => ({
@@ -379,8 +513,15 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
         interfaceName: candidate.interfaceName,
         temporary: candidate.temporary,
       })),
-      echoUsable ? echoAddress : trusted ? selection.address : undefined,
+      echoUsable
+        ? echoAddress
+        : recordValue !== undefined
+          ? undefined
+          : trusted
+            ? selection.address
+            : undefined,
       echoUsable,
+      recordValue === undefined ? undefined : "dns-wins",
     );
 
     if (echoUsable) {
@@ -394,38 +535,51 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
             chosen: true,
             reason: "selected",
           },
+          ...recordCandidates,
           ...localCandidates,
           ...excluded,
         ],
       };
     }
 
+    if (recordValue !== undefined) {
+      return {
+        value: recordValue,
+        candidates: [...recordCandidates, ...localCandidates, ...rejectedEcho, ...excluded],
+      };
+    }
+
+    // The preference was `dns` and the record had no usable answer: the host
+    // probe is the fallback, so the record's own reason is only reported when
+    // that fallback finds nothing either.
+    const recordSkip = record?.skip;
+
     if (!trusted) {
       // A container that does not share the host's stack enumerates its own
       // interfaces, so writing one would advertise an address clients cannot
       // reach. The addresses it did see are still reported as candidates.
       return {
-        skip: { family: "ipv6", reason: "namespace-unavailable" },
-        candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+        skip: recordSkip ?? { family: "ipv6", reason: "namespace-unavailable" },
+        candidates: [...recordCandidates, ...localCandidates, ...rejectedEcho, ...excluded],
       };
     }
 
     const chosen = selection.address;
     if (chosen === undefined) {
       return {
-        skip: { family: "ipv6", reason: "no-host-address" },
-        candidates: [...rejectedEcho, ...excluded],
+        skip: recordSkip ?? { family: "ipv6", reason: "no-host-address" },
+        candidates: [...recordCandidates, ...rejectedEcho, ...excluded],
       };
     }
 
     return isPublicSyncIpv6(chosen)
       ? {
           value: { address: chosen, source: "host" },
-          candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+          candidates: [...recordCandidates, ...localCandidates, ...rejectedEcho, ...excluded],
         }
       : {
-          skip: { family: "ipv6", reason: "not-public", detail: chosen },
-          candidates: [...localCandidates, ...rejectedEcho, ...excluded],
+          skip: recordSkip ?? { family: "ipv6", reason: "not-public", detail: chosen },
+          candidates: [...recordCandidates, ...localCandidates, ...rejectedEcho, ...excluded],
         };
   }
 
@@ -565,7 +719,7 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
       }
 
       if (wanted.includes("ipv6")) {
-        const result = await detectIpv6();
+        const result = await detectIpv6(derp.serverUrl, settings.ipv6Preference);
         candidates.push(...result.candidates);
         if (result.value !== undefined) {
           detected.ipv6 = result.value;

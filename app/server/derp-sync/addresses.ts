@@ -147,6 +147,22 @@ export function isPublicSyncIpv6(value: string): boolean {
   return classifyIpv6Address(value.trim()) === "global";
 }
 
+/**
+ * The first usable global unicast answer in a DNS reply, mirroring
+ * {@link pickPublicSyncIpv4}: a hostname may carry several AAAA records, and one
+ * ULA or link-local address in the set does not invalidate the others.
+ */
+export function pickPublicSyncIpv6(values: readonly string[]): string | undefined {
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed.length > 0 && isPublicSyncIpv6(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  return undefined;
+}
+
 // MARK: Comparison
 
 function canonicalSyncIpv4(value: string): string | undefined {
@@ -226,12 +242,15 @@ export interface DerpSyncIpv6CandidateInput {
  *
  * `echoApplied` says the external echo answer won, which is why none of these
  * was chosen; a temporary candidate then reads as overridden rather than as
- * merely outranked.
+ * merely outranked. `outrankedBy` names the other answer that won instead — the
+ * preferred AAAA record — so the rows say which rule decided, not just that
+ * something else did.
  */
 export function buildIpv6HostCandidates(
   inputs: readonly DerpSyncIpv6CandidateInput[],
   chosen: string | undefined,
   echoApplied: boolean,
+  outrankedBy?: DerpSyncCandidateReason,
 ): DerpSyncCandidate[] {
   return inputs.map((input) => {
     const address = input.address.trim();
@@ -240,9 +259,7 @@ export function buildIpv6HostCandidates(
       ? "selected"
       : echoApplied
         ? "echo-wins"
-        : input.temporary
-          ? "temporary"
-          : "ranked-lower";
+        : (outrankedBy ?? (input.temporary ? "temporary" : "ranked-lower"));
 
     return {
       family: "ipv6",
@@ -252,6 +269,51 @@ export function buildIpv6HostCandidates(
       reason,
       ...(input.temporary ? { temporary: true } : {}),
       ...(input.interfaceName.length > 0 ? { interfaceName: input.interfaceName } : {}),
+    } satisfies DerpSyncCandidate;
+  });
+}
+
+/** One AAAA answer of the relay hostname, as the IPv6 detection saw it. */
+export interface DerpSyncIpv6DnsCandidateInput {
+  address: string;
+  /** `dns` for a record, `literal` when `server_url` names the address itself. */
+  source: DerpSyncSource;
+}
+
+/**
+ * Panel rows for the IPv6 answers of the relay hostname. The IPv6 counterpart of
+ * {@link buildIpv4Candidates}, and the only place a DNS answer appears for this
+ * family: the record is what clients dial when something in front of the relay
+ * terminates the connection. `echoApplied` says the external echo outranked the
+ * record, so its rows read as overridden rather than merely outranked.
+ */
+export function buildIpv6DnsCandidates(
+  inputs: readonly DerpSyncIpv6DnsCandidateInput[],
+  chosen: string | undefined,
+  echoApplied = false,
+): DerpSyncCandidate[] {
+  return inputs.map((input) => {
+    const address = input.address.trim();
+    // The echo is the answer in that case, so no record row is ever the chosen
+    // one even if it happens to spell the same address.
+    const selected =
+      !echoApplied && chosen !== undefined && syncAddressesMatch("ipv6", address, chosen);
+    const kind = classifyIpv6Address(address);
+    const publicAddress = kind === "global";
+
+    return {
+      family: "ipv6",
+      address,
+      source: input.source,
+      chosen: selected,
+      reason: selected
+        ? "selected"
+        : echoApplied
+          ? "echo-wins"
+          : publicAddress
+            ? "ranked-lower"
+            : "not-public",
+      ...(publicAddress ? {} : { detail: kind }),
     } satisfies DerpSyncCandidate;
   });
 }
@@ -326,6 +388,20 @@ export function literalSyncIpv4(host: string | undefined): string | undefined {
 export function isIpLiteralHost(host: string | undefined): boolean {
   const trimmed = (host ?? "").trim().replace(/^\[|\]$/g, "");
   return trimmed.length > 0 && (trimmed.includes(":") || parseIpv4(trimmed) !== undefined);
+}
+
+/**
+ * The usable IPv6 answer of a `server_url` host. A literal address needs no
+ * lookup, so it is its own answer; a hostname is resolved by the caller.
+ * `undefined` means "not an IPv6 host" rather than "no address".
+ */
+export function literalSyncIpv6(host: string | undefined): string | undefined {
+  const trimmed = (host ?? "").trim().replace(/^\[|\]$/g, "");
+  if (trimmed.length === 0 || !trimmed.includes(":")) {
+    return undefined;
+  }
+
+  return parseIpv6(trimmed) === undefined ? undefined : trimmed;
 }
 
 // MARK: Plan

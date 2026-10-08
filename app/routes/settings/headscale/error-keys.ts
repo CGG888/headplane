@@ -53,6 +53,7 @@ export type HeadscaleSettingsErrorCode =
   | "derpPathsRequired"
   | "invalidDerpSyncInterval"
   | "invalidDerpSyncFamilies"
+  | "invalidDerpSyncIpv6Preference"
   | "derpSyncSaveFailed"
   | "invalidHostEchoUrl"
   | "hostEchoSaveFailed"
@@ -124,6 +125,7 @@ export const HEADSCALE_SETTINGS_ERROR_KEYS: Record<HeadscaleSettingsErrorCode, T
   derpPathsRequired: "settings.headscale.errors.derpPathsRequired",
   invalidDerpSyncInterval: "settings.headscale.errors.invalidDerpSyncInterval",
   invalidDerpSyncFamilies: "settings.headscale.errors.invalidDerpSyncFamilies",
+  invalidDerpSyncIpv6Preference: "settings.headscale.errors.invalidDerpSyncIpv6Preference",
   derpSyncSaveFailed: "settings.headscale.errors.derpSyncSaveFailed",
   invalidHostEchoUrl: "settings.headscale.errors.invalidHostEchoUrl",
   hostEchoSaveFailed: "settings.headscale.errors.hostEchoSaveFailed",

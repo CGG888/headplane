@@ -22,6 +22,7 @@ const RELAY_HOST = "relay.example.com";
 const HOST_IPV6 = "2606:4700::1111";
 const PRIVACY_IPV6 = "2606:4700:0:0:152f:808e:9eb1:31c9";
 const ECHO_IPV6 = "240e:3b3:4030:1510::1";
+const DNS_IPV6 = "240e:3b3:4036:cbf0::1";
 const PUBLIC_IPV4 = "8.8.8.8";
 
 function resolution(ipv4: string[], overrides: Partial<RelayResolution> = {}): RelayResolution {
@@ -478,6 +479,134 @@ describe("DERP address sync service", () => {
     ]);
   });
 
+  test("the default IPv6 source keeps the host's own address even when the name resolves", async () => {
+    // The `host` preference is what every installation had before the switch
+    // existed, so it must not even read the record.
+    const preferHost = build({
+      resolve: async () => resolution([PUBLIC_IPV4], { ipv6: [DNS_IPV6] }),
+    });
+    await preferHost.service.update({ enabled: true, families: "ipv6" });
+
+    const run = await preferHost.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: HOST_IPV6, source: "host" });
+    expect(preferHost.patches).toEqual([{ path: "derp.server.ipv6", value: HOST_IPV6 }]);
+    expect(run?.candidates).not.toContainEqual(
+      expect.objectContaining({ family: "ipv6", source: "dns" }),
+    );
+  });
+
+  test("preferring the record writes the AAAA answer clients dial", async () => {
+    const preferDns = build({
+      initial: { ipv6: HOST_IPV6 },
+      resolve: async () => resolution([PUBLIC_IPV4], { ipv6: [DNS_IPV6] }),
+    });
+    await preferDns.service.update({ enabled: true, families: "ipv6", ipv6Preference: "dns" });
+
+    const run = await preferDns.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: DNS_IPV6, source: "dns" });
+    expect(run?.changes).toEqual([{ family: "ipv6", from: HOST_IPV6, to: DNS_IPV6 }]);
+    expect(preferDns.patches).toEqual([{ path: "derp.server.ipv6", value: DNS_IPV6 }]);
+    expect(preferDns.current().ipv6).toBe(DNS_IPV6);
+    // The host address is still listed, now saying which rule outranked it.
+    expect(run?.candidates).toEqual([
+      { family: "ipv6", address: DNS_IPV6, source: "dns", chosen: true, reason: "selected" },
+      {
+        family: "ipv6",
+        address: HOST_IPV6,
+        source: "host",
+        chosen: false,
+        reason: "dns-wins",
+        interfaceName: "eth0",
+      },
+    ]);
+  });
+
+  test("preferring the record falls back to the host when the name has no AAAA answer", async () => {
+    const fallback = build({ resolve: async () => resolution([PUBLIC_IPV4]) });
+    await fallback.service.update({ enabled: true, families: "ipv6", ipv6Preference: "dns" });
+
+    const run = await fallback.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: HOST_IPV6, source: "host" });
+    expect(fallback.patches).toEqual([{ path: "derp.server.ipv6", value: HOST_IPV6 }]);
+  });
+
+  test("the external echo still outranks a preferred record", async () => {
+    const echoWins = build({
+      resolve: async () => resolution([PUBLIC_IPV4], { ipv6: [DNS_IPV6] }),
+      echo: async () => ({
+        address: ECHO_IPV6,
+        attempted: ["https://api64.ipify.org?format=json"],
+      }),
+    });
+    await echoWins.service.update({ enabled: true, families: "ipv6", ipv6Preference: "dns" });
+
+    const run = await echoWins.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: ECHO_IPV6, source: "echo" });
+    expect(run?.candidates).toEqual([
+      { family: "ipv6", address: ECHO_IPV6, source: "echo", chosen: true, reason: "selected" },
+      { family: "ipv6", address: DNS_IPV6, source: "dns", chosen: false, reason: "echo-wins" },
+      {
+        family: "ipv6",
+        address: HOST_IPV6,
+        source: "host",
+        chosen: false,
+        reason: "echo-wins",
+        interfaceName: "eth0",
+      },
+    ]);
+  });
+
+  test("a record with no usable answer is the reported reason when the host has none either", async () => {
+    const nothing = build({
+      resolve: async () => resolution([PUBLIC_IPV4], { ipv6: ["fd00::1"] }),
+      host: async () => hostAddresses({ candidates: [] }),
+    });
+    await nothing.service.update({ enabled: true, families: "ipv6", ipv6Preference: "dns" });
+
+    const run = await nothing.service.runNow();
+
+    expect(run?.skipped).toContainEqual(
+      expect.objectContaining({ family: "ipv6", reason: "not-public" }),
+    );
+    expect(nothing.patches).toEqual([]);
+    expect(nothing.current().ipv6).toBe("");
+  });
+
+  test("an unusable AAAA answer is listed with the reason it was rejected", async () => {
+    const unusable = build({
+      resolve: async () => resolution([PUBLIC_IPV4], { ipv6: ["fd00::1", DNS_IPV6] }),
+    });
+    await unusable.service.update({ enabled: true, families: "ipv6", ipv6Preference: "dns" });
+
+    const run = await unusable.service.runNow();
+
+    expect(run?.detected.ipv6).toEqual({ address: DNS_IPV6, source: "dns" });
+    expect(run?.candidates).toContainEqual({
+      family: "ipv6",
+      address: "fd00::1",
+      source: "dns",
+      chosen: false,
+      reason: "not-public",
+      detail: "ula",
+    });
+  });
+
+  test("the chosen IPv6 source survives a save and a reload of the document", async () => {
+    const persisted = build({});
+    await persisted.service.update({ enabled: true, intervalHours: 6, ipv6Preference: "dns" });
+
+    const document = await readDerpSyncDocument(dir);
+
+    expect(document.settings.ipv6Preference).toBe("dns");
+    // Anything else in the form is untouched by the new field.
+    expect(document.settings.intervalHours).toBe(6);
+    expect(document.settings.families).toBe("both");
+  });
+
   test("an address the host probe excluded is shown with its reason", async () => {
     const test7e = build({
       host: async () =>
@@ -694,6 +823,7 @@ describe("DERP address sync service", () => {
       enabled: true,
       intervalHours: 24,
       families: "ipv4",
+      ipv6Preference: "host",
       autoReload: true,
     });
     expect(stored.last?.outcome).toBe("changed");
@@ -868,6 +998,7 @@ describe("DERP address sync scheduling", () => {
         enabled: true,
         intervalHours: 24,
         families: "both",
+        ipv6Preference: "host",
         autoReload: false,
       } satisfies DerpSyncSettings,
     });
