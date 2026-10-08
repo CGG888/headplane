@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.24 (October 8, 2026)
+
 ## Changes
 
 - **Caddy ships with the panel in both NAS layouts.** The native-mode (`/install/fnos`) and dual-image (`/install/dual-image`) compose files now define the `caddy` service and carry the `CADDY_PORT` line in `.env`, so the Lucky route no longer needs a second stack under `/vol1/1000/APP/caddy`: the Caddyfile lives in `caddy/` next to the panel, `/install/reverse-proxy-lucky` documents the merged layout first and `scripts/dual-image-install.sh` generates the service, the `.env` keys and the Caddyfile. `/install/migration` and the README compose example carry the same three-container shape.
@@ -10,6 +12,8 @@
 
 - **The version card no longer reads "not reported" on a rate-limited or blocked address.** The panel asked the GitHub REST API for the newest Headscale and Headplane releases, and that endpoint allows only 60 unauthenticated requests per hour per address: on a shared connection it answers HTTP 403 `API rate limit exceeded`, so both **Latest version** rows rendered `— (not reported)` while the panel itself was healthy. The lookup now asks `https://github.com/<owner>/<repo>/releases/latest` and reads the tag out of the 302's `Location` header — not subject to that limit and no token needed — and when github.com cannot be reached at all it retries the same lookup through a mirror (`https://ghproxy.net/`, `https://ghfast.top/`, `https://v6.gh-proxy.org/`, `https://gh-proxy.com/`), accepting either the redirect, the API payload or a proxied release page, then tries the route that worked first. Set `HEADPLANE_RELEASE_MIRROR` to your own prefix (comma-separated, `off` disables the fallback), or start the panel with `NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY` to send the lookup through a real proxy.
 - **Browser SSH opens behind a TLS-terminating proxy instead of answering `Unexpected Server Error`.** Before rendering the terminal the console probes its WASM bundle with a `HEAD` request to the origin React Router derives from the incoming request. Behind a proxy that terminates TLS the socket is cleartext, so that origin was `http://<public-host>:<public-port>` — the probe asked a TLS port for a file over HTTP, Node failed it with `ECONNRESET`, and because a rejected fetch is not a `Response` the router turned it into the generic `Unexpected Server Error` instead of the localized "bundle missing" card. It now probes the listener Headplane actually bound (`server.host`/`server.port`, `https` when `server.tls_*` is set, loopback for a wildcard bind) first and keeps the request origin as the fallback the Vite dev server needs, and a fetch that fails counts as a missing asset so the page shows its own message rather than a 500.
+
+---
 
 # 0.22.23 (October 8, 2026)
 
