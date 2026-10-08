@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { parse } from "yaml";
 
-import { loadHeadscaleConfig } from "~/server/headscale/config-loader";
+import {
+  atomicWriteFile,
+  loadHeadscaleConfig,
+  type AtomicWriteFs,
+} from "~/server/headscale/config-loader";
 
 describe("Headscale config loader", () => {
   let dir: string;
@@ -912,5 +916,120 @@ describe("Headscale config loader", () => {
     // at all instead of reaching the JSON reader.
     const config = await loadHeadscaleConfig(path, recordsDir);
     expect(config.dnsRecords()).toEqual([]);
+  });
+});
+
+interface FakeFile {
+  content: string;
+  mode: number;
+}
+
+/**
+ * A filesystem that knows only the files handed to it, so the atomic write can
+ * be observed step by step: what the temp file held, whether the target was
+ * renamed over or copied through, and what survived a failure.
+ */
+function createFakeFs(initial: Record<string, FakeFile> = {}) {
+  const files = new Map(Object.entries(initial).map(([path, entry]) => [path, { ...entry }]));
+  const fs: AtomicWriteFs = {
+    stat: (path) => {
+      const entry = files.get(path);
+      if (entry === undefined) {
+        return Promise.reject(errnoError("ENOENT"));
+      }
+
+      return Promise.resolve({ mode: entry.mode });
+    },
+    writeFile: (path, data, options) => {
+      files.set(path, { content: data, mode: options.mode ?? 0o644 });
+      return Promise.resolve();
+    },
+    rename: (from, to) => {
+      const entry = files.get(from);
+      if (entry === undefined) {
+        return Promise.reject(errnoError("ENOENT"));
+      }
+
+      files.delete(from);
+      files.set(to, entry);
+      return Promise.resolve();
+    },
+    copyFile: (from, to) => {
+      const entry = files.get(from);
+      if (entry === undefined) {
+        return Promise.reject(errnoError("ENOENT"));
+      }
+
+      const target = files.get(to);
+      files.set(to, { content: entry.content, mode: target?.mode ?? entry.mode });
+      return Promise.resolve();
+    },
+    rm: (path) => {
+      files.delete(path);
+      return Promise.resolve();
+    },
+  };
+
+  return { fs, files };
+}
+
+function errnoError(code: string) {
+  const error = new Error(code) as NodeJS.ErrnoException;
+  error.code = code;
+  return error;
+}
+
+const tempFiles = (files: Map<string, FakeFile>) =>
+  [...files.keys()].filter((path) => path.endsWith(".tmp"));
+
+describe("atomicWriteFile", () => {
+  test.each(["EBUSY", "EXDEV"])(
+    "writes through the target when the rename reports %s (single-file bind mount)",
+    async (code) => {
+      const { fs, files } = createFakeFs({
+        "/etc/headscale/config.yaml": { content: "old\n", mode: 0o640 },
+      });
+      const mounted: AtomicWriteFs = { ...fs, rename: () => Promise.reject(errnoError(code)) };
+
+      await atomicWriteFile("/etc/headscale/config.yaml", "new\n", mounted);
+
+      expect(files.get("/etc/headscale/config.yaml")).toEqual({ content: "new\n", mode: 0o640 });
+      expect(tempFiles(files)).toEqual([]);
+    },
+  );
+
+  test("keeps the old file when the rename fails for a reason a copy cannot fix", async () => {
+    const { fs, files } = createFakeFs({
+      "/etc/headscale/config.yaml": { content: "old\n", mode: 0o600 },
+    });
+    const broken: AtomicWriteFs = { ...fs, rename: () => Promise.reject(errnoError("EACCES")) };
+
+    await expect(atomicWriteFile("/etc/headscale/config.yaml", "new\n", broken)).rejects.toThrow(
+      "EACCES",
+    );
+
+    expect(files.get("/etc/headscale/config.yaml")).toEqual({ content: "old\n", mode: 0o600 });
+    expect(tempFiles(files)).toEqual([]);
+  });
+
+  test("renames into place on a filesystem that allows it", async () => {
+    const { fs, files } = createFakeFs({ "/tmp/config.yaml": { content: "old\n", mode: 0o600 } });
+    const calls: string[] = [];
+    const watched: AtomicWriteFs = {
+      ...fs,
+      rename: (from, to) => {
+        calls.push("rename");
+        return fs.rename(from, to);
+      },
+      copyFile: (from, to) => {
+        calls.push("copyFile");
+        return fs.copyFile(from, to);
+      },
+    };
+
+    await atomicWriteFile("/tmp/config.yaml", "new\n", watched);
+
+    expect(calls).toEqual(["rename"]);
+    expect(files.get("/tmp/config.yaml")?.content).toBe("new\n");
   });
 });

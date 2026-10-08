@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   constants,
   access,
+  copyFile,
   readFile,
   realpath,
   rename,
@@ -750,6 +751,47 @@ async function writePatches(config: HeadscaleConfigState, patches: PatchConfig[]
   config.config = config.document.toJSON();
 }
 
+/** The part of `node:fs/promises` the atomic write needs. */
+export interface AtomicWriteFs {
+  stat: (path: string) => Promise<{ mode: number }>;
+  writeFile: (
+    path: string,
+    data: string,
+    options: { encoding: BufferEncoding; mode?: number },
+  ) => Promise<void>;
+  rename: (from: string, to: string) => Promise<void>;
+  copyFile: (from: string, to: string) => Promise<void>;
+  rm: (path: string, options: { force: boolean }) => Promise<void>;
+}
+
+const nodeFs: AtomicWriteFs = {
+  stat: async (path) => {
+    return await stat(path);
+  },
+  writeFile: async (path, data, options) => {
+    await writeFile(path, data, options);
+  },
+  rename: async (from, to) => {
+    await rename(from, to);
+  },
+  copyFile: async (from, to) => {
+    await copyFile(from, to);
+  },
+  rm: async (path, options) => {
+    await rm(path, options);
+  },
+};
+
+/**
+ * Error codes a rename reports when the destination cannot be replaced because
+ * it is itself a mount point.
+ *
+ * The install guides mount Headscale's `config.yaml` into the panel as a single
+ * file, and the kernel refuses to rename over a mount point: Docker's bind
+ * mounts answer `EBUSY`, and a target on another filesystem answers `EXDEV`.
+ */
+const MOUNT_POINT_WRITE_CODES = new Set(["EBUSY", "EXDEV"]);
+
 /**
  * Writes `data` next to `path` and renames it into place.
  *
@@ -757,20 +799,42 @@ async function writePatches(config: HeadscaleConfigState, patches: PatchConfig[]
  * disk, or a container restart between the truncate and the write leaves
  * Headscale's own config.yaml half-written or empty. The rename is atomic, and
  * the file mode of the existing file is preserved.
+ *
+ * A `config.yaml` that this process sees as a single-file bind mount cannot be
+ * replaced by a rename, so the bytes are copied through the mount point
+ * instead. That write is not atomic, but refusing it meant every save from the
+ * panel — OIDC allow-lists, trusted proxies, extra DNS records, embedded DERP
+ * URLs — failed with `Unexpected Server Error` while the operator had done
+ * nothing wrong.
  */
-async function atomicWriteFile(path: string, data: string) {
+export async function atomicWriteFile(path: string, data: string, fs: AtomicWriteFs = nodeFs) {
   const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
 
   try {
-    const existing = await stat(path).catch(() => undefined);
-    await writeFile(temp, data, {
+    const existing = await fs.stat(path).catch(() => undefined);
+    await fs.writeFile(temp, data, {
       encoding: "utf8",
       ...(existing === undefined ? {} : { mode: existing.mode }),
     });
-    await rename(temp, path);
-  } catch (error) {
-    await rm(temp, { force: true }).catch(() => undefined);
-    throw error;
+
+    try {
+      await fs.rename(temp, path);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === undefined || !MOUNT_POINT_WRITE_CODES.has(code)) {
+        throw error;
+      }
+
+      log.warn(
+        "config",
+        "Cannot rename over %s (%s); writing through the mount point instead",
+        path,
+        code,
+      );
+      await fs.copyFile(temp, path);
+    }
+  } finally {
+    await fs.rm(temp, { force: true }).catch(() => undefined);
   }
 }
 
