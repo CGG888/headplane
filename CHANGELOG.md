@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.26 (October 8, 2026)
+
 ## Changes
 
 - **The DERP tab now says when each remote map was fetched, and can fetch it again on demand.** The remote maps that get merged into the region table come from `derp.urls`, and the table itself cannot say whether it is showing a map that answered a minute ago or one this process cached hours earlier — a source whose last fetch failed looked exactly like a source that is simply not in use. A new card lists every configured URL with the time its answer arrived and how long ago that was, when the cached entry is fetched again, and the reason when the last attempt failed. **Refresh now** clears the cached answers and dials every URL again, which picks up a map that changed without waiting for `derp.update_frequency` or restarting Headscale.
@@ -13,6 +15,8 @@
 - **Two texts no longer describe more than the code does.** The native-integration hint now says that a reload re-reads the access policy and that any other configuration change needs a restart, and the DERP settings reference no longer calls `derp.auto_update_enabled` the only switch that puts `derp.urls` and `derp.paths` edits into effect — with it off, a reload or restart does that too.
 
 - **The dashboard no longer calls a declared relay address a contradiction.** `derp.server.ipv6` is the address the operator wants clients to reach, and it is routinely not one this machine holds: the relay can sit behind a router or a NAT66 prefix. The amber notice that compared it with the machine's own address (or with the address the echo probe saw) and offered the other value to copy is gone, and so is the copy button that came with it. What stays is the warning that compares the declared address with what the relay hostname actually resolves to, because that is the address a client would end up following.
+
+---
 
 # 0.22.25 (October 8, 2026)
 
