@@ -315,11 +315,18 @@ PANEL_PORT=4100                 # ← may change (default 4100)
 
 TZ=Asia/Shanghai                # ← may change
 
+# --- Image proxy -------------------------------------------------------------
+# All three images (Headscale, the panel, Caddy) are pulled through this prefix;
+# leave it empty to pull straight from ghcr.io / Docker Hub.
+# v6 needs IPv6; if the pull fails, comment it out and use the v4 line instead
+# (keep only one of the two).
+IMAGE_PROXY=v6.gh-proxy.org/docker/                 # ← may change
+#IMAGE_PROXY=v4.gh-proxy.org/docker/                # ← use this without IPv6
+
 # --- Caddy: the NAS-side path split -----------------------------------------
 # Only the "Lucky + Caddy" layout needs it (see /en/install/reverse-proxy-lucky);
-# with the port layout or the two-domain layout delete these two lines together
+# with the port layout or the two-domain layout delete the line below together
 # with the caddy service in the compose file.
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← may change (another mirror prefix)
 CADDY_PORT=8444                                     # ← may change (confirmed free above)
 ```
 
@@ -340,11 +347,11 @@ services:
   # Headscale server (replaces the native install from the fnOS app centre)
   # ---------------------------------------------------------------------------
   headscale:
-    # When pulls fail in China, use a proxy prefix, for example:
-    #   v6.gh-proxy.org/docker/ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}
+    # The proxy prefix comes from IMAGE_PROXY in .env (shared by all three
+    # images; empty means a direct pull)
     # For debugging (ships a shell; the binary is at /ko-app/headscale):
-    #   v6.gh-proxy.org/docker/ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}-debug
-    image: headscale/headscale:${HEADSCALE_VERSION:?please set HEADSCALE_VERSION in .env}
+    #   ${IMAGE_PROXY-}ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}-debug
+    image: "${IMAGE_PROXY-}headscale/headscale:${HEADSCALE_VERSION:?please set HEADSCALE_VERSION in .env}"
     container_name: headscale # ← do not touch (the panel finds the container by this name/label)
     restart: unless-stopped # ← do not touch
 
@@ -386,8 +393,7 @@ services:
   # HeadplaneCN panel
   # ---------------------------------------------------------------------------
   headplaneCN:
-    # In China an acceleration prefix can be used: v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION}
-    image: ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.23} # ← version may change
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.23}" # ← version may change
     container_name: headplaneCN # ← do not touch
     restart: unless-stopped # ← do not touch
 
@@ -459,9 +465,9 @@ services:
   # It serves plain HTTP only, the certificates live on the router; /admin* goes to
   # the panel with the prefix intact and everything else goes to Headscale.
   # With the port layout or the two-domain layout, delete this service together with
-  # the CADDY_* lines in .env.
+  # the CADDY_PORT line in .env.
   caddy:
-    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← may change (proxy prefix from .env)
+    image: "${IMAGE_PROXY-}caddy:2-alpine" # the proxy prefix lives in IMAGE_PROXY in .env
     container_name: caddy
     restart: unless-stopped
 

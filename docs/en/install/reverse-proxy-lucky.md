@@ -51,7 +51,7 @@ panel adds that prefix itself).
 | Public port             | `8443`                                                 | The non-standard port for public access, **may change** (a home line cannot get an ICP filing, so do not use `443`) | Lucky's listen port, `server_url`, `base_url`        |
 | NAS LAN IP              | `192.168.1.10`                                         | The NAS running Headscale and the panel, **must change**                                                            | Caddyfile upstreams, Lucky's backend address         |
 | Caddy listen port       | `8444`                                                 | Used only inside the LAN and between containers, **may change** (do not collide with `8443`)                        | `CADDY_PORT` in `.env`                               |
-| Caddy image             | `v6.gh-proxy.org/docker/caddy:2-alpine`                | The mirror proxy prefix for pulling images in mainland China, **may change** (another mirror edits only this line)  | `CADDY_IMAGE` in `.env`                              |
+| Image proxy prefix      | `v6.gh-proxy.org/docker/`                              | The prefix every image is pulled through in mainland China, **may change** (another mirror edits only this line)    | `IMAGE_PROXY` in `.env`                              |
 | Headscale `server_url`  | `https://ha.example.com:8443`                          | The address clients connect to, **no path prefix allowed**                                                          | Headscale's `config.yaml`                            |
 | Panel `server.base_url` | `https://ha.example.com:8443`                          | The panel's own address, **no `/admin`** (the panel adds that prefix)                                               | The panel's `config.yaml`                            |
 | Certificate / key path  | `/etc/ssl/ha/fullchain.pem`, `/etc/ssl/ha/privkey.pem` | **Used by Lucky only**; the Caddy inside the NAS never touches certificates                                         | Lucky's certificate settings                         |
@@ -80,7 +80,7 @@ ss -lntp | grep -E ':8443|:8444'
 
 Caddy **does not need a stack of its own**: the native-mode (`/en/install/fnos`) and dual-image
 (`/en/install/dual-image`) compose files already define the `caddy` service and the `.env` already carries
-`CADDY_IMAGE` / `CADDY_PORT`, and `scripts/dual-image-install.sh` generates all of it. **If you installed
+`IMAGE_PROXY` / `CADDY_PORT`, and `scripts/dual-image-install.sh` generates all of it. **If you installed
 from one of those pages, only one thing is left here**: write the `caddy/Caddyfile` from section 3 and
 bring the service up:
 
@@ -105,8 +105,8 @@ price is that the panel is no longer hidden under `/admin`, and layout C needs a
 `/vol1/1000/APP/caddy/.env`) — two values only; changing the mirror or the port edits this one file:
 
 ```bash
-# A direct connection to registry-1.docker.io usually does not work in mainland China; this line is the mirror proxy prefix
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← may change (use a proxy prefix that works for you)
+# A direct connection to registry-1.docker.io usually does not work in mainland China; this line is the mirror proxy prefix (empty = direct)
+IMAGE_PROXY=v6.gh-proxy.org/docker/                   # ← may change (use a prefix that works for you; v4.gh-proxy.org/docker/ without IPv6)
 CADDY_PORT=8444                                       # ← may change (confirmed free in the previous section)
 ```
 
@@ -115,7 +115,7 @@ CADDY_PORT=8444                                       # ← may change (confirme
 ```yaml
 services:
   caddy:
-    image: ${CADDY_IMAGE} # ← may change (comes from .env; another mirror edits only that line)
+    image: ${IMAGE_PROXY-}caddy:2-alpine # ← may change (comes from .env; another mirror edits only that line)
     container_name: caddy
     restart: unless-stopped
 

@@ -174,8 +174,8 @@ PANEL_BIND=192.168.1.10               # ← 必须改：你 NAS 的 IP
 PANEL_PORT=4100                       # ← 可改（默认 4100）
 TZ=Asia/Shanghai                      # ← 可改
 
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← 可改：只有 Lucky 方案需要
-CADDY_PORT=8444                                     # ← 可改（同上）
+IMAGE_PROXY=v6.gh-proxy.org/docker/                 # ← 可改：三个镜像共用（留空 = 直连；没 IPv6 用 v4.gh-proxy.org/docker/）
+CADDY_PORT=8444                                     # ← 可改：只有 Lucky 方案需要
 ```
 
 ::: warning 绑定具体 IP 时，两处要一起改
@@ -330,7 +330,7 @@ curl -s http://127.0.0.1:8480/health        # 期望 {"status":"pass"}
 ```yaml
 services:
   headplaneCN:
-    image: ghcr.io/cgg888/headplanecn:<版本>
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:<版本>"
     container_name: headplaneCN
     restart: unless-stopped
     network_mode: host

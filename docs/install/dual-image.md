@@ -293,10 +293,15 @@ PANEL_PORT=4100                 # ← 可改（默认 4100）
 
 TZ=Asia/Shanghai                # ← 可改
 
+# --- 镜像代理 ----------------------------------------------------------------
+# 三个镜像（Headscale、面板、Caddy）都走这一行；留空 = 直连 ghcr.io / Docker Hub。
+# v6 需要 IPv6；拉不动就把它注释掉、启用下面的 v4（两行只留一行）。
+IMAGE_PROXY=v6.gh-proxy.org/docker/                 # ← 可改
+#IMAGE_PROXY=v4.gh-proxy.org/docker/                # ← 没有 IPv6 时用这个
+
 # --- Caddy：NAS 内的路径分流 -------------------------------------------------
 # 只有「Lucky + Caddy」这一种访问方式需要它（见 /install/reverse-proxy-lucky）；
-# 用端口方案或多域名方案时，把这两行和 compose 里的 caddy 服务一起删掉。
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← 可改（换成你能用的镜像代理前缀）
+# 用端口方案或多域名方案时，把下面这一行和 compose 里的 caddy 服务一起删掉。
 CADDY_PORT=8444                                     # ← 可改（上一节确认过没被占用）
 ```
 
@@ -316,11 +321,10 @@ services:
   # Headscale 服务端（取代 fnOS 应用中心的原生安装）
   # ---------------------------------------------------------------------------
   headscale:
-    # 国内拉不动时用代理前缀，例如：
-    #   v6.gh-proxy.org/docker/ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}
+    # 代理前缀来自 .env 的 IMAGE_PROXY（三个镜像共用；留空 = 直连）
     # 调试用（带 shell，二进制在 /ko-app/headscale）：
-    #   v6.gh-proxy.org/docker/ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}-debug
-    image: headscale/headscale:${HEADSCALE_VERSION:?请在 .env 中设置 HEADSCALE_VERSION}
+    #   ${IMAGE_PROXY-}ghcr.io/juanfont/headscale:${HEADSCALE_VERSION}-debug
+    image: "${IMAGE_PROXY-}headscale/headscale:${HEADSCALE_VERSION:?请在 .env 中设置 HEADSCALE_VERSION}"
     container_name: headscale # ← 别动（面板按这个名字/标签找容器）
     restart: unless-stopped # ← 别动
 
@@ -362,8 +366,7 @@ services:
   # HeadplaneCN 面板
   # ---------------------------------------------------------------------------
   headplaneCN:
-    # 国内可换加速前缀：v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION}
-    image: ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.23} # ← 可改版本
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.23}" # ← 可改版本
     container_name: headplaneCN # ← 别动
     restart: unless-stopped # ← 别动
 
@@ -431,9 +434,9 @@ services:
   # Caddy：NAS 内的路径分流（只有 /install/reverse-proxy-lucky 的 Lucky 方案需要）
   # ---------------------------------------------------------------------------
   # 它只监听明文 HTTP，证书在路由器那层；/admin* 原样转给面板，其余全部转给 Headscale。
-  # 用端口方案或多域名方案时，把这一段和 .env 里的 CADDY_* 一起删掉。
+  # 用端口方案或多域名方案时，把这一段和 .env 里的 CADDY_PORT 一起删掉。
   caddy:
-    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← 可改（走 .env 的代理前缀）
+    image: "${IMAGE_PROXY-}caddy:2-alpine" # 代理前缀在 .env 的 IMAGE_PROXY
     container_name: caddy
     restart: unless-stopped
 

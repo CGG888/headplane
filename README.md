@@ -94,8 +94,11 @@ BASE_DIR=/vol1/1000/APP/headplaneCN
 PANEL_BIND=0.0.0.0
 PANEL_PORT=4100
 TZ=Asia/Shanghai
-# 只有 Lucky 路径分流方案需要；用端口 / 多域名方案时删掉这两行和下面 compose 里的 caddy 服务
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine
+# 镜像代理：三个镜像（headscale、面板、Caddy）都走它；留空 = 直连 ghcr.io / Docker Hub
+# 没有 IPv6 就注释掉 v6 那行、启用 v4 那行（两行只留一行）
+IMAGE_PROXY=v6.gh-proxy.org/docker/
+#IMAGE_PROXY=v4.gh-proxy.org/docker/
+# 只有 Lucky 路径分流方案需要；用端口 / 多域名方案时删掉这一行和下面 compose 里的 caddy 服务
 CADDY_PORT=8444
 ```
 
@@ -103,9 +106,9 @@ CADDY_PORT=8444
 
 ```yaml
 services:
-  # 拉取 ghcr.io 慢时，可在官方镜像名前加代理前缀，例如 v6.gh-proxy.org/docker/ghcr.io/juanfont/headscale
+  # 代理前缀来自 .env 的 IMAGE_PROXY（三个镜像共用），留空 = 直连
   headscale:
-    image: headscale/headscale:${HEADSCALE_VERSION}
+    image: "${IMAGE_PROXY-}headscale/headscale:${HEADSCALE_VERSION}"
     container_name: headscale
     restart: unless-stopped
     network_mode: host # host 模式下不能再写 ports / extra_hosts
@@ -127,7 +130,7 @@ services:
       start_period: 20s
 
   headplaneCN:
-    image: ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION}
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION}"
     container_name: headplaneCN
     restart: unless-stopped
     network_mode: host
@@ -165,7 +168,7 @@ services:
   # 只有当 Lucky 在上游终止 TLS、需要按路径把 /admin 分给面板时才要这一段；
   # 用端口 / 多域名方案请整段删掉（规则文件是 ${BASE_DIR}/caddy/Caddyfile，见 /install/dual-image）
   caddy:
-    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}"
+    image: "${IMAGE_PROXY-}caddy:2-alpine"
     container_name: caddy
     restart: unless-stopped
     network_mode: host

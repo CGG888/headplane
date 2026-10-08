@@ -167,7 +167,7 @@ invalid values` 退出。`openssl rand -base64 24` 正好生成 32 字符，别�
 ```yaml
 services:
   headplane:
-    image: ghcr.io/cgg888/headplanecn:0.22.23 # ← 可改（国内可加加速前缀；排查时换 :<版本>-shell）
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:0.22.23" # ← 可改（代理前缀在 .env 的 IMAGE_PROXY；排查时换 :<版本>-shell）
     container_name: headplane
     restart: unless-stopped
     network_mode: host # ← 别动（host 模式不能再写 ports / extra_hosts）
@@ -207,7 +207,7 @@ services:
   # ---------------------------------------------------------------------------
   # 跟面板在同一个 compose 文件里，不需要第二个目录、第二个栈；用端口方案或多域名方案时整段删掉。
   caddy:
-    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← 可改（镜像代理前缀）
+    image: "${IMAGE_PROXY-}caddy:2-alpine" # 代理前缀在 .env 的 IMAGE_PROXY
     container_name: caddy
     restart: unless-stopped
     network_mode: host # ← 别动（host 模式不能再写 ports；容器内用 127.0.0.1 回源头原生 Headscale）
@@ -220,6 +220,12 @@ services:
       - "/vol1/1000/APP/headplaneCN/caddy/config:/config"
     logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
 ```
+
+::: tip 镜像拉不动？把代理前缀写进 `.env`
+在 `/vol1/1000/APP/headplaneCN/.env` 里加一行 `IMAGE_PROXY=v6.gh-proxy.org/docker/`（没有 IPv6 就用
+`v4.gh-proxy.org/docker/`），compose 里两个镜像会自动带上它；留空或删掉这一行就是直连
+ghcr.io / Docker Hub。
+:::
 
 本形态不挂 `/var/run/docker.sock`（headscale 是原生进程，面板从不重启容器）。`HEADPLANE_*` 环境变量会
 覆盖 `config.yaml`，两处写同样的值不会冲突；但数组型配置项（如 `allowed_action_origins`）**不支持**

@@ -40,16 +40,16 @@ Headscale 的 `server_url` 只能是根地址：✅ `https://ha.example.com:8443
 
 ## 需要你改的值
 
-| 占位符                 | 示例                                                   | 说明                                                             | 在哪里改                                      |
-| ---------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
-| 域名                   | `ha.example.com`                                       | 客户端与面板共用这一个域名，**必须改**                           | DNS、Lucky 的前端域名、Headscale `server_url` |
-| 对外端口               | `8443`                                                 | 公网访问用的非标端口，**可改**（家用宽带拿不到备案，别用 `443`） | Lucky 的监听端口、`server_url`、`base_url`    |
-| NAS 局域网 IP          | `192.168.1.10`                                         | 跑 Headscale 和面板的那台 NAS，**必须改**                        | Caddyfile 的回源地址、Lucky 的后端地址        |
-| Caddy 监听端口         | `8444`                                                 | 只在内网与容器之间用，**可改**（别和 `8443` 撞）                 | `.env` 里的 `CADDY_PORT`                      |
-| Caddy 镜像地址         | `v6.gh-proxy.org/docker/caddy:2-alpine`                | 国内拉镜像用的代理前缀，**可改**（换代理只改这一行）             | `.env` 里的 `CADDY_IMAGE`                     |
-| Headscale `server_url` | `https://ha.example.com:8443`                          | 客户端连接的地址，**不能带路径前缀**                             | Headscale 的 `config.yaml`                    |
-| 面板 `server.base_url` | `https://ha.example.com:8443`                          | 面板自己的地址，**不要带 `/admin`**（前缀由面板自己加）          | 面板的 `config.yaml`                          |
-| 证书 / 私钥路径        | `/etc/ssl/ha/fullchain.pem`、`/etc/ssl/ha/privkey.pem` | **只在 Lucky 上用**，NAS 里的 Caddy 不碰证书                     | Lucky 的证书配置                              |
+| 占位符                 | 示例                                                   | 说明                                                               | 在哪里改                                      |
+| ---------------------- | ------------------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------- |
+| 域名                   | `ha.example.com`                                       | 客户端与面板共用这一个域名，**必须改**                             | DNS、Lucky 的前端域名、Headscale `server_url` |
+| 对外端口               | `8443`                                                 | 公网访问用的非标端口，**可改**（家用宽带拿不到备案，别用 `443`）   | Lucky 的监听端口、`server_url`、`base_url`    |
+| NAS 局域网 IP          | `192.168.1.10`                                         | 跑 Headscale 和面板的那台 NAS，**必须改**                          | Caddyfile 的回源地址、Lucky 的后端地址        |
+| Caddy 监听端口         | `8444`                                                 | 只在内网与容器之间用，**可改**（别和 `8443` 撞）                   | `.env` 里的 `CADDY_PORT`                      |
+| 镜像代理前缀           | `v6.gh-proxy.org/docker/`                              | 国内拉镜像用的前缀，**三个镜像共用**，**可改**（换代理只改这一行） | `.env` 里的 `IMAGE_PROXY`                     |
+| Headscale `server_url` | `https://ha.example.com:8443`                          | 客户端连接的地址，**不能带路径前缀**                               | Headscale 的 `config.yaml`                    |
+| 面板 `server.base_url` | `https://ha.example.com:8443`                          | 面板自己的地址，**不要带 `/admin`**（前缀由面板自己加）            | 面板的 `config.yaml`                          |
+| 证书 / 私钥路径        | `/etc/ssl/ha/fullchain.pem`、`/etc/ssl/ha/privkey.pem` | **只在 Lucky 上用**，NAS 里的 Caddy 不碰证书                       | Lucky 的证书配置                              |
 
 ## 一、先确认端口没被占用
 
@@ -72,7 +72,7 @@ ss -lntp | grep -E ':8443|:8444'
 ## 二、在 NAS 上装 Caddy
 
 Caddy **不需要单独一个栈**：[原生模式](/install/fnos) 与 [双镜像模式](/install/dual-image) 的
-`docker-compose.yml` 里都已经写好 `caddy` 服务，`.env` 里也已经有 `CADDY_IMAGE` / `CADDY_PORT` 两行，
+`docker-compose.yml` 里都已经写好 `caddy` 服务，`.env` 里也已经有 `IMAGE_PROXY` / `CADDY_PORT` 两行，
 安装脚本 `scripts/dual-image-install.sh` 也会直接生成。**如果照那两页装，本节只剩一件事**：写第三节的
 `caddy/Caddyfile`，然后把它拉起来：
 
@@ -97,8 +97,8 @@ Caddy 的场景；合并不方便时才用它。
 —— 只放两个值，换代理 / 换端口都只改这里：
 
 ```bash
-# 国内直连 registry-1.docker.io 通常不通，这一行是镜像代理前缀
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← 可改（换成你能用的代理前缀）
+# 国内直连 registry-1.docker.io 通常不通，这一行是镜像代理前缀（留空 = 直连）
+IMAGE_PROXY=v6.gh-proxy.org/docker/                   # ← 可改（换成你能用的代理前缀；没 IPv6 用 v4.gh-proxy.org/docker/）
 CADDY_PORT=8444                                       # ← 可改（上一节确认过没被占用）
 ```
 
@@ -107,7 +107,7 @@ CADDY_PORT=8444                                       # ← 可改（上一节�
 ```yaml
 services:
   caddy:
-    image: ${CADDY_IMAGE} # ← 可改（走 .env 的代理前缀，换代理只改那一行）
+    image: ${IMAGE_PROXY-}caddy:2-alpine # ← 可改（走 .env 的代理前缀，换代理只改那一行）
     container_name: caddy
     restart: unless-stopped
 

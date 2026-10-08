@@ -188,8 +188,8 @@ PANEL_BIND=192.168.1.10               # ← must change: your NAS's IP
 PANEL_PORT=4100                       # ← may change (defaults to 4100)
 TZ=Asia/Shanghai                      # ← may change
 
-CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← may change: only the Lucky layout needs it
-CADDY_PORT=8444                                     # ← may change (same as above)
+IMAGE_PROXY=v6.gh-proxy.org/docker/                 # ← may change: all three images use it (empty = direct; use v4.gh-proxy.org/docker/ without IPv6)
+CADDY_PORT=8444                                     # ← may change: only the Lucky layout needs it
 ```
 
 ::: warning When you bind a specific IP, two places move together
@@ -353,7 +353,7 @@ the compose file changes the way native mode requires:
 ```yaml
 services:
   headplaneCN:
-    image: ghcr.io/cgg888/headplanecn:<version>
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:<version>"
     container_name: headplaneCN
     restart: unless-stopped
     network_mode: host

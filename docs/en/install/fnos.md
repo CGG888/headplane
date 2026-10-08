@@ -175,7 +175,7 @@ it**, see [Lucky reverse proxy](/en/install/reverse-proxy-lucky))
 ```yaml
 services:
   headplane:
-    image: ghcr.io/cgg888/headplanecn:0.22.23 # ← may change (add a mirror prefix; use :<version>-shell to debug)
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:0.22.23" # ← may change (proxy prefix comes from IMAGE_PROXY in .env; use :<version>-shell to debug)
     container_name: headplane
     restart: unless-stopped
     network_mode: host # ← leave as is (no ports / extra_hosts with host networking)
@@ -217,7 +217,7 @@ services:
   # It lives in this same compose file: no second directory, no second stack. Delete this
   # whole service with the port or two-domain layout.
   caddy:
-    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← may change (mirror prefix)
+    image: "${IMAGE_PROXY-}caddy:2-alpine" # the proxy prefix lives in IMAGE_PROXY in .env
     container_name: caddy
     restart: unless-stopped
     network_mode: host # ← leave as is (no ports with host networking; 127.0.0.1 reaches the native Headscale)
@@ -230,6 +230,12 @@ services:
       - "/vol1/1000/APP/headplaneCN/caddy/config:/config"
     logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
 ```
+
+::: tip Pulls blocked? Put the proxy prefix in `.env`
+Add `IMAGE_PROXY=v6.gh-proxy.org/docker/` to `/vol1/1000/APP/headplaneCN/.env` (use
+`v4.gh-proxy.org/docker/` without IPv6) and both images above pick it up automatically; leave it
+empty or drop the line to pull straight from ghcr.io / Docker Hub.
+:::
 
 This shape does not mount `/var/run/docker.sock` (headscale is a host process; the panel never restarts
 containers). `HEADPLANE_*` variables override `config.yaml`; array-valued options (such as
