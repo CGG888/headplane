@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.21 (October 8, 2026)
+
 ## Changes
 
 - **Expired pre-auth keys can be cleaned up in one click.** The pre-auth key page counts expired keys beside the status filter, and when any exist it offers **Delete all expired**. The cleanup deletes exactly the keys that are already expired — spent single-use keys included — and never touches a key that can still authenticate. Because a deleted key cannot be recovered the button asks for confirmation first, then reports how many were removed and names the ones that failed; it appears only on Headscale versions whose API can delete keys (0.28 and later), and everywhere else expiring remains the way to revoke.
@@ -9,6 +11,8 @@
 ## Fixes
 
 - **The process card no longer implies that SIGHUP reloads everything.** A SIGHUP to `headscale serve` only re-reads the access policy in place; DNS, OIDC and `trusted_proxies` changes need the process to read its configuration again, which means a restart. The process card, the System status page and the install guides now say that, and point at the restart option above.
+
+---
 
 # 0.22.20 (October 8, 2026)
 
