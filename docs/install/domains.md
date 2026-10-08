@@ -13,18 +13,18 @@ Caddyfile 看[云服务器 Caddy](/install/reverse-proxy-caddy)。下文域名�
 
 ## 需要你改的值
 
-| 占位符                 | 示例                           | 说明                                              | 在哪里改                               |
-| ---------------------- | ------------------------------ | ------------------------------------------------- | -------------------------------------- |
-| 域名                   | `ha.example.com`               | Headscale 客户端连接的域名，**必须改**            | Headscale 的 `server_url`、DNS、Lucky  |
-| 面板域名（方案 C）     | `panel.example.com`            | 只给面板用的子域，**必须改**                      | 面板 `server.base_url`、DNS、Lucky     |
-| NAS 局域网 IP          | `192.168.1.10`                 | 运行 Headscale 的 NAS 地址，**必须改**            | 反代回源地址                           |
-| 云服务器公网 IP        | `203.0.113.10`                 | 云服务器地址，**必须改**                          | 反代回源地址（一般就是本机）           |
-| 对外端口               | `8443`                         | 方案 A / B 的公开端口，**可改**（默认 `443`）     | 反代监听端口、`server_url`、`base_url` |
-| `server_url`           | `https://ha.example.com`       | 客户端连接的地址，**不能带路径前缀**              | Headscale 配置                         |
-| `server.base_url`      | `https://ha.example.com/admin` | 面板自己的地址，方案 A **必须含 `/admin`**        | 面板 `config.yaml`                     |
-| `server.cookie_secure` | `true`                         | 对外是 HTTPS 就写 `true`，**别动**                | 面板 `config.yaml`                     |
-| `server.cookie_secret` | `请用上面的命令生成`           | `openssl rand -base64 24`，正好 32 字符，**别动** | 面板 `config.yaml`                     |
-| 证书 / 私钥路径        | `/etc/ssl/ha/fullchain.pem`    | 反代那一层读的证书文件，**按你的环境调整**        | Lucky / Caddy 的证书配置               |
+| 占位符                 | 示例                          | 说明                                                    | 在哪里改                               |
+| ---------------------- | ----------------------------- | ------------------------------------------------------- | -------------------------------------- |
+| 域名                   | `ha.example.com`              | Headscale 客户端连接的域名，**必须改**                  | Headscale 的 `server_url`、DNS、Lucky  |
+| 面板域名（方案 C）     | `panel.example.com`           | 只给面板用的子域，**必须改**                            | 面板 `server.base_url`、DNS、Lucky     |
+| NAS 局域网 IP          | `192.168.1.10`                | 运行 Headscale 的 NAS 地址，**必须改**                  | 反代回源地址                           |
+| 云服务器公网 IP        | `203.0.113.10`                | 云服务器地址，**必须改**                                | 反代回源地址（一般就是本机）           |
+| 对外端口               | `8443`                        | 方案 A / B 的公开端口，**可改**（默认 `443`）           | 反代监听端口、`server_url`、`base_url` |
+| `server_url`           | `https://ha.example.com`      | 客户端连接的地址，**不能带路径前缀**                    | Headscale 配置                         |
+| `server.base_url`      | `https://ha.example.com:8443` | 面板自己的地址，**不要带 `/admin`**（前缀由面板自己加） | 面板 `config.yaml`                     |
+| `server.cookie_secure` | `true`                        | 对外是 HTTPS 就写 `true`，**别动**                      | 面板 `config.yaml`                     |
+| `server.cookie_secret` | `请用上面的命令生成`          | `openssl rand -base64 24`，正好 32 字符，**别动**       | 面板 `config.yaml`                     |
+| 证书 / 私钥路径        | `/etc/ssl/ha/fullchain.pem`   | 反代那一层读的证书文件，**按你的环境调整**              | Lucky / Caddy 的证书配置               |
 
 ::: warning `server_url` 不能带路径前缀
 Headscale 会把 `server_url` 当**根地址**用，客户端拼出来的是 `server_url + /ts2021`、`+ /key`、
@@ -61,7 +61,7 @@ Caddy 或 Nginx 来分流；端口方案和多域名方案只用 Lucky 的**两�
 | 对外地址          | `https://ha.example.com:8443/`       | 同左，端口 `443`              | 同左，端口 `443`               |
 | 面板地址          | `https://ha.example.com:8443/admin`  | `https://ha.example.com:8443` | `https://panel.example.com`    |
 | `server_url`      | `https://ha.example.com:8443`        | `https://ha.example.com`      | `https://ha.example.com`       |
-| `server.base_url` | `https://ha.example.com:8443/admin`  | `https://ha.example.com:8443` | `https://panel.example.com`    |
+| `server.base_url` | `https://ha.example.com:8443`        | `https://ha.example.com:8443` | `https://panel.example.com`    |
 | 要几张证书        | 1 张，含 `ha.example.com`            | 1 张，同一张证书两个端口都用  | 2 张，或 1 张 `*.example.com`  |
 | 要几条反代规则    | 根路径 → Headscale，`/admin*` → 面板 | 两条子规则，按**端口**分开    | 两条子规则，按**域名**分开     |
 | NAS 里要有 Caddy  | **要**                               | 不要                          | 不要                           |
@@ -83,9 +83,9 @@ server_url: https://ha.example.com:8443 # ← 必须改成你的域名 + 对外�
 ```
 
 ```yaml
-# HeadplaneCN 的 config.yaml：面板自己的地址，必须带 /admin
+# HeadplaneCN 的 config.yaml：面板自己的地址，不要带 /admin（面板自己加前缀）
 server:
-  base_url: "https://ha.example.com:8443/admin" # ← 必须改（注意结尾的 /admin）
+  base_url: "https://ha.example.com:8443" # ← 必须改（协议 + 域名 + 端口）
   cookie_secure: true # ← 对外 HTTPS 时不能改
   cookie_secret: "请用上面的命令生成" # ← 用 openssl rand -base64 24
 ```
@@ -102,7 +102,8 @@ server:
 `auto_https off`，端口与回源地址按你的环境调整。完整字段说明与填法见
 [家庭 NAS：Lucky + Caddy](/install/reverse-proxy-lucky#路径分流)。
 
-**要注意什么**：`base_url` 漏掉 `/admin` → 保存类操作报 `Unexpected Server Error`；
+**要注意什么**：`base_url` 只写**面板自己的地址**（协议 + 域名 + 端口），**不要带 `/admin`** ——
+面板固定挂在 `/admin`，带上它不会弄坏登录，但告警/自检里的链接会变成 `…/admin/admin/…`；
 `/admin*` 不要重写路径（`/admin` 会 302 到 `/admin/`）；兜底那一支给 Headscale，
 不能只放行 API 白名单。
 
@@ -266,8 +267,12 @@ Let's Encrypt 的通配符证书只能用 **DNS-01** 验证签发，也就是要
 
 ### 1. 面板进去了，但登录后点任何保存都报错
 
-`server.base_url` 与浏览器地址**不完全一致**（协议、域名、端口、`/admin` 四样都要对上），
-或者反代把 `Host` 改写成了内网 IP。方案 A 最常见的错是把 `/admin` 漏掉。
+`server.base_url` 与浏览器地址的**协议、域名、端口**没对上（`/admin` 不算在内：面板永远挂在
+`/admin` 下，那个前缀不该写进 `base_url`），或者反代把 `Host` 改写成了内网 IP。
+
+如果这三样都对、保存却仍然报 `Unexpected Server Error`，那是另一回事：面板要改 Headscale 的
+`config.yaml`，而它被**单文件挂载**进容器时 `rename` 会失败（`EBUSY`）。把面板那条挂载改成整个
+目录即可：`- "/vol1/1000/APP/headplaneCN/headscale:/etc/headscale"`。
 
 ### 2. 浏览器能打开面板，客户端却一直连不上
 

@@ -34,8 +34,8 @@ Headscale。命令都能直接照抄，每一步都给出「应该看到什么�
 
 ::: warning `server_url` 不能带路径前缀，改了已注册的机器要重新登录
 Headscale 的 `server_url` 只能是根地址：✅ `https://ha.example.com:8443`；❌ `https://ha.example.com:8443/headscale`。
-本页拓扑里面板靠 `/admin` 前缀分开，所以面板的 `server.base_url` 必须写成
-`https://ha.example.com:8443/admin`（含 `/admin`，结尾不带 `/`）。
+本页拓扑里面板靠 `/admin` 前缀分开，但 `server.base_url` 只写**面板自己的地址**
+`https://ha.example.com:8443`（协议 + 域名 + 端口，**不要带 `/admin`** —— 那个前缀是面板自己加的）。
 :::
 
 ## 需要你改的值
@@ -48,7 +48,7 @@ Headscale 的 `server_url` 只能是根地址：✅ `https://ha.example.com:8443
 | Caddy 监听端口         | `8444`                                                 | 只在内网与容器之间用，**可改**（别和 `8443` 撞）                 | `.env` 里的 `CADDY_PORT`                      |
 | Caddy 镜像地址         | `v6.gh-proxy.org/docker/caddy:2-alpine`                | 国内拉镜像用的代理前缀，**可改**（换代理只改这一行）             | `.env` 里的 `CADDY_IMAGE`                     |
 | Headscale `server_url` | `https://ha.example.com:8443`                          | 客户端连接的地址，**不能带路径前缀**                             | Headscale 的 `config.yaml`                    |
-| 面板 `server.base_url` | `https://ha.example.com:8443/admin`                    | 面板自己的地址，**必须含 `/admin`**                              | 面板的 `config.yaml`                          |
+| 面板 `server.base_url` | `https://ha.example.com:8443`                          | 面板自己的地址，**不要带 `/admin`**（前缀由面板自己加）          | 面板的 `config.yaml`                          |
 | 证书 / 私钥路径        | `/etc/ssl/ha/fullchain.pem`、`/etc/ssl/ha/privkey.pem` | **只在 Lucky 上用**，NAS 里的 Caddy 不碰证书                     | Lucky 的证书配置                              |
 
 ## 一、先确认端口没被占用
@@ -260,8 +260,8 @@ Lucky 找不到后端。依次查三样：`docker compose ps` 里 Caddy 是否�
 ### 3. 面板能打开，一登录就 403 / 保存报 `Unexpected Server Error`
 
 Lucky 把 `Host` 改写成了内网 IP，面板的 CSRF / 跨站校验不认：打开**保留原始 Host**，或在
-**自定义参数**里加 `proxy_set_header Host $http_host;`；再核对 `server.base_url` 与浏览器地址
-**逐字一致**（协议 + 域名 + 端口 + `/admin`）。
+**自定义参数**里加 `proxy_set_header Host $http_host;`；再核对 `server.base_url` 与浏览器地址的
+**协议 + 域名 + 端口**逐字一致（`/admin` 不要写进 `base_url`，那是面板自己加的前缀）。
 
 ### 4. `/ts2021`、`/derp` 返回 404
 

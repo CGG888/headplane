@@ -38,8 +38,9 @@ done by the Caddy inside the NAS.
 
 ::: warning `server_url` cannot carry a path prefix, and changing it re-registers every machine
 Headscale's `server_url` must be a root address: ✅ `https://ha.example.com:8443`; ❌ `https://ha.example.com:8443/headscale`.
-In this page's topology the panel is separated by the `/admin` prefix, so the panel's `server.base_url` must be written as
-`https://ha.example.com:8443/admin` (with `/admin`, no trailing `/`).
+In this page's topology the panel is separated by the `/admin` prefix, but `server.base_url` holds the
+panel's own address only: `https://ha.example.com:8443` (scheme + domain + port, **no `/admin`** — the
+panel adds that prefix itself).
 :::
 
 ## Values you need to change
@@ -52,7 +53,7 @@ In this page's topology the panel is separated by the `/admin` prefix, so the pa
 | Caddy listen port       | `8444`                                                 | Used only inside the LAN and between containers, **may change** (do not collide with `8443`)                        | `CADDY_PORT` in `.env`                               |
 | Caddy image             | `v6.gh-proxy.org/docker/caddy:2-alpine`                | The mirror proxy prefix for pulling images in mainland China, **may change** (another mirror edits only this line)  | `CADDY_IMAGE` in `.env`                              |
 | Headscale `server_url`  | `https://ha.example.com:8443`                          | The address clients connect to, **no path prefix allowed**                                                          | Headscale's `config.yaml`                            |
-| Panel `server.base_url` | `https://ha.example.com:8443/admin`                    | The panel's own address, **must include `/admin`**                                                                  | The panel's `config.yaml`                            |
+| Panel `server.base_url` | `https://ha.example.com:8443`                          | The panel's own address, **no `/admin`** (the panel adds that prefix)                                               | The panel's `config.yaml`                            |
 | Certificate / key path  | `/etc/ssl/ha/fullchain.pem`, `/etc/ssl/ha/privkey.pem` | **Used by Lucky only**; the Caddy inside the NAS never touches certificates                                         | Lucky's certificate settings                         |
 
 ## 1. Check the ports are free first
@@ -274,8 +275,8 @@ Caddy fails to start and its log says `bind: address already in use`.
 
 Lucky rewrote `Host` to an internal IP and the panel's CSRF / cross-site checks reject it: turn on
 **preserve original Host**, or add `proxy_set_header Host $http_host;` under **custom parameters**;
-then check that `server.base_url` matches the browser address **character for character** (scheme +
-domain + port + `/admin`).
+then check that `server.base_url` matches the browser address **character for character** in scheme,
+domain and port (`/admin` does not belong in `base_url` — the panel adds that prefix itself).
 
 ### 4. `/ts2021` and `/derp` return 404
 

@@ -24,7 +24,7 @@ certificate path below is a placeholder — substitute your own values.
 | Cloud server public IP  | `203.0.113.10`                             | The cloud server's address, **must change**                    | Reverse proxy upstream (usually localhost)  |
 | Public port             | `8443`                                     | Public port for layouts A / B, **may change** (`443` default)  | Proxy listen port, `server_url`, `base_url` |
 | `server_url`            | `https://ha.example.com`                   | The address clients use, **no path prefix allowed**            | Headscale config                            |
-| `server.base_url`       | `https://ha.example.com/admin`             | The panel's own address, layout A **must include `/admin`**    | Panel `config.yaml`                         |
+| `server.base_url`       | `https://ha.example.com:8443`              | The panel's own address, **no `/admin`** (the panel adds it)   | Panel `config.yaml`                         |
 | `server.cookie_secure`  | `true`                                     | `true` for any HTTPS deployment, **leave alone**               | Panel `config.yaml`                         |
 | `server.cookie_secret`  | `<paste the value from the command above>` | `openssl rand -base64 24`, exactly 32 chars, **leave alone**   | Panel `config.yaml`                         |
 | Certificate / key path  | `/etc/ssl/ha/fullchain.pem`                | Certificates read by the proxy layer, **adjust to your setup** | Lucky / Caddy certificate settings          |
@@ -66,7 +66,7 @@ All three listen on **a single public port** (shown here as `8443`; `443` works 
 | Public address       | `https://ha.example.com:8443/`                 | same, on port `443`              | same, on port `443`                |
 | Panel address        | `https://ha.example.com:8443/admin`            | `https://ha.example.com:8443`    | `https://panel.example.com`        |
 | `server_url`         | `https://ha.example.com:8443`                  | `https://ha.example.com`         | `https://ha.example.com`           |
-| `server.base_url`    | `https://ha.example.com:8443/admin`            | `https://ha.example.com:8443`    | `https://panel.example.com`        |
+| `server.base_url`    | `https://ha.example.com:8443`                  | `https://ha.example.com:8443`    | `https://panel.example.com`        |
 | Certificates         | 1, covering `ha.example.com`                   | 1, one certificate on both ports | 2, or one `*.example.com`          |
 | Proxy rules          | root → Headscale, `/admin*` → panel            | two sub-rules, split by **port** | two sub-rules, split by **domain** |
 | Caddy inside the NAS | **required**                                   | not required                     | not required                       |
@@ -88,9 +88,9 @@ server_url: https://ha.example.com:8443 # ← must change to your domain + publi
 ```
 
 ```yaml
-# HeadplaneCN's config.yaml: the panel's own address, which must include /admin
+# HeadplaneCN's config.yaml: the panel's own address, without /admin (the panel adds it)
 server:
-  base_url: "https://ha.example.com:8443/admin" # ← must change (note the trailing /admin)
+  base_url: "https://ha.example.com:8443" # ← must change (scheme + domain + port)
   cookie_secure: true # ← cannot change on public HTTPS
   cookie_secret: "<paste the value from the command above>" # ← use openssl rand -base64 24
 ```
@@ -108,9 +108,10 @@ router, hence `auto_https off`, and the port and upstreams follow your environme
 full field-by-field walkthrough is in
 [Home NAS: Lucky + Caddy](/en/install/reverse-proxy-lucky#path-routing).
 
-**What to watch out for**: omitting `/admin` in `base_url` makes every save fail with
-`Unexpected Server Error`; match `/admin*` and **do not rewrite the path** (`/admin`
-redirects to `/admin/`); the catch-all branch feeds Headscale, so it cannot be an
+**What to watch out for**: `base_url` is the panel's own address (scheme + domain + port) and
+**must not include `/admin`** — the panel already lives under `/admin`, and adding it there only
+makes alert and self-test links read `…/admin/admin/…`; match `/admin*` and **do not rewrite the
+path** (`/admin` redirects to `/admin/`); the catch-all branch feeds Headscale, so it cannot be an
 allow-list of API paths.
 
 ## 4. Layout B: one domain + two ports
@@ -287,9 +288,14 @@ HTTP-based issuance cannot produce a `*.example.com` certificate.
 
 ### 1. The panel opens, but every save after login fails
 
-`server.base_url` is not **exactly** the browser address (protocol, domain, port and
-`/admin` must all match), or the proxy rewrote `Host` to an internal IP. In layout A the
-usual mistake is the missing `/admin`.
+`server.base_url` does not match the browser address in **scheme, domain or port**
+(`/admin` is not part of it — the panel always lives under `/admin`), or the proxy rewrote
+`Host` to an internal IP.
+
+If all three match and saving still reports `Unexpected Server Error`, the cause is different:
+the panel patches Headscale's `config.yaml` by writing a temp file and renaming it, which fails
+(`EBUSY`) when that file is a **single-file bind mount**. Mount the whole directory into the
+panel instead: `- "/vol1/1000/APP/headplaneCN/headscale:/etc/headscale"`.
 
 ### 2. The browser opens the panel but clients never connect
 

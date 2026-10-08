@@ -19,18 +19,18 @@ Headscale 和面板本身：容器与配置怎么写见 [Docker](/install/docker
 
 ## 需要你改的值
 
-| 值                     | 示例                              | 说明                                                               | 在哪改                                        |
-| ---------------------- | --------------------------------- | ------------------------------------------------------------------ | --------------------------------------------- |
-| 域名                   | `ha.example.com`                  | 客户端要连的域名，**必须改**                                       | DNS、Caddyfile 站点名、Headscale `server_url` |
-| 云服务器公网 IP        | `203.0.113.10`                    | 域名要解析到它，**必须改**                                         | DNS、云控制台的安全组                         |
-| 部署目录               | `/opt/headplane`                  | `docker-compose.yml` 与 `Caddyfile` 所在目录，**按你的实际目录改** | 服务器上的命令、挂载路径                      |
-| 面板回源地址           | `127.0.0.1:4100`                  | 面板就在这台机器上，**换端口时才改**                               | Caddyfile 的 `handle /admin*`                 |
-| Headscale 回源地址     | `127.0.0.1:8480`                  | 客户端要连的控制服务，占**根路径**，**别动**                       | Caddyfile 的兜底 `handle`                     |
-| 面板对外地址           | `https://ha.example.com/admin`    | 面板自己的地址，**必须带 `/admin`**                                | 面板 `server.base_url`                        |
-| `server_url`           | `https://ha.example.com`          | 客户端要连的地址，**不能带路径**                                   | Headscale 的 `config.yaml`                    |
-| `server.cookie_secure` | `true`                            | 对外是 HTTPS 就**保持 `true`**                                     | 面板 `config.yaml`                            |
-| `server.cookie_secret` | 用 `openssl rand -base64 24` 生成 | 换掉会让所有人退出登录                                             | 面板 `config.yaml`                            |
-| `headscale.public_url` | `https://ha.example.com`          | 必须与 `server_url` **逐字一致**                                   | 面板 `config.yaml`                            |
+| 值                     | 示例                              | 说明                                                                                        | 在哪改                                        |
+| ---------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 域名                   | `ha.example.com`                  | 客户端要连的域名，**必须改**                                                                | DNS、Caddyfile 站点名、Headscale `server_url` |
+| 云服务器公网 IP        | `203.0.113.10`                    | 域名要解析到它，**必须改**                                                                  | DNS、云控制台的安全组                         |
+| 部署目录               | `/opt/headplane`                  | `docker-compose.yml` 与 `Caddyfile` 所在目录，**按你的实际目录改**                          | 服务器上的命令、挂载路径                      |
+| 面板回源地址           | `127.0.0.1:4100`                  | 面板就在这台机器上，**换端口时才改**                                                        | Caddyfile 的 `handle /admin*`                 |
+| Headscale 回源地址     | `127.0.0.1:8480`                  | 客户端要连的控制服务，占**根路径**，**别动**                                                | Caddyfile 的兜底 `handle`                     |
+| 面板对外地址           | `https://ha.example.com`          | 面板自己的地址（= `server.base_url`），**不要带 `/admin`**；浏览器实际打开的是它 + `/admin` | 面板 `server.base_url`                        |
+| `server_url`           | `https://ha.example.com`          | 客户端要连的地址，**不能带路径**                                                            | Headscale 的 `config.yaml`                    |
+| `server.cookie_secure` | `true`                            | 对外是 HTTPS 就**保持 `true`**                                                              | 面板 `config.yaml`                            |
+| `server.cookie_secret` | 用 `openssl rand -base64 24` 生成 | 换掉会让所有人退出登录                                                                      | 面板 `config.yaml`                            |
+| `headscale.public_url` | `https://ha.example.com`          | 必须与 `server_url` **逐字一致**                                                            | 面板 `config.yaml`                            |
 
 ## 一、备案（中国大陆服务器必须先看） {#备案中国大陆服务器必须先备案}
 
@@ -178,13 +178,13 @@ ha.example.com {
 面板、Headscale、Caddy 三个地方必须对得上，否则会出现「面板能打开但一登录就 403」「注册链接指向
 `localhost`」「客户端连不上」这类问题：
 
-| 在哪                       | 键                     | 值                             | 说明                                          |
-| -------------------------- | ---------------------- | ------------------------------ | --------------------------------------------- |
-| Headscale 的 `config.yaml` | `server_url`           | `https://ha.example.com`       | 客户端要连的地址，**不能带路径**              |
-| 面板的 `config.yaml`       | `server.base_url`      | `https://ha.example.com/admin` | 面板自己的地址，**必须带 `/admin`**           |
-| 面板的 `config.yaml`       | `server.cookie_secure` | `true`                         | 对外 HTTPS 时必须为 `true`                    |
-| 面板的 `config.yaml`       | `headscale.public_url` | `https://ha.example.com`       | 必须与 Headscale 的 `server_url` **逐字一致** |
-| 面板的 `config.yaml`       | `headscale.url`        | `http://127.0.0.1:8480`        | 机器内部的 API 地址，不走公网、不用 HTTPS     |
+| 在哪                       | 键                     | 值                       | 说明                                          |
+| -------------------------- | ---------------------- | ------------------------ | --------------------------------------------- |
+| Headscale 的 `config.yaml` | `server_url`           | `https://ha.example.com` | 客户端要连的地址，**不能带路径**              |
+| 面板的 `config.yaml`       | `server.base_url`      | `https://ha.example.com` | 面板自己的地址，**不要带 `/admin`**           |
+| 面板的 `config.yaml`       | `server.cookie_secure` | `true`                   | 对外 HTTPS 时必须为 `true`                    |
+| 面板的 `config.yaml`       | `headscale.public_url` | `https://ha.example.com` | 必须与 Headscale 的 `server_url` **逐字一致** |
+| 面板的 `config.yaml`       | `headscale.url`        | `http://127.0.0.1:8480`  | 机器内部的 API 地址，不走公网、不用 HTTPS     |
 
 Headscale 侧叫 `server_url`，面板侧对应的字段是 `headscale.public_url`：**两个值必须逐字一样**
 （协议 + 域名 + 端口，且都没有路径），注册链接就是用它们拼出来的。面板在容器里时 `headscale.url`
@@ -262,8 +262,8 @@ curl -si  https://ha.example.com/admin | head -3   # 期望 302 → /admin/
 
 面板会做 CSRF / 跨站校验，用**和 `server.base_url` 不一样**的地址访问就会 403。逐条核对：
 
-- 浏览器地址要与 `server.base_url` **逐字一致**：协议 + 域名 + `/admin`，不要用 IP、不要用别的
-  子域名、不要多带端口。
+- 浏览器地址的**协议 + 域名 + 端口**要与 `server.base_url` 逐字一致（面板固定在 `/admin`，所以浏览器
+  地址就是 `base_url` + `/admin`），不要用 IP、不要用别的子域名、不要多带端口。
 - Caddyfile 的站点名必须是同一个域名；**不要改写 `Host`**（Caddy 默认原样透传，别加
   `header_up Host ...`）。
 - 如果域名前面还套了 CDN 或另一层反代，确认它把**原始 `Host`** 传了下来。

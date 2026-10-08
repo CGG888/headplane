@@ -63,14 +63,14 @@ Headscale 有一个硬约束：`server_url` **不能带路径前缀**，客户�
 HeadplaneCN 需要一份配置文件才能运行，可以用
 [示例文件](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)作为起点。几个绕不开的字段：
 
-| 字段                       | 说明                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **`headscale.url`**        | 面板访问 Headscale API 的地址。同机默认 `http://127.0.0.1:8480`（容器里是 `http://headscale:8080`）。  |
-| **`headscale.public_url`** | 浏览器访问 Headscale 的**外部**地址，要和 `server_url` 一致，用于生成注册链接。                        |
-| **`server.base_url`**      | 浏览器访问**面板**的地址，例如 `https://ha.example.com/admin` 或 `https://ha.example.com:8443/admin`。 |
-| **`server.cookie_secret`** | 加密 cookie。用 `openssl rand -base64 24` 生成。**换掉它会让所有人重新登录。**                         |
-| **`server.cookie_secure`** | 只要对外是 HTTPS 就设 `true`。                                                                         |
-| **`server.data_path`**     | 面板自己的数据库目录，Docker 里要挂出来。                                                              |
+| 字段                       | 说明                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`headscale.url`**        | 面板访问 Headscale API 的地址。同机默认 `http://127.0.0.1:8480`（容器里是 `http://headscale:8080`）。                                             |
+| **`headscale.public_url`** | 浏览器访问 Headscale 的**外部**地址，要和 `server_url` 一致，用于生成注册链接。                                                                   |
+| **`server.base_url`**      | 面板自己的地址（协议 + 域名 + 端口），例如 `https://ha.example.com:8443`。**不要带 `/admin`** —— 面板固定挂在 `/admin` 下，那个前缀是它自己加的。 |
+| **`server.cookie_secret`** | 加密 cookie。用 `openssl rand -base64 24` 生成。**换掉它会让所有人重新登录。**                                                                    |
+| **`server.cookie_secure`** | 只要对外是 HTTPS 就设 `true`。                                                                                                                    |
+| **`server.data_path`**     | 面板自己的数据库目录，Docker 里要挂出来。                                                                                                         |
 
 运行 HeadplaneCN 的用户（或容器）需要：`server.data_path` 可写、`headscale.config_path` 可读；
 要在界面里改 Headscale 设置或重启它，还需要[对应的集成](/install/fnos)（原生模式的 proc

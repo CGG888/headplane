@@ -76,14 +76,14 @@ HeadplaneCN needs a configuration file to run. Start from the
 [sample file](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml).
 A few fields you cannot avoid:
 
-| Field                      | Description                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`headscale.url`**        | Where the panel reaches the Headscale API. On the same host the default is `http://127.0.0.1:8480` (inside a container it is `http://headscale:8080`). |
-| **`headscale.public_url`** | The **external** address browsers use to reach Headscale. It must match `server_url` and is used to build registration links.                          |
-| **`server.base_url`**      | The address browsers use to reach the **panel**, for example `https://ha.example.com/admin` or `https://ha.example.com:8443/admin`.                    |
-| **`server.cookie_secret`** | Encrypts cookies. Generate it with `openssl rand -base64 24`. **Replacing it logs everyone out.**                                                      |
-| **`server.cookie_secure`** | Set it to `true` whenever the outside world is HTTPS.                                                                                                  |
-| **`server.data_path`**     | The panel's own database directory; mount it out in Docker.                                                                                            |
+| Field                      | Description                                                                                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`headscale.url`**        | Where the panel reaches the Headscale API. On the same host the default is `http://127.0.0.1:8480` (inside a container it is `http://headscale:8080`).                                 |
+| **`headscale.public_url`** | The **external** address browsers use to reach Headscale. It must match `server_url` and is used to build registration links.                                                          |
+| **`server.base_url`**      | The panel's own address (scheme + domain + port), for example `https://ha.example.com:8443`. **Do not include `/admin`**: the panel always lives under that prefix and adds it itself. |
+| **`server.cookie_secret`** | Encrypts cookies. Generate it with `openssl rand -base64 24`. **Replacing it logs everyone out.**                                                                                      |
+| **`server.cookie_secure`** | Set it to `true` whenever the outside world is HTTPS.                                                                                                                                  |
+| **`server.data_path`**     | The panel's own database directory; mount it out in Docker.                                                                                                                            |
 
 The user (or container) running HeadplaneCN needs `server.data_path` to be
 writable and `headscale.config_path` to be readable. To change Headscale

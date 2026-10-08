@@ -130,6 +130,10 @@ pnpm `>=10.4 <11`，`packageManager` 固定为 `pnpm@10.4.0`。`preinstall` 钩�
 是提交摘要。直接写在 `# Next` 之下、小标题之上的文字会成为发布前言，用来写兼容性说明
 和升级提醒。
 
+每次发版（`pnpm release cut <version>`）还要在 `docs/versions.md` 与 `docs/en/versions.md`
+的表格里各补一行：版本号 + 该版本相对上游做了什么，写法与上一行保持一致（英文页按原样复制
+中文表格，不翻译）。版本记录是用户查「哪个版本改了什么」的第一入口，漏一行会被立刻发现。
+
 要发版就运行 `pnpm release cut <version>`：它会把 `# Next` 改名为版本号、更新
 `package.json`、提交并打标签。推送标签后会构建镜像，并用 changelog 中的这一节发布
 GitHub Release。

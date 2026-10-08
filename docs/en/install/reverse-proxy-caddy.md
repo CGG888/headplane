@@ -19,18 +19,18 @@ install Headscale or the panel: see [Docker](/en/install/docker) and [dual-image
 
 ## Values you need to change
 
-| Placeholder            | Example                        | Meaning                                                                | Where to change                                  |
-| ---------------------- | ------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------ |
-| Domain                 | `ha.example.com`               | The domain clients connect to, **must change**                         | DNS, Caddyfile site name, Headscale `server_url` |
-| Cloud server public IP | `203.0.113.10`                 | The domain must point at it, **must change**                           | DNS, the cloud console's security group          |
-| Deployment directory   | `/opt/headplane`               | Where `docker-compose.yml` and `Caddyfile` live, **use your own path** | Shell commands, volume paths                     |
-| Panel upstream         | `127.0.0.1:4100`               | The panel on the same machine, **change only if you moved the port**   | `handle /admin*` in the Caddyfile                |
-| Headscale upstream     | `127.0.0.1:8480`               | Headscale owns the **root path**, **leave alone**                      | The catch-all `handle` in the Caddyfile          |
-| Panel public address   | `https://ha.example.com/admin` | The panel's own address, **must include `/admin`**                     | Panel `server.base_url`                          |
-| `server_url`           | `https://ha.example.com`       | The address clients use, **no path prefix allowed**                    | Headscale `config.yaml`                          |
-| `server.cookie_secure` | `true`                         | **Keep `true`** whenever the outside world is HTTPS                    | Panel `config.yaml`                              |
-| `server.cookie_secret` | `openssl rand -base64 24`      | Replacing it logs everyone out                                         | Panel `config.yaml`                              |
-| `headscale.public_url` | `https://ha.example.com`       | Must match `server_url` **character for character**                    | Panel `config.yaml`                              |
+| Placeholder            | Example                   | Meaning                                                                                            | Where to change                                  |
+| ---------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Domain                 | `ha.example.com`          | The domain clients connect to, **must change**                                                     | DNS, Caddyfile site name, Headscale `server_url` |
+| Cloud server public IP | `203.0.113.10`            | The domain must point at it, **must change**                                                       | DNS, the cloud console's security group          |
+| Deployment directory   | `/opt/headplane`          | Where `docker-compose.yml` and `Caddyfile` live, **use your own path**                             | Shell commands, volume paths                     |
+| Panel upstream         | `127.0.0.1:4100`          | The panel on the same machine, **change only if you moved the port**                               | `handle /admin*` in the Caddyfile                |
+| Headscale upstream     | `127.0.0.1:8480`          | Headscale owns the **root path**, **leave alone**                                                  | The catch-all `handle` in the Caddyfile          |
+| Panel public address   | `https://ha.example.com`  | The panel's own address (= `server.base_url`), **no `/admin`**; the browser opens it plus `/admin` | Panel `server.base_url`                          |
+| `server_url`           | `https://ha.example.com`  | The address clients use, **no path prefix allowed**                                                | Headscale `config.yaml`                          |
+| `server.cookie_secure` | `true`                    | **Keep `true`** whenever the outside world is HTTPS                                                | Panel `config.yaml`                              |
+| `server.cookie_secret` | `openssl rand -base64 24` | Replacing it logs everyone out                                                                     | Panel `config.yaml`                              |
+| `headscale.public_url` | `https://ha.example.com`  | Must match `server_url` **character for character**                                                | Panel `config.yaml`                              |
 
 ## 1. ICP filing first (mainland China servers) {#icp-filing}
 
@@ -170,13 +170,13 @@ What matters here:
 Panel, Headscale and Caddy must line up, or you get "login returns 403", "the registration link points at
 `localhost`" or "clients cannot connect":
 
-| Where                   | Key                    | Value                          | Meaning                                                         |
-| ----------------------- | ---------------------- | ------------------------------ | --------------------------------------------------------------- |
-| Headscale `config.yaml` | `server_url`           | `https://ha.example.com`       | The address clients use, **no path prefix allowed**             |
-| Panel `config.yaml`     | `server.base_url`      | `https://ha.example.com/admin` | The panel's own address, **must include `/admin`**              |
-| Panel `config.yaml`     | `server.cookie_secure` | `true`                         | Must be `true` whenever the outside world is HTTPS              |
-| Panel `config.yaml`     | `headscale.public_url` | `https://ha.example.com`       | Must match Headscale's `server_url` **character for character** |
-| Panel `config.yaml`     | `headscale.url`        | `http://127.0.0.1:8480`        | The API address inside the machine: no public network, no HTTPS |
+| Where                   | Key                    | Value                    | Meaning                                                         |
+| ----------------------- | ---------------------- | ------------------------ | --------------------------------------------------------------- |
+| Headscale `config.yaml` | `server_url`           | `https://ha.example.com` | The address clients use, **no path prefix allowed**             |
+| Panel `config.yaml`     | `server.base_url`      | `https://ha.example.com` | The panel's own address, **no `/admin`**                        |
+| Panel `config.yaml`     | `server.cookie_secure` | `true`                   | Must be `true` whenever the outside world is HTTPS              |
+| Panel `config.yaml`     | `headscale.public_url` | `https://ha.example.com` | Must match Headscale's `server_url` **character for character** |
+| Panel `config.yaml`     | `headscale.url`        | `http://127.0.0.1:8480`  | The API address inside the machine: no public network, no HTTPS |
 
 Headscale calls it `server_url`, the panel's matching field is `headscale.public_url`: **the two must be
 identical** (scheme + domain + port, neither with a path), because registration links are built from them. In a
@@ -250,7 +250,7 @@ port usually works meanwhile, but treat it as temporary and **finish the filing*
 The panel performs a CSRF / cross-site check, so reaching it through an address other than `server.base_url`
 returns 403. Verify each item:
 
-- The browser address must match `server.base_url` **character for character**: scheme + domain + `/admin`, no IP, no other subdomain, no extra port.
+- The browser address must match `server.base_url` in scheme, domain and port **character for character** (the panel always lives under `/admin`, so the browser address is `base_url` + `/admin`): no IP, no other subdomain, no extra port.
 - The Caddyfile site name must be that domain, and `Host` must **not** be rewritten (no `header_up Host ...`).
 - A CDN or another proxy in front must forward the **original `Host`**.
 
