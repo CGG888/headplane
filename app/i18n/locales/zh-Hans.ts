@@ -203,11 +203,6 @@ const zhHans = {
       ipv6EchoMatches: "互联网看到的地址是 {address}，这台机器正好持有它。",
       ipv6EchoForwarded:
         "互联网看到的地址是 {address}，这台机器的任何网卡都没有它：客户端是通过 NAT66 或转发地址的路由器到达该地址的。",
-      ipv6ContradictionTitle: "声明的地址并非客户端实际可达的地址",
-      ipv6ContradictionEcho: "derp.server.ipv6 声明了 {declared}，但互联网看到的是 {detected}。",
-      ipv6ContradictionHost:
-        "derp.server.ipv6 声明了 {declared}，但这台机器自身的地址是 {detected}。",
-      ipv6ContradictionCopy: "复制应使用的地址",
       ipv6ReasonOsUnreadable: "无法读取网卡列表。",
       ipv6ReasonProcUnreadable: "无法读取 /proc/net/if_inet6，因此无法区分临时地址与稳定地址。",
       ipv6ReasonSysUnreadable: "无法读取 /sys/class/net，因此无法区分真实网卡与虚拟网卡。",

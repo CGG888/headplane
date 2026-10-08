@@ -25,9 +25,10 @@
  *
  * Selection, in order:
  *
- * 1. `derp.server.ipv6` when it is set — the operator declared it. A detected
- *    address that disagrees is reported as a contradiction next to it, never
- *    written over it.
+ * 1. `derp.server.ipv6` when it is set — the operator declared it, and only they
+ *    know which address clients are meant to reach. It wins even when no
+ *    interface here carries it: a router or a NAT66 prefix in front of the
+ *    machine is the normal case, not a fault to report.
  * 2. The external echo answer, when the probe answered. It is what clients
  *    reach, whether or not any local interface carries it.
  * 3. The machine's own best address, ranked by {@link compareHostIpv6Candidates}:
@@ -539,8 +540,6 @@ export interface RelayIpv6Selection {
   excluded: HostExcludedAddress[];
   /** Where the internet echo landed, when the probe answered. */
   echo?: { address: string; matchesLocal: boolean; url?: string };
-  /** The declared address and the detected one that contradicts it. */
-  contradiction?: { declared: string; detected: string; source: "host" | "echo" };
   /** Sources that could not be read, and probes with no answer. */
   probeReasons: HostProbeReason[];
 }
@@ -589,11 +588,13 @@ function uniqueReasons(values: readonly HostProbeReason[] | undefined): HostProb
  * echo sees, the machine's own address (cross-checked against the domain's
  * AAAA), or the DNS answer as an unverified fallback.
  *
- * A declared address is never silently contradicted: when a detected address
- * disagrees with it, the row keeps the declared value, carries the detected one
- * next to it as a contradiction, and offers the detected one to copy. A machine
- * with no global address and no AAAA answer comes back as `no-host-address` so
- * the card can say so in plain words instead of showing nothing.
+ * A declared address is taken at its word: it is what the operator wants clients
+ * to reach, and it routinely differs from every address this machine holds — the
+ * relay may sit behind a router or a NAT66 prefix — so a detected address that
+ * disagrees is not reported as a fault and nothing is offered to replace it. A
+ * machine with no global address and no AAAA answer comes back as
+ * `no-host-address` so the card can say so in plain words instead of showing
+ * nothing.
  */
 export function selectRelayIpv6(input: RelayIpv6Input = {}): RelayIpv6Selection {
   const namespace = input.namespace ?? "host";
@@ -631,21 +632,12 @@ export function selectRelayIpv6(input: RelayIpv6Input = {}): RelayIpv6Selection 
   };
 
   if (declared.length > 0) {
-    const detected = echo?.address ?? host.address;
-    const contradiction =
-      detected === undefined || sameAddress(declared, detected)
-        ? undefined
-        : {
-            declared,
-            detected,
-            source: (echo === undefined ? "host" : "echo") as "host" | "echo",
-          };
-
+    // No `copy`: the declared value is the operator's own choice, and the
+    // address this machine happens to hold is not a better one to paste in.
     return {
       ...base,
       source: "declared",
       addresses: [declared],
-      ...(contradiction === undefined ? {} : { contradiction, copy: contradiction.detected }),
     };
   }
 

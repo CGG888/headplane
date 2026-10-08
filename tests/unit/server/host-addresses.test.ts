@@ -684,19 +684,20 @@ describe("selectRelayIpv6", () => {
     expect(relayIpv6NoteKind(selection)).toBeUndefined();
   });
 
-  test("a declared address no source agrees with becomes a contradiction", () => {
+  test("a declared address no source agrees with still wins outright", () => {
     const selection = selectRelayIpv6({
       declared: "2001:db8::5",
       candidates: [candidate("2001:db8::1")],
       namespace: "host",
     });
 
+    // The relay may sit behind a router or a NAT66 prefix, so a local address
+    // that disagrees is not a fault and nothing is offered to replace it.
     expect(selection).toMatchObject({
       source: "declared",
       addresses: ["2001:db8::5"],
-      contradiction: { declared: "2001:db8::5", detected: "2001:db8::1", source: "host" },
-      copy: "2001:db8::1",
     });
+    expect(selection.copy).toBeUndefined();
   });
 
   test("the domain's AAAA pointing elsewhere is the existing mismatch", () => {
@@ -806,7 +807,7 @@ describe("selectRelayIpv6 with the external echo", () => {
     });
   });
 
-  test("an echo answer beats a declared address that disagrees with it", () => {
+  test("a declared address wins even when the echo disagrees", () => {
     const selection = selectRelayIpv6({
       declared: "240e:3b3:4030:1510::5",
       candidates: [candidate(STABLE, "ens18", { temporary: false, realNic: true })],
@@ -817,23 +818,21 @@ describe("selectRelayIpv6 with the external echo", () => {
     expect(selection).toMatchObject({
       source: "declared",
       addresses: ["240e:3b3:4030:1510::5"],
-      contradiction: {
-        declared: "240e:3b3:4030:1510::5",
-        detected: "240e:3b3:4030:1510::1",
-        source: "echo",
-      },
-      copy: "240e:3b3:4030:1510::1",
     });
+    expect(selection.copy).toBeUndefined();
   });
 
-  test("a declared address the echo confirms raises no contradiction", () => {
+  test("a declared address the echo confirms is simply the declared one", () => {
     const selection = selectRelayIpv6({
       declared: "240e:3b3:4030:1510::1",
       namespace: "host",
       echo: { address: "240e:3b3:4030:1510::1" },
     });
 
-    expect(selection.contradiction).toBeUndefined();
+    expect(selection).toMatchObject({
+      source: "declared",
+      addresses: ["240e:3b3:4030:1510::1"],
+    });
     expect(selection.copy).toBeUndefined();
   });
 

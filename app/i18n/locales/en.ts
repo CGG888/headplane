@@ -214,12 +214,6 @@ const en = {
       ipv6EchoMatches: "The internet sees {address}, and this machine holds it.",
       ipv6EchoForwarded:
         "The internet sees {address}, which no interface on this machine holds: clients reach it through NAT66 or a router that forwards another address.",
-      ipv6ContradictionTitle: "The declared address is not what clients reach",
-      ipv6ContradictionEcho:
-        "derp.server.ipv6 declares {declared}, but the internet sees {detected}.",
-      ipv6ContradictionHost:
-        "derp.server.ipv6 declares {declared}, but this machine's own address is {detected}.",
-      ipv6ContradictionCopy: "Copy the address to use",
       ipv6ReasonOsUnreadable: "The interface list could not be read.",
       ipv6ReasonProcUnreadable:
         "/proc/net/if_inet6 could not be read, so a temporary address cannot be told from a stable one.",

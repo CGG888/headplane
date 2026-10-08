@@ -8,6 +8,8 @@
 
 - **Two texts no longer describe more than the code does.** The native-integration hint now says that a reload re-reads the access policy and that any other configuration change needs a restart, and the DERP settings reference no longer calls `derp.auto_update_enabled` the only switch that puts `derp.urls` and `derp.paths` edits into effect — with it off, a reload or restart does that too.
 
+- **The dashboard no longer calls a declared relay address a contradiction.** `derp.server.ipv6` is the address the operator wants clients to reach, and it is routinely not one this machine holds: the relay can sit behind a router or a NAT66 prefix. The amber notice that compared it with the machine's own address (or with the address the echo probe saw) and offered the other value to copy is gone, and so is the copy button that came with it. What stays is the warning that compares the declared address with what the relay hostname actually resolves to, because that is the address a client would end up following.
+
 # 0.22.25 (October 8, 2026)
 
 ## Changes

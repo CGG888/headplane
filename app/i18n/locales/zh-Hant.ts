@@ -203,11 +203,6 @@ const zhHant = {
       ipv6EchoMatches: "網際網路看到的位址是 {address}，而這臺機器正好持有它。",
       ipv6EchoForwarded:
         "網際網路看到的位址是 {address}，這臺機器的任何網路介面都沒有它：用戶端是透過 NAT66 或轉送位址的路由器到達該位址的。",
-      ipv6ContradictionTitle: "宣告的位址並非用戶端實際可達的位址",
-      ipv6ContradictionEcho: "derp.server.ipv6 宣告了 {declared}，但網際網路看到的是 {detected}。",
-      ipv6ContradictionHost:
-        "derp.server.ipv6 宣告了 {declared}，但這臺機器自身的位址是 {detected}。",
-      ipv6ContradictionCopy: "複製應使用的位址",
       ipv6ReasonOsUnreadable: "無法讀取網路介面清單。",
       ipv6ReasonProcUnreadable: "無法讀取 /proc/net/if_inet6，因此無法區分臨時位址與穩定位址。",
       ipv6ReasonSysUnreadable: "無法讀取 /sys/class/net，因此無法區分實體網卡與虛擬介面。",

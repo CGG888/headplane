@@ -765,10 +765,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     "versions-headscale": versions.headscale.updateAvailable,
     "versions-agent": versions.agent.error !== undefined,
     "derp-relay":
-      derp.ipv6StunWarning ||
-      derp.sync?.outcome === "failed" ||
-      derp.relay.ipv6?.contradiction !== undefined ||
-      derp.relay.ipv6?.mismatch === true,
+      derp.ipv6StunWarning || derp.sync?.outcome === "failed" || derp.relay.ipv6?.mismatch === true,
     "derp-nodes": derp.nodes.sources.some((source) => source.gap === "unreadable"),
     "service-server": !service.reachable,
     "service-metrics":
@@ -1196,32 +1193,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               </Fact>
             ) : undefined}
           </Facts>
-
-          {/* A declared address that no source agrees with: the operator has to
-                see both values, and the one clients should use is one click away. */}
-          {relayIpv6?.contradiction !== undefined && relayIpv6.copy !== undefined ? (
-            <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <span className="font-medium">{t("overview.derp.ipv6ContradictionTitle")}</span>
-                <span>
-                  {t(
-                    relayIpv6.contradiction.source === "echo"
-                      ? "overview.derp.ipv6ContradictionEcho"
-                      : "overview.derp.ipv6ContradictionHost",
-                    {
-                      declared: masked(relayIpv6.contradiction.declared),
-                      detected: masked(relayIpv6.contradiction.detected),
-                    },
-                  )}
-                </span>
-                <CopyAddress
-                  address={relayIpv6.copy}
-                  label={t("overview.derp.ipv6ContradictionCopy")}
-                />
-              </div>
-            </div>
-          ) : undefined}
 
           {relayIpv6?.mismatch && relayIpv6.copy !== undefined ? (
             <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:text-amber-200">
