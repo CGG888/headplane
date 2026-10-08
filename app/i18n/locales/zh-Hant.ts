@@ -3247,6 +3247,12 @@ const zhHant = {
       body: "Headscale 0.29 beta 至 0.29.1 會以 {methodNotAllowed} 拒絕 Tailscale 瀏覽器/WASM 的 {ts2021} WebSocket 要求。請升級至 Headscale 0.29.2 或更新版本，或使用 Headscale 0.28.x。",
     },
     joining: "正在加入 Tailnet…",
+    joiningLogin: "正在登入 Headscale…",
+    joinTimeout:
+      "Tailnet 節點在 {seconds} 秒內沒有加入完成。請檢查 Headscale 的公開位址（public_url）是否能從目前的瀏覽器存取。",
+    needsMachineAuth:
+      "Headscale 正在等待批准這台臨時機器，主控台無法繼續。請在 Headscale 中批准該節點後重試。",
+    joinRejectedKey: "Headscale 拒絕了預先授權金鑰。",
     connecting: "正在連線至 {hostname}…",
     nodeStopped: "Tailnet 節點已停止：{error}",
     joinFailed: "加入 Tailnet 失敗：{error}",

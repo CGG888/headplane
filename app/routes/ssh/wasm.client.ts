@@ -4,11 +4,40 @@ const WASM_HELPER_URL = `${__PREFIX__}/wasm_exec.js`;
 /** The only content type `instantiateStreaming` accepts. */
 const WASM_CONTENT_TYPE = "application/wasm";
 
+/** How long a console session may spend joining the Tailnet before giving up. */
+export const TAILNET_JOIN_TIMEOUT_SECONDS = 60;
+const TAILNET_JOIN_TIMEOUT_MS = TAILNET_JOIN_TIMEOUT_SECONDS * 1000;
+
+/**
+ * Why a console session never reached `Running`.
+ *
+ * The backend only reports "Running" once the node is up, so a join that stalls
+ * (an unreachable control URL, a key that needs machine approval) used to leave
+ * the console spinning on "Joining Tailnet…" forever. Every terminal state is
+ * mapped to one of these reasons, which the console turns into a localized
+ * message with a retry button.
+ */
+export type TailnetJoinFailure = "timeout" | "machine-auth" | "stopped" | "rejected" | "panic";
+
+export class TailnetJoinError extends Error {
+  readonly reason: TailnetJoinFailure;
+
+  constructor(reason: TailnetJoinFailure, message: string) {
+    super(message);
+    this.name = "TailnetJoinError";
+    this.reason = reason;
+  }
+}
+
 export interface TailnetConfig {
   controlURL: string;
   authKey: string;
   hostname: string;
   onPanic: (error: string) => void;
+  /** Reports every backend state transition so the console can show progress. */
+  onState?: (state: IPNState) => void;
+  /** Overrides the join deadline; only tests should need this. */
+  timeoutMs?: number;
 }
 
 let goHelper: Promise<void> | null = null;
@@ -87,7 +116,9 @@ export async function instantiateWasmModule(
 
 /**
  * Boots the Tailscale WASM node and resolves once it has joined the Tailnet.
- * Rejects if the pre-auth key is refused or the Go runtime panics.
+ * Rejects with a `TailnetJoinError` if the pre-auth key is refused, the control
+ * server asks for machine approval, the node stops, the Go runtime panics, or
+ * the join does not finish within the deadline.
  */
 export async function connectTailnet(config: TailnetConfig): Promise<IPN> {
   await loadGoHelper();
@@ -112,21 +143,75 @@ export async function connectTailnet(config: TailnetConfig): Promise<IPN> {
   let loginStarted = false;
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    // Every terminal path goes through `settle` so the deadline cannot fire
+    // after the promise already resolved (and so a late panic or state change
+    // from a torn-down session cannot reject a promise nobody is listening to).
+    const settle = (finish: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      finish();
+    };
+
+    const timer = setTimeout(
+      () =>
+        settle(() =>
+          reject(
+            new TailnetJoinError(
+              "timeout",
+              `Joining the Tailnet did not finish within ${TAILNET_JOIN_TIMEOUT_SECONDS} seconds`,
+            ),
+          ),
+        ),
+      config.timeoutMs ?? TAILNET_JOIN_TIMEOUT_MS,
+    );
+
     ipn.run({
       notifyState: (state) => {
-        if (state === "Running") resolve(ipn);
+        if (settled) return;
+
+        config.onState?.(state);
 
         // The backend parks at NeedsLogin until login starts. With an auth key
         // set this consumes it rather than opening an interactive flow.
         if (state === "NeedsLogin" && !loginStarted) {
           loginStarted = true;
           ipn.login();
+          return;
+        }
+
+        if (state === "Running") {
+          settle(() => resolve(ipn));
+          return;
+        }
+
+        // A pre-auth key session must never need a human, so these states end
+        // the session instead of leaving the spinner running forever.
+        if (state === "NeedsMachineAuth") {
+          settle(() =>
+            reject(
+              new TailnetJoinError(
+                "machine-auth",
+                "The control server is waiting for this machine to be approved",
+              ),
+            ),
+          );
+          return;
+        }
+
+        if (state === "Stopped" && loginStarted) {
+          settle(() => reject(new TailnetJoinError("stopped", "The Tailnet node stopped")));
         }
       },
       notifyNetMap: () => {},
       // Only reached when the auth key was refused and the node wants a human.
-      notifyBrowseToURL: () => reject(new Error("Headscale rejected the pre-auth key")),
-      notifyPanicRecover: (error) => reject(new Error(error)),
+      notifyBrowseToURL: () =>
+        settle(() =>
+          reject(new TailnetJoinError("rejected", "Headscale rejected the pre-auth key")),
+        ),
+      notifyPanicRecover: (error) => settle(() => reject(new TailnetJoinError("panic", error))),
     });
   });
 }

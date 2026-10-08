@@ -63,6 +63,7 @@ function fakeFetchResponse(options: {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
+  vi.useRealTimers();
 });
 
 describe("Go WASM helper loading", () => {
@@ -171,9 +172,16 @@ describe("WASM module instantiation", () => {
 });
 
 describe("Tailnet node lifecycle", () => {
-  function stubRuntime(run: () => Promise<void>) {
+  function stubRuntime(run: () => Promise<void>, drive?: (callbacks: IPNCallbacks) => void) {
     const ipn = {
-      run: (callbacks: IPNCallbacks) => callbacks.notifyState("Running"),
+      run: (callbacks: IPNCallbacks) => {
+        if (drive) {
+          drive(callbacks);
+          return;
+        }
+
+        callbacks.notifyState("Running");
+      },
       login: vi.fn(),
       logout: vi.fn(),
       ssh: vi.fn(),
@@ -241,5 +249,159 @@ describe("Tailnet node lifecycle", () => {
     expect(() => stopTailnet(ipn as unknown as IPN)).not.toThrow();
 
     expect(() => stopTailnet(null)).not.toThrow();
+  });
+
+  test("consumes the auth key when the backend asks for a login", async () => {
+    const ipn = stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => {
+        callbacks.notifyState("NeedsLogin");
+        callbacks.notifyState("Running");
+      },
+    );
+    const { connectTailnet } = await import("~/routes/ssh/wasm.client");
+
+    await expect(
+      connectTailnet({
+        controlURL: "https://headscale.example.com",
+        authKey: "key",
+        hostname: "ssh-1-alice",
+        onPanic: vi.fn(),
+      }),
+    ).resolves.toBe(ipn);
+    expect(ipn.login).toHaveBeenCalledOnce();
+  });
+
+  test("reports every state change so the console is not a silent spinner", async () => {
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => {
+        callbacks.notifyState("NoState");
+        callbacks.notifyState("NeedsLogin");
+        callbacks.notifyState("Running");
+      },
+    );
+    const onState = vi.fn();
+    const { connectTailnet } = await import("~/routes/ssh/wasm.client");
+
+    await connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+      onState,
+    });
+
+    expect(onState.mock.calls.map(([state]) => state)).toEqual([
+      "NoState",
+      "NeedsLogin",
+      "Running",
+    ]);
+  });
+
+  test("fails when the control server wants the machine approved", async () => {
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => callbacks.notifyState("NeedsMachineAuth"),
+    );
+    const { connectTailnet, TailnetJoinError } = await import("~/routes/ssh/wasm.client");
+
+    const error: unknown = await connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(TailnetJoinError);
+    expect((error as InstanceType<typeof TailnetJoinError>).reason).toBe("machine-auth");
+  });
+
+  test("fails when the node stops after the login started", async () => {
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => {
+        callbacks.notifyState("NeedsLogin");
+        callbacks.notifyState("Stopped");
+      },
+    );
+    const { connectTailnet, TailnetJoinError } = await import("~/routes/ssh/wasm.client");
+
+    const error: unknown = await connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(TailnetJoinError);
+    expect((error as InstanceType<typeof TailnetJoinError>).reason).toBe("stopped");
+  });
+
+  test("gives up on a join that never reaches Running", async () => {
+    vi.useFakeTimers();
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      () => {},
+    );
+    const { connectTailnet, TailnetJoinError, TAILNET_JOIN_TIMEOUT_SECONDS } =
+      await import("~/routes/ssh/wasm.client");
+
+    const settled = connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+      timeoutMs: TAILNET_JOIN_TIMEOUT_SECONDS * 1000,
+    }).catch((reason: unknown) => reason);
+
+    await vi.advanceTimersByTimeAsync(TAILNET_JOIN_TIMEOUT_SECONDS * 1000);
+
+    const error = await settled;
+    expect(error).toBeInstanceOf(TailnetJoinError);
+    expect((error as InstanceType<typeof TailnetJoinError>).reason).toBe("timeout");
+    expect((error as Error).message).toContain(String(TAILNET_JOIN_TIMEOUT_SECONDS));
+  });
+
+  test("treats a refused key as terminal and ignores later chatter", async () => {
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => {
+        callbacks.notifyBrowseToURL("https://headscale.example.com/register/nodekey");
+        // The session is over; a late state or panic must not settle it again.
+        callbacks.notifyState("Running");
+        callbacks.notifyPanicRecover("late panic");
+      },
+    );
+    const { connectTailnet, TailnetJoinError } = await import("~/routes/ssh/wasm.client");
+
+    const error: unknown = await connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(TailnetJoinError);
+    expect((error as InstanceType<typeof TailnetJoinError>).reason).toBe("rejected");
+  });
+
+  test("reports a dropped session from the notify callback", async () => {
+    stubRuntime(
+      () => new Promise<void>(() => {}),
+      (callbacks) => callbacks.notifyPanicRecover("boom"),
+    );
+    const { connectTailnet, TailnetJoinError } = await import("~/routes/ssh/wasm.client");
+
+    const error: unknown = await connectTailnet({
+      controlURL: "https://headscale.example.com",
+      authKey: "key",
+      hostname: "ssh-1-alice",
+      onPanic: vi.fn(),
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(TailnetJoinError);
+    expect((error as InstanceType<typeof TailnetJoinError>).reason).toBe("panic");
+    expect((error as Error).message).toBe("boom");
   });
 });

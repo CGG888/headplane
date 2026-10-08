@@ -23,7 +23,12 @@ import { isSshErrorPayload, SSHErrorBoundary, sshError, sshErrorMessageKey } fro
 import Ghostty from "./ghostty.client";
 import type { ConsoleKeyPayload } from "./key";
 import UserPrompt from "./user-prompt";
-import { connectTailnet, stopTailnet } from "./wasm.client";
+import {
+  connectTailnet,
+  TailnetJoinError,
+  TAILNET_JOIN_TIMEOUT_SECONDS,
+  stopTailnet,
+} from "./wasm.client";
 
 const WASM_MODULE_URL = `${__PREFIX__}/hp_ssh.wasm`;
 const WASM_HELPER_URL = `${__PREFIX__}/wasm_exec.js`;
@@ -176,6 +181,29 @@ async function readConsoleKeyError(response: Response, t: I18nValue["t"]): Promi
   }
 
   return `${response.status} ${response.statusText}`;
+}
+
+/**
+ * Turns a failed join into a localized message. The Tailnet node reports *why*
+ * it never came up, so a stalled console can say what to check instead of
+ * spinning on "Joining Tailnet…" forever.
+ */
+function joinFailureMessage(error: unknown, t: I18nValue["t"]): string {
+  if (error instanceof TailnetJoinError) {
+    switch (error.reason) {
+      case "timeout":
+        return t("ssh.joinTimeout", { seconds: TAILNET_JOIN_TIMEOUT_SECONDS });
+      case "machine-auth":
+        return t("ssh.needsMachineAuth");
+      case "rejected":
+        return t("ssh.joinRejectedKey");
+      case "panic":
+      case "stopped":
+        return t("ssh.nodeStopped", { error: error.message });
+    }
+  }
+
+  return t("ssh.joinFailed", { error: error instanceof Error ? error.message : String(error) });
 }
 
 async function createConsoleKey(
@@ -331,6 +359,13 @@ function SSHConsole({
         authKey: consoleKey.key,
         hostname: consoleKey.ephemeralHostname,
         onPanic,
+        // Keeps the overlay honest while the node is still coming up: a join
+        // against an unreachable control URL otherwise looks identical to a
+        // slow one.
+        onState: (state) => {
+          if (cancelled) return;
+          setStatus(state === "NeedsLogin" ? t("ssh.joiningLogin") : t("ssh.joining"));
+        },
       });
 
       if (cancelled) {
@@ -344,9 +379,7 @@ function SSHConsole({
     })().catch((error: unknown) => {
       if (cancelled) return;
       setFailed(true);
-      setStatus(
-        t("ssh.joinFailed", { error: error instanceof Error ? error.message : String(error) }),
-      );
+      setStatus(joinFailureMessage(error, t));
     });
 
     return () => {

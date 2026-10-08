@@ -3483,6 +3483,12 @@ const en = {
       body: "Headscale 0.29 beta releases through 0.29.1 reject Tailscale's browser/WASM {ts2021} WebSocket request with {methodNotAllowed}. Upgrade Headscale to 0.29.2 or newer, or use Headscale 0.28.x.",
     },
     joining: "Joining Tailnet…",
+    joiningLogin: "Signing in to Headscale…",
+    joinTimeout:
+      "The Tailnet node did not finish joining within {seconds} seconds. Check that the public Headscale URL (public_url) is reachable from this browser.",
+    needsMachineAuth:
+      "Headscale is waiting for this machine to be approved, so the console cannot continue. Approve the node in Headscale and retry.",
+    joinRejectedKey: "Headscale rejected the pre-auth key.",
     connecting: "Connecting to {hostname}…",
     nodeStopped: "Tailnet node stopped: {error}",
     joinFailed: "Failed to join Tailnet: {error}",

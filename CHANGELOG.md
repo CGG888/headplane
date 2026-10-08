@@ -4,6 +4,10 @@
 
 - **The DERP address sync can now take IPv6 from the relay hostname instead of the host.** The new **IPv6 address source** select in **Settings → Headscale → DERP → auto-sync** chooses between the host machine's own global unicast address (the default, and exactly what every installation did before the select existed — that mode still does no DNS lookup at all) and the first usable global unicast AAAA answer of `server_url`. Pick the record when the relay is not where clients connect — a router or reverse proxy terminating TLS in front of this machine makes the host's own address unreachable even though it is a real global unicast address — and the candidate list then says which rule decided: an address that lost to the record reads `usable, but the relay hostname's AAAA record was preferred` (`dns-wins`), one that lost to the external echo still reads `echo-wins`, and the echo outranks both. A preferred record with no usable answer leaves the host probe as the fallback, so the family keeps working and the configured value is only left alone when neither source has anything usable. Stored settings written before the option existed normalize to the host source.
 
+## Fixes
+
+- **Browser SSH says why it could not join instead of spinning on "Joining Tailnet…" forever.** The in-browser Tailnet node only ever reported success, so an unreachable control URL, a key that needs machine approval or a session that died all looked like the same endless spinner, with no error and no retry button until the page was reloaded. The console now reports each backend state as it happens ("Signing in to Headscale…"), ends the session after 60 seconds with a message pointing at the Headscale address the browser itself must be able to reach (`public_url`, not the panel's own address), and fails with its own message when Headscale wants the machine approved, when the pre-auth key is refused, or when the node stops — each with the retry button.
+
 # 0.22.24 (October 8, 2026)
 
 ## Changes
