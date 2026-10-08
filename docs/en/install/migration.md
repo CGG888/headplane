@@ -126,11 +126,12 @@ Why that order:
   and the occupied-port problem then only surfaces when you start the new shape.
 
 In the other direction (dual-image → native) the container side stops first: `docker compose down` stops
-both containers in dependency order, and section 4 moves the data.
+the stack's containers in dependency order (three with the Lucky path split: `headscale`, `headplaneCN`,
+`caddy`), and section 4 moves the data.
 
 ## 3. Native → dual-image
 
-### 3.1 Directory layout: two containers, one directory
+### 3.1 Directory layout: three containers, one directory
 
 | Host path                                            | What lives there                                                                                                                               |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,7 +139,7 @@ both containers in dependency order, and section 4 moves the data.
 | `${BASE_DIR}/data/`                                  | The panel's own data: sessions, internal database, snapshots, agent state                                                                      |
 | `${BASE_DIR}/config.yaml`                            | The panel's own configuration                                                                                                                  |
 | `${BASE_DIR}/backup/`                                | The `tar.gz` files from before migrations and upgrades (the output of section 1)                                                               |
-| `${BASE_DIR}/.env`, `${BASE_DIR}/docker-compose.yml` | Version numbers, run-as user, the two container definitions                                                                                    |
+| `${BASE_DIR}/.env`, `${BASE_DIR}/docker-compose.yml` | Version numbers, run-as user, the three container definitions (drop the `caddy:` block unless you use the Lucky path split)                    |
 
 `BASE_DIR` is that directory's absolute path, `/vol1/1000/APP/headplaneCN` in the examples — substitute
 your real storage location. **The same path is used inside and outside the container**, which is the
@@ -146,7 +147,8 @@ premise for "the absolute paths stay unchanged" below.
 
 ```bash
 mkdir -p /vol1/1000/APP/headplaneCN/{data,backup} \
-         /vol1/1000/APP/headplaneCN/headscale/derp-maps
+         /vol1/1000/APP/headplaneCN/headscale/derp-maps \
+         /vol1/1000/APP/headplaneCN/caddy/{data,config}   # only the Lucky layout needs it
 ```
 
 ### 3.2 Copy the data into the new directory
@@ -185,6 +187,9 @@ BASE_DIR=/vol1/1000/APP/headplaneCN   # ← may change: must be an absolute path
 PANEL_BIND=192.168.1.10               # ← must change: your NAS's IP
 PANEL_PORT=4100                       # ← may change (defaults to 4100)
 TZ=Asia/Shanghai                      # ← may change
+
+CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← may change: only the Lucky layout needs it
+CADDY_PORT=8444                                     # ← may change (same as above)
 ```
 
 ::: warning When you bind a specific IP, two places move together
@@ -283,7 +288,7 @@ docker compose exec headscale headscale configtest   # validation only, starts n
 cd /vol1/1000/APP/headplaneCN
 docker compose config --quiet        # is the syntax fine and is every variable set?
 docker compose up -d
-docker compose ps                    # expect: both services Up (healthy)
+docker compose ps                    # expect: all three services Up (healthy) (two without Caddy)
 ```
 
 ```bash
@@ -409,7 +414,7 @@ Both directions are accepted the same way:
 ```bash
 cd /vol1/1000/APP/headplaneCN
 
-# 1) The services are up: dual-image has two containers; native has one container plus a host process
+# 1) The services are up: dual-image has three containers (two without Caddy); native has one container plus a host process
 docker compose ps
 ps -ef | grep '[h]eadscale serve'
 
@@ -530,12 +535,12 @@ sudo tar -czf backup/headplane-$(date +%Y%m%d-%H%M%S).tar.gz -C . data config.ya
 
 # ---- Native → dual-image ----
 cd /vol1/1000/APP/headplaneCN
-mkdir -p data backup headscale/derp-maps
+mkdir -p data backup headscale/derp-maps caddy/{data,config}
 sudo cp -a /vol1/@appdata/headscale/. headscale/
 ls -ln headscale | head                  # the owner → HEADSCALE_UID/GID in .env
 docker compose config --quiet
 docker compose up -d
-docker compose ps                        # expect: both services Up (healthy)
+docker compose ps                        # expect: all three services Up (healthy) (two without Caddy)
 
 # ---- Dual-image → native ----
 cd /vol1/1000/APP/headplaneCN

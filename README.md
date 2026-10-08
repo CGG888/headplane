@@ -94,6 +94,9 @@ BASE_DIR=/vol1/1000/APP/headplaneCN
 PANEL_BIND=0.0.0.0
 PANEL_PORT=4100
 TZ=Asia/Shanghai
+# 只有 Lucky 路径分流方案需要；用端口 / 多域名方案时删掉这两行和下面 compose 里的 caddy 服务
+CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine
+CADDY_PORT=8444
 ```
 
 `docker-compose.yml`：
@@ -158,6 +161,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # 只有当 Lucky 在上游终止 TLS、需要按路径把 /admin 分给面板时才要这一段；
+  # 用端口 / 多域名方案请整段删掉（规则文件是 ${BASE_DIR}/caddy/Caddyfile，见 /install/dual-image）
+  caddy:
+    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}"
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - "TZ=${TZ:-Asia/Shanghai}"
+      - "CADDY_PORT=${CADDY_PORT:-8444}"
+    volumes:
+      - "${BASE_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "${BASE_DIR}/caddy/data:/data"
+      - "${BASE_DIR}/caddy/config:/config"
 ```
 
 **五个关键点**

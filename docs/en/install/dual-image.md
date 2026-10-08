@@ -705,7 +705,7 @@ Other save errors, permission problems and missing UI items are in
 ```bash
 cd /vol1/1000/APP/headplaneCN
 
-docker compose ps                                     # both services Up (healthy)
+docker compose ps                                     # all three services Up (healthy) (two without Caddy)
 docker compose logs headplaneCN | grep -i 'valid Headscale configuration'
 docker compose logs headplaneCN | grep -i 'Using Docker integration'
 docker compose logs headplaneCN | grep -i 'Listening on'
@@ -715,7 +715,7 @@ curl -s http://127.0.0.1:8480/health                  # {"status":"pass"}
 curl -s http://192.168.1.10:4100/admin/healthz        # {"status":"OK"}
 ```
 
-- [ ] Both containers are running, recover automatically after `docker compose restart`, and `up -d` is idempotent
+- [ ] The containers are running (`headscale`, `headplaneCN`, plus `caddy` with Lucky), recover automatically after `docker compose restart`, and `up -d` is idempotent
 - [ ] The panel's **Settings → System** shows the integration as **Docker**, and saving the configuration can restart the Headscale container
 - [ ] **A registered client comes online without re-registering** (`tailscale status` shows it as connected straight away)
 - [ ] **Settings → System → Configuration check** is green overall ("cannot verify write permission" for the read-only data directory is expected)

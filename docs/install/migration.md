@@ -114,12 +114,12 @@ docker compose down
 - **最后停面板容器**：先 `down` 很容易忘记去停原生 headscale，于是「端口被占」这个问题直到启动
   新形态时才暴露。
 
-反方向（双镜像 → 原生）先停的是容器那一侧：`docker compose down` 会按依赖顺序停掉两个容器，
-再回到第四节搬数据。
+反方向（双镜像 → 原生）先停的是容器那一侧：`docker compose down` 会按依赖顺序停掉栈里的容器
+（用 Lucky 路径分流时是三个：`headscale`、`headplaneCN`、`caddy`），再回到第四节搬数据。
 
 ## 三、原生 → 双镜像
 
-### 3.1 目录布局：两个容器、一个目录
+### 3.1 目录布局：三个容器、一个目录
 
 | 宿主机路径                                           | 放什么                                                                                                                             |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -127,14 +127,15 @@ docker compose down
 | `${BASE_DIR}/data/`                                  | 面板自己的数据：会话、内部库、快照、Agent 状态                                                                                     |
 | `${BASE_DIR}/config.yaml`                            | 面板自己的配置                                                                                                                     |
 | `${BASE_DIR}/backup/`                                | 迁移与升级前的 `tar.gz`（第一节两条命令的产物）                                                                                    |
-| `${BASE_DIR}/.env`、`${BASE_DIR}/docker-compose.yml` | 版本号、运行用户、两个容器的定义                                                                                                   |
+| `${BASE_DIR}/.env`、`${BASE_DIR}/docker-compose.yml` | 版本号、运行用户、三个容器的定义（含 `caddy`，不用 Lucky 路径分流时删掉那一段）                                                    |
 
 `BASE_DIR` 就是这份目录的绝对路径，示例 `/vol1/1000/APP/headplaneCN`，按你的实际存储位置替换。
 **容器内外用的是同一个路径**，这是下面「绝对路径不用改」的前提。
 
 ```bash
 mkdir -p /vol1/1000/APP/headplaneCN/{data,backup} \
-         /vol1/1000/APP/headplaneCN/headscale/derp-maps
+         /vol1/1000/APP/headplaneCN/headscale/derp-maps \
+         /vol1/1000/APP/headplaneCN/caddy/{data,config}   # 只有 Lucky 方案需要
 ```
 
 ### 3.2 把数据复制到新目录
@@ -172,6 +173,9 @@ BASE_DIR=/vol1/1000/APP/headplaneCN   # ← 可改：必须是绝对路径，容
 PANEL_BIND=192.168.1.10               # ← 必须改：你 NAS 的 IP
 PANEL_PORT=4100                       # ← 可改（默认 4100）
 TZ=Asia/Shanghai                      # ← 可改
+
+CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← 可改：只有 Lucky 方案需要
+CADDY_PORT=8444                                     # ← 可改（同上）
 ```
 
 ::: warning 绑定具体 IP 时，两处要一起改
@@ -265,7 +269,7 @@ docker compose exec headscale headscale configtest   # 只校验，不启动
 cd /vol1/1000/APP/headplaneCN
 docker compose config --quiet        # 语法与变量都齐了吗
 docker compose up -d
-docker compose ps                    # 期望：两个服务都 Up (healthy)
+docker compose ps                    # 期望：三个服务都 Up (healthy)（不用 Caddy 时是两个）
 ```
 
 ```bash
@@ -384,7 +388,7 @@ docker compose logs headplaneCN | grep -iE 'valid Headscale configuration|Found 
 ```bash
 cd /vol1/1000/APP/headplaneCN
 
-# 1) 服务在跑：双镜像应有两个容器；原生形态是一个容器 + 宿主机上的原生进程
+# 1) 服务在跑：双镜像应是三个容器（不用 Caddy 时两个）；原生形态是一个容器 + 宿主机上的原生进程
 docker compose ps
 ps -ef | grep '[h]eadscale serve'
 
@@ -496,12 +500,12 @@ sudo tar -czf backup/headplane-$(date +%Y%m%d-%H%M%S).tar.gz -C . data config.ya
 
 # ---- 原生 → 双镜像 ----
 cd /vol1/1000/APP/headplaneCN
-mkdir -p data backup headscale/derp-maps
+mkdir -p data backup headscale/derp-maps caddy/{data,config}
 sudo cp -a /vol1/@appdata/headscale/. headscale/
 ls -ln headscale | head                  # 属主 → .env 的 HEADSCALE_UID/GID
 docker compose config --quiet
 docker compose up -d
-docker compose ps                        # 期望：两个服务都 Up (healthy)
+docker compose ps                        # 期望：三个服务都 Up (healthy)（不用 Caddy 时是两个）
 
 # ---- 双镜像 → 原生 ----
 cd /vol1/1000/APP/headplaneCN

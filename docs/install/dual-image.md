@@ -660,7 +660,7 @@ docker compose exec headscale headscale configtest # Headscale 侧：只校验�
 ```bash
 cd /vol1/1000/APP/headplaneCN
 
-docker compose ps                                     # 两个服务都 Up (healthy)
+docker compose ps                                     # 三个服务都 Up (healthy)（不用 Caddy 时两个）
 docker compose logs headplaneCN | grep -i 'valid Headscale configuration'
 docker compose logs headplaneCN | grep -i 'Using Docker integration'
 docker compose logs headplaneCN | grep -i 'Listening on'
@@ -670,7 +670,7 @@ curl -s http://127.0.0.1:8480/health                  # {"status":"pass"}
 curl -s http://192.168.1.10:4100/admin/healthz        # {"status":"OK"}
 ```
 
-- [ ] 两个容器都在跑，`docker compose restart` 后自动恢复、`up -d` 幂等
+- [ ] 容器都在跑（`headscale`、`headplaneCN`，用 Lucky 时还有 `caddy`），`docker compose restart` 后自动恢复、`up -d` 幂等
 - [ ] 面板 **设置 → 系统** 集成显示 **Docker**，保存配置能重启 Headscale 容器
 - [ ] **已注册客户端不重新注册即可上线**（`tailscale status` 直接显示已连接）
 - [ ] `设置 → 系统 → 配置检查`整体为绿（只读数据目录的「无法验证写入权限」是预期）
