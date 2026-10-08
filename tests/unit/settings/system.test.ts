@@ -8,7 +8,7 @@ import {
   type Diagnostic,
   type DiagnosticsInput,
 } from "~/routes/settings/system/diagnostics";
-import { createReleaseChecker } from "~/routes/settings/system/release-check";
+import { createReleaseChecker, RELEASES_URL } from "~/routes/settings/system/release-check";
 import { authContext, headscaleContext, integrationContext } from "~/server/context";
 import { parseServerVersion } from "~/server/headscale/api/server-version";
 
@@ -231,54 +231,79 @@ describe("system diagnostics", () => {
 });
 
 describe("headscale release check", () => {
-  function jsonResponse(body: unknown, status = 200) {
+  /** GitHub answers `releases/latest` with a 302 whose Location holds the tag. */
+  function redirectResponse(location: string, status = 302) {
     return {
-      ok: status >= 200 && status < 300,
+      ok: false,
       status,
-      json: () => Promise.resolve(body),
+      url: RELEASES_URL,
+      headers: { get: (name: string) => (name === "location" ? location : null) },
     } as unknown as Response;
   }
 
-  test("reads the latest release tag", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ tag_name: "v0.29.2" }));
+  function errorResponse(status: number) {
+    return {
+      ok: false,
+      status,
+      url: RELEASES_URL,
+      headers: { get: () => null },
+    } as unknown as Response;
+  }
+
+  function releaseTag(tag: string) {
+    return `https://github.com/juanfont/headscale/releases/tag/${tag}`;
+  }
+
+  test("reads the latest release tag from the redirect", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
     const checker = createReleaseChecker({ fetchImpl: fetchImpl as unknown as typeof fetch });
 
     const latest = await checker.latest();
     expect(latest?.raw).toBe("v0.29.2");
     expect(latest?.minor).toBe(29);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    // The HTML endpoint is asked for the redirect itself, never for the API.
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(RELEASES_URL);
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
   });
 
-  test("fails soft on a blocked network, a bad status, and a malformed body", async () => {
+  test("fails soft on a blocked network, a bad status, and an unusable answer", async () => {
     const blocked = createReleaseChecker({
       fetchImpl: vi
         .fn()
         .mockRejectedValue(
-          new Error("getaddrinfo ENOTFOUND api.github.com"),
+          new Error("getaddrinfo ENOTFOUND github.com"),
         ) as unknown as typeof fetch,
     });
     expect(await blocked.latest()).toBeUndefined();
 
+    // "API rate limit exceeded" is a 403 with no Location to read.
     const refused = createReleaseChecker({
-      fetchImpl: vi.fn().mockResolvedValue(jsonResponse({}, 403)) as unknown as typeof fetch,
+      fetchImpl: vi.fn().mockResolvedValue(errorResponse(403)) as unknown as typeof fetch,
     });
     expect(await refused.latest()).toBeUndefined();
 
-    const malformed = createReleaseChecker({
-      fetchImpl: vi.fn().mockResolvedValue(jsonResponse("not json")) as unknown as typeof fetch,
+    // A redirect that does not point at a tag is just as useless.
+    const notATag = createReleaseChecker({
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(
+          redirectResponse("https://github.com/juanfont/headscale/releases"),
+        ) as unknown as typeof fetch,
     });
-    expect(await malformed.latest()).toBeUndefined();
+    expect(await notATag.latest()).toBeUndefined();
 
     const unusable = createReleaseChecker({
       fetchImpl: vi
         .fn()
-        .mockResolvedValue(jsonResponse({ tag_name: "nightly" })) as unknown as typeof fetch,
+        .mockResolvedValue(redirectResponse(releaseTag("nightly"))) as unknown as typeof fetch,
     });
     expect(await unusable.latest()).toBeUndefined();
   });
 
   test("caches a hit and shares one request between concurrent callers", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ tag_name: "v0.29.2" }));
+    const fetchImpl = vi.fn().mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
     const checker = createReleaseChecker({ fetchImpl: fetchImpl as unknown as typeof fetch });
 
     const [first, second] = await Promise.all([checker.latest(), checker.latest()]);
@@ -296,7 +321,7 @@ describe("headscale release check", () => {
     const fetchImpl = vi
       .fn()
       .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValue(jsonResponse({ tag_name: "v0.29.2" }));
+      .mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
     const checker = createReleaseChecker({
       fetchImpl: fetchImpl as unknown as typeof fetch,
       successTtlMs: 6 * 60 * 60 * 1000,

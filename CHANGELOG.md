@@ -4,6 +4,10 @@
 
 - **Caddy ships with the panel in both NAS layouts.** The native-mode (`/install/fnos`) and dual-image (`/install/dual-image`) compose files now define the `caddy` service and carry the `CADDY_IMAGE` / `CADDY_PORT` lines in `.env`, so the Lucky route no longer needs a second stack under `/vol1/1000/APP/caddy`: the Caddyfile lives in `caddy/` next to the panel, `/install/reverse-proxy-lucky` documents the merged layout first and `scripts/dual-image-install.sh` generates the service, the `.env` keys and the Caddyfile.
 
+## Fixes
+
+- **The version card no longer reads "not reported" on a rate-limited address.** The panel asked the GitHub REST API for the newest Headscale and Headplane releases, and that endpoint allows only 60 unauthenticated requests per hour per address: on a shared connection it answers HTTP 403 `API rate limit exceeded`, so both **Latest version** rows rendered `— (not reported)` while the panel itself was healthy. The lookup now asks `https://github.com/<owner>/<repo>/releases/latest` and reads the tag out of the 302's `Location` header, which is not subject to that limit and needs no token, mirror or proxy.
+
 # 0.22.23 (October 8, 2026)
 
 ## Changes

@@ -349,9 +349,13 @@ describe("headplane self-update notice", () => {
 
   test("looks up Headplane's own repository", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ tag_name: "v0.6.1" }),
+      ok: false,
+      status: 302,
+      url: HEADPLANE_RELEASES_URL,
+      headers: {
+        get: (name: string) =>
+          name === "location" ? "https://github.com/CGG888/headplaneCN/releases/tag/v0.6.1" : null,
+      },
     } as unknown as Response);
 
     const checker = createReleaseChecker({
@@ -361,9 +365,7 @@ describe("headplane self-update notice", () => {
     });
 
     expect((await checker.latest())?.raw).toBe("v0.6.1");
-    expect(HEADPLANE_RELEASES_URL).toBe(
-      "https://api.github.com/repos/CGG888/headplaneCN/releases/latest",
-    );
+    expect(HEADPLANE_RELEASES_URL).toBe("https://github.com/CGG888/headplaneCN/releases/latest");
     expect(fetchImpl.mock.calls[0][0]).toBe(HEADPLANE_RELEASES_URL);
   });
 });

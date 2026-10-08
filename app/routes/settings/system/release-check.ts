@@ -3,20 +3,26 @@
 // The system status page would like to tell the operator that a newer Headscale
 // exists, but it must never depend on reaching the internet to render. Every
 // failure mode (no network, DNS blocked, a proxy that blackholes GitHub, a rate
-// limit, a malformed body, or a request that simply takes too long) ends as
+// limit, a missing redirect, or a request that simply takes too long) ends as
 // `undefined`, which the page renders as "no update information" with no badge.
 // Results are cached in-process so a page reload does not talk to GitHub again,
 // and successful lookups are cached for much longer than failures so a
 // temporary outage recovers without hammering the API.
+//
+// The tag is read from the HTML endpoint `https://github.com/<owner>/<repo>/
+// releases/latest`, which answers with a 302 to `/releases/tag/<tag>`. That
+// endpoint is not subject to the unauthenticated GitHub API rate limit (60
+// requests per hour per address), which answers HTTP 403 "API rate limit
+// exceeded" from a shared address and made the version card read "not
+// reported" on an install whose network was perfectly fine.
 
 import { parseServerVersion, type ServerVersion } from "~/server/headscale/api/server-version";
 import log from "~/utils/log";
 
-export const RELEASES_URL = "https://api.github.com/repos/juanfont/headscale/releases/latest";
+export const RELEASES_URL = "https://github.com/juanfont/headscale/releases/latest";
 
 /** Headplane's own releases, looked up exactly the same way. */
-export const HEADPLANE_RELEASES_URL =
-  "https://api.github.com/repos/CGG888/headplaneCN/releases/latest";
+export const HEADPLANE_RELEASES_URL = "https://github.com/CGG888/headplaneCN/releases/latest";
 
 /** Long enough for a healthy connection, short enough to never stall a page. */
 export const REQUEST_TIMEOUT_MS = 3_000;
@@ -59,21 +65,23 @@ export function createReleaseChecker(options: ReleaseCheckerOptions = {}): Relea
     try {
       const response = await fetchImpl(url, {
         headers: {
-          accept: "application/vnd.github+json",
+          accept: "text/html",
           "user-agent": "headplane",
         },
+        // The tag only exists in the Location header, so the redirect must not
+        // be followed: `manual` hands the 302 back untouched.
+        redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });
 
-      if (!response.ok) {
-        log.debug("server", "%s release check returned HTTP %d", label, response.status);
-        return undefined;
-      }
-
-      const body: unknown = await response.json();
-      const tag = readTagName(body);
+      const tag = readTagName(response);
       if (!tag) {
-        log.debug("server", "%s release check returned no tag name", label);
+        log.debug(
+          "server",
+          "%s release check returned no release tag (HTTP %d)",
+          label,
+          response.status,
+        );
         return undefined;
       }
 
@@ -112,18 +120,35 @@ export function createReleaseChecker(options: ReleaseCheckerOptions = {}): Relea
   };
 }
 
-function readTagName(body: unknown): string | undefined {
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+/**
+ * Reads the release tag out of GitHub's `releases/latest` answer: a 302 whose
+ * `Location` ends in `/releases/tag/<tag>`. A response that already travelled
+ * through the redirect is accepted as well, so a `fetch` that follows redirects
+ * anyway still yields a version instead of nothing.
+ */
+function readTagName(response: Response): string | undefined {
+  const fromLocation = tagFromUrl(response.headers.get("location"));
+  if (fromLocation) {
+    return fromLocation;
+  }
+
+  if (response.status < 300 || response.status >= 400) {
+    return tagFromUrl(response.url);
+  }
+
+  return undefined;
+}
+
+function tagFromUrl(url: string | undefined | null): string | undefined {
+  const marker = "/releases/tag/";
+  const index = url?.indexOf(marker) ?? -1;
+  if (index === -1) {
     return undefined;
   }
 
-  const tag = (body as Record<string, unknown>).tag_name;
-  if (typeof tag !== "string") {
-    return undefined;
-  }
-
-  const trimmed = tag.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  const rest = url!.slice(index + marker.length);
+  const tag = rest.split(/[?#]/)[0]?.trim();
+  return tag ? decodeURIComponent(tag) : undefined;
 }
 
 /**
