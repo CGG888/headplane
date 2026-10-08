@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.25 (October 8, 2026)
+
 ## Changes
 
 - **The DERP address sync can now take IPv6 from the relay hostname instead of the host.** The new **IPv6 address source** select in **Settings → Headscale → DERP → auto-sync** chooses between the host machine's own global unicast address (the default, and exactly what every installation did before the select existed — that mode still does no DNS lookup at all) and the first usable global unicast AAAA answer of `server_url`. Pick the record when the relay is not where clients connect — a router or reverse proxy terminating TLS in front of this machine makes the host's own address unreachable even though it is a real global unicast address — and the candidate list then says which rule decided: an address that lost to the record reads `usable, but the relay hostname's AAAA record was preferred` (`dns-wins`), one that lost to the external echo still reads `echo-wins`, and the echo outranks both. A preferred record with no usable answer leaves the host probe as the fallback, so the family keeps working and the configured value is only left alone when neither source has anything usable. Stored settings written before the option existed normalize to the host source.
@@ -11,6 +13,8 @@
 - **The access-control editor no longer offers rules Headscale will refuse.** Both the ACL policy dialog and the SSH rule dialog now run the same fifteen checks Headscale 0.29.4's own policy parser runs before saving: a user, tag, group, host or alias used as an SSH source or destination, an `autogroup` used as an SSH source or destination, `autogroup:self` used as the source of a policy rule, a `checkPeriod` on an `accept` rule or a period that is not a positive duration, a tag or group the policy never defines, a tag source that resolves to a user, to the members of an autogroup or to the autogroup itself, and a user destination that is not the same user the rule belongs to. The offending values are listed under the rule in the panel's own language, and Save stays disabled until they are fixed — the editor can no longer write a policy that Headscale is certain to reject.
 
 - **A policy Headscale rejects is now reported instead of a 500.** The save action recognised only two of the three prefixes Headscale's parser uses, so a rejection from the policy validator (`parsing policy:`) was never matched and surfaced as "Unexpected Server Error" with no explanation. All three prefixes are recognised now, the response is a 400 that carries Headscale's own message, and the editor labels the two kinds apart — `Invalid policy:` for a validator rejection, `Syntax error:` for broken HuJSON.
+
+---
 
 # 0.22.24 (October 8, 2026)
 
