@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.22 (October 8, 2026)
+
 ## Changes
 
 - **The region filter's target file follows your deployment instead of a hardcoded path.** The DERP region mirror used to default to `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`, the path an fnOS-native Headscale uses — so the same panel running in the two-container shape reported the map as **unreadable**, because that directory is not mounted there. The default is now derived from Headscale's live configuration on every read: the directory of the first absolute `derp.paths` entry, otherwise the data directory inferred from `noise.private_key_path`, `sqlite.path`, `derp.server.private_key_path` and `unix_socket`, in that order, with the old path kept only as a last resort. A path you picked by hand still wins, and because the value is never written back nothing is frozen: move the stack and the default moves with it. The mount hint on the page now follows `derp.paths` as well.
@@ -20,6 +22,8 @@
 - **The relay card no longer marks both regions as in use.** When the assigned home region was also the one the client was using — the healthy case, and the common one — the home row and the preferred row both carried the **in use** badge, because both were compared against the preferred region. Only the row that is actually in use carries the badge now, and the two rows say **Home region (assigned)** and **Preferred region (in use)** so the distinction is written on screen instead of implied.
 - **Operation timestamps show the clock you actually read.** The audit log pinned every entry to UTC, so a login at 12:14 local time was listed as 04:14 — the page said "time" and meant "UTC", with nothing on screen saying so. The list and the operation-detail dialog now format the recorded instant in the viewer's own time zone and name that zone (`GMT+8`), and the first paint, where the server and the browser disagree because they sit in different zones, is no longer treated as a hydration error. CSV and JSON exports are unchanged: `at` stays an absolute ISO 8601 UTC timestamp.
 - **A refused reload now says which step failed.** Reloading or restarting Headscale no longer reports a generic failure: the page names the step that stopped — no `headscale serve` process was found, the integration is not configured, permission to send the signal was denied, the signal was sent but `/health` never confirmed it, or the signal could not be sent at all. Before this release a refused reload could be reported as a success. The install guides now also say that a panel running in a container next to a native Headscale needs `security_opt: ["apparmor=unconfined"]` in addition to `pid: host`, because Docker's default AppArmor profile refuses to signal an `unconfined` process and the reload fails with `kill EACCES`.
+
+---
 
 # 0.22.21 (October 8, 2026)
 
