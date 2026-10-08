@@ -59,10 +59,20 @@ function apiMessage(error: unknown): string | null {
   return raw.length > 0 ? raw : null;
 }
 
-// Headscale's parser reports an unusable policy with one of two message
-// prefixes: HuJSON syntax errors and structural unmarshal errors.
+// Headscale reports an unusable policy with one of these message markers:
+// HuJSON syntax errors, JSON unmarshal errors, and every check the policy
+// validator runs afterwards (SSH source/destination rules, tag and user
+// ownership, duplicate user references, ...). They are all a verdict on the
+// policy, so none of them may be reported as an internal server error.
 // https://github.com/juanfont/headscale/blob/c4600346f9c29b514dc9725ac103efb9d0381f23/hscontrol/types/policy.go#L11
-const POLICY_PARSE_PREFIXES = ["parsing HuJSON:", "parsing policy from bytes:"];
+const POLICY_PARSE_PREFIXES = ["parsing HuJSON:", "parsing policy from bytes:", "parsing policy:"];
+
+/** Introduces Headscale's own text in the error an operator ends up reading. */
+const POLICY_PARSE_LABELS: Record<string, string> = {
+  "parsing HuJSON:": "Syntax error:",
+  "parsing policy from bytes:": "Syntax error:",
+  "parsing policy:": "Invalid policy:",
+};
 
 function isPolicyParseError(detail: string): boolean {
   return POLICY_PARSE_PREFIXES.some((prefix) => detail.includes(prefix));
@@ -194,13 +204,13 @@ export async function aclAction({ request, context }: Route.ActionArgs) {
         throw error;
       }
 
-      // Policy parse errors carry one of two prefixes (HuJSON syntax vs.
-      // structural unmarshal). Headscale 0.27.0+ uses these forms; older
-      // releases are no longer supported.
+      // Policy rejections carry one of the markers above (HuJSON syntax, JSON
+      // unmarshal, or a policy validator check). Headscale 0.27.0+ uses these
+      // forms; older releases are no longer supported.
       const prefix = POLICY_PARSE_PREFIXES.find((candidate) => message.includes(candidate));
       if (prefix != null) {
         const cutIndex = message.indexOf(prefix);
-        const trimmed = `Syntax error: ${message.slice(cutIndex + prefix.length).trim()}`;
+        const trimmed = `${POLICY_PARSE_LABELS[prefix]} ${message.slice(cutIndex + prefix.length).trim()}`;
 
         return data<AclActionData>(
           { success: false, error: trimmed, policy: undefined, updatedAt: undefined },

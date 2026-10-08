@@ -13,6 +13,10 @@ vi.mock("~/utils/log", () => ({
 
 const POLICY = '{"acls": [{"action": "accept", "src": ["*"], "dst": ["*:*"]}]}';
 const PARSE_ERROR = "parsing HuJSON: invalid character '}' looking for beginning of value";
+const UNMARSHAL_ERROR =
+  'parsing policy: parsing policy from bytes: json: cannot unmarshal JSON array into Go v2.SSHSrcAliases within "/ssh/0/src": alias not supported for SSH source: v2.Asterix';
+const VALIDATOR_ERROR =
+  "parsing policy: tags in SSH source cannot access user-owned devices (alice@); use autogroup:tagged or specific tags as destinations instead";
 
 function mockFormData(entries: Record<string, string>): FormData {
   const formData = new FormData();
@@ -144,6 +148,54 @@ describe("ACL policy check action", () => {
     expect((result.data as { detail: string }).detail).toBe(PARSE_ERROR);
     expect(check).toHaveBeenCalledOnce();
     expect(set).not.toHaveBeenCalled();
+  });
+
+  test("a policy the validator refuses is never saved", async () => {
+    const { result, check, set } = await submit(
+      { policy: POLICY },
+      {
+        checkFails: apiFailure("POST v1/policy/check", 400, {
+          code: 13,
+          message: VALIDATOR_ERROR,
+        }),
+      },
+    );
+
+    expect(statusOf(result)).toBe(400);
+    expect((result.data as { errorCode: string }).errorCode).toBe("policyRejected");
+    expect((result.data as { detail: string }).detail).toBe(VALIDATOR_ERROR);
+    expect(check).toHaveBeenCalledOnce();
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  test("reports a validator rejection on save instead of failing with a 500", async () => {
+    const { result, set } = await submit(
+      { policy: POLICY },
+      {
+        setFails: apiFailure("PUT v1/policy", 500, { code: 13, message: VALIDATOR_ERROR }),
+      },
+    );
+
+    expect(statusOf(result)).toBe(400);
+    expect((result.data as { success: boolean }).success).toBe(false);
+    expect((result.data as { error: string }).error).toBe(
+      "Invalid policy: tags in SSH source cannot access user-owned devices (alice@); use autogroup:tagged or specific tags as destinations instead",
+    );
+    expect(set).toHaveBeenCalledOnce();
+  });
+
+  test("keeps a malformed policy a syntax error", async () => {
+    const { result } = await submit(
+      { policy: POLICY },
+      {
+        setFails: apiFailure("PUT v1/policy", 500, { code: 13, message: UNMARSHAL_ERROR }),
+      },
+    );
+
+    expect(statusOf(result)).toBe(400);
+    expect((result.data as { error: string }).error).toBe(
+      'Syntax error: json: cannot unmarshal JSON array into Go v2.SSHSrcAliases within "/ssh/0/src": alias not supported for SSH source: v2.Asterix',
+    );
   });
 
   // Everything below used to save without a pre-flight check, so none of it is
