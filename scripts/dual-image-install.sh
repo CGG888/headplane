@@ -291,11 +291,11 @@ mask_secret() {
 	local v="${1-}"
 	local n=${#v}
 	if ((n == 0)); then
-		printf '(empty)'
+		printf '（空 / empty）'
 	elif ((n <= 8)); then
 		printf '********'
 	else
-		printf '%s...%s (len %d, masked)' "${v:0:4}" "${v: -2}" "$n"
+		printf '%s...%s（已掩码 / len %d, masked）' "${v:0:4}" "${v: -2}" "$n"
 	fi
 }
 
@@ -325,15 +325,15 @@ is_uint() {
 reject_special() {
 	local v="$1" what="$2"
 	if [[ $v == *$'\n'* || $v == *$'\t'* ]]; then
-		verr "$what must not contain tabs or newlines"
+		verr "该项不能包含制表符或换行符（$what） / $what must not contain tabs or newlines"
 		return 1
 	fi
 	if [[ $v == *'"'* || $v == *'\'* || $v == *'$'* || $v == *'`'* ]]; then
-		verr "$what must not contain quotes, backslashes, dollar signs or backticks"
+		verr "该项不能包含引号、反斜杠、美元符号或反引号（$what） / $what must not contain quotes, backslashes, dollar signs or backticks"
 		return 1
 	fi
 	if [[ $v != "$(trim "$v")" ]]; then
-		verr "$what must not start or end with whitespace"
+		verr "该项首尾不能有空白字符（$what） / $what must not start or end with whitespace"
 		return 1
 	fi
 	return 0
@@ -344,13 +344,13 @@ reject_special() {
 # -----------------------------------------------------------------------------
 v_abs_path() {
 	local v="$1"
-	[[ -n $v ]] || { verr "path is empty"; return 1; }
-	[[ $v == /* ]] || { verr "path must be absolute and start with / (got '$v')"; return 1; }
-	[[ $v == *"//"* ]] && { verr "path must not contain //"; return 1; }
+	[[ -n $v ]] || { verr "路径为空 / path is empty"; return 1; }
+	[[ $v == /* ]] || { verr "路径必须是绝对路径并以 / 开头（当前为 '$v'） / path must be absolute and start with / (got '$v')"; return 1; }
+	[[ $v == *"//"* ]] && { verr "路径不能包含 // / path must not contain //"; return 1; }
 	case "/$v/" in
-	*/../*) { verr "path must not contain a .. component"; return 1; } ;;
+	*/../*) { verr "路径不能包含 .. 片段 / path must not contain a .. component"; return 1; } ;;
 	esac
-	[[ $v == "/" ]] && { verr "the filesystem root is not a valid deployment directory"; return 1; }
+	[[ $v == "/" ]] && { verr "文件系统根目录不能作为部署目录 / the filesystem root is not a valid deployment directory"; return 1; }
 	reject_special "$v" "path" || return 1
 	return 0
 }
@@ -362,12 +362,12 @@ v_host_dir() {
 	local v="$1" probe
 	v_abs_path "$v" || return 1
 	if [[ -e $v && ! -d $v ]]; then
-		verr "exists and is not a directory: $v"
+		verr "已存在但不是目录：$v / exists and is not a directory: $v"
 		return 1
 	fi
 	probe="$(path_deepest_existing "$v")"
 	if [[ ! -w $probe ]]; then
-		verr "'$probe' is not writable by $(id -un), so $v cannot be created; choose another path or re-run with sudo"
+		verr "'$probe' 对 $(id -un) 不可写，因此无法创建 $v；请另选一个路径，或用 sudo 重新运行 / '$probe' is not writable by $(id -un), so $v cannot be created; choose another path or re-run with sudo"
 		return 1
 	fi
 	return 0
@@ -378,16 +378,16 @@ v_host_file() {
 	local v="$1" probe
 	v_abs_path "$v" || return 1
 	if [[ -d $v ]]; then
-		verr "is a directory; this prompt asks for a file path: $v"
+		verr "是目录，而此处需要的是文件路径：$v / is a directory; this prompt asks for a file path: $v"
 		return 1
 	fi
 	if [[ -e $v ]]; then
-		[[ -w $v ]] || { verr "exists but is not writable by $(id -un): $v"; return 1; }
+		[[ -w $v ]] || { verr "已存在，但对 $(id -un) 不可写：$v / exists but is not writable by $(id -un): $v"; return 1; }
 		return 0
 	fi
 	probe="$(path_deepest_existing "$(dirname "$v")")"
 	if [[ ! -w $probe ]]; then
-		verr "'$probe' is not writable by $(id -un), so $v cannot be created; choose another path or re-run with sudo"
+		verr "'$probe' 对 $(id -un) 不可写，因此无法创建 $v；请另选一个路径，或用 sudo 重新运行 / '$probe' is not writable by $(id -un), so $v cannot be created; choose another path or re-run with sudo"
 		return 1
 	fi
 	return 0
@@ -402,7 +402,7 @@ v_derp_dir() {
 	case "$v" in
 	"$HS_DIR" | "$HS_DIR"/*) return 0 ;;
 	*)
-		verr "the DERP map directory must be $HS_DIR or a directory inside it (that directory is mounted at the same absolute path in both containers)"
+		verr "DERP 地图目录必须是 $HS_DIR 或它内部的目录（该目录在两个容器里挂载到同一个绝对路径） / the DERP map directory must be $HS_DIR or a directory inside it (that directory is mounted at the same absolute path in both containers)"
 		return 1
 		;;
 	esac
@@ -420,24 +420,24 @@ v_recursive_chown_target() {
 	)
 	for d in "${system_dirs[@]}"; do
 		if [[ $v == "$d" ]]; then
-			verr "'$v' is a system directory; refusing to change its ownership recursively"
+			verr "'$v' 是系统目录，拒绝递归修改其属主 / '$v' is a system directory; refusing to change its ownership recursively"
 			return 1
 		fi
 	done
 	if [[ $v == "$BASE_DIR" ]]; then
-		verr "'$v' is the deployment root and also holds the HeadplaneCN files; refusing to change its ownership recursively"
+		verr "'$v' 既是部署根目录、又存放 HeadplaneCN 的文件，拒绝递归修改其属主 / '$v' is the deployment root and also holds the HeadplaneCN files; refusing to change its ownership recursively"
 		return 1
 	fi
 	case "$BASE_DIR" in
 	"$v"/*)
-		verr "'$v' is a parent of the deployment root ($BASE_DIR), so a recursive chown would also take ownership of unrelated files; pick a dedicated directory"
+		verr "'$v' 是部署根目录（$BASE_DIR）的上级，递归 chown 会一并改掉无关文件的属主；请另选一个专用目录 / '$v' is a parent of the deployment root ($BASE_DIR), so a recursive chown would also take ownership of unrelated files; pick a dedicated directory"
 		return 1
 		;;
 	esac
 	local -a headplane_paths=("$HP_DATA" "$HP_CONFIG")
 	for d in "${headplane_paths[@]}"; do
 		if [[ -n $d && $v == "$d" ]]; then
-			verr "'$v' is a HeadplaneCN path; those are written by the HeadplaneCN container as its own user and must keep their owner"
+			verr "'$v' 是 HeadplaneCN 的路径；这些文件由 HeadplaneCN 容器以自己的用户写入，必须保留其属主 / '$v' is a HeadplaneCN path; those are written by the HeadplaneCN container as its own user and must keep their owner"
 			return 1
 		fi
 	done
@@ -448,7 +448,7 @@ v_recursive_chown_target() {
 # would then share one directory that is read-write in one service and read-only
 # in the other.
 warn_layout_collisions() {
-	local -a lnames=("Headscale directory" "HeadplaneCN data directory" "DERP map directory")
+	local -a lnames=("Headscale 目录（Headscale directory）" "HeadplaneCN 数据目录（HeadplaneCN data directory）" "DERP 地图目录（DERP map directory）")
 	local -a lpaths=("$HS_DIR" "$HP_DATA" "$DERP_MAP_DIR")
 	local i j d
 	LAYOUT_COLLISION=0
@@ -456,35 +456,35 @@ warn_layout_collisions() {
 		for ((j = i + 1; j < ${#lpaths[@]}; j++)); do
 			[[ ${lpaths[i]} == "${lpaths[j]}" ]] || continue
 			LAYOUT_COLLISION=1
-			warn "${lnames[i]} and ${lnames[j]} are the same path (${lpaths[i]}): a directory cannot be mounted twice from one place"
+			warn "${lnames[i]} 与 ${lnames[j]} 是同一路径（${lpaths[i]}）：同一个目录不能在同一个位置挂载两次 / the two prompts resolve to the same path (${lpaths[i]}): a directory cannot be mounted twice from one place"
 		done
 		for d in "$HS_CONFIG" "$HP_CONFIG"; do
 			if [[ $d == "${lpaths[i]}" ]]; then
 				LAYOUT_COLLISION=1
-				warn "the file $d and ${lnames[i]} are the same path (${lpaths[i]}): a file and a directory cannot share a path"
+				warn "文件 $d 与 ${lnames[i]} 是同一路径（${lpaths[i]}）：文件和目录不能共用同一个路径 / the file $d and ${lnames[i]}: a file and a directory cannot share one path (${lpaths[i]})"
 			fi
 		done
 	done
 	if ((LAYOUT_COLLISION)); then
-		warn "point the prompts at different directories unless that is really what you want (the plan repeats the resolved layout)"
+		warn "如果这不是你真正想要的，请让各个提示指向不同的目录（计划里会再次打印解析后的布局） / point the prompts at different directories unless that is really what you want (the plan repeats the resolved layout)"
 	fi
 	return 0
 }
 
 v_image_ref() {
 	local v="$1" repo tag last
-	[[ -n $v ]] || { verr "image reference is empty"; return 1; }
-	[[ $v == *:* ]] || { verr "image must be written as repo:tag (no :tag found)"; return 1; }
+	[[ -n $v ]] || { verr "镜像引用为空 / image reference is empty"; return 1; }
+	[[ $v == *:* ]] || { verr "镜像必须写成 repo:tag（没有找到 :tag） / image must be written as repo:tag (no :tag found)"; return 1; }
 	last="${v##*/}"
-	[[ $last == *:* ]] || { verr "the tag must come after the repository, e.g. ghcr.io/owner/name:1.2.3"; return 1; }
+	[[ $last == *:* ]] || { verr "标签必须跟在仓库名之后，例如 ghcr.io/owner/name:1.2.3 / the tag must come after the repository, e.g. ghcr.io/owner/name:1.2.3"; return 1; }
 	repo="${v%:*}"
 	tag="${v##*:}"
-	[[ -n $repo ]] || { verr "repository part is empty"; return 1; }
-	[[ -n $tag ]] || { verr "tag part is empty"; return 1; }
-	[[ $tag =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || { verr "tag '$tag' contains invalid characters"; return 1; }
-	[[ $tag != "latest" ]] || { verr "do not pin 'latest': the guide requires an explicit version tag"; return 1; }
-	[[ $repo =~ ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$ ]] || { verr "repository '$repo' contains invalid characters"; return 1; }
-	[[ $repo != *".."* ]] || { verr "repository must not contain .."; return 1; }
+	[[ -n $repo ]] || { verr "仓库名部分为空 / repository part is empty"; return 1; }
+	[[ -n $tag ]] || { verr "标签部分为空 / tag part is empty"; return 1; }
+	[[ $tag =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || { verr "标签 '$tag' 含有无效字符 / tag '$tag' contains invalid characters"; return 1; }
+	[[ $tag != "latest" ]] || { verr "不要固定为 'latest'：文档要求写明版本标签 / do not pin 'latest': the guide requires an explicit version tag"; return 1; }
+	[[ $repo =~ ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$ ]] || { verr "仓库名 '$repo' 含有无效字符 / repository '$repo' contains invalid characters"; return 1; }
+	[[ $repo != *".."* ]] || { verr "仓库名不能包含 .. / repository must not contain .."; return 1; }
 	reject_special "$v" "image reference" || return 1
 	return 0
 }
@@ -501,8 +501,8 @@ v_image_proxy() {
 	v="${v##/}"
 	bare="${v%/}"
 	[[ $bare =~ ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$ ]] ||
-		{ verr "image proxy '$1' is not a registry prefix such as v6.gh-proxy.org/docker/"; return 1; }
-	[[ $bare != *".."* ]] || { verr "image proxy '$1' must not contain .."; return 1; }
+		{ verr "镜像代理 '$1' 不是形如 v6.gh-proxy.org/docker/ 的镜像源前缀 / image proxy '$1' is not a registry prefix such as v6.gh-proxy.org/docker/"; return 1; }
+	[[ $bare != *".."* ]] || { verr "镜像代理 '$1' 不能包含 .. / image proxy '$1' must not contain .."; return 1; }
 	reject_special "$v" "image proxy" || return 1
 	return 0
 }
@@ -523,35 +523,35 @@ normalize_image_proxy() {
 
 v_port() {
 	local v="$1"
-	is_uint "$v" || { verr "port must be a number (got '$v')"; return 1; }
-	((v >= 1 && v <= 65535)) || { verr "port must be between 1 and 65535 (got $v)"; return 1; }
+	is_uint "$v" || { verr "端口必须是数字（当前为 '$v'） / port must be a number (got '$v')"; return 1; }
+	((v >= 1 && v <= 65535)) || { verr "端口必须在 1 到 65535 之间（当前为 $v） / port must be between 1 and 65535 (got $v)"; return 1; }
 	return 0
 }
 
 v_hostname() {
 	local v="$1" l
 	local -a labels=()
-	[[ -n $v ]] || { verr "hostname is empty"; return 1; }
+	[[ -n $v ]] || { verr "主机名为空 / hostname is empty"; return 1; }
 	reject_special "$v" "hostname" || return 1
 	if [[ $v =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 		local IFS='.'
 		for l in $v; do
-			((10#$l <= 255)) || { verr "'$v' is not a valid IPv4 address"; return 1; }
+			((10#$l <= 255)) || { verr "'$v' 不是有效的 IPv4 地址 / '$v' is not a valid IPv4 address"; return 1; }
 		done
 		return 0
 	fi
-	[[ $v != *..* ]] || { verr "hostname must not contain an empty label"; return 1; }
-	[[ $v != .* && $v != *. ]] || { verr "hostname must not start or end with a dot"; return 1; }
-	[[ ${#v} -le 253 ]] || { verr "hostname is longer than 253 characters"; return 1; }
+	[[ $v != *..* ]] || { verr "主机名不能包含空标签 / hostname must not contain an empty label"; return 1; }
+	[[ $v != .* && $v != *. ]] || { verr "主机名不能以点开头或结尾 / hostname must not start or end with a dot"; return 1; }
+	[[ ${#v} -le 253 ]] || { verr "主机名超过 253 个字符 / hostname is longer than 253 characters"; return 1; }
 	local IFS='.'
 	read -r -a labels <<<"$v"
 	for l in "${labels[@]}"; do
-		[[ ${#l} -ge 1 && ${#l} -le 63 ]] || { verr "label '$l' must be 1-63 characters"; return 1; }
-		[[ $l =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] || { verr "label '$l' is not a valid DNS label"; return 1; }
+		[[ ${#l} -ge 1 && ${#l} -le 63 ]] || { verr "标签 '$l' 必须是 1-63 个字符 / label '$l' must be 1-63 characters"; return 1; }
+		[[ $l =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] || { verr "标签 '$l' 不是有效的 DNS 标签 / label '$l' is not a valid DNS label"; return 1; }
 	done
 	if ((${#labels[@]} > 1)); then
 		l="${labels[${#labels[@]} - 1]}"
-		[[ $l =~ ^[A-Za-z]{2,}$ ]] || { verr "top level domain '$l' must be alphabetic"; return 1; }
+		[[ $l =~ ^[A-Za-z]{2,}$ ]] || { verr "顶级域名 '$l' 必须是字母 / top level domain '$l' must be alphabetic"; return 1; }
 	fi
 	return 0
 }
@@ -560,11 +560,11 @@ v_hostname() {
 v_http_url() {
 	local v="$1" rest hostport host port
 	reject_special "$v" "URL" || return 1
-	[[ $v == http://* || $v == https://* ]] || { verr "URL must start with http:// or https://"; return 1; }
+	[[ $v == http://* || $v == https://* ]] || { verr "URL 必须以 http:// 或 https:// 开头 / URL must start with http:// or https://"; return 1; }
 	rest="${v#*://}"
-	[[ -n $rest ]] || { verr "URL has no host"; return 1; }
-	[[ $rest != *"/"* ]] && : || { verr "URL must not contain a path (no trailing / either)"; return 1; }
-	[[ $rest != *"?"* && $rest != *"#"* ]] || { verr "URL must not contain a query or fragment"; return 1; }
+	[[ -n $rest ]] || { verr "URL 缺少主机名 / URL has no host"; return 1; }
+	[[ $rest != *"/"* ]] && : || { verr "URL 不能包含路径（末尾的 / 也不行） / URL must not contain a path (no trailing / either)"; return 1; }
+	[[ $rest != *"?"* && $rest != *"#"* ]] || { verr "URL 不能包含查询串或片段 / URL must not contain a query or fragment"; return 1; }
 	hostport="$rest"
 	host="$hostport"
 	port=""
@@ -595,20 +595,20 @@ v_host_port_opt() {
 
 v_tz() {
 	local v="$1"
-	[[ -n $v ]] || { verr "timezone is empty"; return 1; }
+	[[ -n $v ]] || { verr "时区为空 / timezone is empty"; return 1; }
 	reject_special "$v" "timezone" || return 1
-	[[ $v =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$ ]] || { verr "timezone must look like Area/City (or UTC)"; return 1; }
+	[[ $v =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$ ]] || { verr "时区必须形如 Area/City（或 UTC） / timezone must look like Area/City (or UTC)"; return 1; }
 	if [[ -d /usr/share/zoneinfo ]]; then
-		[[ -e "/usr/share/zoneinfo/$v" ]] || { verr "no such zone in /usr/share/zoneinfo: $v"; return 1; }
+		[[ -e "/usr/share/zoneinfo/$v" ]] || { verr "/usr/share/zoneinfo 中没有该时区：$v / no such zone in /usr/share/zoneinfo: $v"; return 1; }
 	fi
 	return 0
 }
 
 v_secret32() {
 	local v="$1"
-	[[ -n $v ]] || { verr "secret is empty"; return 1; }
+	[[ -n $v ]] || { verr "密钥为空 / secret is empty"; return 1; }
 	if ((${#v} != 32)); then
-		verr "secret must be exactly 32 characters (got ${#v}); generate one with: openssl rand -base64 24"
+		verr "密钥必须正好 32 个字符（当前为 ${#v}）；可用以下命令生成：openssl rand -base64 24 / secret must be exactly 32 characters (got ${#v}); generate one with: openssl rand -base64 24"
 		return 1
 	fi
 	reject_special "$v" "secret" || return 1
@@ -617,15 +617,15 @@ v_secret32() {
 
 v_nonempty() {
 	local v="$1"
-	[[ -n $v ]] || { verr "value must not be empty"; return 1; }
+	[[ -n $v ]] || { verr "值不能为空 / value must not be empty"; return 1; }
 	reject_special "$v" "value" || return 1
 	return 0
 }
 
 v_region_id() {
 	local v="$1"
-	is_uint "$v" || { verr "region id must be a positive number"; return 1; }
-	((v >= 1 && v <= 65535)) || { verr "region id must be between 1 and 65535"; return 1; }
+	is_uint "$v" || { verr "区域 ID 必须是正整数 / region id must be a positive number"; return 1; }
+	((v >= 1 && v <= 65535)) || { verr "区域 ID 必须在 1 到 65535 之间 / region id must be between 1 and 65535"; return 1; }
 	return 0
 }
 
@@ -635,7 +635,7 @@ v_container_path() {
 	case "$v" in
 	"/etc/headscale/config.yaml" | "$HS_DIR" | "$HS_DIR"/*) return 0 ;;
 	*)
-		verr "path must be $HS_DIR or below it (that directory is mounted at the same absolute path in both containers), not '$v'"
+		verr "路径必须是 $HS_DIR 或它下面的路径（该目录在两个容器里挂载到同一个绝对路径），不能是 '$v' / path must be $HS_DIR or below it (that directory is mounted at the same absolute path in both containers), not '$v'"
 		return 1
 		;;
 	esac
@@ -645,7 +645,7 @@ v_container_path() {
 # hostname could not work: accept 0.0.0.0, 127.0.0.1 or a literal IPv4 address.
 v_bind_addr() {
 	local v="$1" a b c d
-	[[ -n $v ]] || { verr "address must not be empty"; return 1; }
+	[[ -n $v ]] || { verr "地址不能为空 / address must not be empty"; return 1; }
 	if [[ $v == "0.0.0.0" || $v == "127.0.0.1" ]]; then
 		return 0
 	fi
@@ -657,10 +657,10 @@ v_bind_addr() {
 		if ((10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255)); then
 			return 0
 		fi
-		verr "'$v' is not a valid IPv4 address"
+		verr "'$v' 不是有效的 IPv4 地址 / '$v' is not a valid IPv4 address"
 		return 1
 	fi
-	verr "must be 0.0.0.0, 127.0.0.1 or a literal IPv4 address such as 192.168.1.10, not '$v'"
+	verr "必须是 0.0.0.0、127.0.0.1 或形如 192.168.1.10 的 IPv4 地址，不能是 '$v' / must be 0.0.0.0, 127.0.0.1 or a literal IPv4 address such as 192.168.1.10, not '$v'"
 	return 1
 }
 
@@ -688,10 +688,10 @@ read_input() { # outvar prompt [default]
 	else
 		if [[ -n $__dii_default ]]; then
 			printf '\n' >&2
-			warn "standard input is closed (EOF); using the default value"
+			warn "标准输入已关闭（EOF），改用默认值 / standard input is closed (EOF); using the default value"
 			__dii_line="$__dii_default"
 		else
-			die "standard input is closed (EOF) and this prompt has no default: $__dii_prompt"
+			die "标准输入已关闭（EOF），而此提示没有默认值：$__dii_prompt / standard input is closed (EOF) and this prompt has no default: $__dii_prompt"
 		fi
 	fi
 	if [[ -z $__dii_line && -n $__dii_default ]]; then
@@ -703,11 +703,11 @@ read_input() { # outvar prompt [default]
 
 read_secret() { # outvar prompt
 	local __dii_out="$1" __dii_prompt="$2" __dii_line=""
-	printf '%s (input hidden): ' "$__dii_prompt" >&2
+	printf '%s（输入已隐藏 / input hidden）: ' "$__dii_prompt" >&2
 	if IFS= read -rs __dii_line; then
 		printf '\n' >&2
 	else
-		die "standard input is closed (EOF) while reading: $__dii_prompt"
+		die "读取时标准输入已关闭（EOF）：$__dii_prompt / standard input is closed (EOF) while reading: $__dii_prompt"
 	fi
 	printf -v "$__dii_out" '%s' "$__dii_line"
 	return 0
@@ -724,11 +724,11 @@ ask() { # outvar prompt default validator
 		__tries=$((__tries + 1))
 		if ((__tries >= 5)); then
 			if [[ -n $__default ]] && "$__fn" "$__default" 2>/dev/null; then
-				warn "too many invalid answers; falling back to the default"
+				warn "无效回答次数过多，改用默认值 / too many invalid answers; falling back to the default"
 				printf -v "$__out" '%s' "$__default"
 				return 0
 			fi
-			die "too many invalid answers for: $__prompt"
+			die "针对以下提示的无效回答次数过多：$__prompt / too many invalid answers for: $__prompt"
 		fi
 	done
 }
@@ -744,11 +744,11 @@ confirm() { # prompt default(y|n)
 		case "$__reply" in
 		y | Y | yes | YES | Yes) return 0 ;;
 		n | N | no | NO | No) return 1 ;;
-		*) verr "answer y or n" ;;
+		*) verr "请回答 y 或 n / answer y or n" ;;
 		esac
 		__tries=$((__tries + 1))
 		if ((__tries >= 5)); then
-			warn "too many unusable answers; using the default '$__default'"
+			warn "不可用的回答次数过多，改用默认值 '$__default' / too many unusable answers; using the default '$__default'"
 			[[ $__default == y* ]] && return 0 || return 1
 		fi
 	done
@@ -771,15 +771,15 @@ choose_index() { # outvar prompt default_index label...
 			printf '  %d) %s\n' "$i" "$__o" >&2
 			i=$((i + 1))
 		done
-		read_input __reply "Choose" "$__default"
+		read_input __reply "请选择 / Choose" "$__default"
 		if is_uint "$__reply" && ((${#__reply} > 0)) && ((__reply >= 1 && __reply <= ${#__opts[@]})); then
 			printf -v "$__out" '%s' "$__reply"
 			return 0
 		fi
-		verr "enter a number between 1 and ${#__opts[@]}"
+		verr "请输入 1 到 ${#__opts[@]} 之间的数字 / enter a number between 1 and ${#__opts[@]}"
 		__tries=$((__tries + 1))
 		if ((__tries >= 5)); then
-			warn "too many unusable answers; using option $__default"
+			warn "不可用的回答次数过多，改用选项 $__default / too many unusable answers; using option $__default"
 			printf -v "$__out" '%s' "$__default"
 			return 0
 		fi
@@ -1154,7 +1154,7 @@ verify_derp_paths() { # <written or previewed yaml> <real|plan>
 		[[ -n $entry ]] || continue
 		listed=1
 		if ! host="$(container_to_host_path "$entry")"; then
-			warn "derp.paths entry $entry is outside $HS_DIR; the Headscale container cannot read it (only $HS_DIR is mounted)"
+			warn "derp.paths 条目 $entry 在 $HS_DIR 之外；Headscale 容器读不到它（只挂载了 $HS_DIR） / derp.paths entry $entry is outside $HS_DIR; the Headscale container cannot read it (only $HS_DIR is mounted)"
 			bad=$((bad + 1))
 			continue
 		fi
@@ -1164,18 +1164,18 @@ verify_derp_paths() { # <written or previewed yaml> <real|plan>
 		[[ $entry == "$DERP_MAP_CTR" && $host == "$DERP_MAP_HOST" ]] && ok=1
 		[[ -n $MIGRATE_SRC && -e "$MIGRATE_SRC/derp-maps/$base" ]] && ok=1
 		if ((ok == 1)); then
-			dim "  derp.paths ok: $entry"
+			dim "  derp.paths 正常 / derp.paths ok: $entry"
 			continue
 		fi
-		warn "derp.paths entry $entry has no file behind it ($host)"
+		warn "derp.paths 条目 $entry 背后没有文件（$host） / derp.paths entry $entry has no file behind it ($host)"
 		bad=$((bad + 1))
 	done < <(yaml_list "$file" "derp.paths" || true)
 	((listed)) || return 0
 	((bad == 0)) && return 0
 	if [[ $phase == "real" ]]; then
-		die "$bad derp.paths entry/entries would stop Headscale at start-up; put each map in $DERP_MAP_DIR (the directory mounted at the same absolute path in both containers) or drop the line, then re-run"
+		die "$bad 个 derp.paths 条目会让 Headscale 启动失败；请把每个地图放进 $DERP_MAP_DIR（在两个容器里挂载到相同绝对路径的目录），或删掉该行后重跑 / $bad derp.paths entry/entries would stop Headscale at start-up; put each map in $DERP_MAP_DIR (the directory mounted at the same absolute path in both containers) or drop the line, then re-run"
 	fi
-	warn "$bad derp.paths entry/entries of the planned config would stop Headscale at start-up"
+	warn "计划配置中的 $bad 个 derp.paths 条目会让 Headscale 启动失败 / $bad derp.paths entry/entries of the planned config would stop Headscale at start-up"
 	return 0
 }
 
@@ -1200,13 +1200,13 @@ listening_sockets() {
 warn_port_conflict() { # port proto label
 	local port="$1" proto="$2" label="$3" out=""
 	if ! out="$(listening_sockets)"; then
-		dim "  (port check skipped: neither 'ss' nor 'netstat' could list sockets)"
+		dim "  （跳过端口检查：'ss' 与 'netstat' 都无法列出套接字） / (port check skipped: neither 'ss' nor 'netstat' could list sockets)"
 		return 0
 	fi
 	if printf '%s\n' "$out" | grep -Eq "[:.]$port([[:space:]]|$)"; then
-		warn "$label: something is already listening on $proto/$port (the native Headscale may still be running; stop it before 'docker compose up -d')"
+		warn "$label：已经有东西在监听 $proto/$port（原生 Headscale 可能仍在运行；在 'docker compose up -d' 之前先停掉它） / $label: something is already listening on $proto/$port (the native Headscale may still be running; stop it before 'docker compose up -d')"
 	else
-		ok "  $label: $proto/$port looks free"
+		ok "  $label：$proto/$port 看起来空闲 / $label: $proto/$port looks free"
 	fi
 	return 0
 }
@@ -1222,11 +1222,11 @@ act_mkdir() {
 		return 0
 	fi
 	if [[ -d $d ]]; then
-		dim "  exists: $d"
+		dim "  已存在 / exists: $d"
 	else
 		mkdir -p "$d"
 		chmod "$mode" "$d" 2>/dev/null || true
-		ok "  created: $d"
+		ok "  已创建 / created: $d"
 	fi
 	return 0
 }
@@ -1241,7 +1241,7 @@ act_backup_file() { # path
 	if [[ -e $f ]]; then
 		cp -a "$f" "$b"
 		BACKUP_FILES+=("$b")
-		ok "  backed up: $f -> $b"
+		ok "  已备份 / backed up: $f -> $b"
 	fi
 	return 0
 }
@@ -1249,11 +1249,11 @@ act_backup_file() { # path
 act_copy() { # src dst [mode] [label]
 	local src="$1" dst="$2" mode="${3:-}" label="${4:-}"
 	if [[ ! -e $src ]]; then
-		warn "missing source, skipped: $src"
+		warn "源不存在，已跳过 / missing source, skipped: $src"
 		return 0
 	fi
 	if ((DRY_RUN)); then
-		[[ -e $dst ]] && emit "  [dry-run] cp -a $dst $dst.bak-$RUN_STAMP (existing destination kept)"
+		[[ -e $dst ]] && emit "  [dry-run] cp -a $dst $dst.bak-$RUN_STAMP （保留已存在的目标文件 / existing destination kept）"
 		emit "  [dry-run] cp -a $src $dst${mode:+ && chmod $mode $dst}"
 		COPIED_FILES+=("$src -> $dst")
 		return 0
@@ -1264,14 +1264,14 @@ act_copy() { # src dst [mode] [label]
 	mkdir -p "$(dirname "$dst")"
 	cp -a "$src" "$dst"
 	if [[ -n $mode ]]; then
-		chmod "$mode" "$dst" 2>/dev/null || warn "could not chmod $mode $dst"
+		chmod "$mode" "$dst" 2>/dev/null || warn "无法 chmod $mode $dst / could not chmod $mode $dst"
 	fi
 	COPIED_FILES+=("$src -> $dst")
 	local extra=""
 	if have sha256sum; then
 		extra=" sha256=$(sha256sum "$src" | awk '{print $1}')"
 	fi
-	ok "  copied: $src -> $dst (${label:-file})$extra"
+	ok "  已复制 / copied: $src -> $dst (${label:-file})$extra"
 	return 0
 }
 
@@ -1289,9 +1289,9 @@ stage_file() {
 		cp "$content_file" "$staged"
 		WRITTEN_FILES+=("$final (mode $mode)")
 		emit ""
-		emit "--- would write: $final (mode $mode) ---"
+		emit "--- 将写入 / would write: $final (mode $mode) ---"
 		mask_config_lines <"$content_file"
-		emit "--- end: $final ---"
+		emit "--- 结束 / end: $final ---"
 		return 0
 	fi
 	local dir tmp
@@ -1302,9 +1302,9 @@ stage_file() {
 	chmod "$mode" "$tmp" 2>/dev/null || true
 	cat "$content_file" >"$tmp"
 	mv -f "$tmp" "$final"
-	chmod "$mode" "$final" 2>/dev/null || warn "could not chmod $mode $final"
+	chmod "$mode" "$final" 2>/dev/null || warn "无法 chmod $mode $final / could not chmod $mode $final"
 	WRITTEN_FILES+=("$final (mode $mode)")
-	ok "  wrote: $final (mode $mode)"
+	ok "  已写入 / wrote: $final (mode $mode)"
 	return 0
 }
 
@@ -1312,34 +1312,34 @@ stage_file() {
 # Preflight
 # -----------------------------------------------------------------------------
 preflight() {
-	head2 "Preflight"
+	head2 "预检 / Preflight"
 	if [[ $(id -u) -eq 0 ]]; then
 		ROOT_UID=1
-		ok "running as root"
+		ok "以 root 身份运行 / running as root"
 	else
-		warn "not running as root: file ownership cannot be fixed for the containers (run with sudo if you hit permission errors)"
+		warn "不是以 root 身份运行：无法为容器修正文件属主（遇到权限错误就用 sudo 重跑） / not running as root: file ownership cannot be fixed for the containers (run with sudo if you hit permission errors)"
 	fi
 	local missing=()
 	if ! have docker; then
 		missing+=("docker (the Docker CLI is not in PATH)")
 	else
 		if docker compose version >/dev/null 2>&1; then
-			ok "docker + docker compose plugin found"
+			ok "已找到 docker 与 docker compose 插件 / docker + docker compose plugin found"
 		else
 			missing+=("the 'docker compose' plugin (docker: $(docker --version 2>/dev/null || echo unknown))")
 		fi
 	fi
 	if ((${#missing[@]} > 0)); then
 		if ((DRY_RUN)); then
-			warn "missing: ${missing[*]}"
-			warn "continuing because --dry-run changes nothing; a real run would stop here"
+			warn "缺少 / missing: ${missing[*]}"
+			warn "因为 --dry-run 不会改动任何东西，所以继续；真实运行会在这里停下 / continuing because --dry-run changes nothing; a real run would stop here"
 		else
 			local m
-			err "this installer needs the following and will not continue:"
+			err "本安装器需要以下东西，无法继续 / this installer needs the following and will not continue:"
 			for m in "${missing[@]}"; do
 				err "  - $m"
 			done
-			err "install Docker + the Compose plugin, or re-run with --dry-run to see the plan only"
+			err "请安装 Docker 与 Compose 插件，或改用 --dry-run 重跑，只看计划 / install Docker + the Compose plugin, or re-run with --dry-run to see the plan only"
 			exit 1
 		fi
 	fi
@@ -1364,34 +1364,34 @@ preflight() {
 # Step 1: base directory
 # -----------------------------------------------------------------------------
 step_base_dir() {
-	head2 "Step 1/9  Deployment directory"
+	head2 "Step 1/9  部署目录 / Deployment directory"
 	local candidate="$DEFAULT_BASE_DIR"
 	if [[ -n ${OPT_BASE_DIR:-} ]]; then
 		candidate="$OPT_BASE_DIR"
 	elif [[ -f ./docker-compose.yml || -f ./config.yaml ]]; then
 		candidate="$(pwd)"
-		dim "an existing config.yaml / docker-compose.yml was found here, using this directory as the default"
+		dim "这里已存在 config.yaml / docker-compose.yml，因此把它作为默认目录 / an existing config.yaml / docker-compose.yml was found here, using this directory as the default"
 	fi
 
 	local tries=0 reply depth probe
 	while :; do
 		if [[ -n ${OPT_BASE_DIR:-} && $tries -eq 0 ]]; then
 			reply="$OPT_BASE_DIR"
-			printf 'Deployment directory [%s]: %s (--base-dir)\n' "$candidate" "$reply" >&2
+			printf '部署目录 / Deployment directory [%s]: %s (--base-dir)\n' "$candidate" "$reply" >&2
 		else
-			read_input reply "Deployment directory (docker-compose.yml, .env, config.yaml, data/ and headscale/ live here)" "$candidate"
+			read_input reply "部署目录（docker-compose.yml、.env、config.yaml、data/ 与 headscale/ 都放在这里） / Deployment directory (docker-compose.yml, .env, config.yaml, data/ and headscale/ live here)" "$candidate"
 		fi
 		if ! v_abs_path "$reply"; then
 			tries=$((tries + 1))
-			((tries >= 5)) && die "too many invalid answers for the deployment directory"
+			((tries >= 5)) && die "部署目录的无效回答次数过多 / too many invalid answers for the deployment directory"
 			continue
 		fi
 		reply="$(norm_path "$reply")"
 		case "$reply" in
 		/ | /etc | /usr | /bin | /sbin | /boot | /var | /root | /tmp)
-			warn "'$reply' looks like a system directory; pick a dedicated folder such as $DEFAULT_BASE_DIR"
+			warn "'$reply' 看起来像系统目录；请选一个专用文件夹，例如 $DEFAULT_BASE_DIR / '$reply' looks like a system directory; pick a dedicated folder such as $DEFAULT_BASE_DIR"
 			tries=$((tries + 1))
-			((tries >= 5)) && die "too many invalid answers for the deployment directory"
+			((tries >= 5)) && die "部署目录的无效回答次数过多 / too many invalid answers for the deployment directory"
 			continue
 			;;
 		esac
@@ -1401,16 +1401,16 @@ step_base_dir() {
 		# once the plan is confirmed); the real mkdir -p runs in the write phase,
 		# which reports any remaining failure there.
 		if [[ -e $reply && ! -d $reply ]]; then
-			warn "'$reply' exists and is not a directory; choose another path"
+			warn "'$reply' 已存在且不是目录；请换一个路径 / '$reply' exists and is not a directory; choose another path"
 			tries=$((tries + 1))
-			((tries >= 5)) && die "too many invalid answers for the deployment directory"
+			((tries >= 5)) && die "部署目录的无效回答次数过多 / too many invalid answers for the deployment directory"
 			continue
 		fi
 		probe="$(path_deepest_existing "$reply")"
 		if [[ ! -w $probe ]]; then
-			warn "'$probe' is not writable by $(id -un); choose another path or re-run with sudo"
+			warn "'$probe' 对 $(id -un) 不可写；请换一个路径，或用 sudo 重跑 / '$probe' is not writable by $(id -un); choose another path or re-run with sudo"
 			tries=$((tries + 1))
-			((tries >= 5)) && die "too many invalid answers for the deployment directory"
+			((tries >= 5)) && die "部署目录的无效回答次数过多 / too many invalid answers for the deployment directory"
 			continue
 		fi
 		BASE_DIR="$reply"
@@ -1427,17 +1427,20 @@ step_base_dir() {
 	# ---------------------------------------------------------------------
 	BASE_DIR="$(norm_path "$BASE_DIR")"
 	say ""
-	say "The four paths below are the host side of the volume entries. The Headscale"
-	say "directory is mounted at the same absolute path in both containers; only its"
-	say "config.yaml is additionally mounted at /etc/headscale/config.yaml."
-	ask HP_CONFIG "HeadplaneCN config file (mode 600; an existing file is patched, never replaced)" "$BASE_DIR/config.yaml" v_host_file
+	say "下面四个路径是卷条目的宿主机一侧。Headscale 目录在两个容器里都挂载到"
+	say "相同的绝对路径；只有它的 config.yaml 会额外挂载到"
+	say "/etc/headscale/config.yaml。"
+	say "  The four paths below are the host side of the volume entries. The Headscale"
+	say "  directory is mounted at the same absolute path in both containers; only its"
+	say "  config.yaml is additionally mounted at /etc/headscale/config.yaml."
+	ask HP_CONFIG "HeadplaneCN 配置文件（权限 600；已存在的文件只打补丁，绝不替换） / HeadplaneCN config file (mode 600; an existing file is patched, never replaced)" "$BASE_DIR/config.yaml" v_host_file
 	HP_CONFIG="$(norm_path "$HP_CONFIG")"
-	ask HP_DATA "HeadplaneCN data directory (sessions, internal database, snapshots)" "$BASE_DIR/data" v_host_dir
+	ask HP_DATA "HeadplaneCN 数据目录（会话、内部数据库、快照） / HeadplaneCN data directory (sessions, internal database, snapshots)" "$BASE_DIR/data" v_host_dir
 	HP_DATA="$(norm_path "$HP_DATA")"
-	ask HS_DIR "Headscale directory (config.yaml, db.sqlite, the private keys, cache/ and derp-maps/)" "$BASE_DIR/headscale" v_host_dir
+	ask HS_DIR "Headscale 目录（config.yaml、db.sqlite、私钥、cache/ 与 derp-maps/） / Headscale directory (config.yaml, db.sqlite, the private keys, cache/ and derp-maps/)" "$BASE_DIR/headscale" v_host_dir
 	HS_DIR="$(norm_path "$HS_DIR")"
 	HS_CONFIG="$HS_DIR/config.yaml"
-	ask DERP_MAP_DIR "DERP map directory inside the Headscale directory (holds $DEFAULT_DERP_MAP_NAME)" "$HS_DIR/$DEFAULT_DERP_DIR_NAME" v_derp_dir
+	ask DERP_MAP_DIR "Headscale 目录里的 DERP 地图目录（存放 $DEFAULT_DERP_MAP_NAME） / DERP map directory inside the Headscale directory (holds $DEFAULT_DERP_MAP_NAME)" "$HS_DIR/$DEFAULT_DERP_DIR_NAME" v_derp_dir
 	DERP_MAP_DIR="$(norm_path "$DERP_MAP_DIR")"
 
 	DERP_MAP_HOST="$DERP_MAP_DIR/$DEFAULT_DERP_MAP_NAME"
@@ -1452,30 +1455,30 @@ step_base_dir() {
 	# mirror into --headscale-tag / --headplane-tag keeps working: the compose
 	# writer strips the prefix back off the repository.
 	if [[ -n ${OPT_IMAGE_PROXY:-} ]]; then
-		v_image_proxy "$OPT_IMAGE_PROXY" || die "invalid --image-proxy: $OPT_IMAGE_PROXY"
+		v_image_proxy "$OPT_IMAGE_PROXY" || die "无效的 --image-proxy：$OPT_IMAGE_PROXY / invalid --image-proxy: $OPT_IMAGE_PROXY"
 		IMAGE_PROXY="$(normalize_image_proxy "$OPT_IMAGE_PROXY")"
 	else
 		IMAGE_PROXY="$DEFAULT_IMAGE_PROXY"
 	fi
 	if [[ -n ${OPT_CADDY_PORT:-} ]]; then
-		v_port "$OPT_CADDY_PORT" || die "invalid --caddy-port: $OPT_CADDY_PORT"
+		v_port "$OPT_CADDY_PORT" || die "无效的 --caddy-port：$OPT_CADDY_PORT / invalid --caddy-port: $OPT_CADDY_PORT"
 		CADDY_PORT="$OPT_CADDY_PORT"
 	else
 		CADDY_PORT="$DEFAULT_CADDY_PORT"
 	fi
 	v_container_path "$DERP_MAP_CTR" ||
-		die "internal error: the derived DERP map path is not below $HS_DIR: $DERP_MAP_CTR"
+		die "内部错误：推导出的 DERP 地图路径不在 $HS_DIR 之下：$DERP_MAP_CTR / internal error: the derived DERP map path is not below $HS_DIR: $DERP_MAP_CTR"
 	ENV_FILE="$BASE_DIR/.env"
 	BACKUP_DIR="$BASE_DIR/backup"
 	COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 	warn_layout_collisions
 	# The recursive chown of the Headscale directory happens later, so a layout
 	# that would hand it unrelated files is rejected here, before anything exists.
-	v_recursive_chown_target "$HS_DIR" || die "refusing to change the ownership of $HS_DIR recursively"
-	ok "deployment directory: $BASE_DIR"
-	confirm "These directories will hold the Headscale database and private keys (back them up regularly). Understood?" y ||
-		die "aborted by the operator"
-	dim "  the resolved layout is printed again in the plan, before anything is written"
+	v_recursive_chown_target "$HS_DIR" || die "拒绝递归修改 $HS_DIR 的属主 / refusing to change the ownership of $HS_DIR recursively"
+	ok "部署目录 / deployment directory: $BASE_DIR"
+	confirm "这些目录将存放 Headscale 的数据库与私钥（请定期备份）。明白了吗？ / These directories will hold the Headscale database and private keys (back them up regularly). Understood?" y ||
+		die "操作者已中止 / aborted by the operator"
+	dim "  解析后的布局会在写入任何东西之前、于计划中再打印一遍 / the resolved layout is printed again in the plan, before anything is written"
 	return 0
 }
 
@@ -1483,20 +1486,20 @@ step_base_dir() {
 # Step 2: images
 # -----------------------------------------------------------------------------
 step_images() {
-	head2 "Step 2/9  Container images to pin"
+	head2 "Step 2/9  要固定的容器镜像 / Container images to pin"
 	if [[ -n ${OPT_HS_IMAGE:-} ]]; then
-		v_image_ref "$OPT_HS_IMAGE" || die "invalid --headscale-tag: $OPT_HS_IMAGE"
+		v_image_ref "$OPT_HS_IMAGE" || die "无效的 --headscale-tag：$OPT_HS_IMAGE / invalid --headscale-tag: $OPT_HS_IMAGE"
 		HS_IMAGE="$OPT_HS_IMAGE"
-		printf 'Headscale image [%s]: %s (--headscale-tag)\n' "$DEFAULT_HS_IMAGE" "$HS_IMAGE" >&2
+		printf 'Headscale 镜像 / Headscale image [%s]: %s (--headscale-tag)\n' "$DEFAULT_HS_IMAGE" "$HS_IMAGE" >&2
 	else
-		ask HS_IMAGE "Headscale image (repo:tag, pinned)" "$DEFAULT_HS_IMAGE" v_image_ref
+		ask HS_IMAGE "Headscale 镜像（repo:tag，固定版本） / Headscale image (repo:tag, pinned)" "$DEFAULT_HS_IMAGE" v_image_ref
 	fi
 	if [[ -n ${OPT_HP_IMAGE:-} ]]; then
-		v_image_ref "$OPT_HP_IMAGE" || die "invalid --headplane-tag: $OPT_HP_IMAGE"
+		v_image_ref "$OPT_HP_IMAGE" || die "无效的 --headplane-tag：$OPT_HP_IMAGE / invalid --headplane-tag: $OPT_HP_IMAGE"
 		HP_IMAGE="$OPT_HP_IMAGE"
-		printf 'HeadplaneCN image [%s]: %s (--headplane-tag)\n' "$DEFAULT_HP_IMAGE" "$HP_IMAGE" >&2
+		printf 'HeadplaneCN 镜像 / HeadplaneCN image [%s]: %s (--headplane-tag)\n' "$DEFAULT_HP_IMAGE" "$HP_IMAGE" >&2
 	else
-		ask HP_IMAGE "HeadplaneCN image (repo:tag, pinned)" "$DEFAULT_HP_IMAGE" v_image_ref
+		ask HP_IMAGE "HeadplaneCN 镜像（repo:tag，固定版本） / HeadplaneCN image (repo:tag, pinned)" "$DEFAULT_HP_IMAGE" v_image_ref
 	fi
 	# The compose file and .env only carry these two keys (HEADSCALE_VERSION and
 	# HEADPLANE_VERSION), so the tag is split off here: one edit in .env moves
@@ -1505,7 +1508,7 @@ step_images() {
 	HS_IMAGE_VERSION="${HS_IMAGE##*:}"
 	HP_IMAGE_REPO="${HP_IMAGE%:*}"
 	HP_IMAGE_VERSION="${HP_IMAGE##*:}"
-	dim "  these two tags are the version lock; upgrading means editing them in $ENV_FILE"
+	dim "  这两个 tag 就是版本锁；升级意味着在 $ENV_FILE 里改它们 / these two tags are the version lock; upgrading means editing them in $ENV_FILE"
 	return 0
 }
 
@@ -1529,7 +1532,7 @@ split_url() { # url -> sets url_scheme url_host url_port
 }
 
 step_urls() {
-	head2 "Step 3/9  Client URL, DERP and admin UI"
+	head2 "Step 3/9  客户端 URL、DERP 与管理界面 / Client URL, DERP and admin UI"
 	local existing_url="" d
 	existing_url="$(yaml_get "$HS_CONFIG" "server_url" 2>/dev/null || true)"
 	[[ -n $existing_url ]] || existing_url="$(yaml_get "$HP_CONFIG" "headscale.public_url" 2>/dev/null || true)"
@@ -1537,13 +1540,15 @@ step_urls() {
 	[[ -n $existing_url ]] && url_default="$existing_url"
 
 	if [[ -n ${OPT_SERVER_URL:-} ]]; then
-		v_http_url "$OPT_SERVER_URL" || die "invalid --server-url: $OPT_SERVER_URL"
+		v_http_url "$OPT_SERVER_URL" || die "无效的 --server-url：$OPT_SERVER_URL / invalid --server-url: $OPT_SERVER_URL"
 		SERVER_URL="$OPT_SERVER_URL"
-		printf 'Client server_url [%s]: %s (--server-url)\n' "$url_default" "$SERVER_URL" >&2
+		printf '客户端 server_url / Client server_url [%s]: %s (--server-url)\n' "$url_default" "$SERVER_URL" >&2
 	else
-		say "This is the address clients register against (Headscale's server_url)."
-		say "If you are migrating, it MUST stay byte-for-byte identical to the current value."
-		ask SERVER_URL "Client server_url (scheme://host[:port])" "$url_default" v_http_url
+		say "这是客户端注册时使用的地址（Headscale 的 server_url）。"
+		say "如果你在做迁移，它必须与当前值逐字节完全一致。"
+		say "  This is the address clients register against (Headscale's server_url)."
+		say "  If you are migrating, it MUST stay byte-for-byte identical to the current value."
+		ask SERVER_URL "客户端 server_url（scheme://host[:port]） / Client server_url (scheme://host[:port])" "$url_default" v_http_url
 	fi
 	split_url "$SERVER_URL"
 	CLIENT_SCHEME="$url_scheme"
@@ -1551,14 +1556,16 @@ step_urls() {
 	CLIENT_PORT="$url_port"
 
 	if [[ -n ${OPT_DERP_HOST:-} ]]; then
-		v_host_port_opt "$OPT_DERP_HOST" || die "invalid --derp-host: $OPT_DERP_HOST"
+		v_host_port_opt "$OPT_DERP_HOST" || die "无效的 --derp-host：$OPT_DERP_HOST / invalid --derp-host: $OPT_DERP_HOST"
 		DERP_HOST="$OPT_DERP_HOST"
-		printf 'Embedded DERP host[:port] [none]: %s (--derp-host)\n' "$DERP_HOST" >&2
+		printf '内嵌 DERP 主机[:端口] / Embedded DERP host[:port] [none]: %s (--derp-host)\n' "$DERP_HOST" >&2
 	else
 		say ""
-		say "Optional: a second public hostname that also serves /derp (answer 'none' if the"
-		say "client hostname above is enough - it always has to serve /derp anyway)."
-		ask DERP_HOST "Embedded DERP host[:port], or none" "none" v_host_port_opt
+		say "可选：另一个也提供 /derp 的公网主机名（如果上面的客户端主机名就够了，"
+		say "就回答 'none' —— 它本来就必须提供 /derp）。"
+		say "  Optional: a second public hostname that also serves /derp (answer 'none' if the"
+		say "  client hostname above is enough - it always has to serve /derp anyway)."
+		ask DERP_HOST "内嵌 DERP 主机[:端口]，或 none / Embedded DERP host[:port], or none" "none" v_host_port_opt
 	fi
 	if [[ $DERP_HOST == "none" || $DERP_HOST == "direct" || -z $DERP_HOST ]]; then
 		DERP_URL="$SERVER_URL"
@@ -1570,14 +1577,16 @@ step_urls() {
 	fi
 
 	if [[ -n ${OPT_ADMIN_HOST:-} ]]; then
-		v_host_port_opt "$OPT_ADMIN_HOST" || die "invalid --admin-host: $OPT_ADMIN_HOST"
+		v_host_port_opt "$OPT_ADMIN_HOST" || die "无效的 --admin-host：$OPT_ADMIN_HOST / invalid --admin-host: $OPT_ADMIN_HOST"
 		ADMIN_HOST="$OPT_ADMIN_HOST"
-		printf 'Admin UI host[:port] [none]: %s (--admin-host)\n' "$ADMIN_HOST" >&2
+		printf '管理界面主机[:端口] / Admin UI host[:port] [none]: %s (--admin-host)\n' "$ADMIN_HOST" >&2
 	else
 		say ""
-		say "Optional: a separate hostname for the HeadplaneCN admin UI. Answer 'none' to reuse"
-		say "the client URL (the UI is then at <client url>/admin)."
-		ask ADMIN_HOST "Admin UI host[:port], or none" "none" v_host_port_opt
+		say "可选：为 HeadplaneCN 管理界面单独指定一个主机名。回答 'none' 就复用"
+		say "客户端 URL（界面此时位于 <client url>/admin）。"
+		say "  Optional: a separate hostname for the HeadplaneCN admin UI. Answer 'none' to reuse"
+		say "  the client URL (the UI is then at <client url>/admin)."
+		ask ADMIN_HOST "管理界面主机[:端口]，或 none / Admin UI host[:port], or none" "none" v_host_port_opt
 	fi
 	if [[ $ADMIN_HOST == "none" || $ADMIN_HOST == "direct" || -z $ADMIN_HOST ]]; then
 		ADMIN_URL="$SERVER_URL"
@@ -1590,9 +1599,9 @@ step_urls() {
 	# server.base_url must NOT include /admin (the dashboard prefix is appended by the UI)
 	BASE_URL="$ADMIN_URL"
 	if [[ $ADMIN_HOST == "none" ]]; then
-		dim "  server.base_url defaults to the client URL; the UI is at $BASE_URL/admin"
+		dim "  server.base_url 默认取客户端 URL；界面在 $BASE_URL/admin / server.base_url defaults to the client URL; the UI is at $BASE_URL/admin"
 	else
-		dim "  server.base_url = admin URL; the UI is at $BASE_URL/admin"
+		dim "  server.base_url = 管理界面 URL；界面在 $BASE_URL/admin / server.base_url = admin URL; the UI is at $BASE_URL/admin"
 	fi
 	return 0
 }
@@ -1601,10 +1610,13 @@ step_urls() {
 # Step 4: networking, ports, timezone
 # -----------------------------------------------------------------------------
 step_network() {
-	head2 "Step 4/9  Networking, ports and timezone"
-	say "Both containers use network_mode: host, exactly like the deployment verified in"
-	say "docs/install/dual-image.md: no ports: section is written, the containers bind the"
-	say "ports below directly on this machine, and 127.0.0.1 inside a container is this machine."
+	head2 "Step 4/9  网络、端口与时区 / Networking, ports and timezone"
+	say "两个容器都使用 network_mode: host，与 docs/install/dual-image.md 中验证过的"
+	say "部署完全一致：不会写入 ports: 段，容器把下面的端口直接绑定在这台机器上，"
+	say "而容器里的 127.0.0.1 就是这台机器。"
+	say "  Both containers use network_mode: host, exactly like the deployment verified in"
+	say "  docs/install/dual-image.md: no ports: section is written, the containers bind the"
+	say "  ports below directly on this machine, and 127.0.0.1 inside a container is this machine."
 
 	# HeadplaneCN listen port
 	local panel_default="$DEFAULT_ADMIN_PORT"
@@ -1612,15 +1624,15 @@ step_network() {
 	panel_existing="$(yaml_get "$HP_CONFIG" "server.port" 2>/dev/null || true)"
 	[[ -n $panel_existing ]] && panel_default="$panel_existing"
 	if [[ -n ${OPT_HP_PORT:-} ]]; then
-		v_port "$OPT_HP_PORT" || die "invalid --admin-port: $OPT_HP_PORT"
+		v_port "$OPT_HP_PORT" || die "无效的 --admin-port：$OPT_HP_PORT / invalid --admin-port: $OPT_HP_PORT"
 		PANEL_PORT="$OPT_HP_PORT"
-		printf 'HeadplaneCN listen port [%s]: %s (--admin-port)\n' "$panel_default" "$PANEL_PORT" >&2
+		printf 'HeadplaneCN 监听端口 / listen port [%s]: %s (--admin-port)\n' "$panel_default" "$PANEL_PORT" >&2
 	else
-		ask PANEL_PORT "HeadplaneCN listen port (the reverse proxy points at this)" "$panel_default" v_port
+		ask PANEL_PORT "HeadplaneCN 监听端口（反向代理指向它） / HeadplaneCN listen port (the reverse proxy points at this)" "$panel_default" v_port
 	fi
 	if [[ $PANEL_PORT == "$DEFAULT_HS_PORT" || $PANEL_PORT == "$DEFAULT_METRICS_PORT" ]]; then
-		warn "$PANEL_PORT is already used by Headscale ($DEFAULT_HS_PORT control / $DEFAULT_METRICS_PORT metrics)"
-		ask PANEL_PORT "HeadplaneCN listen port (must differ from $DEFAULT_HS_PORT and $DEFAULT_METRICS_PORT)" "$DEFAULT_ADMIN_PORT" v_port
+		warn "$PANEL_PORT 已被 Headscale 占用（$DEFAULT_HS_PORT 控制 / $DEFAULT_METRICS_PORT 指标） / $PANEL_PORT is already used by Headscale ($DEFAULT_HS_PORT control / $DEFAULT_METRICS_PORT metrics)"
+		ask PANEL_PORT "HeadplaneCN 监听端口（必须不同于 $DEFAULT_HS_PORT 与 $DEFAULT_METRICS_PORT） / HeadplaneCN listen port (must differ from $DEFAULT_HS_PORT and $DEFAULT_METRICS_PORT)" "$DEFAULT_ADMIN_PORT" v_port
 	fi
 
 	# The panel binds the host address directly (network_mode: host), so this
@@ -1632,72 +1644,73 @@ step_network() {
 		bind_default="$bind_existing"
 	fi
 	if [[ -n ${OPT_ADMIN_BIND:-} ]]; then
-		v_bind_addr "$OPT_ADMIN_BIND" || die "invalid --admin-bind: $OPT_ADMIN_BIND (use 0.0.0.0, 127.0.0.1 or an IPv4 address)"
+		v_bind_addr "$OPT_ADMIN_BIND" || die "无效的 --admin-bind：$OPT_ADMIN_BIND（请用 0.0.0.0、127.0.0.1 或一个 IPv4 地址） / invalid --admin-bind: $OPT_ADMIN_BIND (use 0.0.0.0, 127.0.0.1 or an IPv4 address)"
 		PANEL_BIND="$OPT_ADMIN_BIND"
-		printf 'Panel bind address [%s]: %s (--admin-bind)\n' "$bind_default" "$PANEL_BIND" >&2
+		printf '面板绑定地址 / Panel bind address [%s]: %s (--admin-bind)\n' "$bind_default" "$PANEL_BIND" >&2
 	else
 		local ab=""
-		choose_index ab "HeadplaneCN listen address:" 1 \
-			"$bind_default  (this machine's LAN address - the recommended default)" \
-			"0.0.0.0  (all interfaces - reachable from the whole LAN)" \
-			"127.0.0.1  (local only - put the reverse proxy on this machine)"
+		choose_index ab "HeadplaneCN 监听地址 / listen address:" 1 \
+			"$bind_default  （本机的 LAN 地址 — 推荐的默认值） / (this machine's LAN address - the recommended default)" \
+			"0.0.0.0  （所有网卡 — 整个 LAN 都能访问） / (all interfaces - reachable from the whole LAN)" \
+			"127.0.0.1  （仅本机 — 把反向代理装在这台机器上） / (local only - put the reverse proxy on this machine)"
 		case "$ab" in
 		2) PANEL_BIND="0.0.0.0" ;;
 		3) PANEL_BIND="127.0.0.1" ;;
-		*) ask PANEL_BIND "Panel bind address (0.0.0.0, 127.0.0.1 or an IPv4 address)" "$bind_default" v_bind_addr ;;
+		*) ask PANEL_BIND "面板绑定地址（0.0.0.0、127.0.0.1 或一个 IPv4 地址） / Panel bind address (0.0.0.0, 127.0.0.1 or an IPv4 address)" "$bind_default" v_bind_addr ;;
 		esac
 	fi
 	if [[ $PANEL_BIND == "127.0.0.1" ]]; then
-		dim "  the panel is only reachable on 127.0.0.1:$PANEL_PORT of this machine"
+		dim "  面板只能通过本机的 127.0.0.1:$PANEL_PORT 访问 / the panel is only reachable on 127.0.0.1:$PANEL_PORT of this machine"
 	elif [[ $PANEL_BIND == "0.0.0.0" ]]; then
-		warn "the panel is reachable on every interface of this machine (tcp/$PANEL_PORT); firewall it or put a TLS reverse proxy in front of it"
+		warn "面板在本机的所有网卡上都能访问（tcp/$PANEL_PORT）；请用防火墙挡一下，或在它前面放一个 TLS 反向代理 / the panel is reachable on every interface of this machine (tcp/$PANEL_PORT); firewall it or put a TLS reverse proxy in front of it"
 	else
-		dim "  the panel listens on $PANEL_BIND:$PANEL_PORT"
+		dim "  面板监听 $PANEL_BIND:$PANEL_PORT / the panel listens on $PANEL_BIND:$PANEL_PORT"
 	fi
 
 	# STUN
 	if [[ -n ${OPT_STUN_PORT:-} ]]; then
-		v_port "$OPT_STUN_PORT" || die "invalid --stun-port: $OPT_STUN_PORT"
+		v_port "$OPT_STUN_PORT" || die "无效的 --stun-port：$OPT_STUN_PORT / invalid --stun-port: $OPT_STUN_PORT"
 		STUN_PORT="$OPT_STUN_PORT"
-		printf 'STUN udp port [%s]: %s (--stun-port)\n' "$DEFAULT_STUN_PORT" "$STUN_PORT" >&2
+		printf 'STUN udp 端口 / port [%s]: %s (--stun-port)\n' "$DEFAULT_STUN_PORT" "$STUN_PORT" >&2
 	else
-		ask STUN_PORT "STUN udp port announced by the embedded DERP" "$DEFAULT_STUN_PORT" v_port
+		ask STUN_PORT "内嵌 DERP 对外通告的 STUN udp 端口 / STUN udp port announced by the embedded DERP" "$DEFAULT_STUN_PORT" v_port
 	fi
 
 	# metrics: Headscale's own listener, localhost-only unless asked otherwise
 	local mi=""
-	choose_index mi "Headscale metrics listen address:" 1 \
-		"127.0.0.1:$DEFAULT_METRICS_PORT  (local only - recommended)" \
-		"0.0.0.0:$DEFAULT_METRICS_PORT  (all interfaces - only if you restrict it yourself)"
+	choose_index mi "Headscale 指标监听地址 / metrics listen address:" 1 \
+		"127.0.0.1:$DEFAULT_METRICS_PORT  （仅本机 — 推荐） / (local only - recommended)" \
+		"0.0.0.0:$DEFAULT_METRICS_PORT  （所有网卡 — 只有你能自己限制访问时才选） / (all interfaces - only if you restrict it yourself)"
 	if [[ $mi == "2" ]]; then
 		METRICS_ADDR="0.0.0.0:$DEFAULT_METRICS_PORT"
-		warn "metrics will be reachable from the whole LAN; do not expose $DEFAULT_METRICS_PORT to the internet"
+		warn "指标在整个 LAN 上都能访问；不要把 $DEFAULT_METRICS_PORT 暴露到公网 / metrics will be reachable from the whole LAN; do not expose $DEFAULT_METRICS_PORT to the internet"
 	else
 		METRICS_ADDR="127.0.0.1:$DEFAULT_METRICS_PORT"
 	fi
 
 	# timezone
 	if [[ -n ${OPT_TZ:-} ]]; then
-		v_tz "$OPT_TZ" || die "invalid --tz: $OPT_TZ"
+		v_tz "$OPT_TZ" || die "无效的 --tz：$OPT_TZ / invalid --tz: $OPT_TZ"
 		TZONE="$OPT_TZ"
-		printf 'Timezone [%s]: %s (--tz)\n' "$TZONE" "$TZONE" >&2
+		printf '时区 / Timezone [%s]: %s (--tz)\n' "$TZONE" "$TZONE" >&2
 	else
-		ask TZONE "Timezone for both containers" "$TZONE" v_tz
+		ask TZONE "两个容器的时区 / Timezone for both containers" "$TZONE" v_tz
 	fi
 
 	# port conflicts (warn only)
 	say ""
-	say "Checking whether these ports are already in use:"
-	warn_port_conflict "$DEFAULT_HS_PORT" "tcp" "Headscale control"
-	warn_port_conflict "${METRICS_ADDR##*:}" "tcp" "Headscale metrics"
-	warn_port_conflict "$STUN_PORT" "udp" "embedded DERP STUN"
+	say "正在检查这些端口是否已被占用："
+	say "  Checking whether these ports are already in use:"
+	warn_port_conflict "$DEFAULT_HS_PORT" "tcp" "Headscale 控制 / Headscale control"
+	warn_port_conflict "${METRICS_ADDR##*:}" "tcp" "Headscale 指标 / Headscale metrics"
+	warn_port_conflict "$STUN_PORT" "udp" "内嵌 DERP STUN / embedded DERP STUN"
 	warn_port_conflict "$PANEL_PORT" "tcp" "HeadplaneCN"
 
 	if [[ $CLIENT_PORT == "$DEFAULT_HS_PORT" || $CLIENT_PORT == "$PANEL_PORT" || $CLIENT_PORT == "$DEFAULT_METRICS_PORT" ]]; then
-		warn "the public client port $CLIENT_PORT is also used by a local listener; that is fine only if the reverse proxy runs on another machine"
+		warn "对外的客户端端口 $CLIENT_PORT 也被本机的一个监听占用；只有当反向代理跑在另一台机器上时才没问题 / the public client port $CLIENT_PORT is also used by a local listener; that is fine only if the reverse proxy runs on another machine"
 	fi
 	if [[ $STUN_PORT == "$DEFAULT_HS_PORT" || $STUN_PORT == "$PANEL_PORT" || $STUN_PORT == "$DEFAULT_METRICS_PORT" ]]; then
-		warn "the STUN port $STUN_PORT equals a TCP listener port; UDP and TCP can coexist, but double-check your proxy"
+		warn "STUN 端口 $STUN_PORT 与某个 TCP 监听端口相同；UDP 与 TCP 可以共存，但请再确认一下你的代理 / the STUN port $STUN_PORT equals a TCP listener port; UDP and TCP can coexist, but double-check your proxy"
 	fi
 	return 0
 }
@@ -1713,49 +1726,51 @@ generate_cookie_secret() {
 		s="$(head -c 24 /dev/urandom | base64 | tr -d '\n' | cut -c1-32)"
 	fi
 	if ((${#s} != 32)); then
-		die "could not generate a 32 character secret (openssl missing and /dev/urandom unreadable); create one with: openssl rand -base64 24"
+		die "无法生成 32 字符的密钥（openssl 缺失且 /dev/urandom 不可读）；可以用下面的命令生成：openssl rand -base64 24 / could not generate a 32 character secret (openssl missing and /dev/urandom unreadable); create one with: openssl rand -base64 24"
 	fi
 	printf '%s' "$s"
 }
 
 step_secrets() {
-	head2 "Step 5/9  Secrets (API key and cookie secret)"
-	say "A Headscale API key is required for the config check, config saves and the HeadplaneCN agent."
-	say "It is only shown once when created:  docker compose exec headscale headscale apikeys create"
+	head2 "Step 5/9  密钥（API key 与 cookie secret） / Secrets (API key and cookie secret)"
+	say "配置检查、保存配置以及 HeadplaneCN 的 agent 都需要一个 Headscale API key。"
+	say "它只在创建时显示一次：docker compose exec headscale headscale apikeys create"
+	say "  A Headscale API key is required for the config check, config saves and the HeadplaneCN agent."
+	say "  It is only shown once when created:  docker compose exec headscale headscale apikeys create"
 	local choice="" key="" kf=""
-	choose_index choice "Headscale API key:" 2 \
-		"Use an existing API key (paste it now, input hidden)" \
-		"Leave it blank for now (an instruction is printed and written into the config)" \
-		"Read the key from a file (for example /root/hskey.txt)"
+	choose_index choice "Headscale API 密钥 / Headscale API key:" 2 \
+		"使用已有的 API key（现在粘贴，输入不回显） / Use an existing API key (paste it now, input hidden)" \
+		"暂时留空（会打印一段说明并写入配置） / Leave it blank for now (an instruction is printed and written into the config)" \
+		"从文件中读取密钥（例如 /root/hskey.txt） / Read the key from a file (for example /root/hskey.txt)"
 	case "$choice" in
 	1)
-		read_secret key "Paste the Headscale API key"
+		read_secret key "粘贴 Headscale API key / Paste the Headscale API key"
 		if ! v_nonempty "$key"; then
-			die "empty API key; re-run and choose option 2 to leave it blank"
+			die "API key 为空；请重跑并选第 2 项留空 / empty API key; re-run and choose option 2 to leave it blank"
 		fi
-		[[ $key == hskey-* ]] || warn "this does not look like a Headscale API key (they start with 'hskey-')"
+		[[ $key == hskey-* ]] || warn "这看起来不像 Headscale API key（它们以 'hskey-' 开头） / this does not look like a Headscale API key (they start with 'hskey-')"
 		API_KEY="$key"
-		API_KEY_STATE="set"
-		ok "  API key accepted: $(mask_secret "$API_KEY")"
+		API_KEY_STATE="已设置 / set"
+		ok "  API key 已接受 / API key accepted: $(mask_secret "$API_KEY")"
 		;;
 	3)
-		read_input kf "Path to the file containing the API key" "" 
-		v_abs_path "$kf" || die "invalid path: $kf"
-		[[ -r $kf ]] || die "cannot read $kf"
+		read_input kf "包含 API key 的文件路径 / Path to the file containing the API key" "" 
+		v_abs_path "$kf" || die "无效路径：$kf / invalid path: $kf"
+		[[ -r $kf ]] || die "无法读取 $kf / cannot read $kf"
 		API_KEY="$(trim "$(head -n 1 "$kf")")"
-		v_nonempty "$API_KEY" || die "$kf is empty"
-		reject_special "$API_KEY" "API key" || die "the key in $kf contains unsupported characters"
-		API_KEY_STATE="set"
-		ok "  API key read from $kf: $(mask_secret "$API_KEY")"
+		v_nonempty "$API_KEY" || die "$kf 是空的 / $kf is empty"
+		reject_special "$API_KEY" "API key" || die "$kf 里的密钥包含不支持的字符 / the key in $kf contains unsupported characters"
+		API_KEY_STATE="已设置 / set"
+		ok "  已从 $kf 读取 API key / API key read from $kf: $(mask_secret "$API_KEY")"
 		;;
 	*)
 		API_KEY=""
-		API_KEY_STATE="blank"
+		API_KEY_STATE="留空 / blank"
 		API_KEY_NEEDED_HINT=1
-		warn "no API key: login, the config check and the agent stay disabled until you add one"
-		say "  create one later with:"
+		warn "没有 API key：在你补上之前，登录、配置检查与 agent 都保持禁用 / no API key: login, the config check and the agent stay disabled until you add one"
+		say "  以后可以用下面的命令创建 / create one later with:"
 		say "    cd $BASE_DIR && docker compose exec headscale headscale apikeys create"
-		say "  then put the full key into headscale.api_key in $HP_CONFIG"
+		say "  然后把完整的密钥填进 $HP_CONFIG 里的 headscale.api_key / then put the full key into headscale.api_key in $HP_CONFIG"
 		;;
 	esac
 
@@ -1764,24 +1779,24 @@ step_secrets() {
 	existing_cookie="$(yaml_get "$HP_CONFIG" "server.cookie_secret" 2>/dev/null || true)"
 	KEEP_COOKIE=0
 	if [[ -n $existing_cookie && $existing_cookie != *"change_me"* ]]; then
-		if confirm "An existing cookie_secret was found in $HP_CONFIG - keep it (keeps current sessions valid)?" y; then
+		if confirm "在 $HP_CONFIG 里发现了已有的 cookie_secret — 保留它吗（这样当前会话仍然有效）？ / An existing cookie_secret was found in $HP_CONFIG - keep it (keeps current sessions valid)?" y; then
 			KEEP_COOKIE=1
 			COOKIE_SECRET="$existing_cookie"
-			COOKIE_STATE="existing value kept ($(mask_secret "$COOKIE_SECRET"))"
-			ok "  keeping the existing cookie_secret: $(mask_secret "$COOKIE_SECRET")"
+			COOKIE_STATE="保留已有值 / existing value kept ($(mask_secret "$COOKIE_SECRET"))"
+			ok "  保留已有的 cookie_secret / keeping the existing cookie_secret: $(mask_secret "$COOKIE_SECRET")"
 		fi
 	fi
 	if ((KEEP_COOKIE == 0)); then
-		if confirm "Generate a random 32 character cookie_secret now?" y; then
+		if confirm "现在生成一个随机的 32 字符 cookie_secret 吗？ / Generate a random 32 character cookie_secret now?" y; then
 			COOKIE_SECRET="$(generate_cookie_secret)"
-			COOKIE_STATE="generated ($(mask_secret "$COOKIE_SECRET"))"
-			ok "  generated cookie_secret: $(mask_secret "$COOKIE_SECRET")"
-			dim "  the real value is written to $HP_CONFIG (mode 600); rotate it by re-running this installer"
+			COOKIE_STATE="已生成 / generated ($(mask_secret "$COOKIE_SECRET"))"
+			ok "  已生成 cookie_secret / generated cookie_secret: $(mask_secret "$COOKIE_SECRET")"
+			dim "  真实值会写入 $HP_CONFIG（权限 600）；重跑本安装器即可轮换 / the real value is written to $HP_CONFIG (mode 600); rotate it by re-running this installer"
 		else
-			read_secret COOKIE_SECRET "Paste the existing cookie_secret (exactly 32 characters)"
-			v_secret32 "$COOKIE_SECRET" || die "the cookie_secret must be exactly 32 characters"
-			COOKIE_STATE="provided by the operator ($(mask_secret "$COOKIE_SECRET"))"
-			ok "  cookie_secret accepted: $(mask_secret "$COOKIE_SECRET")"
+			read_secret COOKIE_SECRET "粘贴已有的 cookie_secret（正好 32 个字符） / Paste the existing cookie_secret (exactly 32 characters)"
+			v_secret32 "$COOKIE_SECRET" || die "cookie_secret 必须正好是 32 个字符 / the cookie_secret must be exactly 32 characters"
+			COOKIE_STATE="由操作者提供 / provided by the operator ($(mask_secret "$COOKIE_SECRET"))"
+			ok "  cookie_secret 已接受 / cookie_secret accepted: $(mask_secret "$COOKIE_SECRET")"
 		fi
 	fi
 	return 0
@@ -1791,20 +1806,20 @@ step_secrets() {
 # Step 6: DERP map file and region
 # -----------------------------------------------------------------------------
 step_derp() {
-	head2 "Step 6/9  Embedded DERP"
+	head2 "Step 6/9  内嵌 DERP / Embedded DERP"
 	if [[ -n ${OPT_REGION_ID:-} ]]; then
-		v_region_id "$OPT_REGION_ID" || die "invalid --region-id: $OPT_REGION_ID"
+		v_region_id "$OPT_REGION_ID" || die "无效的 --region-id：$OPT_REGION_ID / invalid --region-id: $OPT_REGION_ID"
 		REGION_ID="$OPT_REGION_ID"
-		printf 'DERP region id [%s]: %s (--region-id)\n' "$DEFAULT_REGION_ID" "$REGION_ID" >&2
+		printf 'DERP 区域 ID / DERP region id [%s]: %s (--region-id)\n' "$DEFAULT_REGION_ID" "$REGION_ID" >&2
 	else
-		ask REGION_ID "DERP region id" "$DEFAULT_REGION_ID" v_region_id
+		ask REGION_ID "DERP 区域 id / DERP region id" "$DEFAULT_REGION_ID" v_region_id
 	fi
-	ask REGION_CODE "DERP region code" "$DEFAULT_REGION_CODE" v_nonempty
-	ask REGION_NAME "DERP region name" "$DEFAULT_REGION_NAME" v_nonempty
+	ask REGION_CODE "DERP 区域代码 / DERP region code" "$DEFAULT_REGION_CODE" v_nonempty
+	ask REGION_NAME "DERP 区域名称 / DERP region name" "$DEFAULT_REGION_NAME" v_nonempty
 	# The DERP map directory was chosen in step 1 and sits inside the Headscale
 	# directory, so its container path is the same absolute path.
-	ok "  the map file lives on the host at $DERP_MAP_HOST"
-	dim "  DERP map directory: $DERP_MAP_DIR -> the SAME absolute path in both containers (rw)"
+	ok "  地图文件在宿主机上的位置是 $DERP_MAP_HOST / the map file lives on the host at $DERP_MAP_HOST"
+	dim "  DERP 地图目录 / DERP map directory: $DERP_MAP_DIR -> 在两个容器里都是相同的绝对路径（rw） / the SAME absolute path in both containers (rw)"
 	return 0
 }
 
@@ -1812,44 +1827,47 @@ step_derp() {
 # Step 7: migration plan
 # -----------------------------------------------------------------------------
 step_migration() {
-	head2 "Step 7/9  Migrate an existing Headscale installation (optional)"
+	head2 "Step 7/9  迁移已有的 Headscale 安装（可选） / Migrate an existing Headscale installation (optional)"
 	if [[ -f $HS_CONFIG ]]; then
-		dim "  $HS_CONFIG already exists; the installer will adopt and patch it instead of copying"
+		dim "  $HS_CONFIG 已存在；安装器会接管并给它打补丁，而不是复制 / $HS_CONFIG already exists; the installer will adopt and patch it instead of copying"
 	fi
-	if ! confirm "Copy an existing Headscale directory (for example /vol1/@appdata/headscale) into $HS_DIR?" n; then
+	if ! confirm "要把已有的 Headscale 目录（例如 /vol1/@appdata/headscale）复制到 $HS_DIR 吗？ / Copy an existing Headscale directory (for example /vol1/@appdata/headscale) into $HS_DIR?" n; then
 		MIGRATE_ACTIVE=0
 		return 0
 	fi
 	local src reply
-	read_input reply "Existing Headscale directory" "/vol1/@appdata/headscale"
-	v_abs_path "$reply" || die "invalid path: $reply"
+	read_input reply "已有的 Headscale 目录 / Existing Headscale directory" "/vol1/@appdata/headscale"
+	v_abs_path "$reply" || die "无效路径：$reply / invalid path: $reply"
 	src="$(norm_path "$reply")"
-	[[ -d $src ]] || die "not a directory: $src"
+	[[ -d $src ]] || die "不是目录：$src / not a directory: $src"
 	# the source must be outside every directory this run writes into
 	local target
 	for target in "$BASE_DIR" "$HS_DIR" "$HP_DATA" "$BACKUP_DIR"; do
 		case "$src" in
-		"$target" | "$target"/*) die "the source must not be inside the target directory ($target)" ;;
+		"$target" | "$target"/*) die "源目录不能位于目标目录之内（$target） / the source must not be inside the target directory ($target)" ;;
 		esac
 		case "$target" in
-		"$src" | "$src"/*) die "the target directory $target must not be inside the source ($src)" ;;
+		"$src" | "$src"/*) die "目标目录 $target 不能位于源目录之内（$src） / the target directory $target must not be inside the source ($src)" ;;
 		esac
 	done
 	local found=0 f
 	for f in config.yaml db.sqlite noise_private.key; do
 		[[ -e "$src/$f" ]] && found=1
 	done
-	((found == 1)) || die "$src does not look like a Headscale directory (no config.yaml, db.sqlite or noise_private.key)"
+	((found == 1)) || die "$src 看起来不像 Headscale 目录（没有 config.yaml、db.sqlite 或 noise_private.key） / $src does not look like a Headscale directory (no config.yaml, db.sqlite or noise_private.key)"
 	MIGRATE_SRC="$src"
 	MIGRATE_ACTIVE=1
 	say ""
-	say "The originals in $src are only ever READ: nothing there is deleted, moved or modified."
-	say "The whole directory is copied into $HS_DIR, which both containers mount at the SAME absolute"
-	say "path, so the absolute paths inside config.yaml keep working unchanged."
+	say "只会读取 $src 里的原始数据：那里不会被删除、移动或修改任何东西。"
+	say "整个目录会被复制进 $HS_DIR，两个容器都把它挂载到相同的绝对路径，"
+	say "因此 config.yaml 里的绝对路径可以继续照常工作。"
+	say "  The originals in $src are only ever READ: nothing there is deleted, moved or modified."
+	say "  The whole directory is copied into $HS_DIR, which both containers mount at the SAME absolute"
+	say "  path, so the absolute paths inside config.yaml keep working unchanged."
 	local entry n=0
 	for entry in config.yaml db.sqlite noise_private.key private.key derp_server_private.key policy.hujson derp-maps cache; do
 		if [[ -e "$src/$entry" ]]; then
-			say "  found: $src/$entry"
+			say "  已找到 / found: $src/$entry"
 		fi
 	done
 	for entry in "$src"/*; do
@@ -1857,24 +1875,24 @@ step_migration() {
 		case "$(basename "$entry")" in
 		config.yaml | db.sqlite | noise_private.key | private.key | derp_server_private.key | policy.hujson | derp-maps | cache) ;;
 		*)
-			say "  also copied as-is: $entry"
+			say "  也会原样复制 / also copied as-is: $entry"
 			n=$((n + 1))
 			;;
 		esac
 	done
-	((n == 0)) && dim "  (nothing else in that directory)"
-	dim "  headscale.log, headscale.pid and headscale.sock are dropped from the COPY: runtime leftovers."
+	((n == 0)) && dim "  （该目录里没有别的东西） / (nothing else in that directory)"
+	dim "  headscale.log、headscale.pid 与 headscale.sock 会从副本中去掉：它们是运行时残留。 / headscale.log, headscale.pid and headscale.sock are dropped from the COPY: runtime leftovers."
 	return 0
 }
 
 plan_migration() {
 	local ts="${1:-$RUN_STAMP}" archive
 	archive="$BACKUP_DIR/native-headscale-$ts.tar.gz"
-	emit "  migration source : $MIGRATE_SRC   (read-only; nothing is moved or deleted there)"
-	emit "  backup           : tar -czf $archive -C $(dirname "$MIGRATE_SRC") $(basename "$MIGRATE_SRC")   (mode 600)"
-	emit "  copy             : cp -a $MIGRATE_SRC/. $HS_DIR/   (config.yaml, db.sqlite and every key)"
-	emit "  drop from copy   : headscale.log, headscale.pid, headscale.sock"
-	emit "  config.yaml      : absolute paths are left untouched (the directory keeps its path)"
+	emit "  migration source : $MIGRATE_SRC   （只读；那里不会被移动或删除任何东西） / (read-only; nothing is moved or deleted there)"
+	emit "  backup           : tar -czf $archive -C $(dirname "$MIGRATE_SRC") $(basename "$MIGRATE_SRC")   （权限 600 / mode 600）"
+	emit "  copy             : cp -a $MIGRATE_SRC/. $HS_DIR/   （config.yaml、db.sqlite 与所有密钥 / config.yaml, db.sqlite and every key）"
+	emit "  从副本中去掉 / drop from copy   : headscale.log, headscale.pid, headscale.sock"
+	emit "  config.yaml      : 绝对路径保持不变（目录保留自己的路径） / absolute paths are left untouched (the directory keeps its path)"
 	return 0
 }
 
@@ -1882,7 +1900,7 @@ run_migration() {
 	local ts="${1:-$RUN_STAMP}" archive entry
 	archive="$BACKUP_DIR/native-headscale-$ts.tar.gz"
 	emit ""
-	emit "--- migration from $MIGRATE_SRC ---"
+	emit "--- 迁移来源 / migration from $MIGRATE_SRC ---"
 	if ((DRY_RUN)); then
 		plan_migration "$ts"
 		return 0
@@ -1891,41 +1909,41 @@ run_migration() {
 		# the archive holds the database and the private keys, so create it
 		# owner-only instead of trusting the umask of whoever runs the script
 		if (umask 077 && tar -czf "$archive" -C "$(dirname "$MIGRATE_SRC")" "$(basename "$MIGRATE_SRC")"); then
-			chmod 0600 "$archive" 2>/dev/null || warn "  could not restrict permissions on $archive, which holds the private keys"
+			chmod 0600 "$archive" 2>/dev/null || warn "  无法限制 $archive 的权限，而它存放着私钥 / could not restrict permissions on $archive, which holds the private keys"
 			BACKUP_FILES+=("$archive")
-			ok "  backup written: $archive ($(wc -c <"$archive" | tr -d ' ') bytes)"
+			ok "  备份已写入 / backup written: $archive ($(wc -c <"$archive" | tr -d ' ') 字节 / bytes)"
 			if have sha256sum; then
 				dim "  sha256: $(sha256sum "$archive" | awk '{print $1}')"
 			fi
 		else
-			die "the backup failed; nothing was copied (your original data is untouched)"
+			die "备份失败；没有复制任何东西（你的原始数据没有被改动） / the backup failed; nothing was copied (your original data is untouched)"
 		fi
 	else
-		die "tar is missing; refusing to migrate without a backup (your original data is untouched)"
+		die "缺少 tar；没有备份就拒绝迁移（你的原始数据没有被改动） / tar is missing; refusing to migrate without a backup (your original data is untouched)"
 	fi
 	# Copy the whole directory. The container mounts it at the SAME absolute
 	# path, so the absolute paths inside config.yaml keep working unchanged.
 	act_mkdir "$HS_DIR" 755
 	if (cp -a "$MIGRATE_SRC/." "$HS_DIR/"); then
 		COPIED_FILES+=("$MIGRATE_SRC/* -> $HS_DIR/")
-		ok "  copied: $MIGRATE_SRC/* -> $HS_DIR/"
+		ok "  已复制 / copied: $MIGRATE_SRC/* -> $HS_DIR/"
 	else
-		die "the copy failed; your original data in $MIGRATE_SRC is untouched"
+		die "复制失败；你在 $MIGRATE_SRC 里的原始数据没有被改动 / the copy failed; your original data in $MIGRATE_SRC is untouched"
 	fi
 	for entry in headscale.log headscale.pid headscale.sock; do
 		if [[ -e "$HS_DIR/$entry" ]]; then
 			rm -f "$HS_DIR/$entry"
-			dim "  dropped the runtime leftover $HS_DIR/$entry from the copy"
+			dim "  已从副本中去掉运行时残留 $HS_DIR/$entry / dropped the runtime leftover $HS_DIR/$entry from the copy"
 		fi
 	done
 	for entry in noise_private.key private.key derp_server_private.key; do
 		if [[ -e "$HS_DIR/$entry" ]]; then
-			chmod 600 "$HS_DIR/$entry" 2>/dev/null || warn "  could not chmod 600 $HS_DIR/$entry"
+			chmod 600 "$HS_DIR/$entry" 2>/dev/null || warn "  无法 chmod 600 $HS_DIR/$entry / could not chmod 600 $HS_DIR/$entry"
 		fi
 	done
-	dim "  container user: ${HEADSCALE_UID:-0}:${HEADSCALE_GID:-0} (HEADSCALE_UID / HEADSCALE_GID in .env)."
-	dim "  If the copies of db.sqlite and the keys belong to another user, run 'ls -ln $HS_DIR | head'"
-	dim "  and put those two numbers into HEADSCALE_UID and HEADSCALE_GID in $ENV_FILE."
+	dim "  容器用户 / container user: ${HEADSCALE_UID:-0}:${HEADSCALE_GID:-0}（$ENV_FILE 里的 HEADSCALE_UID 与 HEADSCALE_GID / HEADSCALE_UID and HEADSCALE_GID in .env）."
+	dim "  如果复制过来的 db.sqlite 与密钥属于另一个用户，请运行 'ls -ln $HS_DIR | head' / If the copies of db.sqlite and the keys belong to another user, run 'ls -ln $HS_DIR | head'"
+	dim "  并把这两个数字填进 $ENV_FILE 里的 HEADSCALE_UID 与 HEADSCALE_GID。 / and put those two numbers into HEADSCALE_UID and HEADSCALE_GID in $ENV_FILE."
 	return 0
 }
 
@@ -2301,7 +2319,7 @@ write_headscale_config() {
 		src="$HS_CONFIG"
 	elif ((DRY_RUN)) && [[ -n $MIGRATE_SRC && -f $MIGRATE_SRC/config.yaml ]]; then
 		src="$MIGRATE_SRC/config.yaml"
-		dim "  [dry-run] reading the config that would be copied from $MIGRATE_SRC"
+		dim "  [dry-run] 读取将从 $MIGRATE_SRC 复制的配置 / reading the config that would be copied from $MIGRATE_SRC"
 	fi
 
 	if [[ -z $src ]]; then
@@ -2316,13 +2334,13 @@ write_headscale_config() {
 			# shell so it can record the file in WRITTEN_FILES
 			stage_file "$HS_CONFIG" 600 < <(hs_config_skeleton)
 		fi
-		emit "  derp.paths entry: $DERP_MAP_CTR"
+		emit "  derp.paths 条目 / entry: $DERP_MAP_CTR"
 		return 0
 	fi
 
 	dbtype="$(yaml_get "$src" "database.type" 2>/dev/null || true)"
 	if [[ -n $dbtype && $dbtype != "sqlite" ]]; then
-		die "$src uses database.type: $dbtype; this installer only supports sqlite (refusing to rewrite your config)"
+		die "$src 使用 database.type: $dbtype；本安装脚本只支持 sqlite（不会改写你的配置）/ $src uses database.type: $dbtype; this installer only supports sqlite (refusing to rewrite your config)"
 	fi
 
 	spec="$(new_tmp_file)"
@@ -2351,7 +2369,7 @@ write_headscale_config() {
 		emit "--- would patch: $HS_CONFIG (from $src; the original is kept as .bak) ---"
 		mask_config_lines <"$out"
 		emit "--- end: $HS_CONFIG ---"
-		emit "changes that would be made:"
+		emit "将会做出的改动 / changes that would be made:"
 		print_change_log "$log"
 		verify_derp_paths "$out" plan
 		return 0
@@ -2363,31 +2381,31 @@ write_headscale_config() {
 		cp -a "$src" "$bak"
 		chmod 600 "$bak" 2>/dev/null || true
 		BACKUP_FILES+=("$bak")
-		ok "  original kept: $bak"
+		ok "  原文件已保留 / original kept: $bak"
 	else
 		local stamped="$HS_CONFIG.bak-$ts"
 		cp -a "$src" "$stamped"
 		chmod 600 "$stamped" 2>/dev/null || true
 		BACKUP_FILES+=("$stamped")
-		dim "  $bak already existed; this run also kept $stamped"
+		dim "  $bak 已存在；本次运行另外保留了 $stamped / $bak already existed; this run also kept $stamped"
 	fi
 	newfile="$(new_tmp_file)"
 	patch_config "$src" "$spec" "$log" >"$newfile"
 	if cmp -s "$src" "$newfile"; then
-		dim "  $HS_CONFIG already matches the required values (no change)"
-		emit "  no change needed: $HS_CONFIG"
+		dim "  $HS_CONFIG 已符合要求（无改动）/ $HS_CONFIG already matches the required values (no change)"
+		emit "  无需改动 / no change needed: $HS_CONFIG"
 	else
 		stage_file "$HS_CONFIG" 600 <"$newfile"
 		chmod 600 "$HS_CONFIG" 2>/dev/null || true
 	fi
-	emit "  changes applied to $HS_CONFIG:"
+	emit "  已应用到 $HS_CONFIG 的改动 / changes applied to $HS_CONFIG:"
 	print_change_log "$log"
 	verify_derp_paths "$HS_CONFIG" real
 	if have diff; then
 		local d
 		d="$(diff -u "$bak" "$HS_CONFIG" 2>/dev/null || true)"
 		if [[ -n $d ]]; then
-			emit "  unified diff (secrets masked):"
+			emit "  统一 diff（密钥已掩码）/ unified diff (secrets masked):"
 			printf '%s\n' "$d" | mask_config_lines | sed 's/^/    /'
 		fi
 	fi
@@ -2439,7 +2457,7 @@ write_headplane_config() {
 		emit "--- would patch: $HP_CONFIG (original kept as $HP_CONFIG.bak-$ts) ---"
 		mask_config_lines <"$out"
 		emit "--- end: $HP_CONFIG ---"
-		emit "changes that would be made:"
+		emit "将会做出的改动 / changes that would be made:"
 		print_change_log "$log"
 		return 0
 	fi
@@ -2448,15 +2466,15 @@ write_headplane_config() {
 	cp -a "$src" "$bak"
 	chmod 600 "$bak" 2>/dev/null || true
 	BACKUP_FILES+=("$bak")
-	ok "  backed up: $HP_CONFIG -> $bak"
+	ok "  已备份 / backed up: $HP_CONFIG -> $bak"
 	newfile="$(new_tmp_file)"
 	patch_config "$src" "$spec" "$log" >"$newfile"
 	if cmp -s "$src" "$newfile"; then
-		dim "  $HP_CONFIG already matches the required values (no change)"
+		dim "  $HP_CONFIG 已符合要求（无改动）/ $HP_CONFIG already matches the required values (no change)"
 	else
 		stage_file "$HP_CONFIG" 600 <"$newfile"
 	fi
-	emit "  changes applied to $HP_CONFIG:"
+	emit "  已应用到 $HP_CONFIG 的改动 / changes applied to $HP_CONFIG:"
 	print_change_log "$log"
 	return 0
 }
@@ -2464,7 +2482,7 @@ write_headplane_config() {
 print_change_log() {
 	local log="$1" kind key old new note n=0
 	[[ -s $log ]] || {
-		dim "  (no changes)"
+		dim "  （无改动 / no changes）"
 		return 0
 	}
 	while IFS=$'\t' read -r kind key old new note; do
@@ -2483,7 +2501,7 @@ print_change_log() {
 		*) emit "    $kind $key $old $new $note" ;;
 		esac
 	done <"$log"
-	((n == 0)) && dim "  (no changes)"
+	((n == 0)) && dim "  （无改动 / no changes）"
 	return 0
 }
 
@@ -2493,92 +2511,92 @@ print_change_log() {
 # The resolved layout: printed once per run (dry run and real run alike), before
 # anything is written, and reused verbatim for the volumes: entries.
 print_layout() {
-	info "  deployment directory : $BASE_DIR"
-	info "  Headscale directory  : $HS_DIR"
-	info "        mounted at the SAME absolute path in both containers"
-	info "        (config.yaml, db.sqlite, the private keys, cache/ and derp-maps/)"
-	info "  Headscale config     : $HS_CONFIG"
-	info "        -> /etc/headscale/config.yaml (ro in headscale, rw in HeadplaneCN)"
-	info "  DERP map directory   : $DERP_MAP_DIR"
-	info "        -> the SAME absolute path in both containers (rw)"
-	info "  HeadplaneCN config   : $HP_CONFIG"
-	info "        -> /etc/headplane/config.yaml (ro)"
-	info "  HeadplaneCN data     : $HP_DATA"
-	info "        -> /var/lib/headplane (rw)"
+	info "  部署目录 / deployment directory : $BASE_DIR"
+	info "  Headscale 目录 / Headscale directory  : $HS_DIR"
+	info "        在两个容器中挂载到相同的绝对路径 / mounted at the SAME absolute path in both containers"
+	info "        （config.yaml、db.sqlite、私钥、cache/ 与 derp-maps/ / config.yaml, db.sqlite, the private keys, cache/ and derp-maps/）"
+	info "  Headscale 配置 / Headscale config     : $HS_CONFIG"
+	info "        -> /etc/headscale/config.yaml（headscale 中只读、HeadplaneCN 中可写 / ro in headscale, rw in HeadplaneCN）"
+	info "  DERP 地图目录 / DERP map directory   : $DERP_MAP_DIR"
+	info "        -> 在两个容器中为相同的绝对路径（可读写 / the SAME absolute path in both containers, rw）"
+	info "  HeadplaneCN 配置 / HeadplaneCN config   : $HP_CONFIG"
+	info "        -> /etc/headplane/config.yaml（只读 / ro）"
+	info "  HeadplaneCN 数据 / HeadplaneCN data     : $HP_DATA"
+	info "        -> /var/lib/headplane（可读写 / rw）"
 	info "  Caddyfile            : $CADDY_FILE"
-	info "        -> /etc/caddy/Caddyfile (ro; the /admin path split)"
-	info "  .env file            : $ENV_FILE"
-	info "  compose file         : $COMPOSE_FILE"
-	info "  backups              : $BACKUP_DIR"
+	info "        -> /etc/caddy/Caddyfile（只读；/admin 路径拆分 / ro; the /admin path split）"
+	info "  .env 文件 / .env file            : $ENV_FILE"
+	info "  compose 文件 / compose file         : $COMPOSE_FILE"
+	info "  备份目录 / backups              : $BACKUP_DIR"
 	if ((LAYOUT_COLLISION)); then
-		warn "two of the paths above are the same; the containers would share that directory"
+		warn "上面有两个路径相同；容器会共用那个目录 / two of the paths above are the same; the containers would share that directory"
 	fi
 	return 0
 }
 
 print_plan() {
-	head2 "PLAN"
+	head2 "计划 / PLAN"
 	if ((DRY_RUN)); then
-		info "  dry run: nothing below is written and no container is started."
+		info "  试运行：以下内容都不会写入，也不会启动任何容器。 / dry run: nothing below is written and no container is started."
 	else
-		info "  apply: the files below are written after your confirmation."
+		info "  应用：以下文件将在你确认后写入。 / apply: the files below are written after your confirmation."
 	fi
 	print_layout
-	info "  images               : headscale=$HS_IMAGE  panel=$HP_IMAGE"
-	info "  networking           : network_mode: host for both containers (no ports: section)"
-	info "  timezone             : $TZONE"
-	info "  headscale listeners  : tcp/$DEFAULT_HS_PORT (control + /health), tcp/$DEFAULT_METRICS_PORT (metrics), tcp/50443 (gRPC, loopback only), udp/$STUN_PORT (STUN)"
-	info "  panel listener       : tcp/$PANEL_BIND:$PANEL_PORT (panel + /admin/healthz)"
-	info "  client server_url    : $SERVER_URL"
-	info "  DERP endpoint        : $DERP_URL"
-	info "  admin UI             : $ADMIN_URL/admin"
+	info "  镜像 / images               : headscale=$HS_IMAGE  panel=$HP_IMAGE"
+	info "  网络模式 / networking           : 两个容器都使用 network_mode: host（不写 ports: 段 / network_mode: host for both containers, no ports: section）"
+	info "  时区 / timezone             : $TZONE"
+	info "  headscale 监听端口 / headscale listeners  : tcp/$DEFAULT_HS_PORT（控制接口 + /health / control + /health）、tcp/$DEFAULT_METRICS_PORT（监控指标 / metrics）、tcp/50443（gRPC，仅回环 / loopback only）、udp/$STUN_PORT（STUN）"
+	info "  面板监听端口 / panel listener       : tcp/$PANEL_BIND:$PANEL_PORT（面板 + /admin/healthz / panel + /admin/healthz）"
+	info "  客户端 server_url / client server_url    : $SERVER_URL"
+	info "  DERP 端点 / DERP endpoint        : $DERP_URL"
+	info "  管理界面 / admin UI             : $ADMIN_URL/admin"
 	if [[ -n $API_KEY ]]; then
-		info "  headscale.api_key    : set (masked: $(mask_secret "$API_KEY"))"
+		info "  headscale.api_key    : 已设置（掩码显示 / set, masked: $(mask_secret "$API_KEY"))"
 	else
-		info "  headscale.api_key    : not set yet ($API_KEY_STATE)"
+		info "  headscale.api_key    : 尚未设置 / not set yet ($API_KEY_STATE)"
 	fi
-	info "  cookie_secret        : ${COOKIE_STATE:-generated}"
+	info "  cookie_secret        : ${COOKIE_STATE:-已生成 / generated}"
 	info ""
-	info "directories:"
+	info "目录 / directories:"
 	emit "    mkdir -p -m 755 $BASE_DIR"
 	emit "    mkdir -p -m 700 $HP_DATA"
 	emit "    mkdir -p -m 755 $HS_DIR"
 	emit "    mkdir -p -m 755 $DERP_MAP_DIR"
 	emit "    mkdir -p -m 700 $BACKUP_DIR"
-	emit "    mkdir -p -m 755 $CADDY_DIR   (with data/ and config/)"
+	emit "    mkdir -p -m 755 $CADDY_DIR   （含 data/ 与 config/ / with data/ and config/）"
 	info ""
-	info "files:"
-	emit "    $ENV_FILE   (mode 600)"
-	emit "    $HS_CONFIG   (kept and patched, or written new; mode 600)"
-	emit "    $HP_CONFIG   (kept and patched, or written new; mode 600)"
-	emit "    $DERP_MAP_HOST   (empty placeholder, only when missing)"
-	emit "    $COMPOSE_FILE   (mode 644)"
-	emit "    $CADDY_FILE   (mode 644; the /admin path split)"
+	info "文件 / files:"
+	emit "    $ENV_FILE   （权限 600 / mode 600）"
+	emit "    $HS_CONFIG   （保留并打补丁，或新建；权限 600 / kept and patched, or written new; mode 600）"
+	emit "    $HP_CONFIG   （保留并打补丁，或新建；权限 600 / kept and patched, or written new; mode 600）"
+	emit "    $DERP_MAP_HOST   （空占位文件，仅在缺失时创建 / empty placeholder, only when missing）"
+	emit "    $COMPOSE_FILE   （权限 644 / mode 644）"
+	emit "    $CADDY_FILE   （权限 644；/admin 路径拆分 / mode 644; the /admin path split）"
 	if ((MIGRATE_ACTIVE)); then
 		info ""
-		info "migration:"
+		info "迁移 / migration:"
 		plan_migration
 	fi
 	info ""
-	info "the compose file that will be written:"
+	info "将要写入的 compose 文件 / the compose file that will be written:"
 	build_compose_content | sed 's/^/    /'
 	info ""
-	info "the .env file that will be written:"
+	info "将要写入的 .env 文件 / the .env file that will be written:"
 	env_content | sed 's/^/    /'
 	info ""
-	info "the caddy/Caddyfile that will be written:"
+	info "将要写入的 caddy/Caddyfile / the caddy/Caddyfile that will be written:"
 	caddyfile_content | sed 's/^/    /'
 	info ""
-	info "permissions:"
+	info "权限 / permissions:"
 	emit "    chmod 600 $ENV_FILE $HS_CONFIG $HP_CONFIG"
 	emit "    chmod 600 $HS_DIR/noise_private.key $HS_DIR/derp_server_private.key"
 	if ((ROOT_UID)); then
 		emit "    chown -R $HEADSCALE_UID:$HEADSCALE_GID $HS_DIR"
 	else
-		emit "    # not root: run chown -R $HEADSCALE_UID:$HEADSCALE_GID $HS_DIR yourself"
+		emit "    # 非 root：请自己运行 chown -R $HEADSCALE_UID:$HEADSCALE_GID $HS_DIR / not root: run this yourself"
 	fi
 	info ""
-	info "commands the operator will run afterwards:"
+	info "之后由操作者运行的命令 / commands the operator will run afterwards:"
 	emit "    cd $BASE_DIR && docker compose up -d"
 	emit "    docker compose ps"
 	emit "    docker compose exec headscale headscale health"
@@ -2588,66 +2606,66 @@ print_plan() {
 
 print_summary() {
 	local b w c
-	head2 "SUMMARY (safe to copy)"
-	emit "  deployment directory : $BASE_DIR"
-	emit "  compose file         : $COMPOSE_FILE"
-	emit "  .env file            : $ENV_FILE"
-	emit "  Headscale config     : $HS_CONFIG   -> /etc/headscale/config.yaml (ro)"
-	emit "  Headscale directory  : $HS_DIR"
-	emit "                         -> mounted at the SAME absolute path in both containers"
-	emit "  HeadplaneCN config   : $HP_CONFIG   -> /etc/headplane/config.yaml (ro)"
-	emit "  HeadplaneCN data     : $HP_DATA   -> /var/lib/headplane"
-	emit "  DERP map directory   : $DERP_MAP_DIR   -> the SAME absolute path (rw)"
-	emit "  Caddyfile            : $CADDY_FILE   -> /etc/caddy/Caddyfile (ro)"
-	emit "  backups              : $BACKUP_DIR"
-	emit "  images               : headscale=$HS_IMAGE  panel=$HP_IMAGE"
-	emit "  clients use          : $SERVER_URL"
-	emit "  DERP endpoint        : $DERP_URL"
-	emit "  admin UI             : $ADMIN_URL/admin"
+	head2 "总结（可直接复制） / SUMMARY (safe to copy)"
+	emit "  部署目录 / deployment directory : $BASE_DIR"
+	emit "  compose 文件 / compose file         : $COMPOSE_FILE"
+	emit "  .env 文件 / .env file            : $ENV_FILE"
+	emit "  Headscale 配置 / Headscale config     : $HS_CONFIG   -> /etc/headscale/config.yaml（只读 / ro）"
+	emit "  Headscale 目录 / Headscale directory  : $HS_DIR"
+	emit "                         -> 在两个容器中挂载到相同的绝对路径 / mounted at the SAME absolute path in both containers"
+	emit "  HeadplaneCN 配置 / HeadplaneCN config   : $HP_CONFIG   -> /etc/headplane/config.yaml（只读 / ro）"
+	emit "  HeadplaneCN 数据 / HeadplaneCN data     : $HP_DATA   -> /var/lib/headplane"
+	emit "  DERP 地图目录 / DERP map directory   : $DERP_MAP_DIR   -> 相同的绝对路径（可读写） / the SAME absolute path (rw)"
+	emit "  Caddyfile            : $CADDY_FILE   -> /etc/caddy/Caddyfile（只读 / ro）"
+	emit "  备份目录 / backups              : $BACKUP_DIR"
+	emit "  镜像 / images               : headscale=$HS_IMAGE  panel=$HP_IMAGE"
+	emit "  客户端使用 / clients use          : $SERVER_URL"
+	emit "  DERP 端点 / DERP endpoint        : $DERP_URL"
+	emit "  管理界面 / admin UI             : $ADMIN_URL/admin"
 	if [[ -n $API_KEY ]]; then
-		emit "  headscale.api_key    : set (masked: $(mask_secret "$API_KEY"))"
+		emit "  headscale.api_key    : 已设置（掩码显示 / set, masked: $(mask_secret "$API_KEY"))"
 	else
 		emit "  headscale.api_key    : $API_KEY_STATE"
 	fi
-	emit "  cookie_secret        : ${COOKIE_STATE:-generated}"
+	emit "  cookie_secret        : ${COOKIE_STATE:-已生成 / generated}"
 	emit ""
-	emit "start     : cd $BASE_DIR && docker compose up -d"
-	emit "status    : cd $BASE_DIR && docker compose ps"
-	emit "health    : curl -s http://127.0.0.1:$DEFAULT_HS_PORT/health"
+	emit "启动 / start     : cd $BASE_DIR && docker compose up -d"
+	emit "状态 / status    : cd $BASE_DIR && docker compose ps"
+	emit "健康检查 / health    : curl -s http://127.0.0.1:$DEFAULT_HS_PORT/health"
 	emit "headscale : cd $BASE_DIR && docker compose exec headscale headscale health"
-	emit "upgrade   : edit HEADSCALE_VERSION / HEADPLANE_VERSION in $ENV_FILE, then:"
+	emit "升级 / upgrade   : 修改 $ENV_FILE 中的 HEADSCALE_VERSION 与 HEADPLANE_VERSION 后： / edit HEADSCALE_VERSION / HEADPLANE_VERSION in $ENV_FILE, then:"
 	emit "            cd $BASE_DIR && docker compose pull && docker compose up -d"
-	emit "backup    : tar -czf $BACKUP_DIR/headplaneCN-\$(date +%Y%m%d-%H%M%S).tar.gz -C $BASE_DIR ."
-	emit "rollback  : put the two old versions back in $ENV_FILE, then: cd $BASE_DIR && docker compose up -d"
+	emit "备份 / backup    : tar -czf $BACKUP_DIR/headplaneCN-\$(date +%Y%m%d-%H%M%S).tar.gz -C $BASE_DIR ."
+	emit "回滚 / rollback  : 把两个旧版本填回 $ENV_FILE，然后运行 / put the two old versions back in $ENV_FILE, then: cd $BASE_DIR && docker compose up -d"
 	emit ""
-	emit "  * all three containers use the host network (the port / two-domain"
-	emit "    reverse proxy (or a firewall) has to front http://$PANEL_BIND:$PANEL_PORT."
-	emit "  * the panel reaches Headscale on 127.0.0.1:$DEFAULT_HS_PORT inside the host."
-	emit "  * $HS_DIR is the single source of Headscale state; back it up before upgrades."
+	emit "  * 三个容器都使用宿主网络，端口与双域名 / all three containers use the host network (the port / two-domain"
+	emit "    必须由反向代理（或防火墙）挡在 http://$PANEL_BIND:$PANEL_PORT 前面 / reverse proxy (or a firewall) has to front http://$PANEL_BIND:$PANEL_PORT."
+	emit "  * 面板在宿主机内通过 127.0.0.1:$DEFAULT_HS_PORT 访问 Headscale。 / the panel reaches Headscale on 127.0.0.1:$DEFAULT_HS_PORT inside the host."
+	emit "  * $HS_DIR 是 Headscale 状态的唯一来源；升级前请先备份。 / $HS_DIR is the single source of Headscale state; back it up before upgrades."
 	if [ "${API_KEY_NEEDED_HINT:-0}" = 1 ]; then
 		emit ""
-		emit "TODO: Headscale has no API key yet, so the panel cannot drive it:"
+		emit "TODO：Headscale 还没有 API key，面板无法驱动它 / TODO: Headscale has no API key yet, so the panel cannot drive it:"
 		emit "  1. cd $BASE_DIR && docker compose exec headscale headscale apikeys create --expiration 90d"
-		emit "  2. paste the key into headscale.api_key in $HP_CONFIG and restart headplaneCN"
+		emit "  2. 把 key 粘贴到 $HP_CONFIG 里的 headscale.api_key，然后重启 headplaneCN / paste the key into headscale.api_key in $HP_CONFIG and restart headplaneCN"
 	fi
 	emit ""
-	emit "files kept as .bak-$RUN_STAMP:"
+	emit "保留为 .bak-$RUN_STAMP 的文件 / files kept as .bak-$RUN_STAMP:"
 	if ((${#BACKUP_FILES[@]})); then
 		for b in "${BACKUP_FILES[@]}"; do emit "  $b"; done
 	else
-		emit "  (none)"
+		emit "  （无 / none）"
 	fi
-	emit "files written:"
+	emit "已写入的文件 / files written:"
 	if ((${#WRITTEN_FILES[@]})); then
 		for w in "${WRITTEN_FILES[@]}"; do emit "  $w"; done
 	else
-		emit "  (none)"
+		emit "  （无 / none）"
 	fi
-	emit "files copied:"
+	emit "已复制的文件 / files copied:"
 	if ((${#COPIED_FILES[@]})); then
 		for c in "${COPIED_FILES[@]}"; do emit "  $c"; done
 	else
-		emit "  (none)"
+		emit "  （无 / none）"
 	fi
 	return 0
 }
@@ -2655,7 +2673,7 @@ print_summary() {
 run_verification() {
 	local i ok_health=0
 	info ""
-	info "verifying the deployment (this can take a few seconds)..."
+	info "正在验证部署（可能需要几秒钟）... / verifying the deployment (this can take a few seconds)..."
 	if have curl; then
 		for i in 1 2 3 4 5 6; do
 			if curl -fsS "http://127.0.0.1:$DEFAULT_HS_PORT/health" 2>/dev/null | grep -q '"status"'; then
@@ -2666,30 +2684,30 @@ run_verification() {
 		done
 	fi
 	emit "  \$ cd $BASE_DIR && docker compose ps"
-	(cd "$BASE_DIR" && docker compose ps) || warn "'docker compose ps' failed"
+	(cd "$BASE_DIR" && docker compose ps) || warn "docker compose ps 失败 / 'docker compose ps' failed"
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose logs --tail=30 headscale"
-	(cd "$BASE_DIR" && docker compose logs --tail=30 headscale) || warn "'docker compose logs headscale' failed"
+	(cd "$BASE_DIR" && docker compose logs --tail=30 headscale) || warn "docker compose logs headscale 失败 / 'docker compose logs headscale' failed"
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose logs --tail=40 headscale | grep -iE 'error|derp' | tail"
 	(cd "$BASE_DIR" && docker compose logs --tail=40 headscale 2>/dev/null | grep -iE 'error|derp' | tail) || true
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose exec -T headscale headscale health"
-	(cd "$BASE_DIR" && docker compose exec -T headscale headscale health) || warn "Headscale does not report healthy yet; check 'docker compose logs headscale'"
+	(cd "$BASE_DIR" && docker compose exec -T headscale headscale health) || warn "Headscale 还没有报告健康状态；请查看 docker compose logs headscale / Headscale does not report healthy yet; check 'docker compose logs headscale'"
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose exec -T headscale headscale configtest"
-	(cd "$BASE_DIR" && docker compose exec -T headscale headscale configtest) || warn "headscale configtest failed; fix $HS_CONFIG before using the panel"
+	(cd "$BASE_DIR" && docker compose exec -T headscale headscale configtest) || warn "headscale configtest 失败；使用面板前请先修复 $HS_CONFIG / headscale configtest failed; fix $HS_CONFIG before using the panel"
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose exec -T headscale headscale nodes list"
-	(cd "$BASE_DIR" && docker compose exec -T headscale headscale nodes list | head) || warn "'headscale nodes list' failed (an empty list is fine on a fresh install)"
+	(cd "$BASE_DIR" && docker compose exec -T headscale headscale nodes list | head) || warn "headscale nodes list 失败（全新安装时列表为空是正常的） / 'headscale nodes list' failed (an empty list is fine on a fresh install)"
 	emit ""
 	emit "  \$ cd $BASE_DIR && docker compose logs --tail=40 headplaneCN | grep -iE 'valid Headscale configuration|Using Docker integration|Listening on'"
 	(cd "$BASE_DIR" && docker compose logs --tail=40 headplaneCN 2>/dev/null | grep -iE 'valid Headscale configuration|Using Docker integration|Listening on') ||
-		warn "those panel log lines were not found yet; give the panel a few more seconds"
+		warn "还没有看到那些面板日志行；再给面板几秒钟 / those panel log lines were not found yet; give the panel a few more seconds"
 	if ((ok_health)); then
-		ok "Headscale answered on http://127.0.0.1:$DEFAULT_HS_PORT/health"
+		ok "Headscale 已在 http://127.0.0.1:$DEFAULT_HS_PORT/health 应答 / Headscale answered on http://127.0.0.1:$DEFAULT_HS_PORT/health"
 	else
-		warn "curl http://127.0.0.1:$DEFAULT_HS_PORT/health did not answer yet"
+		warn "curl http://127.0.0.1:$DEFAULT_HS_PORT/health 还没有应答 / curl http://127.0.0.1:$DEFAULT_HS_PORT/health did not answer yet"
 	fi
 	return 0
 }
@@ -2699,80 +2717,154 @@ run_verification() {
 # -----------------------------------------------------------------------------
 usage() {
 	cat <<'EOF'
-dual-image-install.sh - install the two-container deployment of Headscale and
-HeadplaneCN that docs/install/dual-image.md describes.
+dual-image-install.sh - 安装 docs/install/dual-image.md 描述的双容器部署
+                        （Headscale + HeadplaneCN 面板）。
 
-The whole stack is one directory with one .env file:
+整个栈就是一个目录加一个 .env 文件：
 
-  <base>/docker-compose.yml     both services, host networking, no ports:
-  <base>/.env                   versions, container user, BASE_DIR, panel bind, TZ
-  <base>/config.yaml            HeadplaneCN panel configuration
-  <base>/data/                  panel data            -> /var/lib/headplane
-  <base>/headscale/             Headscale config and ALL of its data
+  <base>/docker-compose.yml     两个服务、host 网络、没有 ports: 段
+  <base>/.env                   版本号、容器用户、BASE_DIR、面板监听地址、TZ
+  <base>/config.yaml            HeadplaneCN 面板配置
+  <base>/data/                  面板数据              -> /var/lib/headplane
+  <base>/headscale/             Headscale 配置与它的全部数据
+                                （config.yaml、db.sqlite、私钥、
+                                 cache/ 与 derp-maps/）-> 在两个容器里都挂载到
+                                相同的绝对路径，因此 config.yaml 里的绝对路径
+                                保持有效
+  <base>/backup/                带时间戳的 tar.gz 备份
+
+  dual-image-install.sh - install the two-container deployment of Headscale and
+  HeadplaneCN that docs/install/dual-image.md describes.
+
+  The whole stack is one directory with one .env file:
+
+    <base>/docker-compose.yml   both services, host networking, no ports:
+    <base>/.env                 versions, container user, BASE_DIR, panel bind, TZ
+    <base>/config.yaml          HeadplaneCN panel configuration
+    <base>/data/                panel data            -> /var/lib/headplane
+    <base>/headscale/           Headscale config and ALL of its data
                                 (config.yaml, db.sqlite, the private keys,
                                  cache/ and derp-maps/) -> mounted at the SAME
                                 absolute path in both containers, so the
                                 absolute paths in config.yaml keep working
-  <base>/backup/                timestamped tar.gz backups
+    <base>/backup/              timestamped tar.gz backups
 
-USAGE
+用法
   bash scripts/dual-image-install.sh [options]
 
-FLAGS
-  -h, --help              show this help and exit
-  -n, --dry-run           print the plan and every file that would be written;
-                          write nothing and start nothing
-      --self-test         run the built-in self test (no docker, no network)
-      --defaults          accept every default and never prompt
-      --base-dir PATH     deployment directory (default: /vol1/1000/APP/headplaneCN)
-      --headscale-tag IMG Headscale image as repo:tag (default: headscale/headscale:0.29.4)
-      --headplane-tag IMG HeadplaneCN image as repo:tag
-                          (default: ghcr.io/cgg888/headplanecn:0.22.23)
-      --server-url URL    the URL clients use (Headscale server_url)
-      --derp-host H[:P]   embedded DERP host clients reach; "none" disables it
-      --admin-host H[:P]  host the admin UI is reverse proxied from
-      --admin-port PORT   port the panel listens on (default: 4100)
-      --admin-bind ADDR   address the panel binds: 0.0.0.0 (not recommended),
-                          127.0.0.1 (reverse proxy on this host) or a specific
-                          address such as 192.168.1.10 (default)
-      --caddy-port PORT   plain-HTTP port of the bundled Caddy path splitter
-                          (default: 8444; only the Lucky layout needs it)
-      --image-proxy PFX   registry prefix prepended to all three images
-                          (default: v6.gh-proxy.org/docker/; "off" = direct pull)
-      --stun-port PORT    STUN port of the embedded DERP server (default: 3478)
-      --region-id N       embedded DERP region id (default: 999)
-      --tz ZONE           timezone for both containers (default: the host's)
-      --version           print the script version and exit
+  USAGE
+    bash scripts/dual-image-install.sh [options]
 
-PROMPTS
-   1. deployment directory (default /vol1/1000/APP/headplaneCN)
-   2. HeadplaneCN config file, then the HeadplaneCN data directory
-   3. Headscale directory, then the DERP map directory inside it
-   4. Headscale image, then the HeadplaneCN image
-   5. client server_url, embedded DERP host, admin UI host
-   6. panel bind address, panel port, STUN port, metrics address, timezone
-   7. Headscale API key, panel cookie_secret, DERP region id/code/name
-   8. whether to copy an existing Headscale directory
-      (default /vol1/@appdata/headscale) into the new one
+选项
+  -h, --help              显示本帮助并退出
+  -n, --dry-run           打印计划与将要写入的每个文件；
+                          不写任何东西、不启动任何东西
+      --self-test         运行内置自检（不用 docker、不用网络）
+      --defaults          全部接受默认值，不再提问
+      --base-dir PATH     部署目录（默认：/vol1/1000/APP/headplaneCN）
+      --headscale-tag IMG Headscale 镜像 repo:tag（默认：headscale/headscale:0.29.4）
+      --headplane-tag IMG HeadplaneCN 镜像 repo:tag
+                          （默认：ghcr.io/cgg888/headplanecn:0.22.23）
+      --server-url URL    客户端使用的 URL（Headscale server_url）
+      --derp-host H[:P]   客户端可达的内嵌 DERP 主机；"none" 表示关闭
+      --admin-host H[:P]  反向代理到管理界面的主机
+      --admin-port PORT   面板监听的端口（默认：4100）
+      --admin-bind ADDR   面板绑定的地址：0.0.0.0（不推荐）、
+                          127.0.0.1（反向代理在本机）或具体地址
+                          如 192.168.1.10（默认）
+      --caddy-port PORT   内置 Caddy 路径分流器的明文 HTTP 端口
+                          （默认：8444；只有 Lucky 布局需要它）
+      --image-proxy PFX   为三个镜像统一加上的镜像站前缀
+                          （默认：v6.gh-proxy.org/docker/；"off" = 直接拉取）
+      --stun-port PORT    内嵌 DERP 服务器的 STUN 端口（默认：3478）
+      --region-id N       内嵌 DERP 区域 id（默认：999）
+      --tz ZONE           两个容器的时区（默认：宿主机的）
+      --version           打印脚本版本并退出
 
-WHAT IT WRITES
-  * .env and docker-compose.yml in the deployment directory (600 / 644)
-  * caddy/Caddyfile: the /admin path split in front of the panel (644)
-  * the panel config.yaml, patching only the keys this installer owns
-  * the Headscale config.yaml, keeping every absolute path inside the
-    deployment directory: nothing is rewritten to /etc/headscale/... or
-    /var/lib/headscale/... because $BASE_DIR/headscale is mounted at the same
-    absolute path inside both containers
-  * a placeholder DERP map when the file does not exist yet
-  * the directories above, plus a timestamped tar.gz in <base>/backup/
+  FLAGS
+    -h, --help              show this help and exit
+    -n, --dry-run           print the plan and every file that would be written;
+                            write nothing and start nothing
+        --self-test         run the built-in self test (no docker, no network)
+        --defaults          accept every default and never prompt
+        --base-dir PATH     deployment directory (default: /vol1/1000/APP/headplaneCN)
+        --headscale-tag IMG Headscale image as repo:tag (default: headscale/headscale:0.29.4)
+        --headplane-tag IMG HeadplaneCN image as repo:tag
+                            (default: ghcr.io/cgg888/headplanecn:0.22.23)
+        --server-url URL    the URL clients use (Headscale server_url)
+        --derp-host H[:P]   embedded DERP host clients reach; "none" disables it
+        --admin-host H[:P]  host the admin UI is reverse proxied from
+        --admin-port PORT   port the panel listens on (default: 4100)
+        --admin-bind ADDR   address the panel binds: 0.0.0.0 (not recommended),
+                            127.0.0.1 (reverse proxy on this host) or a specific
+                            address such as 192.168.1.10 (default)
+        --caddy-port PORT   plain-HTTP port of the bundled Caddy path splitter
+                            (default: 8444; only the Lucky layout needs it)
+        --image-proxy PFX   registry prefix prepended to all three images
+                            (default: v6.gh-proxy.org/docker/; "off" = direct pull)
+        --stun-port PORT    STUN port of the embedded DERP server (default: 3478)
+        --region-id N       embedded DERP region id (default: 999)
+        --tz ZONE           timezone for both containers (default: the host's)
+        --version           print the script version and exit
 
-WHAT IT NEVER DOES
-  * no git, no 'rm -rf', no deletion or move of your data
-  * never overwrites a file without keeping a .bak copy next to it
-  * never starts a container without the final confirmation
+提问顺序
+   1. 部署目录（默认 /vol1/1000/APP/headplaneCN）
+   2. HeadplaneCN 配置文件，然后是 HeadplaneCN 数据目录
+   3. Headscale 目录，然后是它里面的 DERP 地图目录
+   4. Headscale 镜像，然后是 HeadplaneCN 镜像
+   5. 客户端 server_url、内嵌 DERP 主机、管理界面主机
+   6. 面板绑定地址、面板端口、STUN 端口、metrics 地址、时区
+   7. Headscale API key、面板 cookie_secret、DERP 区域 id/code/name
+   8. 是否把一个已有的 Headscale 目录
+      （默认 /vol1/@appdata/headscale）复制到新目录里
 
-Every write is printed before it happens; --dry-run shows the complete result
-and changes nothing outside a private temporary directory.
+  PROMPTS
+     1. deployment directory (default /vol1/1000/APP/headplaneCN)
+     2. HeadplaneCN config file, then the HeadplaneCN data directory
+     3. Headscale directory, then the DERP map directory inside it
+     4. Headscale image, then the HeadplaneCN image
+     5. client server_url, embedded DERP host, admin UI host
+     6. panel bind address, panel port, STUN port, metrics address, timezone
+     7. Headscale API key, panel cookie_secret, DERP region id/code/name
+     8. whether to copy an existing Headscale directory
+        (default /vol1/@appdata/headscale) into the new one
+
+会写入什么
+  * 部署目录里的 .env 与 docker-compose.yml（600 / 644）
+  * caddy/Caddyfile：面板前面的 /admin 路径分流（644）
+  * 面板的 config.yaml，只修改本安装器负责的键
+  * Headscale 的 config.yaml，保留部署目录内的每个绝对路径：
+    不会改写成 /etc/headscale/... 或 /var/lib/headscale/...，
+    因为 $BASE_DIR/headscale 在两个容器里都挂载到相同的绝对路径
+  * 文件还不存在时，写入一个占位 DERP 地图
+  * 上面那些目录，以及 <base>/backup/ 里一个带时间戳的 tar.gz
+
+永远不会做的事
+  * 不用 git、不执行 'rm -rf'、不删除也不移动你的数据
+  * 覆盖任何文件前都会在旁边保留一个 .bak 副本
+  * 没有最终确认就不会启动容器
+
+每次写入之前都会先打印；--dry-run 会显示完整结果，
+且不会改动私有临时目录之外的任何东西。
+
+  WHAT IT WRITES
+    * .env and docker-compose.yml in the deployment directory (600 / 644)
+    * caddy/Caddyfile: the /admin path split in front of the panel (644)
+    * the panel config.yaml, patching only the keys this installer owns
+    * the Headscale config.yaml, keeping every absolute path inside the
+      deployment directory: nothing is rewritten to /etc/headscale/... or
+      /var/lib/headscale/... because $BASE_DIR/headscale is mounted at the same
+      absolute path inside both containers
+    * a placeholder DERP map when the file does not exist yet
+    * the directories above, plus a timestamped tar.gz in <base>/backup/
+
+  WHAT IT NEVER DOES
+    * no git, no 'rm -rf', no deletion or move of your data
+    * never overwrites a file without keeping a .bak copy next to it
+    * never starts a container without the final confirmation
+
+  Every write is printed before it happens; --dry-run shows the complete result
+  and changes nothing outside a private temporary directory.
 EOF
 	return 0
 }
@@ -2792,35 +2884,35 @@ self_test() {
 	}
 	_y() { # description function value
 		if "$2" "$3" >/dev/null 2>&1; then
-			_ok "$1 accepts '$3'"
+			_ok "$1 接受 / accepts '$3'"
 		else
-			_bad "$1 should accept '$3'"
+			_bad "$1 应接受 / should accept '$3'"
 		fi
 	}
 	_n() { # description function value
 		if "$2" "$3" >/dev/null 2>&1; then
-			_bad "$1 should reject '$3'"
+			_bad "$1 应拒绝 / should reject '$3'"
 		else
-			_ok "$1 rejects '$3'"
+			_ok "$1 拒绝 / rejects '$3'"
 		fi
 	}
 	_eq() { # description expected actual
 		if [ "$2" = "$3" ]; then
 			_ok "$1"
 		else
-			_bad "$1 (expected '$2', got '$3')"
+			_bad "$1（期望 / expected '$2'，实际 / got '$3'）"
 		fi
 	}
 	_has() { # file fixed-string description
 		if grep -Fq -- "$2" "$1"; then
 			_ok "$3"
 		else
-			_bad "$3 (missing '$2')"
+			_bad "$3（缺少 / missing '$2'）"
 		fi
 	}
 	_hasnt() { # file fixed-string description
 		if grep -Fq -- "$2" "$1"; then
-			_bad "$3 (found '$2')"
+			_bad "$3（发现 / found '$2'）"
 		else
 			_ok "$3"
 		fi
@@ -2832,8 +2924,8 @@ self_test() {
 		_eq "$1" "$2" "$n"
 	}
 
-	head2 "Self test"
-	info "hermetic: no docker, no network, nothing written outside $T"
+	head2 "自检 / Self test"
+	info "自包含：不使用 docker、不联网，也不会在 $T 之外写入任何内容 / hermetic: no docker, no network, nothing written outside $T"
 	info ""
 
 	# --- validators --------------------------------------------------------
@@ -2861,9 +2953,9 @@ self_test() {
 	_y "v_image_proxy" v_image_proxy "none"
 	_n "v_image_proxy" v_image_proxy "v6.gh-proxy.org/docker/; rm -rf /"
 	_n "v_image_proxy" v_image_proxy "v6.gh-proxy.org/../docker/"
-	_eq "normalize_image_proxy drops the scheme and keeps one trailing slash" \
+	_eq "normalize_image_proxy 去掉协议头并保留一个结尾斜杠 / normalize_image_proxy drops the scheme and keeps one trailing slash" \
 		"v6.gh-proxy.org/docker/" "$(normalize_image_proxy 'https://v6.gh-proxy.org/docker')"
-	_eq "normalize_image_proxy maps off to a direct pull" "" "$(normalize_image_proxy off)"
+	_eq "normalize_image_proxy 把 off 映射为直连拉取 / normalize_image_proxy maps off to a direct pull" "" "$(normalize_image_proxy off)"
 
 	_y "v_port" v_port "1"
 	_y "v_port" v_port "4100"
@@ -2902,14 +2994,14 @@ self_test() {
 
 	# --- nothing is created before the operator confirms ---------------------
 	if declare -f step_base_dir | grep -Eq '(^|[^a-z])(mkdir|mktemp|stage_file|act_mkdir|act_copy)([^a-z]|$)'; then
-		_bad "step_base_dir must not create anything"
+		_bad "step_base_dir 不得创建任何东西 / step_base_dir must not create anything"
 	else
-		_ok "step_base_dir only asks questions and validates paths"
+		_ok "step_base_dir 只提问并校验路径 / step_base_dir only asks questions and validates paths"
 	fi
 	if declare -f step_network | grep -Eq '(^|[^a-z])(mkdir|mktemp|stage_file|act_mkdir|act_copy)([^a-z]|$)'; then
-		_bad "step_network must not create anything"
+		_bad "step_network 不得创建任何东西 / step_network must not create anything"
 	else
-		_ok "step_network only asks questions and validates addresses"
+		_ok "step_network 只提问并校验地址 / step_network only asks questions and validates addresses"
 	fi
 
 	# --- the same-absolute-path layout -------------------------------------
@@ -2927,8 +3019,8 @@ self_test() {
 	_n "v_container_path" v_container_path "/var/lib/headscale/db.sqlite"
 	_n "v_container_path" v_container_path "$T/elsewhere/map.yaml"
 
-	_eq "norm_path drops the trailing /" "/vol1/1000/APP/headplaneCN" "$(norm_path "/vol1/1000/APP/headplaneCN/")"
-	_eq "norm_path leaves a plain path alone" "/vol1/@appdata/headscale" "$(norm_path "/vol1/@appdata/headscale")"
+	_eq "norm_path 去掉结尾的 / / norm_path drops the trailing /" "/vol1/1000/APP/headplaneCN" "$(norm_path "/vol1/1000/APP/headplaneCN/")"
+	_eq "norm_path 不会改动普通路径 / norm_path leaves a plain path alone" "/vol1/@appdata/headscale" "$(norm_path "/vol1/@appdata/headscale")"
 
 	# --- the YAML reader ---------------------------------------------------
 	cat >"$T/panel.yaml" <<'YAML'
@@ -2944,11 +3036,11 @@ integration:
   proc:
     enabled: false
 YAML
-	_eq "yaml_get reads a quoted scalar" "192.168.1.10" "$(yaml_get "$T/panel.yaml" server.host)"
-	_eq "yaml_get reads an integer" "4100" "$(yaml_get "$T/panel.yaml" server.port)"
-	_eq "yaml_get reads a nested scalar" "http://127.0.0.1:8480" "$(yaml_get "$T/panel.yaml" headscale.url)"
-	_eq "yaml_get reads a boolean" "false" "$(yaml_get "$T/panel.yaml" integration.proc.enabled)"
-	_eq "yaml_get is empty for a missing key" "" "$(yaml_get "$T/panel.yaml" headscale.api_key)"
+	_eq "yaml_get 能读带引号的标量 / yaml_get reads a quoted scalar" "192.168.1.10" "$(yaml_get "$T/panel.yaml" server.host)"
+	_eq "yaml_get 能读整数 / yaml_get reads an integer" "4100" "$(yaml_get "$T/panel.yaml" server.port)"
+	_eq "yaml_get 能读嵌套标量 / yaml_get reads a nested scalar" "http://127.0.0.1:8480" "$(yaml_get "$T/panel.yaml" headscale.url)"
+	_eq "yaml_get 能读布尔值 / yaml_get reads a boolean" "false" "$(yaml_get "$T/panel.yaml" integration.proc.enabled)"
+	_eq "yaml_get 对缺失的键返回空 / yaml_get is empty for a missing key" "" "$(yaml_get "$T/panel.yaml" headscale.api_key)"
 
 	# --- the config patcher ------------------------------------------------
 	cat >"$T/hs-old.yaml" <<YAML
@@ -2986,35 +3078,35 @@ YAML
 		printf 'derp.paths\tlist\t%s\n' "$DERP_MAP_CTR"
 	} >"$T/spec.tsv"
 	if patch_config "$T/hs-old.yaml" "$T/spec.tsv" "$T/changes.log" >"$T/hs-new.yaml" 2>/dev/null; then
-		_ok "patch_config produced a config"
+		_ok "patch_config 生成了配置 / patch_config produced a config"
 	else
-		_bad "patch_config failed"
+		_bad "patch_config 失败 / patch_config failed"
 	fi
-	_has "$T/hs-new.yaml" "$SERVER_URL" "the patcher rewrites server_url"
-	_hasnt "$T/hs-new.yaml" "https://old.example.com" "the old server_url is gone"
-	_has "$T/hs-new.yaml" "$HS_DIR/noise_private.key" "the patcher points noise.private_key_path at the deployment directory"
-	_has "$T/hs-new.yaml" "$HS_DIR/db.sqlite" "the patcher points database.sqlite.path at the deployment directory"
-	_hasnt "$T/hs-new.yaml" "/old/place" "the stale host paths are gone"
-	_has "$T/hs-new.yaml" "$DERP_MAP_CTR" "the stale derp.paths entry becomes the same-absolute-path map"
-	_hasnt "$T/hs-new.yaml" "/vol1/@appdata" "no /vol1/@appdata path is left in the config"
-	_hasnt "$T/hs-new.yaml" "/etc/headscale/derp-maps" "the DERP map is not moved into /etc/headscale/derp-maps"
-	_hasnt "$T/hs-new.yaml" "/var/lib/headscale" "nothing points into /var/lib/headscale"
-	_has "$T/hs-new.yaml" "# Headscale configuration (self test)" "the patcher keeps comments"
-	_has "$T/hs-new.yaml" "policy:" "the patcher keeps blocks it does not own"
-	_has "$T/changes.log" "CHANGE" "the patcher recorded its changes"
+	_has "$T/hs-new.yaml" "$SERVER_URL" "补丁程序会改写 server_url / the patcher rewrites server_url"
+	_hasnt "$T/hs-new.yaml" "https://old.example.com" "旧的 server_url 已消失 / the old server_url is gone"
+	_has "$T/hs-new.yaml" "$HS_DIR/noise_private.key" "补丁程序把 noise.private_key_path 指向部署目录 / the patcher points noise.private_key_path at the deployment directory"
+	_has "$T/hs-new.yaml" "$HS_DIR/db.sqlite" "补丁程序把 database.sqlite.path 指向部署目录 / the patcher points database.sqlite.path at the deployment directory"
+	_hasnt "$T/hs-new.yaml" "/old/place" "过期的宿主机路径已消失 / the stale host paths are gone"
+	_has "$T/hs-new.yaml" "$DERP_MAP_CTR" "过期的 derp.paths 条目变成同绝对路径的映射文件 / the stale derp.paths entry becomes the same-absolute-path map"
+	_hasnt "$T/hs-new.yaml" "/vol1/@appdata" "配置里不再残留 /vol1/@appdata 路径 / no /vol1/@appdata path is left in the config"
+	_hasnt "$T/hs-new.yaml" "/etc/headscale/derp-maps" "DERP 地图没有被移进 /etc/headscale/derp-maps / the DERP map is not moved into /etc/headscale/derp-maps"
+	_hasnt "$T/hs-new.yaml" "/var/lib/headscale" "没有任何路径指向 /var/lib/headscale / nothing points into /var/lib/headscale"
+	_has "$T/hs-new.yaml" "# Headscale configuration (self test)" "补丁程序保留注释 / the patcher keeps comments"
+	_has "$T/hs-new.yaml" "policy:" "补丁程序保留不属于它的配置块 / the patcher keeps blocks it does not own"
+	_has "$T/changes.log" "CHANGE" "补丁程序记录了改动 / the patcher recorded its changes"
 	if patch_config "$T/hs-new.yaml" "$T/spec.tsv" "$T/changes2.log" >"$T/hs-new2.yaml" 2>/dev/null &&
 		cmp -s "$T/hs-new.yaml" "$T/hs-new2.yaml"; then
-		_ok "a second pass over an already patched config changes nothing"
+		_ok "对已打过补丁的配置再跑一次不会有任何改变 / a second pass over an already patched config changes nothing"
 	else
-		_bad "the patcher is not idempotent"
+		_bad "补丁程序不是幂等的 / the patcher is not idempotent"
 	fi
 
 	# --- derp.paths has to be readable inside the container ----------------
 	printf 'regions: {}\n' >"$DERP_MAP_HOST"
 	if (verify_derp_paths "$T/hs-new.yaml" real) >/dev/null 2>&1; then
-		_ok "verify_derp_paths accepts a map that exists"
+		_ok "verify_derp_paths 接受存在的映射文件 / accepts a map that exists"
 	else
-		_bad "verify_derp_paths rejected a map that exists"
+		_bad "verify_derp_paths 竟然拒绝了存在的映射文件 / rejected a map that exists"
 	fi
 	cat >"$T/hs-broken.yaml" <<YAML
 derp:
@@ -3022,14 +3114,14 @@ derp:
     - $DERP_MAP_DIR/does-not-exist.yaml
 YAML
 	if (verify_derp_paths "$T/hs-broken.yaml" real) >/dev/null 2>&1; then
-		_bad "verify_derp_paths must stop a real run on a missing map"
+		_bad "verify_derp_paths 必须在映射文件缺失时终止正式运行 / must stop a real run on a missing map"
 	else
-		_ok "verify_derp_paths stops a real run on a missing map"
+		_ok "verify_derp_paths 在映射文件缺失时终止正式运行 / stops a real run on a missing map"
 	fi
 	if (verify_derp_paths "$T/hs-broken.yaml" plan) >/dev/null 2>&1; then
-		_ok "verify_derp_paths only warns in a dry run"
+		_ok "verify_derp_paths 在试运行时只警告 / only warns in a dry run"
 	else
-		_bad "verify_derp_paths must not stop a dry run"
+		_bad "verify_derp_paths 不得中断试运行 / must not stop a dry run"
 	fi
 
 	# --- the migration copies, never moves ---------------------------------
@@ -3058,37 +3150,37 @@ YAML
 		HEADSCALE_UID="0"
 		HEADSCALE_GID="0"
 		if run_migration >/dev/null 2>&1; then
-			_ok "run_migration finished"
+			_ok "run_migration 执行完成 / finished"
 		else
-			_bad "run_migration failed"
+			_bad "run_migration 执行失败 / failed"
 		fi
 		_mig_archive="$BACKUP_DIR/native-headscale-selftest.tar.gz"
 		if [ -s "$_mig_archive" ]; then
-			_ok "the migration wrote a timestamped backup into $BACKUP_DIR"
+			_ok "迁移已把带时间戳的备份写入 $BACKUP_DIR / the migration wrote a timestamped backup there"
 		else
-			_bad "the migration did not write a backup"
+			_bad "迁移没有写入备份 / the migration did not write a backup"
 		fi
 		if [ -f "$MIGRATE_SRC/db.sqlite" ] && [ -f "$MIGRATE_SRC/config.yaml" ]; then
-			_ok "the source directory is left untouched (copy, never move)"
+			_ok "源目录保持不变（只复制，绝不移动）/ the source directory is left untouched (copy, never move)"
 		else
-			_bad "the migration moved or deleted source files"
+			_bad "迁移移动或删除了源文件 / the migration moved or deleted source files"
 		fi
 		for _f in config.yaml db.sqlite noise_private.key derp_server_private.key; do
 			if [ -e "$HS_DIR/$_f" ]; then
-				_ok "the migration copied $_f"
+				_ok "迁移已复制 $_f / the migration copied it"
 			else
-				_bad "the migration did not copy $_f"
+				_bad "迁移没有复制 $_f / the migration did not copy it"
 			fi
 		done
 		for _f in headscale.log headscale.pid headscale.sock; do
 			if [ -e "$HS_DIR/$_f" ]; then
-				_bad "the migration left the runtime file $_f in the copy"
+				_bad "迁移把运行时文件 $_f 留在了副本里 / the migration left the runtime file in the copy"
 			else
-				_ok "the migration dropped the runtime file $_f"
+				_ok "迁移已去掉运行时文件 $_f / the migration dropped the runtime file"
 			fi
 		done
 	else
-		dim "  (tar is missing: the migration test is skipped)"
+		dim "  （缺少 tar：跳过迁移测试 / tar is missing: the migration test is skipped）"
 	fi
 
 	# --- .env, compose and both config skeletons ---------------------------
@@ -3127,44 +3219,44 @@ YAML
 	env_content >"$T/env"
 	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ IMAGE_PROXY CADDY_PORT; do
 		if grep -Eq "^$_k=" "$T/env"; then
-			_ok ".env defines $_k"
+			_ok ".env 定义了 $_k / .env defines it"
 		else
-			_bad ".env must define $_k"
+			_bad ".env 必须定义 $_k / .env must define it"
 		fi
 	done
 
 	build_compose_content >"$T/compose.yml"
 	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ IMAGE_PROXY CADDY_PORT; do
-		_has "$T/compose.yml" "\${$_k" "the compose file reads \${$_k...} from .env"
+		_has "$T/compose.yml" "\${$_k" "compose 文件从 .env 读取 \${$_k...} / the compose file reads it from .env"
 	done
-	_count "exactly one pid: host (the panel only)" "1" "$T/compose.yml" "    pid: host"
-	_count "network_mode: host on all three services" "3" "$T/compose.yml" "    network_mode: host"
-	_count "read_only: true on headscale" "1" "$T/compose.yml" "    read_only: true"
-	_has "$T/compose.yml" "      - /var/run/headscale" "headscale gets a writable /var/run/headscale"
-	_has "$T/compose.yml" "      - /tmp" "headscale gets a writable /tmp"
-	_hasnt "$T/compose.yml" "security_opt:" "no security_opt key is generated"
-	_hasnt "$T/compose.yml" "apparmor=" "no apparmor override is generated"
-	_has "$T/compose.yml" "- /var/run/docker.sock:/var/run/docker.sock" "the panel gets the docker socket"
-	_hasnt "$T/compose.yml" "docker.sock:/var/run/docker.sock:ro" "the docker socket is writable (the panel restarts the container)"
-	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__DOCKER__ENABLED=true" "docker integration is on"
-	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__DOCKER__CONTAINER_NAME=headscale" "docker integration targets the headscale container"
-	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__PROC__ENABLED=false" "process integration is off"
-	_has "$T/compose.yml" "- \"\${BASE_DIR}/headscale:\${BASE_DIR}/headscale\"" "the Headscale directory is mounted at the same absolute path"
-	_has "$T/compose.yml" "\${BASE_DIR}/headscale/config.yaml:/etc/headscale/config.yaml:ro" "headscale reads its config from the read-only copy"
-	_has "$T/compose.yml" "container_name: headscale" "the headscale container keeps its fixed name"
-	_has "$T/compose.yml" "container_name: headplaneCN" "the panel container is headplaneCN"
-	_has "$T/compose.yml" "me.tale.headplane.target: \"headscale\"" "the headscale container carries the integration label"
-	_hasnt "$T/compose.yml" "    ports:" "host networking needs no ports: section"
-	_has "$T/compose.yml" "/admin/healthz" "the panel healthcheck probes its own bind address"
-	_has "$T/compose.yml" "container_name: caddy" "the caddy container keeps its fixed name"
-	_has "$T/compose.yml" "caddy/Caddyfile:/etc/caddy/Caddyfile:ro" "caddy reads the Caddyfile from the deployment directory"
-	_has "$T/compose.yml" "CADDY_PORT=\${CADDY_PORT:-8444}" "caddy's port comes from .env"
-	_has "$T/compose.yml" "\${IMAGE_PROXY-}headscale/headscale:" "the headscale image goes through IMAGE_PROXY"
-	_has "$T/compose.yml" "\${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:" "the panel image goes through IMAGE_PROXY"
-	_has "$T/compose.yml" "\${IMAGE_PROXY-}caddy:2-alpine" "the caddy image goes through IMAGE_PROXY"
-	_has "$T/env" "IMAGE_PROXY=$DEFAULT_IMAGE_PROXY" ".env carries the default mirror prefix"
-	_has "$T/env" "#IMAGE_PROXY=$DEFAULT_IMAGE_PROXY_ALT" ".env keeps the v4 alternative commented out"
-	_hasnt "$T/compose.yml" "CADDY_IMAGE" "the old per-image CADDY_IMAGE key is gone"
+	_count "只出现一次 pid: host（仅面板）/ exactly one pid: host (the panel only)" "1" "$T/compose.yml" "    pid: host"
+	_count "三个服务都使用 network_mode: host / network_mode: host on all three services" "3" "$T/compose.yml" "    network_mode: host"
+	_count "headscale 使用 read_only: true / read_only: true on headscale" "1" "$T/compose.yml" "    read_only: true"
+	_has "$T/compose.yml" "      - /var/run/headscale" "headscale 获得可写的 /var/run/headscale / headscale gets a writable /var/run/headscale"
+	_has "$T/compose.yml" "      - /tmp" "headscale 获得可写的 /tmp / headscale gets a writable /tmp"
+	_hasnt "$T/compose.yml" "security_opt:" "不生成 security_opt 键 / no security_opt key is generated"
+	_hasnt "$T/compose.yml" "apparmor=" "不生成 apparmor 覆盖 / no apparmor override is generated"
+	_has "$T/compose.yml" "- /var/run/docker.sock:/var/run/docker.sock" "面板获得 docker socket / the panel gets the docker socket"
+	_hasnt "$T/compose.yml" "docker.sock:/var/run/docker.sock:ro" "docker socket 可写（面板要重启容器）/ the docker socket is writable (the panel restarts the container)"
+	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__DOCKER__ENABLED=true" "Docker 集成已开启 / docker integration is on"
+	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__DOCKER__CONTAINER_NAME=headscale" "Docker 集成指向 headscale 容器 / docker integration targets the headscale container"
+	_has "$T/compose.yml" "HEADPLANE_INTEGRATION__PROC__ENABLED=false" "进程集成已关闭 / process integration is off"
+	_has "$T/compose.yml" "- \"\${BASE_DIR}/headscale:\${BASE_DIR}/headscale\"" "Headscale 目录挂载在相同的绝对路径 / the Headscale directory is mounted at the same absolute path"
+	_has "$T/compose.yml" "\${BASE_DIR}/headscale/config.yaml:/etc/headscale/config.yaml:ro" "headscale 从只读副本读取配置 / headscale reads its config from the read-only copy"
+	_has "$T/compose.yml" "container_name: headscale" "headscale 容器保留固定名称 / the headscale container keeps its fixed name"
+	_has "$T/compose.yml" "container_name: headplaneCN" "面板容器名为 headplaneCN / the panel container is headplaneCN"
+	_has "$T/compose.yml" "me.tale.headplane.target: \"headscale\"" "headscale 容器带有集成标签 / the headscale container carries the integration label"
+	_hasnt "$T/compose.yml" "    ports:" "宿主网络模式不需要 ports: 段 / host networking needs no ports: section"
+	_has "$T/compose.yml" "/admin/healthz" "面板健康检查探测自己的绑定地址 / the panel healthcheck probes its own bind address"
+	_has "$T/compose.yml" "container_name: caddy" "caddy 容器保留固定名称 / the caddy container keeps its fixed name"
+	_has "$T/compose.yml" "caddy/Caddyfile:/etc/caddy/Caddyfile:ro" "caddy 从部署目录读取 Caddyfile / caddy reads the Caddyfile from the deployment directory"
+	_has "$T/compose.yml" "CADDY_PORT=\${CADDY_PORT:-8444}" "caddy 的端口来自 .env / caddy's port comes from .env"
+	_has "$T/compose.yml" "\${IMAGE_PROXY-}headscale/headscale:" "headscale 镜像走 IMAGE_PROXY / the headscale image goes through IMAGE_PROXY"
+	_has "$T/compose.yml" "\${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:" "面板镜像走 IMAGE_PROXY / the panel image goes through IMAGE_PROXY"
+	_has "$T/compose.yml" "\${IMAGE_PROXY-}caddy:2-alpine" "caddy 镜像走 IMAGE_PROXY / the caddy image goes through IMAGE_PROXY"
+	_has "$T/env" "IMAGE_PROXY=$DEFAULT_IMAGE_PROXY" ".env 带有默认镜像前缀 / .env carries the default mirror prefix"
+	_has "$T/env" "#IMAGE_PROXY=$DEFAULT_IMAGE_PROXY_ALT" ".env 保留 v4 备用前缀（已注释）/ .env keeps the v4 alternative commented out"
+	_hasnt "$T/compose.yml" "CADDY_IMAGE" "旧的按镜像 CADDY_IMAGE 键已移除 / the old per-image CADDY_IMAGE key is gone"
 
 	# A mirror typed into the image tags must not be applied a second time.
 	_hs_saved="$HS_IMAGE_REPO"
@@ -3172,40 +3264,40 @@ YAML
 	HS_IMAGE_REPO="$IMAGE_PROXY$HS_IMAGE_REPO"
 	HP_IMAGE_REPO="$IMAGE_PROXY$HP_IMAGE_REPO"
 	build_compose_content >"$T/compose-prefixed.yml"
-	_has "$T/compose-prefixed.yml" "\${IMAGE_PROXY-}headscale/headscale:" "a prefixed --headscale-tag is not prefixed twice"
-	_has "$T/compose-prefixed.yml" "\${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:" "a prefixed --headplane-tag is not prefixed twice"
-	_hasnt "$T/compose-prefixed.yml" "$IMAGE_PROXY\${IMAGE_PROXY-" "the mirror prefix is stripped from the repository"
+	_has "$T/compose-prefixed.yml" "\${IMAGE_PROXY-}headscale/headscale:" "已带前缀的 --headscale-tag 不会被重复加前缀 / a prefixed --headscale-tag is not prefixed twice"
+	_has "$T/compose-prefixed.yml" "\${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:" "已带前缀的 --headplane-tag 不会被重复加前缀 / a prefixed --headplane-tag is not prefixed twice"
+	_hasnt "$T/compose-prefixed.yml" "$IMAGE_PROXY\${IMAGE_PROXY-" "仓库名中的镜像前缀已被去掉 / the mirror prefix is stripped from the repository"
 	HS_IMAGE_REPO="$_hs_saved"
 	HP_IMAGE_REPO="$_hp_saved"
 
 	caddyfile_content >"$T/Caddyfile"
-	_has "$T/Caddyfile" "auto_https off" "the Caddyfile never asks for a certificate"
-	_has "$T/Caddyfile" "handle /admin*" "the Caddyfile keeps the panel's /admin prefix"
-	_has "$T/Caddyfile" "reverse_proxy $PANEL_BIND:$PANEL_PORT" "the Caddyfile sends /admin to the panel"
-	_has "$T/Caddyfile" "reverse_proxy 127.0.0.1:$DEFAULT_HS_PORT" "the Caddyfile sends everything else to Headscale"
-	_has "$T/Caddyfile" "flush_interval -1" "the Caddyfile leaves long-lived connections unbuffered"
+	_has "$T/Caddyfile" "auto_https off" "Caddyfile 从不申请证书 / the Caddyfile never asks for a certificate"
+	_has "$T/Caddyfile" "handle /admin*" "Caddyfile 保留面板的 /admin 前缀 / the Caddyfile keeps the panel's /admin prefix"
+	_has "$T/Caddyfile" "reverse_proxy $PANEL_BIND:$PANEL_PORT" "Caddyfile 把 /admin 转发给面板 / the Caddyfile sends /admin to the panel"
+	_has "$T/Caddyfile" "reverse_proxy 127.0.0.1:$DEFAULT_HS_PORT" "Caddyfile 把其余请求转发给 Headscale / the Caddyfile sends everything else to Headscale"
+	_has "$T/Caddyfile" "flush_interval -1" "Caddyfile 对长连接不做缓冲 / the Caddyfile leaves long-lived connections unbuffered"
 
 	hs_config_skeleton >"$T/hs-skeleton.yaml"
-	_eq "the skeleton keeps the Headscale key path in the deployment directory" "$HS_DIR/noise_private.key" "$(yaml_get "$T/hs-skeleton.yaml" noise.private_key_path)"
-	_eq "the skeleton keeps the DERP key path in the deployment directory" "$HS_DIR/derp_server_private.key" "$(yaml_get "$T/hs-skeleton.yaml" derp.server.private_key_path)"
-	_eq "the skeleton keeps the database in the deployment directory" "$HS_DIR/db.sqlite" "$(yaml_get "$T/hs-skeleton.yaml" database.sqlite.path)"
-	_eq "the skeleton keeps the unix socket in the deployment directory" "$HS_DIR/headscale.sock" "$(yaml_get "$T/hs-skeleton.yaml" unix_socket)"
-	_eq "the skeleton keeps the DERP map under the deployment directory" "$DERP_MAP_CTR" "$(yaml_list "$T/hs-skeleton.yaml" derp.paths | head -n 1)"
-	_hasnt "$T/hs-skeleton.yaml" "/var/lib/headscale/" "no path in the skeleton points into /var/lib/headscale"
-	_hasnt "$T/hs-skeleton.yaml" "/etc/headscale/derp" "the skeleton never moves the DERP map into /etc/headscale"
-	_eq "the skeleton listens on the Headscale port" "0.0.0.0:$DEFAULT_HS_PORT" "$(yaml_get "$T/hs-skeleton.yaml" listen_addr)"
-	_eq "the skeleton keeps sqlite" "sqlite" "$(yaml_get "$T/hs-skeleton.yaml" database.type)"
+	_eq "骨架把 Headscale 密钥路径放在部署目录 / the skeleton keeps the Headscale key path in the deployment directory" "$HS_DIR/noise_private.key" "$(yaml_get "$T/hs-skeleton.yaml" noise.private_key_path)"
+	_eq "骨架把 DERP 密钥路径放在部署目录 / the skeleton keeps the DERP key path in the deployment directory" "$HS_DIR/derp_server_private.key" "$(yaml_get "$T/hs-skeleton.yaml" derp.server.private_key_path)"
+	_eq "骨架把数据库放在部署目录 / the skeleton keeps the database in the deployment directory" "$HS_DIR/db.sqlite" "$(yaml_get "$T/hs-skeleton.yaml" database.sqlite.path)"
+	_eq "骨架把 unix socket 放在部署目录 / the skeleton keeps the unix socket in the deployment directory" "$HS_DIR/headscale.sock" "$(yaml_get "$T/hs-skeleton.yaml" unix_socket)"
+	_eq "骨架把 DERP 地图放在部署目录下 / the skeleton keeps the DERP map under the deployment directory" "$DERP_MAP_CTR" "$(yaml_list "$T/hs-skeleton.yaml" derp.paths | head -n 1)"
+	_hasnt "$T/hs-skeleton.yaml" "/var/lib/headscale/" "骨架里没有任何路径指向 /var/lib/headscale / no path in the skeleton points into /var/lib/headscale"
+	_hasnt "$T/hs-skeleton.yaml" "/etc/headscale/derp" "骨架从不把 DERP 地图移进 /etc/headscale / the skeleton never moves the DERP map into /etc/headscale"
+	_eq "骨架监听 Headscale 端口 / the skeleton listens on the Headscale port" "0.0.0.0:$DEFAULT_HS_PORT" "$(yaml_get "$T/hs-skeleton.yaml" listen_addr)"
+	_eq "骨架保留 sqlite / the skeleton keeps sqlite" "sqlite" "$(yaml_get "$T/hs-skeleton.yaml" database.type)"
 
 	hp_config_skeleton >"$T/hp-skeleton.yaml"
-	_eq "the panel skeleton binds the chosen address" "$PANEL_BIND" "$(yaml_get "$T/hp-skeleton.yaml" server.host)"
-	_eq "the panel skeleton listens on the chosen port" "$PANEL_PORT" "$(yaml_get "$T/hp-skeleton.yaml" server.port)"
-	_eq "the panel skeleton stores its data in the container" "/var/lib/headplane" "$(yaml_get "$T/hp-skeleton.yaml" server.data_path)"
-	_eq "the panel skeleton talks to Headscale on localhost" "http://127.0.0.1:$DEFAULT_HS_PORT" "$(yaml_get "$T/hp-skeleton.yaml" headscale.url)"
-	_eq "the panel skeleton reads the mounted config copy" "/etc/headscale/config.yaml" "$(yaml_get "$T/hp-skeleton.yaml" headscale.config_path)"
-	_eq "the panel skeleton uses the Docker integration" "true" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.enabled)"
-	_eq "the Docker integration targets the headscale container" "headscale" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.container_name)"
-	_eq "the Docker integration looks for the integration label" "me.tale.headplane.target=headscale" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.container_label)"
-	_eq "the process integration is off" "false" "$(yaml_get "$T/hp-skeleton.yaml" integration.proc.enabled)"
+	_eq "面板骨架绑定所选地址 / the panel skeleton binds the chosen address" "$PANEL_BIND" "$(yaml_get "$T/hp-skeleton.yaml" server.host)"
+	_eq "面板骨架监听所选端口 / the panel skeleton listens on the chosen port" "$PANEL_PORT" "$(yaml_get "$T/hp-skeleton.yaml" server.port)"
+	_eq "面板骨架把数据存在容器内 / the panel skeleton stores its data in the container" "/var/lib/headplane" "$(yaml_get "$T/hp-skeleton.yaml" server.data_path)"
+	_eq "面板骨架通过本机回环访问 Headscale / the panel skeleton talks to Headscale on localhost" "http://127.0.0.1:$DEFAULT_HS_PORT" "$(yaml_get "$T/hp-skeleton.yaml" headscale.url)"
+	_eq "面板骨架读取挂载的配置副本 / the panel skeleton reads the mounted config copy" "/etc/headscale/config.yaml" "$(yaml_get "$T/hp-skeleton.yaml" headscale.config_path)"
+	_eq "面板骨架使用 Docker 集成 / the panel skeleton uses the Docker integration" "true" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.enabled)"
+	_eq "Docker 集成指向 headscale 容器（panel 骨架）/ the Docker integration targets the headscale container" "headscale" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.container_name)"
+	_eq "Docker 集成会查找集成标签 / the Docker integration looks for the integration label" "me.tale.headplane.target=headscale" "$(yaml_get "$T/hp-skeleton.yaml" integration.docker.container_label)"
+	_eq "进程集成已关闭（panel 骨架）/ the process integration is off" "false" "$(yaml_get "$T/hp-skeleton.yaml" integration.proc.enabled)"
 
 	# --- the panel writer patches an existing config to the same values -----
 	local hp_saved="$HP_CONFIG" dry_saved="$DRY_RUN"
@@ -3225,21 +3317,21 @@ integration:
   proc:
     enabled: true
 YAML
-	write_headplane_config selftest >"$T/hp-writer.out" 2>"$T/hp-writer.err" || _bad "write_headplane_config must not fail"
+	write_headplane_config selftest >"$T/hp-writer.out" 2>"$T/hp-writer.err" || _bad "write_headplane_config 不得失败 / write_headplane_config must not fail"
 	sed -n '/^--- would patch:/,/^--- end:/p' "$T/hp-writer.out" | sed '1d;$d' >"$T/hp-writer.yaml"
-	_eq "the panel writer binds the chosen address" "$PANEL_BIND" "$(yaml_get "$T/hp-writer.yaml" server.host)"
-	_eq "the panel writer replaces the old port" "$PANEL_PORT" "$(yaml_get "$T/hp-writer.yaml" server.port)"
-	_eq "the panel writer stores its data in the container" "/var/lib/headplane" "$(yaml_get "$T/hp-writer.yaml" server.data_path)"
-	_eq "the panel writer talks to Headscale on localhost" "http://127.0.0.1:$DEFAULT_HS_PORT" "$(yaml_get "$T/hp-writer.yaml" headscale.url)"
-	_eq "the panel writer reads the mounted config copy" "/etc/headscale/config.yaml" "$(yaml_get "$T/hp-writer.yaml" headscale.config_path)"
-	_eq "the panel writer turns the Docker integration on" "true" "$(yaml_get "$T/hp-writer.yaml" integration.docker.enabled)"
-	_eq "the panel writer names the headscale container" "headscale" "$(yaml_get "$T/hp-writer.yaml" integration.docker.container_name)"
-	_eq "the panel writer writes the integration label" "me.tale.headplane.target=headscale" "$(yaml_get "$T/hp-writer.yaml" integration.docker.container_label)"
-	_eq "the panel writer uses the docker socket" "unix:///var/run/docker.sock" "$(yaml_get "$T/hp-writer.yaml" integration.docker.socket)"
-	_eq "the panel writer turns the process integration off" "false" "$(yaml_get "$T/hp-writer.yaml" integration.proc.enabled)"
-	_hasnt "$T/hp-writer.yaml" "3000" "the old panel port is gone"
-	_hasnt "$T/hp-writer.yaml" "http://headscale:8080" "the old headscale.url is gone"
-	_hasnt "$T/hp-writer.out" "$COOKIE_SECRET" "a dry run never prints the cookie secret in full"
+	_eq "面板写入器绑定所选地址 / the panel writer binds the chosen address" "$PANEL_BIND" "$(yaml_get "$T/hp-writer.yaml" server.host)"
+	_eq "面板写入器替换旧端口 / the panel writer replaces the old port" "$PANEL_PORT" "$(yaml_get "$T/hp-writer.yaml" server.port)"
+	_eq "面板写入器把数据存在容器内 / the panel writer stores its data in the container" "/var/lib/headplane" "$(yaml_get "$T/hp-writer.yaml" server.data_path)"
+	_eq "面板写入器通过本机回环访问 Headscale / the panel writer talks to Headscale on localhost" "http://127.0.0.1:$DEFAULT_HS_PORT" "$(yaml_get "$T/hp-writer.yaml" headscale.url)"
+	_eq "面板写入器读取挂载的配置副本 / the panel writer reads the mounted config copy" "/etc/headscale/config.yaml" "$(yaml_get "$T/hp-writer.yaml" headscale.config_path)"
+	_eq "面板写入器开启 Docker 集成 / the panel writer turns the Docker integration on" "true" "$(yaml_get "$T/hp-writer.yaml" integration.docker.enabled)"
+	_eq "面板写入器指定 headscale 容器名 / the panel writer names the headscale container" "headscale" "$(yaml_get "$T/hp-writer.yaml" integration.docker.container_name)"
+	_eq "面板写入器写入集成标签 / the panel writer writes the integration label" "me.tale.headplane.target=headscale" "$(yaml_get "$T/hp-writer.yaml" integration.docker.container_label)"
+	_eq "面板写入器使用 docker socket / the panel writer uses the docker socket" "unix:///var/run/docker.sock" "$(yaml_get "$T/hp-writer.yaml" integration.docker.socket)"
+	_eq "面板写入器关闭进程集成 / the panel writer turns the process integration off" "false" "$(yaml_get "$T/hp-writer.yaml" integration.proc.enabled)"
+	_hasnt "$T/hp-writer.yaml" "3000" "旧的 panel 端口已消失 / the old panel port is gone"
+	_hasnt "$T/hp-writer.yaml" "http://headscale:8080" "旧的 headscale.url 已消失 / the old headscale.url is gone"
+	_hasnt "$T/hp-writer.out" "$COOKIE_SECRET" "试运行绝不会完整打印 cookie secret / a dry run never prints the cookie secret in full"
 	HP_CONFIG="$hp_saved"
 	DRY_RUN="$dry_saved"
 
@@ -3277,67 +3369,67 @@ parse_args() {
 			exit 0
 			;;
 		--base-dir)
-			[[ $# -ge 2 ]] || die "--base-dir needs a value"
+			[[ $# -ge 2 ]] || die "--base-dir 需要一个值 / needs a value"
 			OPT_BASE_DIR="$2"
 			shift
 			;;
 		--headscale-tag)
-			[[ $# -ge 2 ]] || die "--headscale-tag needs a value"
+			[[ $# -ge 2 ]] || die "--headscale-tag 需要一个值 / needs a value"
 			OPT_HS_IMAGE="$2"
 			shift
 			;;
 		--headplane-tag)
-			[[ $# -ge 2 ]] || die "--headplane-tag needs a value"
+			[[ $# -ge 2 ]] || die "--headplane-tag 需要一个值 / needs a value"
 			OPT_HP_IMAGE="$2"
 			shift
 			;;
 		--server-url)
-			[[ $# -ge 2 ]] || die "--server-url needs a value"
+			[[ $# -ge 2 ]] || die "--server-url 需要一个值 / needs a value"
 			OPT_SERVER_URL="$2"
 			shift
 			;;
 		--derp-host)
-			[[ $# -ge 2 ]] || die "--derp-host needs a value"
+			[[ $# -ge 2 ]] || die "--derp-host 需要一个值 / needs a value"
 			OPT_DERP_HOST="$2"
 			shift
 			;;
 		--admin-host)
-			[[ $# -ge 2 ]] || die "--admin-host needs a value"
+			[[ $# -ge 2 ]] || die "--admin-host 需要一个值 / needs a value"
 			OPT_ADMIN_HOST="$2"
 			shift
 			;;
 		--admin-port)
-			[[ $# -ge 2 ]] || die "--admin-port needs a value"
+			[[ $# -ge 2 ]] || die "--admin-port 需要一个值 / needs a value"
 			OPT_HP_PORT="$2"
 			shift
 			;;
 		--admin-bind)
-			[[ $# -ge 2 ]] || die "--admin-bind needs a value"
+			[[ $# -ge 2 ]] || die "--admin-bind 需要一个值 / needs a value"
 			OPT_ADMIN_BIND="$2"
 			shift
 			;;
 		--caddy-port)
-			[[ $# -ge 2 ]] || die "--caddy-port needs a value"
+			[[ $# -ge 2 ]] || die "--caddy-port 需要一个值 / needs a value"
 			OPT_CADDY_PORT="$2"
 			shift
 			;;
 		--image-proxy)
-			[[ $# -ge 2 ]] || die "--image-proxy needs a value"
+			[[ $# -ge 2 ]] || die "--image-proxy 需要一个值 / needs a value"
 			OPT_IMAGE_PROXY="$2"
 			shift
 			;;
 		--stun-port)
-			[[ $# -ge 2 ]] || die "--stun-port needs a value"
+			[[ $# -ge 2 ]] || die "--stun-port 需要一个值 / needs a value"
 			OPT_STUN_PORT="$2"
 			shift
 			;;
 		--tz)
-			[[ $# -ge 2 ]] || die "--tz needs a value"
+			[[ $# -ge 2 ]] || die "--tz 需要一个值 / needs a value"
 			OPT_TZ="$2"
 			shift
 			;;
 		--region-id)
-			[[ $# -ge 2 ]] || die "--region-id needs a value"
+			[[ $# -ge 2 ]] || die "--region-id 需要一个值 / needs a value"
 			OPT_REGION_ID="$2"
 			shift
 			;;
@@ -3346,8 +3438,8 @@ parse_args() {
 			break
 			;;
 		*)
-			err "unknown option: $1"
-			err "run with --help to see all flags"
+			err "未知选项 / unknown option: $1"
+			err "用 --help 查看全部选项 / run with --help to see all flags"
 			exit 2
 			;;
 		esac
@@ -3364,7 +3456,7 @@ main() {
 
 	RUN_TS="$(date '+%Y-%m-%d %H:%M:%S %z')"
 	RUN_STAMP="$(date '+%Y%m%d-%H%M%S')"
-	TMP_ROOT="$(mktemp -d 2>/dev/null)" || die "cannot create a private temporary directory"
+	TMP_ROOT="$(mktemp -d 2>/dev/null)" || die "无法创建私有临时目录 / cannot create a private temporary directory"
 	TMP_DIRS+=("$TMP_ROOT")
 	trap 'cleanup' EXIT
 	trap 'exit 130' INT
@@ -3378,19 +3470,19 @@ main() {
 	fi
 
 	head2 "$SCRIPT_NAME $SCRIPT_VERSION  ($RUN_TS)"
-	info "two-container deployment (Headscale + HeadplaneCN); see docs/install/dual-image.md"
-	info "this script never deletes or moves your data and never runs git."
+	info "双容器部署（Headscale + HeadplaneCN）；见 docs/install/dual-image.md / two-container deployment (Headscale + HeadplaneCN); see docs/install/dual-image.md"
+	info "本脚本绝不会删除或移动你的数据，也不会执行 git 命令。 / this script never deletes or moves your data and never runs git."
 	info ""
 
 	if ((DRY_RUN == 0)); then
-		if confirm "Preview only, as a dry run (nothing will be written or started)?" n; then
+		if confirm "只做预览（试运行），不会写入或启动任何东西？ / Preview only, as a dry run (nothing will be written or started)?" n; then
 			DRY_RUN=1
 		fi
 	fi
 	if ((DRY_RUN)); then
-		info "mode: DRY RUN - nothing is written outside $TMP_ROOT and nothing is started"
+		info "模式：DRY RUN（试运行）—— 除 $TMP_ROOT 外不写入任何内容，也不会启动任何东西 / mode: DRY RUN - nothing is written outside $TMP_ROOT and nothing is started"
 	else
-		info "mode: APPLY - files are written after the final confirmation"
+		info "模式：APPLY（正式执行）—— 文件会在最终确认后写入 / mode: APPLY - files are written after the final confirmation"
 	fi
 	info ""
 
@@ -3406,11 +3498,11 @@ main() {
 	print_plan
 
 	if ((DRY_RUN == 0)); then
-		if ! confirm "Write these files now?" y; then
-			die "aborted by the operator; nothing was written"
+		if ! confirm "现在写入这些文件吗？ / Write these files now?" y; then
+			die "操作者已中止；没有写入任何内容 / aborted by the operator; nothing was written"
 		fi
 
-		head2 "Step 8/9  Writing"
+		head2 "Step 8/9  写入 / Writing"
 		act_mkdir "$BASE_DIR" 755
 		act_mkdir "$HP_DATA" 700
 		act_mkdir "$HS_DIR" 755
@@ -3427,14 +3519,14 @@ main() {
 		dim "  --- .env ---"
 		stage_file "$ENV_FILE" 600 < <(env_content)
 
-		dim "  --- Headscale configuration ---"
+		dim "  --- Headscale 配置 / configuration ---"
 		write_headscale_config "$RUN_STAMP"
 
-		dim "  --- HeadplaneCN configuration ---"
+		dim "  --- HeadplaneCN 配置 / configuration ---"
 		write_headplane_config "$RUN_STAMP"
 
 		if [[ ! -e $DERP_MAP_HOST ]]; then
-			dim "  --- DERP mirror map (placeholder) ---"
+			dim "  --- DERP 镜像地图（占位文件）/ DERP mirror map (placeholder) ---"
 			stage_file "$DERP_MAP_HOST" 644 <<'YAML'
 # Placeholder written by dual-image-install.sh.
 # Fill it in from the panel (Settings -> Headscale -> DERP map) or let the
@@ -3443,60 +3535,60 @@ main() {
 regions: {}
 YAML
 		else
-			dim "  keeping the existing DERP map: $DERP_MAP_HOST"
+			dim "  保留已有的 DERP 地图 / keeping the existing DERP map: $DERP_MAP_HOST"
 		fi
 
-		dim "  --- compose file ---"
+		dim "  --- compose 文件 / file ---"
 		if [[ -e $COMPOSE_FILE ]]; then
 			act_backup_file "$COMPOSE_FILE" "$RUN_STAMP"
 		fi
 		build_compose_content | stage_file "$COMPOSE_FILE" 644
 
-		dim "  --- caddy/Caddyfile (the /admin path split) ---"
+		dim "  --- caddy/Caddyfile（/admin 路径拆分 / the /admin path split）---"
 		if [[ -e $CADDY_FILE ]]; then
 			act_backup_file "$CADDY_FILE" "$RUN_STAMP"
 		fi
 		caddyfile_content | stage_file "$CADDY_FILE" 644
 
-		dim "  --- permissions ---"
-		chmod 600 "$ENV_FILE" 2>/dev/null || warn "could not chmod 600 $ENV_FILE"
+		dim "  --- 权限 / permissions ---"
+		chmod 600 "$ENV_FILE" 2>/dev/null || warn "无法 chmod 600 $ENV_FILE / could not chmod 600 $ENV_FILE"
 		if [[ -e $HS_CONFIG ]]; then
-			chmod 600 "$HS_CONFIG" 2>/dev/null || warn "could not chmod 600 $HS_CONFIG"
+			chmod 600 "$HS_CONFIG" 2>/dev/null || warn "无法 chmod 600 $HS_CONFIG / could not chmod 600 $HS_CONFIG"
 		fi
 		local _key
 		for _key in noise_private.key derp_server_private.key private.key; do
 			if [[ -e $HS_DIR/$_key ]]; then
-				chmod 600 "$HS_DIR/$_key" 2>/dev/null || warn "could not chmod 600 $HS_DIR/$_key"
+				chmod 600 "$HS_DIR/$_key" 2>/dev/null || warn "无法 chmod 600 $HS_DIR/$_key / could not chmod 600 $HS_DIR/$_key"
 			fi
 		done
 		if ((ROOT_UID)); then
 			if v_recursive_chown_target "$HS_DIR"; then
-				chown -R "$HEADSCALE_UID:$HEADSCALE_GID" "$HS_DIR" || warn "could not chown -R $HS_DIR"
-				ok "  $HS_DIR and everything in it now belong to $HEADSCALE_UID:$HEADSCALE_GID"
+				chown -R "$HEADSCALE_UID:$HEADSCALE_GID" "$HS_DIR" || warn "无法 chown -R $HS_DIR / could not chown -R $HS_DIR"
+				ok "  $HS_DIR 及其中的所有内容现在都属于 / $HS_DIR and everything in it now belong to $HEADSCALE_UID:$HEADSCALE_GID"
 			fi
 		else
-			dim "  not root: if the containers cannot write $HS_DIR, run this yourself:"
+			dim "  非 root：如果容器无法写入 $HS_DIR，请自行运行 / not root: if the containers cannot write $HS_DIR, run this yourself:"
 			dim "    chown -R $HEADSCALE_UID:$HEADSCALE_GID $HS_DIR"
 		fi
 		if have docker && docker compose version >/dev/null 2>&1; then
 			if (cd "$BASE_DIR" && docker compose config -q 2>/dev/null); then
-				ok "  docker compose accepted the generated files"
+				ok "  docker compose 接受了生成的文件 / docker compose accepted the generated files"
 			else
-				warn "docker compose config reported a problem; run 'cd $BASE_DIR && docker compose config' to see it"
+				warn "docker compose config 报告了问题；运行 'cd $BASE_DIR && docker compose config' 查看详情 / docker compose config reported a problem; run it to see the details"
 			fi
 		fi
 
-		head2 "Step 9/9  Start and verify"
-		if confirm "Start the stack now (docker compose up -d)?" n; then
+		head2 "Step 9/9  启动并验证 / Start and verify"
+		if confirm "现在启动整套服务（docker compose up -d）？ / Start the stack now (docker compose up -d)?" n; then
 			START_NOW=1
 			if (cd "$BASE_DIR" && docker compose up -d); then
-				ok "containers started"
+				ok "容器已启动 / containers started"
 				run_verification
 			else
-				warn "'docker compose up -d' failed; fix the problem above and run it again by hand"
+				warn "docker compose up -d 失败；请修复上面的问题后手动重跑 / 'docker compose up -d' failed; fix the problem above and run it again by hand"
 			fi
 		else
-			dim "  not started. When you are ready:"
+			dim "  未启动。准备好后执行 / not started. When you are ready:"
 			dim "    cd $BASE_DIR && docker compose up -d"
 		fi
 	fi
@@ -3505,8 +3597,8 @@ YAML
 
 	if ((DRY_RUN)); then
 		info ""
-		ok "DRY RUN finished: nothing was written outside $TMP_ROOT and no container was started."
-		info "re-run the same command without --dry-run to write these files."
+		ok "DRY RUN（试运行）结束：除 $TMP_ROOT 外没有写入任何内容，也没有启动容器。 / DRY RUN finished: nothing was written outside $TMP_ROOT and no container was started."
+		info "去掉 --dry-run 重跑同样的命令即可写入这些文件。 / re-run the same command without --dry-run to write these files."
 	fi
 	return 0
 }
