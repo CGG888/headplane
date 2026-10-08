@@ -45,7 +45,7 @@ further until the backup is done**.
 | Headscale data owner            | `965:966`                                                             | The container runs as this uid:gid, otherwise it cannot write the database         | **must**                       | `HEADSCALE_UID/GID` in `.env` (read the real value with `ls -ln`)  |
 | Panel cookie key                | `openssl rand -base64 24`                                             | Encrypts cookies; must be exactly 32 characters                                    | **never** (keep the old value) | `server.cookie_secret` in the panel's `config.yaml`                |
 | Headscale API key               | `hskey-api-...`                                                       | How the panel reaches the Headscale API; the full value, not the prefix            | **must**                       | `headscale.api_key` in the panel's `config.yaml`                   |
-| Image version numbers           | `0.29.4`, `0.22.23`                                                   | Pinned versions, never `latest`; upgrades change only these                        | may                            | `HEADSCALE_VERSION` / `HEADPLANE_VERSION` in `.env`                |
+| Image version numbers           | `0.29.4`, `0.22.25`                                                   | Pinned versions, never `latest`; upgrades change only these                        | may                            | `HEADSCALE_VERSION` / `HEADPLANE_VERSION` in `.env`                |
 | DERP map file path              | `/vol1/1000/APP/headplaneCN/headscale/derp-maps/official-mirror.yaml` | `derp.paths` and the panel's DERP card must point at the same file                 | may                            | Headscale's `config.yaml`                                          |
 | STUN port                       | `udp/3478`                                                            | Must be forwarded by the router on its own; a reverse proxy cannot carry UDP       | **never**                      | router / firewall                                                  |
 
@@ -178,7 +178,7 @@ the keys a migration touches:
 ```ini
 # /vol1/1000/APP/headplaneCN/.env
 HEADSCALE_VERSION=0.29.4              # ← may change: a pinned version, upgrades edit this line
-HEADPLANE_VERSION=0.22.23             # ← may change: same here
+HEADPLANE_VERSION=0.22.25             # ← may change: same here
 
 HEADSCALE_UID=965                     # ← must change: the uid you saw in `ls -ln` during 3.2
 HEADSCALE_GID=966                     # ← must change: the matching gid (0 means run as root)
