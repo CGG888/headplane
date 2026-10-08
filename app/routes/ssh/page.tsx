@@ -15,6 +15,7 @@ import {
   headscaleContext,
   requestApiContext,
 } from "~/server/context";
+import { assetProbeOrigins } from "~/server/self-origin";
 import { findHeadscaleUserBySubject } from "~/server/web/headscale-identity";
 
 import type { Route } from "./+types/page";
@@ -39,18 +40,34 @@ export async function loader({ request, params, context, url }: Route.LoaderArgs
   const getRequestApi = context.get(requestApiContext);
   const compatibilityWarning = getBrowserSSHCompatibilityWarning(headscale.version);
 
-  const origin = url.origin;
+  // The WASM bundle is served by this process, so probe the listener rather
+  // than the origin the request reports: behind a TLS-terminating proxy that
+  // origin is cleartext at the public hostname, and asking its TLS port for the
+  // file resets the connection. A rejected fetch is not a Response, so it would
+  // reach the router as a generic "Unexpected Server Error" instead of the
+  // localized `wasmMissing` card below.
   const assets = [WASM_HELPER_URL, WASM_MODULE_URL];
-  const missing: string[] = [];
+  let assetsReachable = false;
 
-  for (const file of assets) {
-    const res = await fetch(`${origin}${file}`, { method: "HEAD" });
-    if (!res.ok) {
-      missing.push(file);
+  for (const origin of assetProbeOrigins(config.server, url.origin)) {
+    const results = await Promise.all(
+      assets.map(async (file) => {
+        try {
+          const res = await fetch(`${origin}${file}`, { method: "HEAD" });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }),
+    );
+
+    if (results.every(Boolean)) {
+      assetsReachable = true;
+      break;
     }
   }
 
-  if (missing.length > 0) {
+  if (!assetsReachable) {
     throw data(sshError("wasmMissing"), 405);
   }
 
