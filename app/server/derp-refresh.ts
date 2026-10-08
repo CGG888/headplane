@@ -1,7 +1,9 @@
 import type {
   IntegrationKind,
   IntegrationReloadResult,
+  IntegrationReloadStage,
   IntegrationRestartResult,
+  IntegrationRestartStage,
 } from "~/server/config/integration/abstract";
 import type { Headscale } from "~/server/headscale/api";
 import log from "~/utils/log";
@@ -39,6 +41,15 @@ export type DerpChangeKind = "local" | "map-file" | "config";
  */
 export type DerpReloadOutcome = "not-needed" | "ticker" | "triggered" | "manual" | "failed";
 
+/**
+ * How a refresh that failed actually failed: which call the integration was
+ * asked to make, and where it stopped. `"error"` means the call threw instead
+ * of answering with a stage, so only the logs name the cause.
+ */
+export type DerpRefreshFailure =
+  | { action: "restart"; stage: IntegrationRestartStage | "error" }
+  | { action: "reload"; stage: IntegrationReloadStage | "error" };
+
 export interface DerpRefreshResult {
   changeKind: DerpChangeKind;
   /** The action id (or a short label) that wrote, for the notice on the page. */
@@ -50,6 +61,12 @@ export interface DerpRefreshResult {
   outcome: DerpReloadOutcome;
   /** True when Headscale's running process has not picked the change up yet. */
   pendingRestart: boolean;
+  /**
+   * Set only when `outcome` is `failed`: the notice can then name the stage
+   * instead of telling the operator to read the logs. The integration's own
+   * stages are the same ones Settings → System already reports.
+   */
+  failure?: DerpRefreshFailure;
 }
 
 let lastRefresh: DerpRefreshResult | undefined;
@@ -185,7 +202,8 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
   const integration = input.integration;
 
   let outcome: DerpReloadOutcome;
-  let failedStage: string | undefined;
+  let failedStage: IntegrationReloadStage | IntegrationRestartStage | "error" | undefined;
+  let failedCall: "reload" | "restart" | undefined;
   if (action === "none") {
     outcome = input.changeKind === "map-file" ? "ticker" : "not-needed";
   } else if (action === "manual" || !integration) {
@@ -200,6 +218,7 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
       ok = reloaded.ok;
       if (!reloaded.ok) {
         failedStage = reloaded.stage;
+        failedCall = action === "restart" ? "restart" : "reload";
         log.error(
           "config",
           "Integration %s could not %s after %s: %s",
@@ -211,6 +230,7 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
       }
     } catch (error) {
       failedStage = "error";
+      failedCall = action === "restart" ? "restart" : "reload";
       log.error(
         "config",
         "Integration %s failed to %s after %s: %s",
@@ -225,6 +245,11 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
     outcome = ok ? "triggered" : "failed";
   }
 
+  const failure =
+    outcome === "failed" && failedStage !== undefined && failedCall !== undefined
+      ? ({ action: failedCall, stage: failedStage } as DerpRefreshFailure)
+      : undefined;
+
   const result: DerpRefreshResult = {
     changeKind: input.changeKind,
     reason: input.reason,
@@ -232,6 +257,7 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
     invalidated: true,
     outcome,
     pendingRestart: outcome === "manual" || outcome === "failed",
+    ...(failure === undefined ? {} : { failure }),
   };
 
   lastRefresh = result;

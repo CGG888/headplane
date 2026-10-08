@@ -151,6 +151,13 @@ const DERP_MAP_CACHE_MAX_ENTRIES = 200;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<RemoteDerpMapOutcome>>();
 
+/**
+ * Bumped by every invalidation. A request that started before the bump must not
+ * remember its answer: that answer describes the state the write replaced, and
+ * its TTL (up to six hours) would outlive the write that cleared the cache.
+ */
+let generation = 0;
+
 /** Inserts an answer, refreshing its recency and evicting the oldest beyond the cap. */
 function rememberOutcome(url: string, entry: CacheEntry): void {
   cache.delete(url);
@@ -166,9 +173,16 @@ function rememberOutcome(url: string, entry: CacheEntry): void {
   }
 }
 
-/** Drops every cached answer, so the next lookup dials the URL again. */
+/**
+ * Drops every cached answer, so the next lookup dials the URL again. Requests
+ * already in flight are forgotten too — the next caller starts a fresh one
+ * instead of joining a download that began before the write — and whatever they
+ * eventually return is not remembered.
+ */
 export function clearRemoteDerpMapCache(): void {
   cache.clear();
+  inFlight.clear();
+  generation += 1;
 }
 
 interface ResolvedOptions {
@@ -366,12 +380,16 @@ export async function loadRemoteDerpMapOutcome(
     return pending;
   }
 
+  const startedGeneration = generation;
   const started = (async () => {
     const outcome = await downloadDerpMap(trimmed, deps);
-    rememberOutcome(trimmed, {
-      outcome,
-      expiresAt: deps.now() + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
-    });
+    if (generation === startedGeneration) {
+      rememberOutcome(trimmed, {
+        outcome,
+        expiresAt: deps.now() + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
+      });
+    }
+
     return outcome;
   })();
 

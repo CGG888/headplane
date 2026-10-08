@@ -242,6 +242,52 @@ describe("remote reading of a wire-format official map", () => {
     expect(calls).toEqual([url]);
   });
 
+  test("a write neither shares nor remembers a download that started before it", async () => {
+    const url = "https://example.com/invalidated-mid-download.yaml";
+    const dials: string[] = [];
+    const dialWaiters: Array<() => void> = [];
+    const answers: Array<(body: string) => void> = [];
+    const fetch: DerpMapFetch = (target) => {
+      dials.push(target);
+      dialWaiters.shift()?.();
+      return new Promise<DerpMapResponse>((resolve) => {
+        answers.push((body) => resolve(textResponse(body)));
+      });
+    };
+    const dialled = () => new Promise<void>((resolve) => dialWaiters.push(resolve));
+
+    // A lookup starts a download and is still waiting for it.
+    const firstDial = dialled();
+    const stale = loadRemoteDerpMapOutcome(url, SETTINGS, { fetch });
+    await firstDial;
+
+    // A DERP write clears the caches while that download is in flight.
+    clearRemoteDerpMapCache();
+
+    // The next caller dials again instead of joining the older download ...
+    const secondDial = dialled();
+    const fresh = loadRemoteDerpMapOutcome(url, SETTINGS, { fetch });
+    await secondDial;
+    expect(dials).toHaveLength(2);
+
+    // ... the answer of that download still reaches the caller already waiting
+    // for it, but it is not remembered ...
+    answers[0]?.(LOCAL_MAP);
+    expect((await stale)?.regions?.map((region) => region.regionId)).toEqual([901]);
+    const probe = loadRemoteDerpMapOutcome(url, SETTINGS, { fetch });
+
+    // ... so the download that began after the write is what the cache holds.
+    answers[1]?.(WIRE_EXCERPT);
+    await fresh;
+    expect((await probe)?.regions?.map((region) => region.regionId)).toEqual([1, 3]);
+    expect(dials).toHaveLength(2);
+
+    // And a later lookup is served from that cache without another dial.
+    const cached = await loadRemoteDerpMapOutcome(url, SETTINGS, { fetch });
+    expect(cached.regions?.map((region) => region.regionId)).toEqual([1, 3]);
+    expect(dials).toHaveLength(2);
+  });
+
   test("gives a remote map a ten second deadline", () => {
     expect(DERP_MAP_FETCH_TIMEOUT_MS).toBe(10_000);
   });

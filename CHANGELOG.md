@@ -1,5 +1,13 @@
 # Next
 
+## Fixes
+
+- **A DERP change Headscale did not pick up now says which step failed.** When a DERP tab saved something and the configured integration could not reload or restart Headscale, the notice on the page only said that Headscale had not come back healthy and pointed at the HeadplaneCN logs. It now names the step that failed — no running process found, not allowed to signal it, the process did not stop in time, it stopped but did not start again — using the same wording as Settings → System, so the next thing to do is usually obvious from the notice itself.
+
+- **A DERP map that was being downloaded while something was written is no longer reused for six hours afterwards.** Every DERP write clears this process's DERP caches, but clearing them forgot the stored answers without forgetting the downloads still in flight: a download that started just before the write could finish after it and store its pre-write contents under a six-hour lifetime, and a lookup made in the meantime joined that older download instead of dialing again. A write now discards downloads that started before it, so the next lookup fetches the map that is actually on disk.
+
+- **Two texts no longer describe more than the code does.** The native-integration hint now says that a reload re-reads the access policy and that any other configuration change needs a restart, and the DERP settings reference no longer calls `derp.auto_update_enabled` the only switch that puts `derp.urls` and `derp.paths` edits into effect — with it off, a reload or restart does that too.
+
 # 0.22.25 (October 8, 2026)
 
 ## Changes

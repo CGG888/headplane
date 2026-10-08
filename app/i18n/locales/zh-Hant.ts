@@ -84,7 +84,8 @@ const zhHant = {
       kubernetes: "Kubernetes 模式",
       kubernetesHint: "Headscale 以 Kubernetes 工作負載執行，由 Kubernetes 整合管理。",
       proc: "原生模式",
-      procHint: "Headscale 以原生程序執行（在此容器之外）；儲存設定後透過 SIGHUP 重新載入。",
+      procHint:
+        "Headscale 以原生程序執行（在此容器之外）；儲存存取策略後會透過 SIGHUP 重新載入，其它設定變更需要重新啟動。",
       none: "未設定整合",
       noneHint: "沒有啟用任何整合，修改設定後需要手動重啟 Headscale。",
     },

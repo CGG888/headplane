@@ -95,6 +95,7 @@ import {
   type DerpRelaySource,
 } from "./derp-settings";
 import { buildDerpRelayRows, type DerpRelayRow } from "./derp-status";
+import { derpRefreshFailureKey } from "./error-keys";
 
 /** The wording for each place the DERP relays can come from. */
 const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
@@ -516,7 +517,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               title={t(DERP_REFRESH_NOTICE_KEYS[loaderData.derpRefresh.outcome])}
               variant={loaderData.derpRefresh.pendingRestart ? "warning" : undefined}
             >
-              {t("settings.headscale.derp.refreshNoticeBody")}
+              {loaderData.derpRefresh.failure
+                ? t(derpRefreshFailureKey(loaderData.derpRefresh.failure))
+                : t("settings.headscale.derp.refreshNoticeBody")}
             </Notice>
           ) : undefined}
         </>

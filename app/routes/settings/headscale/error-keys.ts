@@ -1,4 +1,5 @@
 import type { TranslationKey } from "~/i18n";
+import { RELOAD_STAGE_KEYS, RESTART_STAGE_KEYS } from "~/routes/settings/system/error-keys";
 import type {
   DerpMirrorPastedMap,
   DerpMirrorProbeStatus,
@@ -7,6 +8,7 @@ import type {
   MirrorPathOutcome,
   MirrorPathSkipReason,
 } from "~/server/derp-mirror/types";
+import type { DerpRefreshFailure } from "~/server/derp-refresh";
 
 import type { DerpMapIssue, DerpMapIssueCode } from "./derp-map-schema";
 import type { OidcSelfTestReport } from "./oidc-self-test";
@@ -265,5 +267,23 @@ export const DERP_MAP_ISSUE_KEYS: Record<DerpMapIssueCode, TranslationKey> = {
   derpNodeInvalidIpv6: "settings.headscale.derp.mapIssues.derpNodeInvalidIpv6",
   derpNodeInvalidStunOnly: "settings.headscale.derp.mapIssues.derpNodeInvalidStunOnly",
 };
+
+/**
+ * The message for a DERP refresh that ended in `failed`: which call was made
+ * and the step it stopped at, in the same wording Settings → System uses for
+ * that step. A call that threw instead of answering has no stage, so it falls
+ * back to that call's generic failure.
+ */
+export function derpRefreshFailureKey(failure: DerpRefreshFailure): TranslationKey {
+  if (failure.action === "restart") {
+    return failure.stage === "error"
+      ? "settings.system.errors.failed"
+      : RESTART_STAGE_KEYS[failure.stage];
+  }
+
+  return failure.stage === "error"
+    ? "settings.system.reloadStage.failed"
+    : RELOAD_STAGE_KEYS[failure.stage];
+}
 
 export type { DerpMapIssue };

@@ -84,7 +84,8 @@ const zhHans = {
       kubernetes: "Kubernetes 模式",
       kubernetesHint: "Headscale 作为 Kubernetes 工作负载运行，由 Kubernetes 集成管理。",
       proc: "原生模式",
-      procHint: "Headscale 以原生进程运行（在本容器之外）；保存配置后通过 SIGHUP 重新加载。",
+      procHint:
+        "Headscale 以原生进程运行（在本容器之外）；保存访问策略后会通过 SIGHUP 重新加载，其它配置改动需要重启。",
       none: "未配置集成",
       noneHint: "没有启用任何集成，修改配置后需要手动重启 Headscale。",
     },

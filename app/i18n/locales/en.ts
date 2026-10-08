@@ -90,7 +90,7 @@ const en = {
         "Headscale runs as a Kubernetes workload managed through the Kubernetes integration.",
       proc: "Native mode",
       procHint:
-        "Headscale runs as a native process outside this container; saving configuration reloads it with SIGHUP.",
+        "Headscale runs as a native process outside this container; saving the access policy reloads it with SIGHUP, and any other configuration change needs a restart.",
       none: "No integration",
       noneHint:
         "No integration is enabled, so Headscale has to be restarted by hand after a configuration change.",

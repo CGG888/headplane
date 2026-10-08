@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   IntegrationKind,
   IntegrationReloadResult,
+  IntegrationReloadStage,
+  IntegrationRestartStage,
 } from "~/server/config/integration/abstract";
 import {
   clearLastDerpRefresh,
@@ -24,17 +26,24 @@ interface TargetOptions {
   reloadOk?: boolean;
   restartOk?: boolean;
   reloadThrows?: boolean;
+  /** The step a failed restart reports, which the notice then names. */
+  restartStage?: IntegrationRestartStage;
+  /** The step a failed reload reports. */
+  reloadStage?: IntegrationReloadStage;
 }
 
 function makeTarget(options: TargetOptions = {}) {
-  const restartResult = { ok: options.restartOk ?? true, stage: "healthy" as const };
+  const restartResult = {
+    ok: options.restartOk ?? true,
+    stage: options.restartStage ?? ("healthy" as const),
+  };
   const onConfigChange = options.reloadThrows
     ? vi.fn(async (): Promise<IntegrationReloadResult> => {
         throw new Error("reload refused");
       })
     : vi.fn(async (): Promise<IntegrationReloadResult> => ({
         ok: options.reloadOk ?? true,
-        stage: options.reloadOk === false ? "permission" : "healthy",
+        stage: options.reloadStage ?? (options.reloadOk === false ? "permission" : "healthy"),
       }));
   const restart = vi.fn(async () => restartResult);
 
@@ -130,11 +139,17 @@ describe("refreshDerpAfterWrite", () => {
       pendingRestart: false,
     });
     expect(Number.isNaN(Date.parse(result.at))).toBe(false);
+    expect(result.failure).toBeUndefined();
     expect(getLastDerpRefresh()).toEqual(result);
   });
 
   test("a restart that did not come back healthy is a pending restart", async () => {
-    const { target } = makeTarget({ kind: "proc", canRestart: true, restartOk: false });
+    const { target } = makeTarget({
+      kind: "proc",
+      canRestart: true,
+      restartOk: false,
+      restartStage: "stop-timeout",
+    });
 
     const result = await refreshDerpAfterWrite({
       headscale,
@@ -145,6 +160,8 @@ describe("refreshDerpAfterWrite", () => {
 
     expect(result.outcome).toBe("failed");
     expect(result.pendingRestart).toBe(true);
+    // The notice names the step instead of sending the operator to the logs.
+    expect(result.failure).toEqual({ action: "restart", stage: "stop-timeout" });
   });
 
   test("a reload that throws is reported as failed", async () => {
@@ -159,6 +176,8 @@ describe("refreshDerpAfterWrite", () => {
 
     expect(result.outcome).toBe("failed");
     expect(result.pendingRestart).toBe(true);
+    // A call that threw answered with no stage of its own.
+    expect(result.failure).toEqual({ action: "reload", stage: "error" });
   });
 
   test("a Docker reload that answers ok: false is recorded as a failed refresh", async () => {
@@ -174,6 +193,7 @@ describe("refreshDerpAfterWrite", () => {
     expect(onConfigChange).toHaveBeenCalledTimes(1);
     expect(result.outcome).toBe("failed");
     expect(result.pendingRestart).toBe(true);
+    expect(result.failure).toEqual({ action: "reload", stage: "permission" });
     expect(getLastDerpRefresh()).toEqual(result);
   });
 
@@ -218,6 +238,8 @@ describe("refreshDerpAfterWrite", () => {
 
     expect(result.outcome).toBe("manual");
     expect(result.pendingRestart).toBe(true);
+    // Nothing was attempted, so there is no stage to report.
+    expect(result.failure).toBeUndefined();
   });
 });
 

@@ -1,9 +1,10 @@
 name: Deploy Docs
 
 on:
+  # Releases are cut from main and pushed with --follow-tags, so the branch
+  # push already deploys the docs; also matching the v* tag only queued a
+  # second, identical build behind the pages concurrency group.
   push:
-    tags:
-      - "v*"
     branches:
       - "main"
       - "release/docs"
