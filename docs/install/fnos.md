@@ -18,7 +18,7 @@ outline: [2, 3]
 fnOS **官方应用中心不提供 headscale**：在「应用中心 → 设置 → 第三方市场 → 添加源」里添加
 [github.com/conversun/fnos-store](https://github.com/conversun/fnos-store)，刷新后安装 `headscale`
 （依赖会一并装上）。版本建议 **0.29.2 或更高**（0.29.0 beta ~ 0.29.1 的浏览器 SSH 有 WebSocket 回归）；
-面板镜像用 `ghcr.io/cgg888/headplanecn:0.22.22`，国内拉不动就加加速前缀。
+面板镜像用 `ghcr.io/cgg888/headplanecn:0.22.23`，国内拉不动就加加速前缀。
 :::
 
 ## 需要你改的值
@@ -164,7 +164,7 @@ invalid values` 退出。`openssl rand -base64 24` 正好生成 32 字符，别�
 ```yaml
 services:
   headplane:
-    image: ghcr.io/cgg888/headplanecn:0.22.22 # ← 可改（国内可加加速前缀；排查时换 :<版本>-shell）
+    image: ghcr.io/cgg888/headplanecn:0.22.23 # ← 可改（国内可加加速前缀；排查时换 :<版本>-shell）
     container_name: headplane
     restart: unless-stopped
     network_mode: host # ← 别动（host 模式不能再写 ports / extra_hosts）
@@ -207,7 +207,7 @@ services:
 ::: warning 官方镜像没有 shell
 `docker compose exec headplane sh` 会失败：镜像是 distroless，`/bin/sh` 是个假 shell（退出码 127，提示
 `Headplane containers do not contain a shell by default.`）。要进容器排查就把 `image:` 临时换成
-`ghcr.io/cgg888/headplanecn:0.22.22-shell`；宿主机侧的 `ls`、`ss`、`curl` 不需要进容器。
+`ghcr.io/cgg888/headplanecn:0.22.23-shell`；宿主机侧的 `ls`、`ss`、`curl` 不需要进容器。
 :::
 
 ## 七、启动与自检

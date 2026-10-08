@@ -130,10 +130,32 @@ pnpm `>=10.4 <11`，`packageManager` 固定为 `pnpm@10.4.0`。`preinstall` 钩�
 是提交摘要。直接写在 `# Next` 之下、小标题之上的文字会成为发布前言，用来写兼容性说明
 和升级提醒。
 
-每次发版（`pnpm release cut <version>`）还要在 `docs/versions.md` 与 `docs/en/versions.md`
-的表格里各补一行：版本号 + 该版本相对上游做了什么，写法与上一行保持一致（英文页按原样复制
-中文表格，不翻译）。版本记录是用户查「哪个版本改了什么」的第一入口，漏一行会被立刻发现。
-
 要发版就运行 `pnpm release cut <version>`：它会把 `# Next` 改名为版本号、更新
-`package.json`、提交并打标签。推送标签后会构建镜像，并用 changelog 中的这一节发布
-GitHub Release。
+`package.json`、提交并打标签（只提交这两个文件，并且要求工作区干净）。推送标签后会构建
+镜像，并用 changelog 中的这一节发布 GitHub Release。
+
+发版不是跑一条命令就结束，按顺序走完这张清单：
+
+1. 在 `CHANGELOG.md` 的 `# Next` 里写全面向用户的说明，`## Changes` / `## Fixes` 分开。
+2. 在 `docs/versions.md` 与 `docs/en/versions.md` 的表格里各补一行：版本号 + 该版本相对
+   上游做了什么，写法与上一行保持一致（英文页按原样复制中文表格，不翻译）。版本记录是
+   用户查「哪个版本改了什么」的第一入口，漏一行会被立刻发现。
+3. 把文档与脚本里硬编码的面板版本号换成新版本——镜像标签与版本号一一对应，漏改会让用户
+   拉到旧镜像：`README.md`、`docs/install/{fnos,dual-image,migration}.md`、
+   `docs/en/install/{同三篇}.md`、`scripts/dual-image-install.sh`（`DEFAULT_HP_IMAGE`、
+   `--help` 里的默认标签、自检里的 `v_image_ref` 与 `HP_IMAGE_VERSION`）。用
+   `rg -n '0\.22\.[0-9]+'` 复查有没有漏网；只改当前版本号，别动 `CHANGELOG.md` 与
+   `docs/versions.md` 里的历史版本，也别动 Headscale 的版本号（`0.29.4` 一类）。
+4. 提交这些改动，再运行 `pnpm release cut <version>`。
+5. 推送才会生效：`git push origin main --follow-tags`（推送前先向用户确认）。
+
+## 经验
+
+- **Headscale 的配置目录整目录挂载。** `config.yaml` 若是单文件 bind mount，内核不允许
+  `rename` 覆盖（`EBUSY`），面板的保存类操作会全线失败。`atomicWriteFile`（见
+  `app/server/headscale/config-loader.ts`）现在会在 `EBUSY`/`EXDEV` 时退化为穿透挂载点
+  写入，但原子性只在目录挂载下成立，文档与示例仍写成 `- /path/headscale:/etc/headscale`。
+- **`server.base_url` 不带 `/admin`。** 它只写面板自己的地址（协议 + 域名 + 端口），
+  `/admin` 前缀由面板自己加；带路径只会让告警与登录自检读成 `/admin/admin/…`。
+- **中英文档同改。** `docs/` 中文是默认语言，`docs/en/` 是逐页镜像，任何一次文档改动都要
+  两边一起改。

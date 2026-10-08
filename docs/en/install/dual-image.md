@@ -36,7 +36,7 @@ in [Domains & access](/en/install/domains); how to fill in the reverse proxy and
 | NAS LAN IP             | `192.168.1.10`                          | **Must change**: the reverse proxy goes back to this address — `127.0.0.1` will not connect | `PANEL_BIND` in `.env`; the panel's `server.host`              |
 | Base directory         | `/vol1/1000/APP/headplaneCN`            | **May change**: configuration, data and backups all live here                               | `BASE_DIR` in `.env` and every absolute path                   |
 | Panel port             | `4100`                                  | **May change** (default 4100): the port the panel listens on                                | `PANEL_PORT` in `.env`                                         |
-| Image versions         | `0.29.4` / `0.22.22`                    | **May change**: an upgrade means editing these two numbers                                  | `.env`                                                         |
+| Image versions         | `0.29.4` / `0.22.23`                    | **May change**: an upgrade means editing these two numbers                                  | `.env`                                                         |
 | Headscale data owner   | `965:966`                               | **Must change**: fill in whoever actually owns the data directory                           | `HEADSCALE_UID` / `HEADSCALE_GID` in `.env`                    |
 | API key                | `hskey-api-...`                         | **Must change**: created in section 2 and shown only once                                   | The panel's `headscale.api_key`                                |
 | cookie secret          | the output of `openssl rand -base64 24` | **Must change**: exactly 32 characters, hand-writing it always goes wrong                   | The panel's `server.cookie_secret`                             |
@@ -290,7 +290,7 @@ live here**, so an upgrade changes one number.
 # --- Image versions ---------------------------------------------------------
 # Pin the versions; do not use latest: an upgrade means editing these two lines on purpose
 HEADSCALE_VERSION=0.29.4        # ← may change (an upgrade edits only this)
-HEADPLANE_VERSION=0.22.22       # ← may change
+HEADPLANE_VERSION=0.22.23       # ← may change
 
 # --- The user that runs the headscale container ------------------------------
 # The official image is built as a non-root user, while the data directory is owned by that original headscale user.
@@ -378,7 +378,7 @@ services:
   # ---------------------------------------------------------------------------
   headplaneCN:
     # In China an acceleration prefix can be used: v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION}
-    image: ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.22} # ← version may change
+    image: ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.23} # ← version may change
     container_name: headplaneCN # ← do not touch
     restart: unless-stopped # ← do not touch
 

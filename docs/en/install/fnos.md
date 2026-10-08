@@ -18,7 +18,7 @@ headscale in Docker too → [Dual-image deployment](/en/install/dual-image).
 The fnOS **official app center does not offer headscale**: open "App Center → Settings → Third-party market
 → Add source", add [github.com/conversun/fnos-store](https://github.com/conversun/fnos-store), refresh, then
 install `headscale` (its dependencies come along). Version **0.29.2 or newer** recommended (browser SSH has a
-WebSocket regression in 0.29.0 beta – 0.29.1). Use the panel image `ghcr.io/cgg888/headplanecn:0.22.22`; add a
+WebSocket regression in 0.29.0 beta – 0.29.1). Use the panel image `ghcr.io/cgg888/headplanecn:0.22.23`; add a
 mirror prefix if pulls fail in mainland China.
 :::
 
@@ -172,7 +172,7 @@ Path: `/vol1/1000/APP/headplaneCN/docker-compose.yml`
 ```yaml
 services:
   headplane:
-    image: ghcr.io/cgg888/headplanecn:0.22.22 # ← may change (add a mirror prefix; use :<version>-shell to debug)
+    image: ghcr.io/cgg888/headplanecn:0.22.23 # ← may change (add a mirror prefix; use :<version>-shell to debug)
     container_name: headplane
     restart: unless-stopped
     network_mode: host # ← leave as is (no ports / extra_hosts with host networking)
@@ -216,7 +216,7 @@ containers). `HEADPLANE_*` variables override `config.yaml`; array-valued option
 ::: warning The official image has no shell
 `docker compose exec headplane sh` fails: the image is distroless and `/bin/sh` is a stub (exit code 127)
 that prints `Headplane containers do not contain a shell by default.` To debug inside the container, switch
-`image:` to `ghcr.io/cgg888/headplanecn:0.22.22-shell` for a moment; host-side `ls`, `ss` and `curl` need no
+`image:` to `ghcr.io/cgg888/headplanecn:0.22.23-shell` for a moment; host-side `ls`, `ss` and `curl` need no
 container access at all.
 :::
 

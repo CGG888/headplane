@@ -68,7 +68,7 @@ SCRIPT_VERSION="2.0.0"
 # Defaults (shown in brackets at each prompt)
 # -----------------------------------------------------------------------------
 DEFAULT_HS_IMAGE="headscale/headscale:0.29.4"
-DEFAULT_HP_IMAGE="ghcr.io/cgg888/headplanecn:0.22.22"
+DEFAULT_HP_IMAGE="ghcr.io/cgg888/headplanecn:0.22.23"
 DEFAULT_BASE_DIR="/vol1/1000/APP/headplaneCN"
 DEFAULT_SERVER_URL="https://ha.example.com:8443"
 DEFAULT_ADMIN_PORT="4100"
@@ -2568,7 +2568,7 @@ FLAGS
       --base-dir PATH     deployment directory (default: /vol1/1000/APP/headplaneCN)
       --headscale-tag IMG Headscale image as repo:tag (default: headscale/headscale:0.29.4)
       --headplane-tag IMG HeadplaneCN image as repo:tag
-                          (default: ghcr.io/cgg888/headplanecn:0.22.22)
+                          (default: ghcr.io/cgg888/headplanecn:0.22.23)
       --server-url URL    the URL clients use (Headscale server_url)
       --derp-host H[:P]   embedded DERP host clients reach; "none" disables it
       --admin-host H[:P]  host the admin UI is reverse proxied from
@@ -2686,7 +2686,7 @@ self_test() {
 	_n "v_host_file" v_host_file "$T"
 
 	_y "v_image_ref" v_image_ref "headscale/headscale:0.29.4"
-	_y "v_image_ref" v_image_ref "ghcr.io/cgg888/headplanecn:0.22.22"
+	_y "v_image_ref" v_image_ref "ghcr.io/cgg888/headplanecn:0.22.23"
 	_n "v_image_ref" v_image_ref "headscale/headscale"
 	_n "v_image_ref" v_image_ref "headscale/headscale:latest"
 	_n "v_image_ref" v_image_ref ":0.29.4"
@@ -2932,7 +2932,7 @@ YAML
 	HS_IMAGE_REPO="headscale/headscale"
 	HS_IMAGE_VERSION="0.29.4"
 	HP_IMAGE_REPO="ghcr.io/cgg888/headplanecn"
-	HP_IMAGE_VERSION="0.22.22"
+	HP_IMAGE_VERSION="0.22.23"
 	PANEL_BIND="192.168.1.10"
 	PANEL_PORT="4100"
 	HEADSCALE_UID="0"
