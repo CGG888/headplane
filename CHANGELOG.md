@@ -1,5 +1,7 @@
 # Next
 
+# 0.22.23 (October 8, 2026)
+
 ## Changes
 
 - **The install guides are split by the decision you are actually making.** `/install` now opens with the three choices that decide everything else — deployment shape, domain scheme and reverse proxy route — and answers each one with a table before linking out. The fnOS pages become install-only (`fnOS · native mode`, `fnOS · dual-image mode`); migration in both directions moved to a new `/install/migration`, the domain question (one domain with a path split, one domain on two ports, two domains, DNS records, where the certificate lives, ICP filing in mainland China) to `/install/domains`, and the two proxy routes to `/install/reverse-proxy-lucky` (home NAS: Lucky terminates TLS, Caddy inside the NAS splits `/admin`) and `/install/reverse-proxy-caddy` (cloud server: Caddy does both, with automatic certificates). Every guide states which values you **must** change, which you **may** change and which to leave alone, and all example domains, addresses, keys and certificate paths have been replaced with placeholders. Both languages were kept in step.
@@ -10,6 +12,8 @@
 ## Fixes
 
 - **Saving Headscale's configuration works on a single-file bind mount.** The panel wrote Headscale's `config.yaml` by putting the new content into a temp file and renaming it over the target, which the kernel refuses when that file is a bind mount (`EBUSY`) — so **Authentication restrictions**, trusted proxies, extra DNS records and embedded DERP URLs all failed with `Unexpected Server Error` on the documented Docker deployment. The write now falls back to copying the bytes through the mount point when a rename is impossible, and keeps the atomic rename everywhere else; mounting the whole directory (`/vol1/1000/APP/headplaneCN/headscale:/etc/headscale`) still works and is no longer required.
+
+---
 
 # 0.22.22 (October 8, 2026)
 
