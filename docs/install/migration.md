@@ -39,7 +39,7 @@ outline: [2, 3]
 | Headscale 数据属主        | `965:966`                                                             | 容器以这个 uid:gid 运行，否则写不了数据库       | **必须改**           | `.env` 的 `HEADSCALE_UID/GID`（`ls -ln` 看实际值）          |
 | 面板 cookie 密钥          | `openssl rand -base64 24`                                             | 加密 cookie，必须正好 32 个字符                 | **别动**（沿用旧值） | 面板 `config.yaml` 的 `server.cookie_secret`                |
 | Headscale API 密钥        | `hskey-api-...`                                                       | 面板访问 Headscale API 用，要完整值而不是前缀   | **必须改**           | 面板 `config.yaml` 的 `headscale.api_key`                   |
-| 镜像版本号                | `0.29.4`、`0.22.25`                                                   | 固定版本，不用 `latest`；升级只改这里           | 可改                 | `.env` 的 `HEADSCALE_VERSION` / `HEADPLANE_VERSION`         |
+| 镜像版本号                | `0.29.4`、`0.22.26`                                                   | 固定版本，不用 `latest`；升级只改这里           | 可改                 | `.env` 的 `HEADSCALE_VERSION` / `HEADPLANE_VERSION`         |
 | DERP 地图文件路径         | `/vol1/1000/APP/headplaneCN/headscale/derp-maps/official-mirror.yaml` | `derp.paths` 与面板 DERP 卡片必须指向同一个文件 | 可改                 | Headscale 的 `config.yaml`                                  |
 | STUN 端口                 | `udp/3478`                                                            | 必须由路由器单独转发，反向代理管不了 UDP        | **别动**             | 路由器 / 防火墙                                             |
 
@@ -164,7 +164,7 @@ ls -ln /vol1/1000/APP/headplaneCN/headscale | head
 ```ini
 # /vol1/1000/APP/headplaneCN/.env
 HEADSCALE_VERSION=0.29.4              # ← 可改：固定版本，升级就改这一行
-HEADPLANE_VERSION=0.22.25             # ← 可改：同上
+HEADPLANE_VERSION=0.22.26             # ← 可改：同上
 
 HEADSCALE_UID=965                     # ← 必须改：3.2 里 ls -ln 看到的属主 uid
 HEADSCALE_GID=966                     # ← 必须改：同上的 gid（填 0 表示以 root 运行）

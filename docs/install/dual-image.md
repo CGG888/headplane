@@ -33,7 +33,7 @@ outline: [2, 3]
 | NAS 局域网 IP      | `192.168.1.10`                   | **必须改**：反代回源要打这个地址，写 `127.0.0.1` 连不上 | `.env` 的 `PANEL_BIND`、面板的 `server.host`       |
 | 基础目录           | `/vol1/1000/APP/headplaneCN`     | **可改**：配置、数据、备份都放在这里                    | `.env` 的 `BASE_DIR` 与所有绝对路径                |
 | 面板端口           | `4100`                           | **可改**（默认 4100）：面板自己监听的端口               | `.env` 的 `PANEL_PORT`                             |
-| 镜像版本           | `0.29.4` / `0.22.25`             | **可改**：升级就是改这两行数字                          | `.env`                                             |
+| 镜像版本           | `0.29.4` / `0.22.26`             | **可改**：升级就是改这两行数字                          | `.env`                                             |
 | Headscale 数据属主 | `965:966`                        | **必须改**：按数据目录的实际属主填                      | `.env` 的 `HEADSCALE_UID` / `HEADSCALE_GID`        |
 | API Key            | `hskey-api-...`                  | **必须改**：第二节生成，只显示一次                      | 面板的 `headscale.api_key`                         |
 | cookie 密钥        | `openssl rand -base64 24` 的输出 | **必须改**：正好 32 字符，手写必错                      | 面板的 `server.cookie_secret`                      |
@@ -272,7 +272,7 @@ compose 会自动读取同目录的 `.env`。**版本号和运行用户都在这
 # --- 镜像版本 ---------------------------------------------------------------
 # 固定版本，不要用 latest：升级就是显式改这两行
 HEADSCALE_VERSION=0.29.4        # ← 可改（升级只改这里）
-HEADPLANE_VERSION=0.22.25       # ← 可改
+HEADPLANE_VERSION=0.22.26       # ← 可改
 
 # --- 运行 headscale 容器的用户 ----------------------------------------------
 # 官方镜像以非 root 用户构建，而数据目录的属主是原来那个 headscale 用户。
@@ -366,7 +366,7 @@ services:
   # HeadplaneCN 面板
   # ---------------------------------------------------------------------------
   headplaneCN:
-    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.25}" # ← 可改版本
+    image: "${IMAGE_PROXY-}ghcr.io/cgg888/headplanecn:${HEADPLANE_VERSION:-0.22.26}" # ← 可改版本
     container_name: headplaneCN # ← 别动
     restart: unless-stopped # ← 别动
 
