@@ -2101,6 +2101,8 @@ const zhHans = {
         publicPortUnknown: "未配置 server_url，或无法解析它，因此无法确定公开中继端口。",
         publicPortNote:
           "Tailscale 官方文档建议使用 443，因为客户端在某些情况下会直接假定该端口；只要 server_url 明确写出端口，其他端口同样可用。",
+        publicFieldsNote:
+          "手工把这个中继写进本地地图时，hostname 只填 {hostname}，端口写在 derpport：{port}。端口粘在 hostname 里会被忽略，客户端会去拨 443 并连接失败。",
         proxyTitle: "置于反向代理之后",
         proxyDerpPath: "必须转发 /derp 路径，不能只转发 API 和控制路径。",
         proxyUpgrade: "必须放行 DERP 使用的 HTTP Upgrade，并且不要缓冲连接。",
@@ -2207,6 +2209,8 @@ const zhHans = {
           agentSettingsLink: "打开 Agent 设置",
           currentNumber: "当前 {number}",
           selectionNote: "勾选只会改变这里的预览，保存之前不会写入任何内容。",
+          embeddedRegion:
+            "这是本部署自己的中继：Headscale 已经把它下发给客户端，镜像不会另外再抄一份。",
           settingsTitle: "镜像设置",
           settingsBody: "镜像按自己的计划运行并写入自己的文件，不会改动 Headscale 的其余配置。",
           enabledLabel: "启用镜像",
@@ -2538,6 +2542,8 @@ const zhHans = {
           derpNodeInvalid: "每个节点都必须是包含 name、regionid 与 hostname 的映射。",
           derpNodeMissingName: "该节点缺少 name。",
           derpNodeMissingHostname: "该节点缺少 hostname。",
+          derpNodeHostnameHasPort:
+            "hostname {host} 里带了端口 {port}。hostname 只写主机名，端口写在 derpport —— hostname 里的端口会被忽略，客户端会改成拨 {default}。",
           derpNodeMissingRegionId: "该节点缺少 regionid。",
           derpNodeInvalidRegionId: "regionid 必须是正整数。",
           derpNodeRegionMismatch: "该节点声明的 regionid 是 {node}，但它被放在区域 {region} 下面。",

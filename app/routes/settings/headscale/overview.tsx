@@ -39,6 +39,7 @@ import {
   requestApiContext,
   snapshotContext,
 } from "~/server/context";
+import { embeddedRelayIdentity, isEmbeddedRelayRegion } from "~/server/derp-mirror/embedded";
 import {
   assignRegionNumbers,
   EMBEDDED_REGION_ID,
@@ -275,6 +276,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       ? undefined
       : mirrorSourceAttempts.find((attempt) => attempt.reason !== undefined)?.reason;
 
+  // The relay this deployment serves itself, identified from the same
+  // configuration the mirror's run reads. Headscale publishes it on its own, so
+  // the row is marked and the server's run leaves it out.
+  const embeddedRelay = embeddedRelayIdentity({ serverUrl: derp.serverUrl, server: derp.server });
+
   const mirrorRegions: MirrorRegionRow[] = officialRegions.map((region) => {
     const latency = mirrorRegionLatency(measuredLatencies, mirrorLatencies, region.regionId);
 
@@ -288,6 +294,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       latencyMs: latency.latencyMs,
       ...(latency.source === undefined ? {} : { latencySource: latency.source }),
       storedNumber: mirrorSettings.assignment[String(region.regionId)],
+      embedded: isEmbeddedRelayRegion(region, embeddedRelay),
     };
   });
 
@@ -295,9 +302,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // order: the region a fresh ranking makes 901 comes first, and ticking a subset
   // only filters that order, which is why the preview matches the numbers a fresh
   // ranking assigns to it. The local measurements are handed over separately so
-  // the rule can prefer them.
+  // the rule can prefer them. The embedded relay is left out because the server's
+  // own run leaves it out too: it must not consume a number the written file then
+  // hands to a different region.
   const ranked = assignRegionNumbers(
-    mirrorRegions.map((region) => String(region.officialId)),
+    mirrorRegions.filter((region) => !region.embedded).map((region) => String(region.officialId)),
     mirrorLatencies,
     undefined,
     measuredLatencies,

@@ -818,9 +818,11 @@ export default function DerpRegionMirror({
   ];
 
   // The fastest three the agent measured; the preset replaces the selection with
-  // exactly those regions.
+  // exactly those regions. The embedded relay is never one of them: the mirror
+  // refuses to copy it, so recommending it would only fill a slot the file will
+  // not contain.
   function applyRecommended() {
-    setSelected(new Set(recommendedRegionIds(regions)));
+    setSelected(new Set(recommendedRegionIds(regions.filter((region) => !region.embedded))));
   }
 
   /**
@@ -1161,6 +1163,10 @@ export default function DerpRegionMirror({
                         setSelected((previous) => {
                           const updated = new Set(previous);
                           for (const row of rows) {
+                            if (row.embedded) {
+                              continue;
+                            }
+
                             updated.add(row.officialId);
                           }
 
@@ -1243,7 +1249,9 @@ export default function DerpRegionMirror({
 
                 {rows.map((region) => {
                   const latency = formatMirrorLatency(region.latencyMs);
-                  const number = numbers.get(region.officialId);
+                  // The embedded relay is never written — Headscale already
+                  // publishes it — so it carries no number here either.
+                  const number = region.embedded ? undefined : numbers.get(region.officialId);
                   const keepsOther =
                     number !== undefined &&
                     region.storedNumber !== undefined &&
@@ -1251,7 +1259,12 @@ export default function DerpRegionMirror({
 
                   return (
                     <TableList.Item key={region.officialId}>
-                      <span className="w-28 font-mono text-sm">
+                      <span
+                        className="w-28 font-mono text-sm"
+                        {...(region.embedded
+                          ? { title: t("settings.headscale.derp.mirror.embeddedRegion") }
+                          : {})}
+                      >
                         {number === undefined ? <span className="opacity-50">—</span> : number}
                         {keepsOther ? (
                           <span className="ml-1 text-xs opacity-60">
@@ -1295,9 +1308,14 @@ export default function DerpRegionMirror({
                       <span className="flex w-14 justify-end">
                         <RegionCheckbox
                           checked={selected.has(region.officialId)}
-                          label={t("settings.headscale.derp.mirror.selectRegion", {
-                            code: region.code,
-                          })}
+                          disabled={region.embedded}
+                          label={
+                            region.embedded
+                              ? t("settings.headscale.derp.mirror.embeddedRegion")
+                              : t("settings.headscale.derp.mirror.selectRegion", {
+                                  code: region.code,
+                                })
+                          }
                           onChange={(next) => toggle(region.officialId, next)}
                         />
                       </span>

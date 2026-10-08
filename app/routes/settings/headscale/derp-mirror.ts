@@ -75,6 +75,12 @@ export interface MirrorRegionRow {
   latencySource?: MirrorLatencySource;
   /** The mirrored number the settings already hold for this region. */
   storedNumber: number | undefined;
+  /**
+   * True when this row is the relay this deployment serves itself. Headscale
+   * already publishes that one, so the mirror never copies it — and the table
+   * says so instead of offering a number it would refuse to write.
+   */
+  embedded: boolean;
 }
 
 /**

@@ -31,6 +31,9 @@
 
 import { parseDocument, stringify } from "yaml";
 
+import { splitHostPort } from "~/utils/derp-host-port";
+
+import { isEmbeddedRelayRegion, type EmbeddedRelayIdentity } from "./embedded";
 import { chineseRegionName } from "./names";
 import type { LocalDerpMap, LocalDerpNode, LocalDerpRegion, OfficialRegion } from "./types";
 
@@ -310,11 +313,18 @@ function toLocalNode(
   number: number,
   index: number,
 ): LocalDerpNode {
+  // A source that glued its port onto the name — a hand-written map, or a map
+  // mirrored from one — is repaired here. The format wants the port in
+  // `derpport`, and a client that only reads the name dials 443 and fails, so a
+  // mirror that copied the spelling forward would ship a relay nobody can use.
+  const endpoint = splitHostPort(node.hostname);
+  const derpPort = node.derpPort ?? endpoint?.port;
+
   return {
     name: `${number}${nodeLetter(index)}`,
-    hostname: node.hostname,
+    hostname: endpoint?.host ?? node.hostname,
     regionid: number,
-    ...(node.derpPort === undefined ? {} : { derpport: node.derpPort }),
+    ...(derpPort === undefined ? {} : { derpport: derpPort }),
     ...(node.stunPort === undefined ? {} : { stunport: node.stunPort }),
     // Only a real `true` is written; the format's default is a normal DERP node.
     ...(node.stunOnly ? { stunonly: true } : {}),
@@ -331,12 +341,15 @@ function toLocalNode(
  *
  * A selected region the official map does not describe, and one the assignment
  * has no number for, are skipped: the map must not name a region Headscale
- * cannot dial.
+ * cannot dial. The relay this deployment serves itself (`embedded`) is skipped
+ * for the same reason: the map Headscale already builds for it is the copy
+ * clients should use, and a second copy competes with it.
  */
 export function buildMirrorMap(
   regions: OfficialRegion[],
   assignment: Record<string, number>,
   selected: string[],
+  embedded?: EmbeddedRelayIdentity,
 ): LocalDerpMap {
   const wanted = new Set(readSelection(selected));
   const scheduled = regions
@@ -345,6 +358,7 @@ export function buildMirrorMap(
       (entry): entry is { region: OfficialRegion; id: string } =>
         entry.id !== undefined && wanted.has(entry.id),
     )
+    .filter((entry) => !isEmbeddedRelayRegion(entry.region, embedded))
     .map((entry) => ({ ...entry, number: assignment[entry.id] }))
     .filter((entry): entry is { region: OfficialRegion; id: string; number: number } =>
       isMirrorNumber(entry.number),

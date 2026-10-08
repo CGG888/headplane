@@ -89,6 +89,7 @@ describe("official region rows", () => {
       nodeCount: 1,
       latencyMs: undefined,
       storedNumber: undefined,
+      embedded: false,
     }));
 
     // This is exactly what the card renders: the rows in official order, with

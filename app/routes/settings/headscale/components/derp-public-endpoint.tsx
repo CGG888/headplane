@@ -8,7 +8,8 @@ import { deriveDerpPublicEndpoint, formatDerpPublicEndpoint } from "../derp-sett
  * The public endpoint clients use for the embedded DERP server, plus the
  * requirements a reverse proxy in front of Headscale has to meet. DERP shares
  * Headscale's HTTPS endpoint, so the port comes from `server_url`, never from
- * Headscale's listen address.
+ * Headscale's listen address — and those same two halves are what a
+ * hand-written local map has to split between `hostname` and `derpport`.
  */
 export default function DerpPublicEndpoint({ serverUrl }: { serverUrl: string }) {
   const { t, tr } = useI18n();
@@ -32,6 +33,14 @@ export default function DerpPublicEndpoint({ serverUrl }: { serverUrl: string })
         <Text className="mt-1 text-sm opacity-70">
           {t("settings.headscale.derp.publicPortNote")}
         </Text>
+        {endpoint ? (
+          <Text className="mt-1 text-sm opacity-70">
+            {tr("settings.headscale.derp.publicFieldsNote", {
+              hostname: <Code>{endpoint.host}</Code>,
+              port: <Code>{String(endpoint.port)}</Code>,
+            })}
+          </Text>
+        ) : null}
       </div>
 
       <div className="sm:w-1/2">

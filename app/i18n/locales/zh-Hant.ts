@@ -2100,6 +2100,8 @@ const zhHant = {
         publicPortUnknown: "未設定 server_url，或無法解析它，因此無法確定公開中繼連接埠。",
         publicPortNote:
           "Tailscale 官方文件建議使用 443，因為用戶端在某些情況下會直接假定該連接埠；只要 server_url 明確寫出連接埠，其他連接埠同樣可用。",
+        publicFieldsNote:
+          "手動把這個中繼寫進本地地圖時，hostname 只填 {hostname}，連接埠寫在 derpport：{port}。連接埠貼在 hostname 裡會被忽略，用戶端會去撥 443 並連線失敗。",
         proxyTitle: "置於反向代理之後",
         proxyDerpPath: "必須轉發 /derp 路徑，不能只轉發 API 與控制路徑。",
         proxyUpgrade: "必須放行 DERP 使用的 HTTP Upgrade，並且不要緩衝連線。",
@@ -2206,6 +2208,8 @@ const zhHant = {
           agentSettingsLink: "開啟 Agent 設定",
           currentNumber: "目前 {number}",
           selectionNote: "勾選只會改變這裡的預覽，儲存之前不會寫入任何內容。",
+          embeddedRegion:
+            "這是本部署自己的中繼：Headscale 已經把它下發給用戶端，鏡像不會另外再抄一份。",
           settingsTitle: "鏡像設定",
           settingsBody: "鏡像依自己的排程執行並寫入自己的檔案，不會改動 Headscale 其餘的設定。",
           enabledLabel: "啟用鏡像",
@@ -2537,6 +2541,8 @@ const zhHant = {
           derpNodeInvalid: "每個節點都必須是包含 name、regionid 與 hostname 的對應。",
           derpNodeMissingName: "該節點缺少 name。",
           derpNodeMissingHostname: "該節點缺少 hostname。",
+          derpNodeHostnameHasPort:
+            "hostname {host} 裡帶了連接埠 {port}。hostname 只寫主機名，連接埠寫在 derpport —— hostname 裡的連接埠會被忽略，用戶端會改成撥 {default}。",
           derpNodeMissingRegionId: "該節點缺少 regionid。",
           derpNodeInvalidRegionId: "regionid 必須是正整數。",
           derpNodeRegionMismatch: "該節點宣告的 regionid 是 {node}，但它被放在區域 {region} 下面。",

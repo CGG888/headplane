@@ -15,6 +15,8 @@
 
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Range } from "yaml";
 
+import { splitHostPort } from "~/utils/derp-host-port";
+
 import { DERP_DEFAULT_PORT, MAX_DERP_MAP_ISSUES } from "./derp-map-limits";
 import { parseIpv4, parseIpv6 } from "./trusted-proxies";
 
@@ -37,6 +39,7 @@ export type DerpMapIssueCode =
   | "derpNodeInvalid"
   | "derpNodeMissingName"
   | "derpNodeMissingHostname"
+  | "derpNodeHostnameHasPort"
   | "derpNodeMissingRegionId"
   | "derpNodeInvalidRegionId"
   | "derpNodeRegionMismatch"
@@ -408,8 +411,23 @@ function validateNode(
     push({ code: "derpNodeMissingName", ...position(counter, node) });
   }
 
-  if (textValue(node.get("hostname", true)) === undefined) {
+  const hostnameNode = node.get("hostname", true);
+  const hostname = textValue(hostnameNode);
+  if (hostname === undefined) {
     push({ code: "derpNodeMissingHostname", ...position(counter, node) });
+  } else {
+    // A port inside the name is not a syntax error in this format, which is
+    // exactly why it has to be reported: the port is dropped, the client dials
+    // the default instead, and a relay whose STUN answers on its own port looks
+    // reachable while every DERP connection to it fails.
+    const endpoint = splitHostPort(hostname);
+    if (endpoint !== undefined) {
+      push({
+        code: "derpNodeHostnameHasPort",
+        ...position(counter, hostnameNode),
+        vars: { host: endpoint.host, port: endpoint.port, default: DERP_DEFAULT_PORT },
+      });
+    }
   }
 
   const nodeIdNode = node.get("regionid", true);

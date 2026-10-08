@@ -31,7 +31,12 @@ const numbering: MirrorNumbering = {
   reserved: [999],
 };
 
-function row(officialId: number, storedNumber?: number, latencyMs?: number): MirrorRegionRow {
+function row(
+  officialId: number,
+  storedNumber?: number,
+  latencyMs?: number,
+  embedded = false,
+): MirrorRegionRow {
   return {
     officialId,
     code: `c${officialId}`,
@@ -40,6 +45,7 @@ function row(officialId: number, storedNumber?: number, latencyMs?: number): Mir
     nodeCount: 2,
     latencyMs,
     storedNumber,
+    embedded,
   };
 }
 

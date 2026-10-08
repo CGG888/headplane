@@ -2246,6 +2246,8 @@ const en = {
           "server_url is missing or cannot be parsed, so the public relay port cannot be determined.",
         publicPortNote:
           "Tailscale's documentation recommends 443, because clients assume that port in some situations. Any other port works as long as server_url names it.",
+        publicFieldsNote:
+          "Writing this relay into a local map by hand: put {hostname} in hostname and the port in derpport: {port}. A port inside hostname is ignored, and clients dial 443 instead and fail.",
         proxyTitle: "Behind a reverse proxy",
         proxyDerpPath: "Forward the /derp path, not only the API and control paths.",
         proxyUpgrade: "Allow the HTTP Upgrade DERP uses, and do not buffer the connection.",
@@ -2362,6 +2364,8 @@ const en = {
           currentNumber: "now {number}",
           selectionNote:
             "Ticking a region only changes this preview. Nothing is written until you save.",
+          embeddedRegion:
+            "This is your own relay: Headscale already hands it to clients, so the mirror never copies it.",
           settingsTitle: "Mirror settings",
           settingsBody:
             "The mirror runs on its own schedule and writes its own file, so it never touches the rest of Headscale's configuration.",
@@ -2721,6 +2725,8 @@ const en = {
           derpNodeInvalid: "Every node must be a mapping with name, regionid and hostname.",
           derpNodeMissingName: "This node has no name.",
           derpNodeMissingHostname: "This node has no hostname.",
+          derpNodeHostnameHasPort:
+            "hostname {host} carries the port {port}. Put the host in hostname and the port in derpport — a port inside hostname is dropped, and clients dial {default} instead.",
           derpNodeMissingRegionId: "This node has no regionid.",
           derpNodeInvalidRegionId: "regionid must be a positive integer.",
           derpNodeRegionMismatch:

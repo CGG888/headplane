@@ -140,6 +140,8 @@ describe("DERP region mirror service", () => {
       reloadFails?: boolean;
       /** Held open by a test that needs the run still in flight. */
       gate?: { wait?: Promise<void> };
+      /** The embedded relay the fake configuration names, when a test needs one. */
+      embedded?: { serverUrl: string; server: { regionId: number; regionCode: string } };
     } = {},
   ): Harness {
     const target = join(dir, "official-mirror.yaml");
@@ -164,6 +166,7 @@ describe("DERP region mirror service", () => {
           urls,
           autoUpdateEnabled: true,
           updateFrequency: "3h",
+          ...(options.embedded === undefined ? {} : options.embedded),
         }),
       },
       ...(options.withSnapshots === false
@@ -294,6 +297,39 @@ describe("DERP region mirror service", () => {
     expect(document.last?.outcome).toBe("changed");
     expect(document.settings.assignment).toEqual({ [SIN]: 901, [TOK]: 902, [HKG]: 903 });
     expect(typeof document.settings.assignmentRankedAt).toBe("string");
+  });
+
+  test("never writes the relay this deployment serves itself", async () => {
+    const h = build({
+      embedded: {
+        serverUrl: "https://relay.example.com",
+        server: { regionId: 999, regionCode: "gddg" },
+      },
+    });
+    h.source.regions = [
+      ...OFFICIAL,
+      // A copy of the deployment's own relay that a source describes: renumbered
+      // and renamed, so only the code still says what it is.
+      {
+        regionId: 912,
+        code: "gddg",
+        name: "Dongguan copy",
+        nodes: [{ name: "912a", hostname: "other.example.com", stunOnly: false }],
+      },
+    ];
+    await configure(h, { officialRegionIds: [HKG, SIN, "912"] });
+
+    const run = await h.service.runNow();
+
+    expect(run?.outcome).toBe("changed");
+    // Selected, but neither numbered nor written.
+    expect(run?.mirrored).toEqual([HKG, SIN]);
+    expect(run?.assignment).toEqual({ [SIN]: 901, [HKG]: 902 });
+
+    const yaml = await readFile(h.target, "utf8");
+    expect(yaml).toContain("regioncode: hkg");
+    expect(yaml).not.toContain("gddg");
+    expect(yaml).not.toContain("912");
   });
 
   test("a second run with an identical map writes nothing and takes no snapshot", async () => {

@@ -163,6 +163,23 @@ describe("validateDerpMap", () => {
     ]);
   });
 
+  test("reports a port inside a hostname, and leaves a bare IPv6 literal alone", () => {
+    const issues = validateDerpMap(
+      withNode("name: a\n        regionid: 901\n        hostname: d.example.com:8443"),
+    );
+    expect(issues.map((issue) => issue.code)).toEqual(["derpNodeHostnameHasPort"]);
+    expect(issues[0].vars).toEqual({ host: "d.example.com", port: 8443, default: 443 });
+
+    // A colon on its own is not a port: an IPv6 literal belongs in `hostname`
+    // without one, so flagging it would turn a valid map into an invalid one.
+    expect(
+      codes(withNode("name: a\n        regionid: 901\n        hostname: 2001:db8::1")),
+    ).toEqual([]);
+    expect(
+      codes(withNode("name: a\n        regionid: 901\n        hostname: d.example.com")),
+    ).toEqual([]);
+  });
+
   test("rejects a node whose regionid is not the region it is listed under", () => {
     const issues = validateDerpMap(
       withNode("name: a\n        regionid: 5\n        hostname: d.example.com"),

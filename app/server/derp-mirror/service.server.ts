@@ -67,6 +67,11 @@ import type { SnapshotTarget } from "~/server/snapshots/types";
 import log from "~/utils/log";
 
 import {
+  embeddedRelayIdentity,
+  isEmbeddedRelayRegion,
+  type EmbeddedRelayIdentity,
+} from "./embedded";
+import {
   assignRegionNumbers,
   buildMirrorMap,
   mirrorMapChanged,
@@ -140,6 +145,13 @@ export interface DerpMirrorConfigPort {
      * port; without it the mirror falls back to the legacy target.
      */
     dataDirectory?: string;
+    /** `server_url`: the endpoint clients reach this deployment's relay on. */
+    serverUrl?: string;
+    /**
+     * `derp.server`: the relay this deployment runs itself. A source map that
+     * describes it is never mirrored, because Headscale already publishes it.
+     */
+    server?: { regionId?: number; regionCode?: string };
   };
 }
 
@@ -396,6 +408,21 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         `The DERP mirror target could not be derived from Headscale's configuration: ${errorMessage(error)}`,
       );
       return {};
+    }
+  }
+
+  /**
+   * The relay this deployment serves itself, as a fetched map would describe it.
+   * Read from the same configuration the target path comes from, and left
+   * `undefined` when that cannot be read or names no relay — the mirror then has
+   * nothing extra to skip.
+   */
+  function embeddedRelay(): EmbeddedRelayIdentity | undefined {
+    try {
+      return embeddedRelayIdentity(options.config.getDERPSettings());
+    } catch (error) {
+      log.debug("config", `The embedded relay could not be identified: ${errorMessage(error)}`);
+      return undefined;
     }
   }
 
@@ -807,8 +834,15 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         });
       }
 
-      // 4. Only regions the fetched map actually describes can be mirrored.
-      const available = regions.map((region) => String(region.regionId));
+      // 4. Only regions the fetched map actually describes can be mirrored, minus
+      //    the relay this deployment serves itself: a source that describes it
+      //    (its own local map, a hand-written copy of it) would otherwise be
+      //    mirrored into a second copy of a relay Headscale already names, and
+      //    the copy is what clients then dial.
+      const embedded = embeddedRelay();
+      const available = regions
+        .filter((region) => !isEmbeddedRelayRegion(region, embedded))
+        .map((region) => String(region.regionId));
       const mirrored = current.officialRegionIds.filter((id) => available.includes(id));
       if (mirrored.length === 0) {
         return await finish({
@@ -855,7 +889,7 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
 
       // 6. Render, then validate with the validator the map editor uses: a
       //    document Headscale would refuse is never written.
-      const map = buildMirrorMap(regions, numbered.assignment, mirrored);
+      const map = buildMirrorMap(regions, numbered.assignment, mirrored, embedded);
       const yaml = renderMirrorYaml(map);
       const issues = validateDerpMap(yaml);
       if (issues.length > 0) {

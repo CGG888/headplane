@@ -258,6 +258,7 @@ export const DERP_MAP_ISSUE_KEYS: Record<DerpMapIssueCode, TranslationKey> = {
   derpNodeInvalid: "settings.headscale.derp.mapIssues.derpNodeInvalid",
   derpNodeMissingName: "settings.headscale.derp.mapIssues.derpNodeMissingName",
   derpNodeMissingHostname: "settings.headscale.derp.mapIssues.derpNodeMissingHostname",
+  derpNodeHostnameHasPort: "settings.headscale.derp.mapIssues.derpNodeHostnameHasPort",
   derpNodeMissingRegionId: "settings.headscale.derp.mapIssues.derpNodeMissingRegionId",
   derpNodeInvalidRegionId: "settings.headscale.derp.mapIssues.derpNodeInvalidRegionId",
   derpNodeRegionMismatch: "settings.headscale.derp.mapIssues.derpNodeRegionMismatch",

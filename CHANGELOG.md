@@ -1,5 +1,15 @@
 # Next
 
+## Changes
+
+- **The embedded DERP card now says which two fields a hand-written map has to fill.** `server_url` is where clients reach this deployment's relay, and the card already printed the host and port it yields — but a local DERP map has no `server_url`: it spells the same endpoint as a node's `hostname` and `derpport`. The card now prints that pair explicitly, so a map written by hand puts `relay.example.com` in `hostname` and `8443` in `derpport` instead of gluing the port onto the name.
+
+## Fixes
+
+- **A node whose `hostname` carries a port is now reported instead of accepted.** Tailscale's map format keeps the port in `derpport`, and a `hostname: relay.example.com:8443` with no `derpport` was a document the panel called valid: each client then dialed 443 and failed the TLS handshake, while the same node's STUN port stayed reachable, so the relay looked alive and was picked as the preferred one. The map validator — the editor and the save action share it — now reports a port inside `hostname` as its own problem, naming the host and the port and saying which field each belongs in. A bare IPv6 literal is still accepted.
+
+- **The official-region mirror no longer copies the relay this deployment serves itself.** A mirror source can describe the embedded relay — this deployment's own local map served back over HTTP, or a pasted copy of it — and mirroring it wrote a second copy of the same relay into the 900s; that copy usually lost the port, so clients preferred it and could not connect. The embedded region is now left out of both the numbering and the written file, the region table marks that row with the reason, prints no number for it and disables its checkbox, and the recommended preset skips it, so the selection matches what a run actually writes. A port glued onto a node's `hostname` anywhere in the source is split into `hostname` and `derpport` when the mirror renders it, instead of being carried forward.
+
 # 0.22.26 (October 8, 2026)
 
 ## Changes
