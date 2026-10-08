@@ -38,6 +38,10 @@ export default class KubernetesIntegration extends Integration<typeof configSche
     return "Kubernetes (k8s)";
   }
 
+  get kind() {
+    return "kubernetes" as const;
+  }
+
   static get configSchema() {
     return configSchema;
   }
@@ -156,10 +160,11 @@ export default class KubernetesIntegration extends Integration<typeof configSche
 
   async onConfigChange(headscale: Headscale) {
     if (!this.pid) {
-      return;
+      log.error("config", "Cannot signal Headscale: no headscale serve process found");
+      return false;
     }
 
-    await signalAndWaitHealthy(headscale, {
+    return await signalAndWaitHealthy(headscale, {
       pid: this.pid,
       signal: "SIGHUP",
     });

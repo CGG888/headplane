@@ -482,6 +482,20 @@ export default function DerpSettings({
               }
             />
           </refreshFetcher.Form>
+
+          {!autoUpdate ? (
+            // The setting above is the general one; this is the quick answer to
+            // "I just changed a map file and do not want to restart Headscale".
+            <refreshFetcher.Form method="post">
+              <input name="action_id" type="hidden" value="enable_derp_auto_update" />
+              <p className="mb-3 text-xs text-mist-600 dark:text-mist-400">
+                {t("settings.headscale.derp.enableAutoUpdateHint")}
+              </p>
+              <Button disabled={refreshDisabled} type="submit" variant="light">
+                {t("settings.headscale.derp.enableAutoUpdate")}
+              </Button>
+            </refreshFetcher.Form>
+          ) : undefined}
         </section>
       </SettingsCollapsible>
 

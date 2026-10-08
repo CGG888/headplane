@@ -343,6 +343,17 @@ in {
                           can terminate the Headscale process.
                         '';
                       };
+
+                      allow_restart = mkOption {
+                        type = types.bool;
+                        default = false;
+                        description = ''
+                          Let HeadplaneCN restart Headscale from the settings page after a
+                          configuration change. This only works when a supervisor (systemd,
+                          s6, …) starts Headscale again, because HeadplaneCN sends SIGTERM
+                          and then waits for a new "headscale serve" process to appear.
+                        '';
+                      };
                     };
                   };
                   default = {};

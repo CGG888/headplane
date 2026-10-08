@@ -36,7 +36,7 @@ The full single sign-on block:
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `issuer`                          | The provider's discovery URL. **Headscale treats an empty issuer as "OIDC disabled".**                                                                                                                                                                                                                                        |
 | `client_id`                       | Client registered at the provider.                                                                                                                                                                                                                                                                                            |
-| `client_secret`                   | Write-only here: HeadplaneCN shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                                 |
+| `client_secret`                   | Write-only here: HeadplaneCN shows whether a secret is set, never its value. Leave the field untouched to keep the current one.                                                                                                                                                                                               |
 | `client_secret_path`              | Read the secret from a file instead of storing it inline. Headscale reads the file when it starts and expands environment variables in the path, which makes this the safer place for the secret. Leave the field empty to remove the key.                                                                                    |
 | `scope`                           | Defaults to `openid`, `profile`, `email`.                                                                                                                                                                                                                                                                                     |
 | `email_verified_required`         | Default `true`. Turn it off only for providers that never send `email_verified`.                                                                                                                                                                                                                                              |
@@ -111,25 +111,25 @@ Tailscale clients reach each other through DERP relays when a direct connection
 is impossible. Headscale ships with Tailscale's public DERP map, and this section
 edits how that map is used:
 
-| Setting                                              | What it does                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                  |
-| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry is a path **on the Headscale host**, and the DERP tab can view and edit it right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                |
-| `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale refreshes the built-in map from Tailscale, and how often (`3h`).                                                                                                                                                                              |
-| `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying. |
+| Setting                                              | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `derp.urls`                                          | Extra DERP map URLs to merge into the built-in one — point this at a custom map file you host.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `derp.paths`                                         | Local DERP map files to merge, for maps you keep on disk. Each entry is a path **on the Headscale host**, and the DERP tab can view and edit it right here — see [Editing local DERP map files](#editing-local-derp-map-files).                                                                                                                                                                                                                                                                  |
+| `derp.auto_update_enabled` / `derp.update_frequency` | Whether Headscale re-reads the built-in map itself, and how often (`3h`). This is also the only switch that makes `derp.urls` / `derp.paths` edits take effect in a running process: with it on, Headscale re-reads map files at that interval (including `derp.paths` edited on this page); with it off, those edits need a reload or restart. The DERP tab triggers that reload or restart for you after a save and says at the top what happened, and offers a one-click way to turn this on. |
+| `derp.server.*`                                      | The embedded DERP server: enable it, give it a region id (900–999), code and name, a STUN listen address, and the private key Headscale uses to sign the region. `verify_clients` controls whether clients must prove they are in your tailnet before relaying.                                                                                                                                                                                                                                  |
 
 ### Editing local DERP map files
 
 Each path in `derp.paths` is a map file Headscale merges at startup, and the DERP
 tab edits them in place. Every configured path gets its own row:
 
-| Action                  | What it does                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **View**                | Read-only rendering with a line-number gutter and light YAML colouring. Nothing is written.                                 |
-| **Edit**                | An editor that validates while you type, with the same rules the server enforces before it writes anything.                 |
+| Action                  | What it does                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **View**                | Read-only rendering with a line-number gutter and light YAML colouring. Nothing is written.                                  |
+| **Edit**                | An editor that validates while you type, with the same rules the server enforces before it writes anything.                  |
 | **Save**                | Validates on the server, snapshots the current file, then replaces it atomically (temp file + rename in the same directory). |
-| **Roll back**           | Restores the snapshot taken before the last write, and snapshots the content it replaces first.                             |
-| **Create from example** | Loads one of three fully commented templates into the editor; nothing is written until you save.                            |
+| **Roll back**           | Restores the snapshot taken before the last write, and snapshots the content it replaces first.                              |
+| **Create from example** | Loads one of three fully commented templates into the editor; nothing is written until you save.                             |
 
 A row also lists what HeadplaneCN found on disk: whether the file exists, is
 readable, is writable, parses, is a valid DERP map, and keeps its region ids and
@@ -220,14 +220,14 @@ and nothing updates them when Tailscale moves one of its relays.
 
 #### What the editor checks
 
-| Rule       | Detail                                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| YAML       | The document parses; a syntax error is reported with the line and column the YAML parser gives.                                |
-| Region     | The document is a DERP map (a `regions` mapping), and every region has `regionid`, `regioncode`, `regionname` and `nodes`.     |
-| Uniqueness | Region ids and region codes each appear only once.                                                                            |
+| Rule       | Detail                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| YAML       | The document parses; a syntax error is reported with the line and column the YAML parser gives.                                 |
+| Region     | The document is a DERP map (a `regions` mapping), and every region has `regionid`, `regioncode`, `regionname` and `nodes`.      |
+| Uniqueness | Region ids and region codes each appear only once.                                                                              |
 | Node       | Every node has `name`, `regionid` and `hostname`; `derpport` and `stunport` are integers from 1 to 65535 (`stunport` may be 0). |
-| Addresses  | `ipv4`/`ipv6`, when present and non-empty, are valid addresses, and `stunonly` is a boolean.                                   |
-| Size       | No more than 256 KiB, so the container can read and write it comfortably.                                                     |
+| Addresses  | `ipv4`/`ipv6`, when present and non-empty, are valid addresses, and `stunonly` is a boolean.                                    |
+| Size       | No more than 256 KiB, so the container can read and write it comfortably.                                                       |
 
 Every problem is shown in your language, next to the line it came from. The server
 never sends English prose: it answers with a stable code plus the position, and the
@@ -235,10 +235,19 @@ page words it.
 
 #### Taking effect
 
-Headscale reads `derp.paths` files **when it starts**, so a saved map is picked up
-after a reload or restart — **Settings → System** has that control when the process
-integration is enabled. HeadplaneCN deliberately does not reload Headscale for you
-here: a reload that does not re-read the map would look like it worked.
+Headscale reads the files under `derp.paths` **when it starts**, but with
+`derp.auto_update_enabled` on it also re-reads map files itself on
+`derp.update_frequency` — in that case a saved change needs no reload at all and
+the page says so.
+
+With automatic updates off, a saved change is picked up after a reload or
+restart, and it has to be the right one: on a native install SIGHUP only reloads
+the access policy and does not re-read DERP files, so by default the page only
+tells you a manual reload is needed — set `integration.proc.allow_restart` and
+HeadplaneCN restarts the process for you. After every save the DERP page triggers
+whichever fits (the Docker integration restarts the container; Kubernetes, like a
+native install, tells you to do it yourself) and says at the top what happened,
+so no reload silently "looks like it worked".
 
 The file is snapshotted before **every** write, so it appears on
 **Settings → Snapshots** with the reason `DERP map file: <name>` and can be
@@ -324,9 +333,9 @@ last-check status, and links back to this card.
 
 The card has two buttons, and they share one detection pass:
 
-| Button      | What it does                                                                                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Check**   | Runs both detections and the comparison, then writes nothing at all. It is the safe way to see what a run would do.                                                                      |
+| Button      | What it does                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Check**   | Runs both detections and the comparison, then writes nothing at all. It is the safe way to see what a run would do.                                                                         |
 | **Run now** | Runs the same checks and writes only what changed — per family, just the key whose address differs. HeadplaneCN snapshots the configuration first and records an audit entry for the write. |
 
 Neither button waits for the next scheduled run: both detect and report
@@ -359,9 +368,9 @@ The auto-sync derives one address per family, and the two families are not
 detected the same way. The detection panel in the settings card lists every
 candidate it found, where each one came from, and why it was chosen or skipped.
 
-| Family   | Detected from                                                                                                                                                                                                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.               |
+| Family   | Detected from                                                                                                                                                                                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IPv4** | The **A record of the `server_url` hostname**, resolved through the configured resolvers. A machine behind NAT cannot know its own public IPv4, so the DNS answer is the right one to advertise. Private, CGNAT, loopback and link-local answers are refused instead of being written.                   |
 | **IPv6** | The **host machine's own global unicast address**: the interface list, plus `/proc/net/if_inet6` for the temporary/privacy flag and `/sys/class/net/.../device` to tell a real NIC from a bridge. A stable address beats one that rotates, and the address the domain's AAAA names wins when it matches. |
 
 IPv6 is deliberately different. There is no NAT for it: the machine itself holds
@@ -495,8 +504,8 @@ box only changes the preview: nothing is written until **Save**.
 
 Numbers are the point of the card:
 
-| Region                 | Number                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| Region                 | Number                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
 | Hong Kong              | **901**, always — its checkbox cannot be cleared                                                       |
 | Singapore              | **902**, always — its checkbox cannot be cleared                                                       |
 | Everything else ticked | **903** and up, fastest measured latency first; equal latencies go to the lower official id, then code |
@@ -507,20 +516,20 @@ client's relay choice does not change just because a latency sample moved. Only
 
 The settings, all written by **Save**:
 
-| Setting             | Default                                                    | Notes                                                                                                                                                                                                             |
-| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enable the mirror   | off                                                        | Enabling lets HeadplaneCN rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                 |
-| Target file path    | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml`  | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                             |
-| Refresh interval    | every 24 hours                                             | 6, 12 or 24 hours.                                                                                                                                                                                                |
+| Setting              | Default                                                   | Notes                                                                                                                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Enable the mirror    | off                                                       | Enabling lets HeadplaneCN rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                                                   |
+| Target file path     | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml` | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                                                                 |
+| Refresh interval     | every 24 hours                                            | 6, 12 or 24 hours.                                                                                                                                                                                                                                     |
 | Reload after writing | on                                                        | When a run actually changed the file, HeadplaneCN asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
 
 Its actions:
 
-| Action         | What it does                                                                                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Save**       | Writes the settings and the selection.                                                                                                                                                                                                                |
-| **Check**      | Fetches the official map, filters and renumbers it, then compares it with the file on disk — **writing nothing**: no snapshot, no reload, no alert, and no change to the stored numbering. It is the safe way to see what a run would do.              |
-| **Update now** | The same pass, writing what changed: snapshot, atomic replace, audit entry, then the reload switch.                                                                                                                                                    |
+| Action         | What it does                                                                                                                                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Save**       | Writes the settings and the selection.                                                                                                                                                                                                                      |
+| **Check**      | Fetches the official map, filters and renumbers it, then compares it with the file on disk — **writing nothing**: no snapshot, no reload, no alert, and no change to the stored numbering. It is the safe way to see what a run would do.                   |
+| **Update now** | The same pass, writing what changed: snapshot, atomic replace, audit entry, then the reload switch.                                                                                                                                                         |
 | **Renumber**   | The same writing run with the stored numbering dropped first, so every region is ranked again from the latest measurements. Its dialog warns that **clients may briefly drop and re-select their relays** while the new numbers spread through the tailnet. |
 
 The card also offers a sort order, a latency ceiling with quick presets, a
@@ -531,7 +540,7 @@ A run that cannot write **leaves the previous file exactly as it was** and names
 the reason in its summary: no region is selected, the official map could not be
 fetched, it describes none of the selected regions, the target path is not
 absolute or contains a `..` segment, the target is not writable, the generated
-map was rejected by the map validator, or the reload failed. A *writing* run that
+map was rejected by the map validator, or the reload failed. A _writing_ run that
 failed also raises the
 [DERP address sync failed](/en/features/notifications#reported-events) notification;
 a check never does.
@@ -579,10 +588,10 @@ it — the page warns when it cannot.
 
 ## Policy mode
 
-| Mode             | Meaning                                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mode             | Meaning                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `file` (default) | The policy is a HuJSON file that Headscale reads. Its API is **read-only**, so the Access Control editor can only save when HeadplaneCN can write that file itself. |
-| `database`       | The policy lives in Headscale's database and is writable through the API — this is what lets the [Access Control editor](/en/features/acls) save changes.            |
+| `database`       | The policy lives in Headscale's database and is writable through the API — this is what lets the [Access Control editor](/en/features/acls) save changes.           |
 
 Switching modes **does not copy the policy**:
 

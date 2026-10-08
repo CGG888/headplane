@@ -93,6 +93,10 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
     return "Docker";
   }
 
+  get kind() {
+    return "docker" as const;
+  }
+
   static get configSchema() {
     return configSchema;
   }
@@ -251,9 +255,10 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
     return this.client !== undefined && this.containerId !== undefined;
   }
 
-  async onConfigChange(headscale: Headscale) {
+  async onConfigChange(headscale: Headscale): Promise<boolean> {
     if (!this.client || !this.apiVersion) {
-      return;
+      log.error("config", "Cannot restart Headscale: Docker is not configured");
+      return false;
     }
 
     log.info("config", "Restarting Headscale via Docker");
@@ -292,7 +297,7 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
         }
 
         log.info("config", "Headscale is up and running");
-        return;
+        return true;
       } catch {
         if (attempts < this.maxAttempts) {
           attempts++;
@@ -301,8 +306,10 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
         }
 
         log.error("config", "Missed restart deadline for %s", this.containerId);
-        return;
+        return false;
       }
     }
+
+    return false;
   }
 }

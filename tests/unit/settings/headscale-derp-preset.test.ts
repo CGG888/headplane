@@ -59,7 +59,7 @@ interface SubmitOptions {
   audit?: { record: (input: unknown) => Promise<unknown> };
 }
 
-const onConfigChange = vi.fn().mockResolvedValue(undefined);
+const onConfigChange = vi.fn().mockResolvedValue(true);
 
 function createMockContext(options: SubmitOptions, patch: ReturnType<typeof vi.fn>) {
   return {

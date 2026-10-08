@@ -72,7 +72,7 @@ describe("DERP address sync service", () => {
     const audit: Array<Record<string, unknown>> = [];
     const alerts: Array<{ failed: boolean; reason?: string }> = [];
     const snapshot = vi.fn(async () => ({ id: "snap-1" }));
-    const reload = vi.fn(async () => undefined);
+    const reload = vi.fn(async () => true);
 
     const service = createDerpSyncService({
       dataPath: dir,
@@ -110,7 +110,17 @@ describe("DERP address sync service", () => {
             },
           }),
       headscale: {} as unknown as Headscale,
-      ...(options.withIntegration === false ? {} : { integration: { onConfigChange: reload } }),
+      ...(options.withIntegration === false
+        ? {}
+        : {
+            integration: {
+              name: "Docker",
+              kind: "docker" as const,
+              canRestart: () => false,
+              restart: async () => ({ ok: true, stage: "healthy" as const }),
+              onConfigChange: reload,
+            },
+          }),
       resolveRelay: options.resolve ?? (async () => resolution([PUBLIC_IPV4])),
       loadHostIpv6: options.host ?? (async () => hostAddresses()),
       // The echo is off unless a test asks for it, so no test reaches the

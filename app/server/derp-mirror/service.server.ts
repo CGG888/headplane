@@ -51,6 +51,12 @@ import { dirname, isAbsolute, resolve } from "node:path";
 
 import { isDerpMapDocument, validateDerpMap } from "~/routes/settings/headscale/derp-map-schema";
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
+import {
+  invalidateDerpData,
+  refreshDerpAfterWrite,
+  toReloadState,
+  type DerpReloadTarget,
+} from "~/server/derp-refresh";
 import type { Headscale } from "~/server/headscale/api";
 import {
   loadRemoteDerpMapOutcome,
@@ -129,9 +135,7 @@ export interface DerpMirrorConfigPort {
 }
 
 /** The reload/restart integration, as the service needs it. */
-export interface DerpMirrorReloadPort {
-  onConfigChange(headscale: Headscale): Promise<void> | void;
-}
+export type DerpMirrorReloadPort = DerpReloadTarget;
 
 /** The audit sink, as the service needs it. */
 export interface DerpMirrorAuditPort {
@@ -601,20 +605,23 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
    */
   async function reloadAfterWrite(): Promise<DerpMirrorReload> {
     if (options.integration === undefined || !settings.autoReload) {
+      // Nothing pushes the file to Headscale, but every page that already parsed
+      // it must stop showing the regions from before this run.
+      invalidateDerpData();
       return "manual";
     }
 
-    try {
-      await options.integration.onConfigChange(options.headscale);
-      return "triggered";
-    } catch (error) {
-      log.warn(
-        "config",
-        "The DERP region mirror could not reload Headscale: %s",
-        errorMessage(error),
-      );
-      return "failed";
-    }
+    // The run wrote the file Headscale loads, so this is the file-content class:
+    // Headscale's own updater covers it, and a deployment that cannot reload
+    // says so instead of reporting the change as live.
+    const result = await refreshDerpAfterWrite({
+      headscale: options.headscale,
+      integration: options.integration,
+      changeKind: "map-file",
+      reason: "derp_mirror_run",
+    });
+
+    return toReloadState(result.outcome);
   }
 
   /**

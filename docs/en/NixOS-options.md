@@ -224,6 +224,17 @@ _Type:_ boolean
 
 _Default:_ `true`
 
+## settings.integration.proc.allow_restart
+
+_Description:_ Let HeadplaneCN restart Headscale from the settings page after a
+configuration change. This only works when a supervisor (systemd, s6, …) starts
+Headscale again, because HeadplaneCN sends SIGTERM and then waits for a new
+"headscale serve" process to appear.
+
+_Type:_ boolean
+
+_Default:_ `false`
+
 ## settings.oidc
 
 _Description:_ OIDC Configuration for authentication.

@@ -18,3 +18,25 @@ export interface AuthKeyDeleteFailure {
 }
 
 export type AuthKeyDeleteResult = AuthKeyDeleteSuccess | AuthKeyDeleteFailure;
+
+/**
+ * Why a bulk delete of expired keys failed as a whole. The per-key codes are
+ * the same ones a single deletion reports; `forbidden` covers a self-service
+ * account whose own keys could not be resolved at all.
+ */
+export type AuthKeyBulkDeleteErrorCode = AuthKeyDeleteErrorCode | "forbidden";
+
+export interface AuthKeyBulkDeleteSuccess {
+  success: true;
+  /** How many keys Headscale accepted as deleted. */
+  deleted: number;
+  /** How many deletions failed for a reason other than "already gone". */
+  failed: number;
+}
+
+export interface AuthKeyBulkDeleteFailure {
+  success: false;
+  errorCode: AuthKeyBulkDeleteErrorCode;
+}
+
+export type AuthKeyBulkDeleteResult = AuthKeyBulkDeleteSuccess | AuthKeyBulkDeleteFailure;

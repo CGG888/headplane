@@ -16,7 +16,11 @@ import { Capabilities } from "~/server/web/roles";
 import type { PreAuthKey } from "~/types";
 
 import type { Route } from "./+types/overview";
+import { isPreAuthKeyExpired } from "./filters";
+import { loadPreAuthKeyGroups } from "./keys.server";
 import {
+  type AuthKeyBulkDeleteFailure,
+  type AuthKeyBulkDeleteSuccess,
   type AuthKeyDeleteFailure,
   type AuthKeyDeleteSuccess,
   PRE_AUTH_KEY_EXPIRED,
@@ -321,6 +325,70 @@ export async function authKeysAction({ request, context }: Route.ActionArgs) {
       await recordPreAuthKeyDeletion(audit, principal, keyId, "success");
 
       return data({ success: true } satisfies AuthKeyDeleteSuccess);
+    }
+
+    case "delete_expired_preauthkeys": {
+      // Same Headscale boundary as the single-key delete: the endpoint and the
+      // stable key id it addresses both start at 0.28.
+      if (!api.preAuthKeys.delete) {
+        return data(
+          { success: false, errorCode: "unsupported" } satisfies AuthKeyBulkDeleteFailure,
+          {
+            status: 400,
+          },
+        );
+      }
+
+      // A self-service account can only ever clean up its own keys, so the
+      // scope has to resolve to a user before anything is read or deleted.
+      const selfServiceOnly = !canGenerateAny && canGenerateOwn;
+      const currentHeadscaleUserId = isUserPrincipal(principal)
+        ? principal.user.headscaleUserId
+        : undefined;
+      if (selfServiceOnly && !currentHeadscaleUserId) {
+        await recordPreAuthKeyDeletion(audit, principal, "", "failure", "forbidden");
+
+        return data({ success: false, errorCode: "forbidden" } satisfies AuthKeyBulkDeleteFailure, {
+          status: 403,
+        });
+      }
+
+      const allUsers = await api.users.list();
+      const users = selfServiceOnly
+        ? allUsers.filter((user) => user.id === currentHeadscaleUserId)
+        : allUsers;
+
+      // The set is recomputed here rather than submitted by the client: only
+      // keys this server can currently see as expired are ever deleted, which
+      // is what keeps "only expired" true even for a hand-crafted request.
+      const { keys } = await loadPreAuthKeyGroups(api, users, selfServiceOnly);
+      const expired = keys
+        .flatMap(({ preAuthKeys }) => preAuthKeys)
+        .filter((key) => key.id.length > 0 && isPreAuthKeyExpired(key));
+
+      // Headscale deletes one key per request, so the cleanup is a plain
+      // sequence: a key that fails (or is already gone) must not stop the rest.
+      let deleted = 0;
+      let failed = 0;
+      for (const key of expired) {
+        try {
+          await api.preAuthKeys.delete(key.id);
+          deleted += 1;
+          await recordPreAuthKeyDeletion(audit, principal, key.id, "success");
+        } catch (error) {
+          if (isDataWithApiError(error) && error.data.statusCode === 404) {
+            // Already gone, which is the goal of the cleanup.
+            deleted += 1;
+            await recordPreAuthKeyDeletion(audit, principal, key.id, "failure", "notFound");
+            continue;
+          }
+
+          failed += 1;
+          await recordPreAuthKeyDeletion(audit, principal, key.id, "failure");
+        }
+      }
+
+      return data({ success: true, deleted, failed } satisfies AuthKeyBulkDeleteSuccess);
     }
 
     default:

@@ -1549,14 +1549,32 @@ const en = {
         "HeadplaneCN can only reload or restart Headscale when the Docker, Kubernetes, or native (/proc) integration is enabled. See the {link} for setup instructions.",
       processUnavailableLink: "documentation",
       processSemanticsReload:
-        "{name} sends SIGHUP to the Headscale process, which reloads the configuration without dropping connections.",
+        "{name} sends SIGHUP to the Headscale process, which re-reads the access policy in place. Other settings need a restart — turn on allow_restart to do that from here.",
       processSemanticsRestart: "{name} restarts the Headscale container or pod.",
+      restartButton: "Restart Headscale now",
+      restartTitle: "Restart Headscale?",
+      restartBody:
+        "HeadplaneCN stops the native Headscale process and waits for its supervisor to start it again. It re-reads the configuration and every DERP map file while it starts.",
+      restartWarning:
+        "Every machine drops its control connection for as long as the restart takes, and its online state may lag until it reconnects. Headscale only comes back if something supervises it (systemd, s6, a container runtime); without a supervisor this leaves Headscale stopped.",
+      restartWait: "This can take up to about a minute.",
+      restartStage: {
+        noProcess: "No running headscale serve process was found.",
+        stalePid: "The process that was found is no longer Headscale. Nothing was stopped.",
+        stopTimeout: "Headscale did not stop in time.",
+        notRestarted: "Headscale stopped but has not started again. Check its supervisor.",
+        unhealthy: "Headscale started again but its /health endpoint is not answering yet.",
+        healthy: "Headscale is running again.",
+        unsupported: "This integration cannot restart Headscale.",
+      },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
         notAvailable:
           "No integration is enabled, so HeadplaneCN cannot reload or restart Headscale.",
         failed:
           "The integration could not reach Headscale. Check the HeadplaneCN logs for details.",
+        notRestartable: "This integration cannot restart Headscale for you.",
+        restartFailed: "Headscale was not restarted successfully.",
       },
       checks: {
         reachable: {
@@ -2061,7 +2079,7 @@ const en = {
         removePath: "Remove",
         refreshTitle: "DERP Map Updates",
         refreshBody:
-          "How often Headscale refreshes the DERP map from the sources above. Changes take effect after Headscale is restarted.",
+          "How often Headscale re-reads the DERP sources above by itself. With this on, a change to a map file is picked up within the frequency below; with it off, the change needs a reload or restart, which HeadplaneCN triggers after each save.",
         autoUpdateLabel: "Refresh the DERP map",
         autoUpdateDescription:
           "Let a background worker re-read the DERP sources periodically. Headscale's default is false.",
@@ -2069,6 +2087,20 @@ const en = {
         updateFrequencyDescription:
           "How often the DERP sources are refreshed, for example 3h or 30m. Headscale's default is 3h.",
         saveRefresh: "Save DERP updates",
+        enableAutoUpdate: "Refresh the map automatically",
+        enableAutoUpdateHint:
+          "Saves Refresh the DERP map with a 10m interval, so the next change to a map file is picked up without restarting Headscale. The updater starts with Headscale, so this first save still needs one restart — HeadplaneCN triggers it when the integration can, otherwise reload manually.",
+        refreshNotice: {
+          notNeeded: "Saved. Nothing Headscale reads changed, so no reload was needed.",
+          ticker: "Saved. Headscale re-reads this file on its own within the update frequency.",
+          triggered: "Saved and reloaded. Headscale has picked the change up.",
+          manual:
+            "Saved. Headscale has not picked it up yet — reload or restart it to apply the change.",
+          failed:
+            "Saved, but Headscale did not come back healthy after the reload. Check the HeadplaneCN logs.",
+        },
+        refreshNoticeBody:
+          "This is the result of the last DERP change this server performed; it stays until the next one.",
         serverTitle: "Embedded DERP Server",
         serverBody:
           "Run a DERP relay inside Headscale itself. It requires Headscale's server_url to use https, because DERP runs over TLS.",
@@ -2951,6 +2983,14 @@ const en = {
       bulkSummary: "Expired {count} pre-auth keys.",
       bulkError:
         "Some keys could not be expired. The list shows what Headscale still has; retry the ones that failed.",
+      bulkDeleteExpired: "Delete all expired",
+      bulkDeleteTitle: "Delete {count} expired pre-auth keys?",
+      bulkDeleteBody:
+        "This permanently deletes every expired pre-auth key from Headscale. Active keys are not touched, and it cannot be undone.",
+      bulkDeleteProgress: "Deleting expired pre-auth keys…",
+      bulkDeleteSummary: "Deleted {count} expired pre-auth keys.",
+      bulkDeletePartial:
+        "Deleted {deleted} expired keys; {failed} could not be deleted. Retry, or delete the rest from their rows.",
       delete: "Delete key",
       deleteTitle: "Delete pre-auth key {key}?",
       deleteBody:

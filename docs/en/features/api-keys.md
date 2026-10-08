@@ -13,10 +13,10 @@ tool you point at the API needs one too — which is why the keys live under
 
 ## Managing keys
 
-| Action     | What happens                                                                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Action     | What happens                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Create** | Pick how long the key should live (days). HeadplaneCN asks Headscale for a key that expires at that moment.                                             |
-| **Copy**   | The full key is returned **exactly once**. Copy it straight away — Headscale only ever stores a prefix, so it cannot be shown again.                  |
+| **Copy**   | The full key is returned **exactly once**. Copy it straight away — Headscale only ever stores a prefix, so it cannot be shown again.                    |
 | **Expire** | Revokes a key immediately. The prefix in the list is enough; HeadplaneCN normalises the masked `hskey-api-…-***` display form before calling Headscale. |
 
 The list shows the prefix, when the key was created, when it expires and when it
@@ -39,8 +39,14 @@ Headscale has no delete for API keys — its API only offers
 - **Rotating** therefore means: create a new key, put it in
   `headscale.api_key`, restart HeadplaneCN, then expire the old key.
 
-The **Pre-Auth Keys** page works the same way: pre-auth keys are revoked by
-expiring them, used and expired keys stay in the list, and nothing is deleted.
+The **Pre-Auth Keys** page is different: since Headscale 0.28 its API offers
+`DELETE /api/v1/preauthkey`, so keys can be deleted there — one at a time from a
+row, or all expired keys at once with **Delete all expired** above the list
+(spent single-use keys included). Active keys are never touched, and because a
+deletion cannot be undone the button asks for confirmation first and then
+reports how many were removed and which ones failed. On a Headscale version that
+cannot delete keys the page offers no delete at all, and expiring remains the
+way to revoke.
 
 ::: warning An API key is full admin access
 Headscale has no scopes or roles for API keys: any valid, unexpired key can do

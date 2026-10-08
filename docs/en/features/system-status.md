@@ -35,16 +35,16 @@ all stay silent, so a custom build is not nagged about an upstream release.
 Each row is a check with a pass / warning / failure state, an explanation, and
 where it helps a link to the page that fixes it:
 
-| Check                     | Why it matters                                                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Headscale reachable       | `GET /health` — if this fails, nothing else on the page is meaningful.                                                       |
-| API key valid             | HeadplaneCN's `headscale.api_key` must still work; an expired key breaks every page.                                           |
-| Version new enough        | The HeadplaneCN Agent and browser SSH need Headscale 0.28+; newer releases fix real bugs, 0.29.2 is the recommended baseline.  |
-| Policy mode               | With `policy.mode: file` the Access Control editor cannot save through the API; `database` lets it.                          |
-| OIDC configured           | Browser SSH requires users to sign in through OIDC, so it needs a working OIDC block.                                        |
-| Trusted proxies           | Behind a reverse proxy, Headscale only sees the real client address when the proxy's network is listed in `trusted_proxies`. |
-| Headscale config readable | The DNS and Headscale settings pages can only read (or write) when `headscale.config_path` is mounted.                       |
-| Integration enabled       | Without an integration HeadplaneCN cannot reload or restart Headscale for you.                                                 |
+| Check                     | Why it matters                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Headscale reachable       | `GET /health` — if this fails, nothing else on the page is meaningful.                                                        |
+| API key valid             | HeadplaneCN's `headscale.api_key` must still work; an expired key breaks every page.                                          |
+| Version new enough        | The HeadplaneCN Agent and browser SSH need Headscale 0.28+; newer releases fix real bugs, 0.29.2 is the recommended baseline. |
+| Policy mode               | With `policy.mode: file` the Access Control editor cannot save through the API; `database` lets it.                           |
+| OIDC configured           | Browser SSH requires users to sign in through OIDC, so it needs a working OIDC block.                                         |
+| Trusted proxies           | Behind a reverse proxy, Headscale only sees the real client address when the proxy's network is listed in `trusted_proxies`.  |
+| Headscale config readable | The DNS and Headscale settings pages can only read (or write) when `headscale.config_path` is mounted.                        |
+| Integration enabled       | Without an integration HeadplaneCN cannot reload or restart Headscale for you.                                                |
 
 ## Configuration checks
 
@@ -62,16 +62,16 @@ being called failures. Mount the directory read-only into the container to turn
 them into real checks.
 :::
 
-| Check                | Why it matters                                                                                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Removed keys         | `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are gone in 0.29 and Headscale **refuses to start** while they are present.                         |
-| Trusted proxy ranges | `0.0.0.0/0` and `::/0` are configuration errors.                                                                                                                         |
-| TLS and ACME         | A configured certificate or Let's Encrypt hostname whose files do not exist cannot be served; `server_url` over `http` alongside TLS configuration is usually a mistake. |
-| Database             | A missing or read-only SQLite directory stops Headscale from writing anything.                                                                                           |
-| Policy file          | With `policy.mode: file`, an empty `policy.path` means _allow everything_.                                                                                               |
-| DNS records          | Both `dns.extra_records` and `dns.extra_records_path` set means the inline records are silently ignored.                                                                 |
-| OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                   |
-| Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                         |
+| Check                | Why it matters                                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Removed keys         | `oidc.expiry`, `oidc.strip_email_domain` and `oidc.map_legacy_users` are gone in 0.29 and Headscale **refuses to start** while they are present.                                                                                                             |
+| Trusted proxy ranges | `0.0.0.0/0` and `::/0` are configuration errors.                                                                                                                                                                                                             |
+| TLS and ACME         | A configured certificate or Let's Encrypt hostname whose files do not exist cannot be served; `server_url` over `http` alongside TLS configuration is usually a mistake.                                                                                     |
+| Database             | A missing or read-only SQLite directory stops Headscale from writing anything.                                                                                                                                                                               |
+| Policy file          | With `policy.mode: file`, an empty `policy.path` means _allow everything_.                                                                                                                                                                                   |
+| DNS records          | Both `dns.extra_records` and `dns.extra_records_path` set means the inline records are silently ignored.                                                                                                                                                     |
+| OIDC coherence       | An issuer without a client ID, an unknown PKCE method, or a secret and a secret file at the same time.                                                                                                                                                       |
+| Noise key            | A configured `noise.private_key_path` that is not there (Headscale generates it on first start).                                                                                                                                                             |
 | Local DERP map files | Every entry in `derp.paths` gets its own rows — the file exists, is readable, is writable, is inside the size cap, parses as YAML, validates as a DERP map, and keeps its region ids and codes unique. A path this container cannot see is **unverifiable**. |
 
 The local-map rows are the same checks the DERP card shows next to each path in
@@ -129,17 +129,30 @@ says so when the response was longer.
 
 The button follows whatever integration is configured:
 
-| Integration                          | What the button does                                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `integration.proc` (native installs) | Sends **SIGHUP** to the `headscale serve` process — Headscale reloads its configuration without dropping connections. |
-| `integration.docker`                 | Restarts the Headscale container.                                                                                     |
-| `integration.kubernetes`             | Restarts the Headscale pod.                                                                                           |
+| Integration                          | What the button does                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `integration.proc` (native installs) | Sends **SIGHUP** to the `headscale serve` process — that only re-reads the **access policy (ACL)** in place. |
+| `integration.docker`                 | Restarts the Headscale container.                                                                            |
+| `integration.kubernetes`             | Restarts the Headscale pod.                                                                                  |
 
 With no integration enabled the button is disabled and the page says so; restart
 Headscale however your service manager does it.
 
-::: tip Native installs and reloads
-A SIGHUP reload happens in place, so it is the safe choice after changing DNS,
-OIDC or `trusted_proxies`. Changes that swap the database or the policy mode are
-worth a full restart instead, which the native integration cannot do for you.
+::: tip Native installs and "Restart Headscale now"
+SIGHUP only reloads the access policy, so it does not make a DNS, OIDC or
+`trusted_proxies` change take effect — those need the configuration file to be
+read again, which means restarting the process. Native installs do not restart
+anything by default: set `integration.proc.allow_restart` to `true` (it defaults
+to `false`) and the process card grows a **Restart Headscale now** button. It
+asks for confirmation first and warns that every node drops offline briefly; it
+only sends SIGTERM and then waits for a new `headscale serve` to appear, so
+Headscale has to be supervised by systemd, s6 or similar. Do not use it without
+a supervisor.
+
+DERP settings are handled for you after a save: the Docker integration restarts
+the container, the native integration restarts the process when `allow_restart`
+is on, and otherwise the page tells you a manual reload is still needed. The one
+exception is an edit confined to the contents of a map file under `derp.paths`
+while `derp.auto_update_enabled` is `true` — Headscale re-reads map files itself
+within `derp.update_frequency`, so no reload is needed.
 :::

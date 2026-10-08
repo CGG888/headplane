@@ -373,7 +373,7 @@ function statusOf(result: ActionResult): number {
 
 describe("system process action", () => {
   test("asks the integration to reload Headscale exactly once", async () => {
-    const onConfigChange = vi.fn().mockResolvedValue(undefined);
+    const onConfigChange = vi.fn().mockResolvedValue(true);
     const result = await submit({ integration: { name: "Native Linux (/proc)", onConfigChange } });
 
     expect(statusOf(result)).toBe(200);

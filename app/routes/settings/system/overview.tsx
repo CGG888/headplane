@@ -21,11 +21,13 @@ import {
   Stethoscope,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { data, useFetcher } from "react-router";
 
 import Button from "~/components/button";
 import Chip from "~/components/chip";
 import Code from "~/components/code";
+import Dialog, { DialogPanel } from "~/components/dialog";
 import Link from "~/components/link";
 import Notice from "~/components/notice";
 import PageError from "~/components/page-error";
@@ -41,6 +43,8 @@ import {
   type SettingsStatusTone,
 } from "~/components/settings-nav";
 import StatusCircle from "~/components/status-circle";
+import Text from "~/components/text";
+import Title from "~/components/title";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import {
@@ -71,7 +75,7 @@ import {
   type DiagnosticStatus,
   type OidcStatus,
 } from "./diagnostics";
-import { SYSTEM_ERROR_KEYS, type SystemResult } from "./error-keys";
+import { RESTART_STAGE_KEYS, SYSTEM_ERROR_KEYS, type SystemResult } from "./error-keys";
 import MetricsPanel from "./metrics-panel";
 import { loadMetrics } from "./metrics-probe";
 import { headplaneReleaseChecker, headscaleReleaseChecker } from "./release-check";
@@ -232,7 +236,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     selfUpdate,
     canProcess: auth.can(principal, Capabilities.configure_iam),
     integration: integration
-      ? { name: integration.name, action: integrationAction(integration.name) }
+      ? {
+          name: integration.name,
+          action: integrationAction(integration.name),
+          // Only a native install can be restarted from here, and only when the
+          // operator turned it on; everything else keeps the reload button.
+          canRestart: integration.canRestart(),
+        }
       : null,
     // The raw inputs behind the diagnostics, for anything that wants the values
     // without parsing the check list.
@@ -269,10 +279,19 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { t, tr } = useI18n();
   const fetcher = useFetcher<SystemResult>();
   const isBusy = fetcher.state !== "idle";
+  const [restartOpen, setRestartOpen] = useState(false);
 
   const result = fetcher.data;
   const error = result && !result.success ? t(SYSTEM_ERROR_KEYS[result.errorCode]) : undefined;
   const succeeded = Boolean(result?.success) && !isBusy;
+
+  // A restart closes its confirmation as soon as the reply says it worked; the
+  // success line then reports the step it reached.
+  useEffect(() => {
+    if (succeeded) {
+      setRestartOpen(false);
+    }
+  }, [succeeded]);
 
   const { reachable, integration } = loaderData;
   const isReload = integration?.action === "reload";
@@ -458,6 +477,51 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               </SettingsActions>
             </fetcher.Form>
 
+            {integration?.canRestart ? (
+              <>
+                <Button
+                  disabled={isBusy || !loaderData.canProcess}
+                  onClick={() => setRestartOpen(true)}
+                  variant="danger"
+                >
+                  {t("settings.system.restartButton")}
+                </Button>
+
+                <Dialog
+                  isOpen={restartOpen}
+                  onOpenChange={(open) => {
+                    if (!isBusy) {
+                      setRestartOpen(open);
+                    }
+                  }}
+                >
+                  <DialogPanel
+                    isDisabled={isBusy}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (isBusy) {
+                        return;
+                      }
+
+                      const form = new FormData();
+                      form.set("action_id", "restart_headscale");
+                      fetcher.submit(form, { method: "POST" });
+                    }}
+                    variant="destructive"
+                  >
+                    <Title>{t("settings.system.restartTitle")}</Title>
+                    <Text>{t("settings.system.restartBody")}</Text>
+                    <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                      {t("settings.system.restartWarning")}
+                    </p>
+                    <p className="text-xs text-mist-600 dark:text-mist-400">
+                      {t("settings.system.restartWait")}
+                    </p>
+                  </DialogPanel>
+                </Dialog>
+              </>
+            ) : undefined}
+
             {!loaderData.canProcess ? (
               <Notice title={t("settings.system.processRestrictedTitle")} variant="warning">
                 {t("errors.permission.modifyIam")}
@@ -465,9 +529,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             ) : undefined}
 
             {error ? (
-              <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-                {error}
-              </p>
+              <>
+                <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                  {error}
+                </p>
+                {result && !result.success && result.stage ? (
+                  <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                    {t(RESTART_STAGE_KEYS[result.stage])}
+                  </p>
+                ) : undefined}
+              </>
             ) : undefined}
           </SettingsCollapsible>
         </SettingsPanel>

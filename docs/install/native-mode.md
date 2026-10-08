@@ -113,11 +113,12 @@ headscale apikeys create --expiration 90d
 
 启用网络管理只需在 HeadplaneCN 配置文件里多设几个字段：
 
-| 字段                           | 说明                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.proc.enabled`** | 设为 `true` 以启用进程检查。                                                                                                    |
-| **`headscale.config_path`**    | Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                                                             |
-| `headscale.dns_records_path`   | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。                                  |
+| 字段                             | 说明                                                                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`integration.proc.enabled`**   | 设为 `true` 以启用进程检查。                                                                                                                          |
+| `integration.proc.allow_restart` | _可选_（默认 `false`）。设为 `true` 后设置页会出现**立即重启 Headscale** 按钮；它只发 SIGTERM，需要 systemd、s6 之类的监管程序把 Headscale 重新拉起。 |
+| **`headscale.config_path`**      | Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                                                                                   |
+| `headscale.dns_records_path`     | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。                                                   |
 
 设置好这些之后重启 HeadplaneCN。你应该会在界面导航栏里看到「DNS」和「设置」这样的新入口，可以在
 那里管理 Tailnet 配置。

@@ -1,5 +1,15 @@
 # Next
 
+## Changes
+
+- **Expired pre-auth keys can be cleaned up in one click.** The pre-auth key page counts expired keys beside the status filter, and when any exist it offers **Delete all expired**. The cleanup deletes exactly the keys that are already expired — spent single-use keys included — and never touches a key that can still authenticate. Because a deleted key cannot be recovered the button asks for confirmation first, then reports how many were removed and names the ones that failed; it appears only on Headscale versions whose API can delete keys (0.28 and later), and everywhere else expiring remains the way to revoke.
+- **DERP edits are applied instead of being left to a restart you have to remember.** Saving anything under DERP — a map URL, a map file, the embedded server, a mirror or sync run, even a snapshot restore — now drops the cached DERP data so the UI shows what was written, then triggers the reload the deployment actually supports: Docker restarts the container, the native integration restarts the process once `integration.proc.allow_restart` is on, and a deployment that cannot restart is told a manual reload is still needed instead of getting a silent no-op. An edit confined to the _contents_ of a map file listed in `derp.paths` needs none of that while `derp.auto_update_enabled` is on, because Headscale re-reads map files itself within `derp.update_frequency`; when that switch is off the DERP page offers to turn it on with one click. The page also reports what happened after each save — refreshed on the timer, reloaded, or still waiting for a manual reload.
+- **A native Headscale can be restarted from Settings → System.** It is off by default: `integration.proc.allow_restart` has to be set to `true` (or the matching NixOS option), because HeadplaneCN only sends SIGTERM and then waits for a new `headscale serve` to appear — without a supervisor such as systemd or s6 nothing brings the process back. The button asks for confirmation first, warns that every node drops offline briefly, and every stage of the attempt — no process, stale pid, stop timeout, not restarted, unhealthy — is named instead of a bare failure.
+
+## Fixes
+
+- **The process card no longer implies that SIGHUP reloads everything.** A SIGHUP to `headscale serve` only re-reads the access policy in place; DNS, OIDC and `trusted_proxies` changes need the process to read its configuration again, which means a restart. The process card, the System status page and the install guides now say that, and point at the restart option above.
+
 # 0.22.20 (October 8, 2026)
 
 ## Fixes

@@ -246,8 +246,8 @@ function integrationCheck({ integrationName }: DiagnosticsInput): Diagnostic {
 /**
  * Headplane only reloads or restarts Headscale when an integration is
  * configured, and the integration decides which of the two it can do. The
- * native `/proc` integration signals `headscale serve` with SIGHUP, which
- * reloads the configuration in place; Docker and Kubernetes restart the
+ * native `/proc` integration signals `headscale serve` with SIGHUP, which only
+ * re-reads the access policy in place; Docker and Kubernetes restart the
  * container or pod instead. This mirrors the names in
  * `app/server/config/integration`.
  */

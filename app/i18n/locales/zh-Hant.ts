@@ -1450,12 +1450,30 @@ const zhHant = {
         "只有在啟用 Docker、Kubernetes 或原生(/proc)整合後，HeadplaneCN 才能重新載入或重新啟動 Headscale。設定方式請參閱{link}。",
       processUnavailableLink: "文件",
       processSemanticsReload:
-        "{name}會向 Headscale 程序傳送 SIGHUP，在不中斷連線的情況下重新載入設定。",
+        "{name}會向 Headscale 程序傳送 SIGHUP，它只會就地重新讀取存取策略；其它設定需要重新啟動，可在下方開啟 allow_restart 後由這裡完成。",
       processSemanticsRestart: "{name}會重新啟動 Headscale 容器或 Pod。",
+      restartButton: "立即重新啟動 Headscale",
+      restartTitle: "確定要重新啟動 Headscale 嗎？",
+      restartBody:
+        "HeadplaneCN 會停止原生 Headscale 程序，並等待監管程序將它重新啟動。啟動時會重新讀取設定檔與所有 DERP 地圖檔案。",
+      restartWarning:
+        "重新啟動期間所有機器都會中斷控制連線，重新連上之前它們的線上狀態也可能落後。只有存在監管程序（systemd、s6、容器執行環境等）時 Headscale 才會自動回來；沒有監管程序時，這次操作會讓 Headscale 一直停著。",
+      restartWait: "最多可能需要一分鐘左右。",
+      restartStage: {
+        noProcess: "找不到正在執行的 headscale serve 程序。",
+        stalePid: "找到的程序已經不是 Headscale，沒有停止任何程序。",
+        stopTimeout: "Headscale 未能在逾時前停止。",
+        notRestarted: "Headscale 已停止，但尚未重新啟動，請檢查它的監管程序。",
+        unhealthy: "Headscale 已重新啟動，但 /health 尚未回應。",
+        healthy: "Headscale 已重新運作。",
+        unsupported: "目前的整合無法重新啟動 Headscale。",
+      },
       errors: {
         invalidAction: "要求無效，請重新載入本頁後再試。",
         notAvailable: "未啟用整合，HeadplaneCN 無法重新載入或重新啟動 Headscale。",
         failed: "整合無法連線至 Headscale，詳情請參閱 HeadplaneCN 記錄。",
+        notRestartable: "目前的整合無法為你重新啟動 Headscale。",
+        restartFailed: "Headscale 未能成功重新啟動。",
       },
       checks: {
         reachable: {
@@ -1927,13 +1945,24 @@ const zhHant = {
         removePath: "移除",
         refreshTitle: "DERP 地圖更新",
         refreshBody:
-          "Headscale 從上述來源重新整理 DERP 地圖的頻率。修改後需要重新啟動 Headscale 才會生效。",
+          "Headscale 自己重讀上述 DERP 來源的頻率。開啟後，地圖檔案的改動會在下面的頻率內被讀取；關閉時改動需要重新載入或重新啟動，HeadplaneCN 會在每次儲存後自動觸發。",
         autoUpdateLabel: "自動重新整理 DERP 地圖",
         autoUpdateDescription: "讓背景工作定期重新讀取 DERP 來源。Headscale 的預設值為 false。",
         updateFrequencyLabel: "更新頻率",
         updateFrequencyDescription:
           "重新整理 DERP 來源的頻率，例如 3h 或 30m。Headscale 的預設值為 3h。",
         saveRefresh: "儲存 DERP 更新設定",
+        enableAutoUpdate: "自動重新整理地圖",
+        enableAutoUpdateHint:
+          "將「自動重新整理 DERP 地圖」以 10m 間隔儲存，之後修改地圖檔案就無需重新啟動 Headscale。更新工作隨 Headscale 啟動，因此這次儲存仍需要重新啟動一次（整合允許時 HeadplaneCN 會自動重新啟動，否則請手動重新載入）。",
+        refreshNotice: {
+          notNeeded: "已儲存。Headscale 讀取的內容沒有變更，無需重新載入。",
+          ticker: "已儲存。Headscale 會在更新間隔內自行重新讀取該檔案。",
+          triggered: "已儲存並已重新載入，Headscale 已生效。",
+          manual: "已儲存，但 Headscale 尚未讀取——請重新載入或重新啟動 Headscale 以生效。",
+          failed: "已儲存，但重新載入後 Headscale 未恢復健康，請查看 HeadplaneCN 日誌。",
+        },
+        refreshNoticeBody: "這是本伺服器最近一次 DERP 變更的結果，在下一次變更前都會顯示這則提示。",
         serverTitle: "內嵌 DERP 伺服器",
         serverBody:
           "在 Headscale 內部執行一個 DERP 中繼。DERP 使用 TLS，因此要求 server_url 採用 https。",
@@ -2743,6 +2772,13 @@ const zhHant = {
       bulkProgress: "正在讓 {done}/{total} 個金鑰過期…",
       bulkSummary: "已讓 {count} 個預先授權金鑰過期。",
       bulkError: "部分金鑰無法過期。清單顯示的是 Headscale 仍保留的金鑰，請對失敗的金鑰重試。",
+      bulkDeleteExpired: "刪除全部已過期",
+      bulkDeleteTitle: "刪除 {count} 個已過期的預先授權金鑰？",
+      bulkDeleteBody:
+        "這會從 Headscale 永久刪除所有已過期的預先授權金鑰，不會影響仍然有效的金鑰，且無法復原。",
+      bulkDeleteProgress: "正在刪除已過期的預先授權金鑰…",
+      bulkDeleteSummary: "已刪除 {count} 個已過期的預先授權金鑰。",
+      bulkDeletePartial: "已刪除 {deleted} 個已過期金鑰，{failed} 個刪除失敗，可重試或逐列刪除。",
       delete: "刪除金鑰",
       deleteTitle: "刪除預先授權金鑰 {key}？",
       deleteBody:

@@ -223,6 +223,16 @@ _Type:_ boolean
 
 _Default:_ `true`
 
+## settings.integration.proc.allow_restart
+
+_Description:_ 允许 HeadplaneCN 在配置改动后从设置页重启 Headscale。只有在
+systemd、s6 之类的监管程序会把 Headscale 重新拉起时才有效 —— HeadplaneCN
+只发送 SIGTERM，然后等待新的 `headscale serve` 进程出现。
+
+_Type:_ boolean
+
+_Default:_ `false`
+
 ## settings.oidc
 
 _Description:_ 用于认证的 OIDC 配置。

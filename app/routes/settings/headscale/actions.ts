@@ -24,6 +24,11 @@ import {
 } from "~/server/derp-mirror/settings";
 import { parseDerpMapBody } from "~/server/derp-mirror/sources";
 import type { DerpMirrorReload } from "~/server/derp-mirror/types";
+import {
+  invalidateDerpData,
+  refreshDerpAfterWrite,
+  type DerpChangeKind,
+} from "~/server/derp-refresh";
 import { isDerpSyncFamilies, parseDerpSyncIntervalHours } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
 import {
@@ -127,6 +132,21 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
   const formData = await request.formData();
   const action = formData.get("action_id")?.toString();
+
+  /**
+   * Every DERP write funnels through this: it clears what this process cached
+   * (map files, remote maps, relay DNS) and, when this deployment can, gets the
+   * change into Headscale's running process. The result is recorded so the DERP
+   * page can say whether the change is live or still waiting for a restart.
+   */
+  const refreshDerp = (changeKind: DerpChangeKind, reason: string) =>
+    refreshDerpAfterWrite({
+      headscale,
+      integration,
+      changeKind,
+      reason,
+      autoUpdateEnabled: headscaleConfig.getDERPSettings().autoUpdateEnabled,
+    });
 
   // The self-test only reads the configuration and the identity provider, and
   // the region filter keeps everything of its own outside Headscale's
@@ -453,7 +473,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
         return [{ path: "derp.urls", value: [...current.urls, url] }];
       });
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "add_derp_url");
       return success();
     }
 
@@ -472,7 +492,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
         return [{ path: "derp.urls", value: current.urls.filter((entry) => entry !== url) }];
       });
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "remove_derp_url");
       return success();
     }
 
@@ -495,7 +515,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
         return [{ path: "derp.paths", value: [...current.paths, path] }];
       });
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "add_derp_path");
       return success();
     }
 
@@ -514,7 +534,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
 
         return [{ path: "derp.paths", value: current.paths.filter((entry) => entry !== path) }];
       });
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "remove_derp_path");
       return success();
     }
 
@@ -535,7 +555,22 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         { path: "derp.auto_update_enabled", value: autoUpdateEnabled },
         { path: "derp.update_frequency", value: updateFrequency },
       ]);
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "save_derp_settings");
+      return success();
+    }
+
+    case "enable_derp_auto_update": {
+      // The one-click version of the setting above, for an operator who just
+      // changed a map file and does not want to restart Headscale for it. Ten
+      // minutes is short enough to feel automatic and long enough that the
+      // updater's own netmap change — Headscale reshuffles the map it hands out
+      // on every tick — stays a background detail. The updater is created when
+      // Headscale starts, so this first save still needs one restart.
+      await headscaleConfig.patch([
+        { path: "derp.auto_update_enabled", value: true },
+        { path: "derp.update_frequency", value: "10m" },
+      ]);
+      await refreshDerp("config", "enable_derp_auto_update");
       return success();
     }
 
@@ -601,7 +636,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
           value: automaticallyAdd,
         },
       ]);
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "save_derp_server");
       return success();
     }
 
@@ -633,6 +668,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpSyncSaveFailed");
       }
 
+      // The address the sync writes ends up in the DERP map this page renders.
+      invalidateDerpData();
       return success();
     }
 
@@ -641,6 +678,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       // changed, then follow the reload switch. Works while the schedule is off.
       const derpSync = context.get(derpSyncContext);
       await derpSync.runNow();
+      invalidateDerpData();
       return success();
     }
 
@@ -753,7 +791,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       }
 
       await headscaleConfig.patch(patches);
-      await integration?.onConfigChange(headscale);
+      await refreshDerp("config", "preset_embedded_derp");
       return success();
     }
 
@@ -782,6 +820,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpRegionMapWriteFailed");
       }
 
+      invalidateDerpData();
       return success();
     }
 
@@ -806,6 +845,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpRegionMapWriteFailed");
       }
 
+      invalidateDerpData();
       return success();
     }
 
@@ -838,6 +878,10 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         }
 
         await recordMirrorRegionNames(context.get(auditContext), principal, dataPath, merged.added);
+      }
+
+      if (merged.added > 0) {
+        invalidateDerpData();
       }
 
       return data({
@@ -941,6 +985,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
           )
         : undefined;
 
+      invalidateDerpData();
+
       return data({
         success: true,
         ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
@@ -978,6 +1024,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
           ? undefined
           : await ensureMirrorPath(context, principal, settings.targetPath, settings.autoReload);
 
+      invalidateDerpData();
+
       return data({
         success: true,
         mirror: run,
@@ -1001,6 +1049,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         settings === undefined
           ? undefined
           : await ensureMirrorPath(context, principal, settings.targetPath, settings.autoReload);
+
+      invalidateDerpData();
 
       return data({
         success: true,
@@ -1041,6 +1091,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpMirrorPasteSaveFailed");
       }
 
+      invalidateDerpData();
+
       return data({
         success: true,
         ...(result.settings.pastedMap === undefined ? {} : { paste: result.settings.pastedMap }),
@@ -1057,6 +1109,7 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure("derpMirrorPasteClearFailed");
       }
 
+      invalidateDerpData();
       return success();
     }
 
@@ -1124,6 +1177,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         return failure(result.code, result.issues);
       }
 
+      await refreshDerp("map-file", "save_derp_map");
+
       return data({
         success: true,
         snapshotId: result.snapshotId,
@@ -1148,6 +1203,8 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
       if (!result.ok) {
         return failure(result.code);
       }
+
+      await refreshDerp("map-file", "restore_derp_map");
 
       return data({
         success: true,
@@ -1276,16 +1333,29 @@ async function reloadAfterMirrorPathAdded(
     return "manual";
   }
 
-  const integration = context.get(integrationContext);
-  if (integration === undefined) {
-    return "manual";
-  }
+  // A new `derp.paths` entry is a configuration change: Headscale's updater
+  // re-reads file contents, but the list of files it reads comes from its
+  // startup snapshot. What this deployment can do about that is decided in one
+  // place, so the native restart and the Docker restart follow the same rules
+  // here as everywhere else.
+  const result = await refreshDerpAfterWrite({
+    headscale: context.get(headscaleContext),
+    integration: context.get(integrationContext),
+    changeKind: "config",
+    reason: "derp_path_added",
+    autoUpdateEnabled: context.get(headscaleConfigContext).getDERPSettings().autoUpdateEnabled,
+  });
 
-  try {
-    await integration.onConfigChange(context.get(headscaleContext));
-    return "triggered";
-  } catch {
-    return "failed";
+  switch (result.outcome) {
+    case "triggered":
+      return "triggered";
+    case "failed":
+      return "failed";
+    case "not-needed":
+    case "ticker":
+      return "not-needed";
+    default:
+      return "manual";
   }
 }
 

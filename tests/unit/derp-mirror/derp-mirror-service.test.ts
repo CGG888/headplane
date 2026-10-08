@@ -151,6 +151,8 @@ describe("DERP region mirror service", () => {
       if (options.reloadFails) {
         throw new Error("reload refused");
       }
+
+      return true;
     });
     const urls: string[] = ["https://controlplane.tailscale.com/derpmap/default"];
     const source: Harness["source"] = { regions: OFFICIAL, latencies: {} };
@@ -182,7 +184,17 @@ describe("DERP region mirror service", () => {
             },
           }),
       headscale: {} as unknown as Headscale,
-      ...(options.withIntegration === false ? {} : { integration: { onConfigChange: reload } }),
+      ...(options.withIntegration === false
+        ? {}
+        : {
+            integration: {
+              name: "Docker",
+              kind: "docker" as const,
+              canRestart: () => false,
+              restart: async () => ({ ok: true, stage: "healthy" as const }),
+              onConfigChange: reload,
+            },
+          }),
       loadOfficialRegions: async (sources, cache) => {
         loads.push({
           urls: sources.map((source) => source.url),

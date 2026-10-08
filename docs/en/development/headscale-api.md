@@ -106,12 +106,12 @@ site exists; **Partial** = the endpoint works but some parameters declared by th
 
 ### Pre-auth keys
 
-| Method | Path                        | Capability                   | Status      | Where it is used (files and pages)                                                                      | Notes                             |
-| ------ | --------------------------- | ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| GET    | `/api/v1/preauthkey`        | List pre-auth keys           | Implemented | `api/resources/pre-auth-keys.ts:36,81` -> Settings -> Pre-auth keys, `/overview`                        | Spec lists no `user` param        |
-| POST   | `/api/v1/preauthkey`        | Create a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:43` -> Settings -> Pre-auth keys, `/ssh/:id`, agent (`hp-agent.ts:129`) | Supports ownerless tag-only keys  |
-| POST   | `/api/v1/preauthkey/expire` | Expire a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:58` -> Settings -> Pre-auth keys                                        | Wire format differs pre/post 0.28 |
-| DELETE | `/api/v1/preauthkey`        | Delete a pre-auth key record | Missing     | No call site                                                                                            | Expire already covers revocation  |
+| Method | Path                        | Capability                   | Status      | Where it is used (files and pages)                                                                       | Notes                                  |
+| ------ | --------------------------- | ---------------------------- | ----------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| GET    | `/api/v1/preauthkey`        | List pre-auth keys           | Implemented | `api/resources/pre-auth-keys.ts:36,81` -> Settings -> Pre-auth keys, `/overview`                         | Spec lists no `user` param             |
+| POST   | `/api/v1/preauthkey`        | Create a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:43` -> Settings -> Pre-auth keys, `/ssh/:id`, agent (`hp-agent.ts:129`)  | Supports ownerless tag-only keys       |
+| POST   | `/api/v1/preauthkey/expire` | Expire a pre-auth key        | Implemented | `api/resources/pre-auth-keys.ts:58` -> Settings -> Pre-auth keys                                         | Wire format differs pre/post 0.28      |
+| DELETE | `/api/v1/preauthkey`        | Delete a pre-auth key record | Implemented | `api/resources/pre-auth-keys.ts:96` -> Settings -> Pre-auth keys (single-row delete, delete all expired) | 0.28+ only; addressed by its stable id |
 
 ### API keys
 
@@ -639,7 +639,6 @@ below was checked against an actual call site in the code rather than inferred f
 | ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `GET /api/v1/node` (`user` filter) | Partial | Server-side filtering is worth considering for very large tailnets; the UI filters client-side today, so nothing is functionally missing              | P3       |
 | `POST /api/v1/node/backfillips`    | Missing | Add a confirmed, one-off repair entry under Settings -> System (nodes missing IPs after an old-database upgrade); confirm `confirmed` semantics first | P2       |
-| `DELETE /api/v1/preauthkey`        | Missing | The existing "revoke" already covers the main need via expire; if implemented, restrict deletion to expired or already-used keys                      | P3       |
 | `DELETE /api/v1/apikey/{prefix}`   | Missing | Same as above — expire already invalidates the key immediately; if implemented, note the spec's optional `id` query parameter                         | P3       |
 | `POST /api/v1/auth/register`       | Missing | The spec has no pending-registration list, so the UI has no data source; leave it out unless the operator pastes an authId by hand                    | P3       |
 | `POST /api/v1/auth/reject`         | Missing | Same reason; and the result cannot be reviewed in the UI afterwards                                                                                   | P3       |

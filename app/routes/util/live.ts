@@ -1,7 +1,7 @@
 import { data } from "react-router";
 
 import { headscaleLiveStoreContext, requestApiContext } from "~/server/context";
-import { nodesResource, usersResource } from "~/server/headscale/live-store";
+import { derpResource, nodesResource, usersResource } from "~/server/headscale/live-store";
 import log from "~/utils/log";
 
 import type { Route } from "./+types/live";
@@ -32,6 +32,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   await Promise.all([
     headscaleLiveStore.get(nodesResource, api),
     headscaleLiveStore.get(usersResource, api),
+    headscaleLiveStore.get(derpResource, api),
   ]);
 
   let teardown = () => {};

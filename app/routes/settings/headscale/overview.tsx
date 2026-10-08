@@ -60,6 +60,7 @@ import {
   parseDerpMapBody,
   resolveMirrorSourceChain,
 } from "~/server/derp-mirror/sources";
+import { getLastDerpRefresh } from "~/server/derp-refresh";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
 import { loadRemoteDerpMapOutcome } from "~/server/headscale/derp-map-remote";
@@ -106,6 +107,18 @@ const RELAY_SOURCE_KEYS: Record<DerpRelaySource, TranslationKey> = {
   "map-only": "settings.headscale.derp.relaySourceMapOnly",
   none: "settings.headscale.derp.relaySourceNone",
 };
+
+/**
+ * What the last DERP write says about whether the change is live: the outcome
+ * names the mechanism, and the page does not have to guess from the change kind.
+ */
+const DERP_REFRESH_NOTICE_KEYS = {
+  "not-needed": "settings.headscale.derp.refreshNotice.notNeeded",
+  ticker: "settings.headscale.derp.refreshNotice.ticker",
+  triggered: "settings.headscale.derp.refreshNotice.triggered",
+  manual: "settings.headscale.derp.refreshNotice.manual",
+  failed: "settings.headscale.derp.refreshNotice.failed",
+} as const;
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const agentsFeature = context.get(agentsContext);
@@ -308,6 +321,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return {
     access: auth.can(principal, Capabilities.configure_iam),
     writable: headscaleConfig.writable(),
+    // The last DERP write this process performed, so the page can say whether
+    // Headscale's running process has picked it up or still needs a restart.
+    derpRefresh: getLastDerpRefresh() ?? null,
     derpSync: {
       settings: derpSync.settings(),
       last: derpSync.last(),
@@ -501,6 +517,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 keys: <Code>{fatalOidcKeys.join(", ")}</Code>,
                 setting: <Code>node.expiry</Code>,
               })}
+            </Notice>
+          ) : undefined}
+          {loaderData.derpRefresh ? (
+            <Notice
+              title={t(DERP_REFRESH_NOTICE_KEYS[loaderData.derpRefresh.outcome])}
+              variant={loaderData.derpRefresh.pendingRestart ? "warning" : undefined}
+            >
+              {t("settings.headscale.derp.refreshNoticeBody")}
             </Notice>
           ) : undefined}
         </>

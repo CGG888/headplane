@@ -1451,12 +1451,30 @@ const zhHans = {
         "只有在启用 Docker、Kubernetes 或原生(/proc)集成后，HeadplaneCN 才能重新加载或重启 Headscale。设置方法请参阅{link}。",
       processUnavailableLink: "文档",
       processSemanticsReload:
-        "{name}会向 Headscale 进程发送 SIGHUP，在不中断连接的情况下重新加载配置。",
+        "{name}会向 Headscale 进程发送 SIGHUP，它只会就地重新读取访问策略；其它设置需要重启，可在下方打开 allow_restart 后由这里完成。",
       processSemanticsRestart: "{name}会重启 Headscale 容器或 Pod。",
+      restartButton: "立即重启 Headscale",
+      restartTitle: "确定要重启 Headscale 吗？",
+      restartBody:
+        "HeadplaneCN 会停止原生 Headscale 进程，并等待监管程序把它重新启动。启动过程中会重新读取配置文件和所有 DERP 地图文件。",
+      restartWarning:
+        "重启期间所有机器都会断开控制连接，重新连上之前它们的在线状态也可能滞后。只有存在监管程序（systemd、s6、容器运行时等）时 Headscale 才会自动回来；没有监管程序的话，这次操作会让 Headscale 一直停着。",
+      restartWait: "最多可能需要一分钟左右。",
+      restartStage: {
+        noProcess: "没有找到正在运行的 headscale serve 进程。",
+        stalePid: "找到的进程已经不再是 Headscale，没有停止任何进程。",
+        stopTimeout: "Headscale 未能在超时前停止。",
+        notRestarted: "Headscale 已停止，但还没有重新启动，请检查它的监管程序。",
+        unhealthy: "Headscale 已重新启动，但 /health 还没有响应。",
+        healthy: "Headscale 已重新运行。",
+        unsupported: "当前集成无法重启 Headscale。",
+      },
       errors: {
         invalidAction: "请求无效，请重新加载本页后重试。",
         notAvailable: "未启用集成，HeadplaneCN 无法重新加载或重启 Headscale。",
         failed: "集成无法连接 Headscale，详情请查看 HeadplaneCN 日志。",
+        notRestartable: "当前集成无法为你重启 Headscale。",
+        restartFailed: "Headscale 未能成功重启。",
       },
       checks: {
         reachable: {
@@ -1928,13 +1946,25 @@ const zhHans = {
         removePath: "移除",
         refreshTitle: "DERP 地图更新",
         refreshBody:
-          "Headscale 从上述来源刷新 DERP 地图的频率。修改后需要重启 Headscale 才会生效。",
+          "Headscale 自己重读上述 DERP 来源的频率。打开后，地图文件的改动会在下面的频率内被读取；关闭时改动需要重载或重启，HeadplaneCN 会在每次保存后自动触发。",
         autoUpdateLabel: "自动刷新 DERP 地图",
         autoUpdateDescription: "让后台任务定期重新读取 DERP 来源。Headscale 的默认值为 false。",
         updateFrequencyLabel: "更新频率",
         updateFrequencyDescription:
           "刷新 DERP 来源的频率，例如 3h 或 30m。Headscale 的默认值为 3h。",
         saveRefresh: "保存 DERP 更新设置",
+        enableAutoUpdate: "自动刷新地图",
+        enableAutoUpdateHint:
+          "把「自动刷新 DERP 地图」按 10m 间隔保存，之后修改地图文件就无需重启 Headscale。更新任务随 Headscale 启动，所以这次保存仍需要重启一次（集成允许时 HeadplaneCN 会自动重启，否则请手动重载）。",
+        refreshNotice: {
+          notNeeded: "已保存。Headscale 读取的内容没有变化，无需重新加载。",
+          ticker: "已保存。Headscale 会在更新间隔内自行重新读取该文件。",
+          triggered: "已保存并已重新加载，Headscale 已生效。",
+          manual: "已保存，但 Headscale 尚未读取——请重新加载或重启 Headscale 以生效。",
+          failed: "已保存，但重新加载后 Headscale 未恢复健康，请查看 HeadplaneCN 日志。",
+        },
+        refreshNoticeBody:
+          "这是本服务器最近一次 DERP 变更的结果，直到下一次变更前都会显示这条提示。",
         serverTitle: "内嵌 DERP 服务器",
         serverBody:
           "在 Headscale 内部运行一个 DERP 中继。DERP 基于 TLS，因此要求 server_url 使用 https。",
@@ -2744,6 +2774,13 @@ const zhHans = {
       bulkProgress: "正在使 {done}/{total} 个密钥过期…",
       bulkSummary: "已使 {count} 个预授权密钥过期。",
       bulkError: "部分密钥无法过期。列表显示的是 Headscale 中仍保留的密钥，请对失败的密钥重试。",
+      bulkDeleteExpired: "删除全部已过期",
+      bulkDeleteTitle: "删除 {count} 个已过期的预授权密钥？",
+      bulkDeleteBody:
+        "这会从 Headscale 永久删除所有已过期的预授权密钥，不会影响仍然有效的密钥，且无法撤销。",
+      bulkDeleteProgress: "正在删除已过期的预授权密钥…",
+      bulkDeleteSummary: "已删除 {count} 个已过期的预授权密钥。",
+      bulkDeletePartial: "已删除 {deleted} 个已过期密钥，{failed} 个删除失败，可重试或逐行删除。",
       delete: "删除密钥",
       deleteTitle: "删除预授权密钥 {key}？",
       deleteBody:

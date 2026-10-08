@@ -105,7 +105,7 @@ Headscale 自带的原生 gRPC 监听端口（默认 `50443`）是否在本操�
 | GET    | `/api/v1/preauthkey`        | 列出预授权密钥     | 已实现 | `api/resources/pre-auth-keys.ts:36,81` → 设置 → 预授权密钥、`/overview`                         | 规格未列出 `user` 参数，待确认 |
 | POST   | `/api/v1/preauthkey`        | 创建预授权密钥     | 已实现 | `api/resources/pre-auth-keys.ts:43` → 设置 → 预授权密钥、`/ssh/:id`、Agent（`hp-agent.ts:129`） | 支持无属主的 tag-only 密钥     |
 | POST   | `/api/v1/preauthkey/expire` | 使预授权密钥失效   | 已实现 | `api/resources/pre-auth-keys.ts:58` → 设置 → 预授权密钥                                         | 0.28 前后报文不同              |
-| DELETE | `/api/v1/preauthkey`        | 删除预授权密钥记录 | 未实现 | 无调用点                                                                                        | “吊销”已由 expire 覆盖         |
+| DELETE | `/api/v1/preauthkey`        | 删除预授权密钥记录 | 已实现 | `api/resources/pre-auth-keys.ts:96` → 设置 → 预授权密钥（单行删除、一键清理已过期）             | 0.28+ 才有；按稳定 id 删除     |
 
 ### API 密钥
 
@@ -615,7 +615,6 @@ Headscale 自带的原生 gRPC 监听端口（默认 `50443`）是否在本操�
 | --------------------------------- | ------ | --------------------------------------------------------------------------------------------------------- | ------ |
 | `GET /api/v1/node`（`user` 过滤） | 部分   | 大 tailnet 可考虑服务端过滤；目前界面在客户端过滤，功能无缺失                                             | P3     |
 | `POST /api/v1/node/backfillips`   | 未实现 | 建议在 设置 → 系统 增加一个带确认的一次性修复入口（老库升级后节点缺 IP）；动手前先确认 `confirmed` 的语义 | P2     |
-| `DELETE /api/v1/preauthkey`       | 未实现 | 现有“吊销”已用 expire 覆盖主要需求；若要清理历史记录，建议只允许删除已过期/已使用的密钥                   | P3     |
 | `DELETE /api/v1/apikey/{prefix}`  | 未实现 | 同上，expire 已让密钥立即失效；若实现，注意规格同时提供可选 `id` 查询参数                                 | P3     |
 | `POST /api/v1/auth/register`      | 未实现 | 规格缺“待批准列表”端点，UI 没有数据源；建议先不实现，除非改成由操作者粘贴 authId                          | P3     |
 | `POST /api/v1/auth/reject`        | 未实现 | 原因同上；且拒绝后界面无法复核结果                                                                        | P3     |

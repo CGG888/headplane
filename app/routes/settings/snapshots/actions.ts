@@ -8,11 +8,11 @@ import {
   integrationContext,
   snapshotContext,
 } from "~/server/context";
+import { refreshDerpAfterWrite } from "~/server/derp-refresh";
 import { SNAPSHOT_REASONS } from "~/server/snapshots/reasons";
 import { isSnapshotError } from "~/server/snapshots/types";
 import type { Principal } from "~/server/web/auth";
 import { Capabilities } from "~/server/web/roles";
-import log from "~/utils/log";
 
 import type { Route } from "./+types/overview";
 import type { SnapshotActionErrorCode } from "./error-keys";
@@ -116,13 +116,18 @@ export async function snapshotsAction({ request, context }: Route.ActionArgs) {
 
       try {
         const { snapshot, restored } = await snapshots.restore(id);
-        try {
-          // Reloading Headscale is best-effort: the files are already restored,
-          // so a failing integration must not report the restore as failed.
-          await integration?.onConfigChange(headscale);
-        } catch (error) {
-          log.warn("config", "Failed to reload Headscale after a restore: %s", String(error));
-        }
+
+        // A restore can put a DERP map file or Headscale's own configuration
+        // back, so everything this process cached about DERP has to go, and the
+        // deployment gets its usual chance to pick the restored files up. The
+        // refresh never throws: the files are already restored, so a reload that
+        // cannot happen must not report the restore as failed.
+        await refreshDerpAfterWrite({
+          headscale,
+          integration,
+          changeKind: "config",
+          reason: "restore_snapshot",
+        });
 
         await audit?.record({
           ...auditActorOf(principal),

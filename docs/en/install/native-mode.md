@@ -125,11 +125,12 @@ HeadplaneCN and Headscale both run on the same machine because HeadplaneCN needs
 Enabling network management is as simple as setting a few additional fields in
 your HeadplaneCN configuration file:
 
-| Field                          | Description                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.proc.enabled`** | Set to `true` to enable process inspection.                                                                                    |
-| **`headscale.config_path`**    | Path to your Head**scale** configuration file (e.g., `/etc/headscale/config.yaml`).                                            |
-| `headscale.dns_records_path`   | _Optional_. Refer to the [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml) for details. |
+| Field                            | Description                                                                                                                                                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`integration.proc.enabled`**   | Set to `true` to enable process inspection.                                                                                                                                                                     |
+| `integration.proc.allow_restart` | _Optional_ (defaults to `false`). Setting it to `true` adds a **Restart Headscale now** button to the settings page; it only sends SIGTERM, so a supervisor such as systemd or s6 has to start Headscale again. |
+| **`headscale.config_path`**      | Path to your Head**scale** configuration file (e.g., `/etc/headscale/config.yaml`).                                                                                                                             |
+| `headscale.dns_records_path`     | _Optional_. Refer to the [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml) for details.                                                                              |
 
 With these settings in place, restart HeadplaneCN. You should now see additional
 options in the UI navbar such as "DNS" and "Settings" where you can manage your

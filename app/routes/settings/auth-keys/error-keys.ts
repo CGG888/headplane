@@ -1,6 +1,6 @@
 import type { TranslationKey } from "~/i18n";
 
-import type { AuthKeyDeleteErrorCode } from "./result";
+import type { AuthKeyBulkDeleteErrorCode, AuthKeyDeleteErrorCode } from "./result";
 
 /**
  * Stable error codes returned by the pre-auth key delete action, mapped onto
@@ -12,4 +12,10 @@ export const AUTH_KEY_ERROR_KEYS: Record<AuthKeyDeleteErrorCode, TranslationKey>
   invalidKeyId: "errors.generic.requestFailed",
   notFound: "settings.authKeys.errors.notFound",
   unsupported: "settings.authKeys.errors.unsupported",
+};
+
+/** The same mapping for the one-click cleanup, which may also lack an owner. */
+export const AUTH_KEY_BULK_ERROR_KEYS: Record<AuthKeyBulkDeleteErrorCode, TranslationKey> = {
+  ...AUTH_KEY_ERROR_KEYS,
+  forbidden: "errors.permission.manageUserPreAuthKeys",
 };

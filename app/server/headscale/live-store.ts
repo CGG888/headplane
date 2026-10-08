@@ -2,6 +2,7 @@ import type { Machine, User } from "~/types";
 import log from "~/utils/log";
 
 import type { HeadscaleClient } from "./api";
+import { getDerpRevision } from "./derp-revision";
 
 /**
  * Defines a resource that can be fetched and polled by the live store.
@@ -130,6 +131,18 @@ export const usersResource = defineResource("users", {
   pollInterval: 15_000,
   fetch: (api) => api.users.list(),
   project: projectUsers,
+});
+
+/**
+ * A counter, not data: the DERP caches and the files behind them live on this
+ * server, so every Headscale API poll can only tell us whether something
+ * invalidated them since the last one. Reading it never touches the network or
+ * the filesystem — the poll above must not become a DERP fetch.
+ */
+export const derpResource = defineResource("derp", {
+  pollInterval: 15_000,
+  fetch: () => Promise.resolve({ revision: getDerpRevision() }),
+  project: (data) => data,
 });
 
 /**

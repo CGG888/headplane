@@ -35,6 +35,12 @@
 // a run that found nothing to change never is.
 
 import { AUDIT_ACTIONS } from "~/server/audit/actions";
+import {
+  invalidateDerpData,
+  refreshDerpAfterWrite,
+  toReloadState,
+  type DerpReloadTarget,
+} from "~/server/derp-refresh";
 import type { Headscale } from "~/server/headscale/api";
 import { loadHostIpv6Addresses, selectHostIpv6Address } from "~/server/host-addresses";
 import { loadHostEcho, readHostEchoSettings, type HostEchoResult } from "~/server/host-echo";
@@ -86,9 +92,7 @@ export interface DerpSyncConfigPort {
 }
 
 /** The reload/restart integration, as the service needs it. */
-export interface DerpSyncReloadPort {
-  onConfigChange(headscale: Headscale): Promise<void> | void;
-}
+export type DerpSyncReloadPort = DerpReloadTarget;
 
 /** The audit sink, as the service needs it. */
 export interface DerpSyncAuditPort {
@@ -476,20 +480,20 @@ export function createDerpSyncService(options: DerpSyncServiceOptions): DerpSync
    */
   async function reloadAfterWrite(settings: DerpSyncSettings): Promise<DerpSyncReload> {
     if (options.integration === undefined || !settings.autoReload) {
+      invalidateDerpData();
       return "manual";
     }
 
-    try {
-      await options.integration.onConfigChange(options.headscale);
-      return "triggered";
-    } catch (error) {
-      log.warn(
-        "config",
-        "The DERP address sync could not reload Headscale: %s",
-        errorMessage(error),
-      );
-      return "failed";
-    }
+    // This run wrote Headscale's own configuration (`derp.server.ipv4`/`ipv6`),
+    // so only a process that reads that file again can see the new address.
+    const result = await refreshDerpAfterWrite({
+      headscale: options.headscale,
+      integration: options.integration,
+      changeKind: "config",
+      reason: "derp_sync_run",
+    });
+
+    return toReloadState(result.outcome);
   }
 
   /**

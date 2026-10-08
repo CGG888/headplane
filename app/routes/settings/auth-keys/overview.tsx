@@ -21,12 +21,12 @@ import { Capabilities } from "~/server/web/roles";
 import type { PreAuthKey } from "~/types";
 import type { User } from "~/types/User";
 import cn from "~/utils/cn";
-import log from "~/utils/log";
 import { getUserDisplayName } from "~/utils/user";
 
 import type { Route } from "./+types/overview";
 import { authKeysAction } from "./actions";
 import AuthKeyRow from "./auth-key-row";
+import BulkDeleteExpiredAuthKeys from "./bulk-delete";
 import BulkExpireAuthKeys from "./bulk-expire";
 import AddAuthKey from "./dialogs/add-auth-key";
 import {
@@ -38,6 +38,7 @@ import {
   selectExpirableAuthKeys,
   TAG_ONLY,
 } from "./filters";
+import { loadPreAuthKeyGroups } from "./keys.server";
 import SelectCheckbox from "./select-checkbox";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -70,66 +71,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ? usersSnap.data.filter((user) => user.id === currentHeadscaleUserId)
     : usersSnap.data;
 
-  let keys: { user: User | null; preAuthKeys: PreAuthKey[] }[];
-  let missing: { user: User; error: unknown }[] = [];
-
-  // Try fetching all keys at once (Headscale 0.28+), fall back to per-user
-  let allKeys: PreAuthKey[] | null = null;
-  if (api.preAuthKeys.listAll) {
-    try {
-      allKeys = await api.preAuthKeys.listAll();
-    } catch {
-      // Treat any failure as "no global list available" and fall through.
-    }
-  }
-
-  if (allKeys !== null) {
-    const keysByUser = new Map<string | null, PreAuthKey[]>();
-    for (const key of allKeys) {
-      const userId = key.user?.id ?? null;
-      const existing = keysByUser.get(userId) ?? [];
-      existing.push(key);
-      keysByUser.set(userId, existing);
-    }
-
-    keys = [];
-    const tagOnly = selfServiceOnly ? undefined : keysByUser.get(null);
-    if (tagOnly?.length) {
-      keys.push({ preAuthKeys: tagOnly, user: null });
-    }
-    for (const user of users) {
-      const userKeys = keysByUser.get(user.id);
-      if (userKeys?.length) {
-        keys.push({ preAuthKeys: userKeys, user });
-      }
-    }
-  } else {
-    type FetchResult =
-      | { success: true; user: User; preAuthKeys: PreAuthKey[] }
-      | { success: false; user: User; error: unknown; preAuthKeys: [] };
-
-    const results: FetchResult[] = await Promise.all(
-      users
-        .filter((u) => u.id?.length > 0)
-        .map(async (user) => {
-          try {
-            const preAuthKeys = await api.preAuthKeys.listForUser(user.id);
-            return { preAuthKeys, success: true as const, user };
-          } catch (error) {
-            log.error("api", "GET /v1/preauthkey for %s: %o", user.name, error);
-            return { error, preAuthKeys: [] as const, success: false as const, user };
-          }
-        }),
-    );
-
-    keys = results
-      .filter(({ success }) => success)
-      .map(({ user, preAuthKeys }) => ({ preAuthKeys, user }));
-
-    missing = results
-      .filter((r): r is Extract<FetchResult, { success: false }> => !r.success)
-      .map(({ user, error }) => ({ error, user }));
-  }
+  const { keys, missing } = await loadPreAuthKeyGroups(api, users, selfServiceOnly);
 
   return {
     access: canGenerateAny || canGenerateOwn,
@@ -318,6 +260,7 @@ export default function Page({
           <p className="pb-2 text-sm text-mist-600 dark:text-mist-300">
             {t("settings.authKeys.expiredCount", { count: expiredCount })}
           </p>
+          {canDeleteKeys ? <BulkDeleteExpiredAuthKeys count={expiredCount} /> : null}
           <label className="ml-auto flex cursor-pointer items-center gap-2 pb-2 text-sm text-mist-600 dark:text-mist-300">
             <SelectCheckbox
               aria-label={t("settings.authKeys.selectAll")}

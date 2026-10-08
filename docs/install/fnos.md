@@ -39,11 +39,11 @@ fnOS **官方应用中心不提供 headscale**。请先在「飞牛应用中心 
 
 ## 一、先认清三个路径（最容易搞混）
 
-| 路径                          | 角色                | 里面有什么                                                                                                          |
-| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `/vol1/@appcenter/headscale/` | **程序目录**        | `headscale`（可执行文件/CLI）、`bin/headscale-server`（启动脚本）、`config/config.yaml`（**种子模板**）、`ui/`      |
-| `/vol1/@appdata/headscale/`   | **配置 + 数据目录** | `config.yaml`（**真正生效**）、`db.sqlite`、`noise_private.key`、`headscale.sock`、`headscale.pid`、`headscale.log` |
-| `/vol1/1000/APP/headplane/`   | **HeadplaneCN 目录**  | `docker-compose.yml`、`config.yaml`、`data/`（本指南使用这个目录）                                                  |
+| 路径                          | 角色                 | 里面有什么                                                                                                          |
+| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `/vol1/@appcenter/headscale/` | **程序目录**         | `headscale`（可执行文件/CLI）、`bin/headscale-server`（启动脚本）、`config/config.yaml`（**种子模板**）、`ui/`      |
+| `/vol1/@appdata/headscale/`   | **配置 + 数据目录**  | `config.yaml`（**真正生效**）、`db.sqlite`、`noise_private.key`、`headscale.sock`、`headscale.pid`、`headscale.log` |
+| `/vol1/1000/APP/headplane/`   | **HeadplaneCN 目录** | `docker-compose.yml`、`config.yaml`、`data/`（本指南使用这个目录）                                                  |
 
 **为什么生效的是 `@appdata` 那份？** fnOS 的启动脚本 `@appcenter/headscale/bin/headscale-server`
 的关键逻辑就是「种子模板只在第一次落地，之后永远读 `@appdata`」：
@@ -197,7 +197,7 @@ derp:
 - **两个地址族取法不同**：**IPv4 取 `server_url` 主机名的 A 记录**（私有、CGNAT、回环与链路本地
   答复会被拒绝）；**IPv6 取宿主机自己的全局单播地址**（稳定地址优先于会轮换的隐私地址，域名
   AAAA 指到的那个优先；可选的**仅 IPv6 回显**在路由器转发或转换 IPv6 时是权威答案）。
-:::
+  :::
 
 ::: tip 中继地址：IPv4 看 DNS，IPv6 要看**宿主机自己**
 `derp.server.ipv4` / `ipv6` 是 Headscale 公布给客户端的地址，两个地址族的取法不一样
@@ -272,7 +272,7 @@ getting DERPMap: open /etc/headscale/derp-maps/derp.yaml: no such file or direct
 2. **把这个目录按原路径读写挂进容器**（第七节 compose 的 `volumes`，容器内路径与宿主机逐字相同）：
 
    ```yaml
-     - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
+   - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
    ```
 
    然后 `docker compose up -d` 重建容器。Docker 以**更具体**的挂载点为准，所以这份挂载会
@@ -552,18 +552,18 @@ curl -I http://192.0.2.10:4100/admin
 
 这里有**两条**反代链路，要求完全不同，别混在一起：
 
-| 链路          | 前端                                                          | 后端                       | 关注点                                            |
-| ------------- | ------------------------------------------------------------- | -------------------------- | ------------------------------------------------- |
+| 链路            | 前端                                                          | 后端                     | 关注点                                            |
+| --------------- | ------------------------------------------------------------- | ------------------------ | ------------------------------------------------- |
 | **HeadplaneCN** | `https://headplane.example.com`                               | `http://192.0.2.10:4100` | `base_url`、跨站校验、WebSocket（浏览器 SSH）     |
-| **Headscale** | `https://headscale.example.com`（自建 DERP 时通常带 `:8443`） | `http://192.0.2.10:8480` | **原样透传路径**、放行 HTTP Upgrade、关闭响应缓冲 |
+| **Headscale**   | `https://headscale.example.com`（自建 DERP 时通常带 `:8443`） | `http://192.0.2.10:8480` | **原样透传路径**、放行 HTTP Upgrade、关闭响应缓冲 |
 
 ### 9.1 HeadplaneCN 的反代
 
-| 项目                        | 要求                                                                                      |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| **保留原始 Host**           | 建议让后端看到的 `Host` 就是浏览器访问的域名；若 Lucky 改写成内网 IP，就会出现下面问题 1  |
-| **`server.base_url`**       | 必须与浏览器地址完全一致（协议 + 域名 + 端口），否则保存类操作会被判定为跨站              |
-| **WebSocket**（浏览器 SSH） | 转发 `Upgrade: websocket`、`Connection: Upgrade`，`Sec-WebSocket-Protocol` 原样透传       |
+| 项目                        | 要求                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| **保留原始 Host**           | 建议让后端看到的 `Host` 就是浏览器访问的域名；若 Lucky 改写成内网 IP，就会出现下面问题 1    |
+| **`server.base_url`**       | 必须与浏览器地址完全一致（协议 + 域名 + 端口），否则保存类操作会被判定为跨站                |
+| **WebSocket**（浏览器 SSH） | 转发 `Upgrade: websocket`、`Connection: Upgrade`，`Sec-WebSocket-Protocol` 原样透传         |
 | **CORS**（浏览器 SSH）      | HeadplaneCN 与 Headscale 不同源时，Headscale 侧需返回 `Access-Control-Allow-Origin`（见下） |
 
 Headscale 侧（不同源时）需要补充的响应头：
@@ -639,14 +639,14 @@ tailscale debug derp <你的 region_code>
 （OIDC 是否配置、策略模式、可信代理数量、内嵌中继状态、密钥数量、Agent 同步、快照体积、
 检查结果），保存按钮统一右对齐；窄屏下 Tab 可横向滚动。各页面：
 
-| 页面                  | 内容                                                                                                                                                                                                                                                 |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 页面                  | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/settings/headscale` | OIDC 全量配置、可信代理、策略模式（file/database）、节点有效期 / 临时节点回收 / 日志级别与格式 / Taildrop / 自动更新 / logtail / 更新检查，以及 **DERP**（自定义 map、内嵌服务器预设、区域名称映射、连通性提示、由 `server_url` 推导的公开中继端口、**地址自动同步**（计划、地址族、自动重载、外部 IPv6 回显、探测面板，「检查」预演 / 「立即运行」写入）、以及 `derp.paths` 本地地图的**在线查看 / 编辑 / 保存 / 回滚 / 用示例创建**（路径按宿主机绝对路径填写，容器要按同一路径挂载；每行给出存在 / 可读 / 可写 / YAML / 结构 / 唯一性检查） |
-| `/settings/system`    | Headscale 版本与更新提示、诊断（可达性、API Key、版本、策略模式、OIDC、可信代理、配置可读性、集成）、**配置检查**（见下），以及由进程集成驱动的「重新加载配置 / 重启 Headscale」按钮                                                                 |
-| `/settings/api-keys`  | 创建、查看与**使 Headscale API Key 过期**                                                                                                                                                                                                            |
-| `/settings/audit`     | 操作审计：谁在什么时候改了什么                                                                                                                                                                                                                       |
-| `/settings/snapshots` | 写入 Headscale 配置前自动留一份快照（`config.yaml`，文件模式下还有策略文件），支持下载与一键恢复；**不备份数据库**                                                                                                                                   |
-| `/settings/agent`     | Agent 状态、上次同步时间与节点数、立即同步、批准待处理注册；api_key 被拒时直接提示是配置里的哪把 key 无效并给出跳转                                                                                                                                  |
+| `/settings/system`    | Headscale 版本与更新提示、诊断（可达性、API Key、版本、策略模式、OIDC、可信代理、配置可读性、集成）、**配置检查**（见下），以及由进程集成驱动的「重新加载配置 / 重启 Headscale」按钮                                                                                                                                                                                                                                                                                                                                                           |
+| `/settings/api-keys`  | 创建、查看与**使 Headscale API Key 过期**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `/settings/audit`     | 操作审计：谁在什么时候改了什么                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `/settings/snapshots` | 写入 Headscale 配置前自动留一份快照（`config.yaml`，文件模式下还有策略文件），支持下载与一键恢复；**不备份数据库**                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `/settings/agent`     | Agent 状态、上次同步时间与节点数、立即同步、批准待处理注册；api_key 被拒时直接提示是配置里的哪把 key 无效并给出跳转                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 配置检查（web 版 `configtest`）会逐项给出结论与修复入口：已从 Headscale 移除的 `oidc.*` 键、
 被拒绝的可信代理范围（`0.0.0.0/0` 与 `::/0`）、TLS 证书/ACME 路径缺失、数据库目录缺失或不可写、
@@ -656,18 +656,18 @@ tailscale debug derp <你的 region_code>
 
 ## 十一、功能开启清单
 
-| 功能                   | 怎么开                                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 中英繁切换             | 默认可用：登录后右上角**头像菜单**；登录页右上角地球按钮                                                            |
-| 机器 / 用户管理        | 默认可用                                                                                                            |
-| **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                    |
-| **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 发 SIGHUP 使其重载                        |
-| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 HeadplaneCN                                                      |
-| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径** + 把该目录按**相同绝对路径读写**挂给 HeadplaneCN（见第四节）；保存后需重载/重启 headscale 才生效 |
-| **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它     |
-| **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                             |
-| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **HeadplaneCN 用 OIDC 登录**（API Key 登录不支持）                            |
-| VNC / RDP              | ❌ HeadplaneCN 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole |
+| 功能                   | 怎么开                                                                                                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 中英繁切换             | 默认可用：登录后右上角**头像菜单**；登录页右上角地球按钮                                                                                                                                                                |
+| 机器 / 用户管理        | 默认可用                                                                                                                                                                                                                |
+| **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                                                                                                                        |
+| **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 触发重载，但 SIGHUP 只重载 ACL，需要重启的改动请开 `integration.proc.allow_restart` 或用系统方式重启 headscale                                |
+| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 HeadplaneCN                                                                                                                                                        |
+| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径** + 把该目录按**相同绝对路径读写**挂给 HeadplaneCN（见第四节）；保存后 HeadplaneCN 会自动触发重载/重启（原生部署默认只提示，需 `integration.proc.allow_restart` 或手动重启） |
+| **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它                                                                                                         |
+| **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                                                                                                                                 |
+| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **HeadplaneCN 用 OIDC 登录**（API Key 登录不支持）                                                                                                                              |
+| VNC / RDP              | ❌ HeadplaneCN 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole                                                                                                   |
 
 ## 十二、升级、备份与卸载
 

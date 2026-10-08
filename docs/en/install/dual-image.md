@@ -132,7 +132,8 @@ services:
     depends_on:
       - headscale
     network_mode: host
-    # REQUIRED: integration.proc reads /proc to find headscale serve and send it SIGHUP
+    # REQUIRED: integration.proc reads /proc to find headscale serve so it can signal it
+    # (SIGHUP only reloads the ACL; set integration.proc.allow_restart: true to restart it here)
     pid: host
     volumes:
       # HeadplaneCN's own configuration (read-only is enough)

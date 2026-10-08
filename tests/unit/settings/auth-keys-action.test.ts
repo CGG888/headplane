@@ -282,3 +282,207 @@ describe("Pre-auth key deletion", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 });
+
+interface BulkDeleteOptions {
+  canGenerateAny?: boolean;
+  canGenerateOwn?: boolean;
+  /** False to model a Headscale older than 0.28, where the method is absent. */
+  supported?: boolean;
+  /** Ids whose delete call rejects with the given error instead of succeeding. */
+  failWith?: Record<string, unknown>;
+  /** True to model an account with no linked Headscale user. */
+  missingLink?: boolean;
+}
+
+/** A key that is still usable: not spent and not past its expiration. */
+function activeKey(id: string, userId: string | null) {
+  return {
+    id,
+    key: `key-${id}`,
+    user: userId === null ? null : { id: userId },
+    reusable: false,
+    ephemeral: false,
+    used: false,
+    expiration: new Date(Date.now() + 86_400_000).toISOString(),
+    createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    aclTags: [],
+  };
+}
+
+/** An expired key: past its expiration, or a spent single-use key. */
+function expiredKey(id: string, userId: string | null, spent = false) {
+  return {
+    ...activeKey(id, userId),
+    used: spent,
+    expiration: new Date(Date.now() - 86_400_000).toISOString(),
+  };
+}
+
+function bulkRequest(): Request {
+  const formData = new FormData();
+  formData.set("action_id", "delete_expired_preauthkeys");
+  return { formData: () => Promise.resolve(formData) } as unknown as Request;
+}
+
+async function submitBulkDelete(options: BulkDeleteOptions = {}) {
+  const { authKeysAction } = await import("~/routes/settings/auth-keys/actions");
+
+  // 1 is active, 2 and 3 are expired, 4 belongs to another user, 5 has no owner.
+  const keys = [
+    activeKey("1", "1"),
+    expiredKey("2", "1", true),
+    expiredKey("3", "1"),
+    expiredKey("4", "9"),
+    expiredKey("5", null),
+  ];
+
+  const remove = vi.fn(async (id: string) => {
+    const failure = options.failWith?.[id];
+    if (failure) throw failure;
+  });
+
+  const record = vi.fn().mockResolvedValue(undefined);
+  const listUsers = vi.fn().mockResolvedValue([
+    { id: "1", name: "alice", provider: "oidc", providerId: "https://idp.example.com/alice" },
+    { id: "9", name: "someone", provider: "oidc", providerId: "https://idp.example.com/other" },
+  ]);
+
+  const canGenerateAny = options.canGenerateAny ?? true;
+  const canGenerateOwn = options.canGenerateOwn ?? true;
+
+  const context = {
+    get: (key: unknown) => {
+      if (key === authContext) {
+        return {
+          can: (_principal: unknown, capability: number) =>
+            capability === Capabilities.generate_authkeys ? canGenerateAny : canGenerateOwn,
+        };
+      }
+      if (key === requestApiContext) {
+        return () =>
+          Promise.resolve({
+            principal: {
+              ...PRINCIPAL,
+              user: {
+                ...PRINCIPAL.user,
+                headscaleUserId: options.missingLink ? undefined : PRINCIPAL.user.headscaleUserId,
+              },
+            },
+            api: {
+              preAuthKeys:
+                options.supported === false ? {} : { delete: remove, listAll: async () => keys },
+              users: { list: listUsers },
+            },
+          });
+      }
+      if (key === auditContext) {
+        return { record };
+      }
+      return undefined;
+    },
+  };
+
+  let result: { data: unknown; init?: { status?: number } | null };
+  try {
+    result = (await authKeysAction({
+      request: bulkRequest(),
+      context,
+      params: {},
+    } as never)) as typeof result;
+  } catch (thrown) {
+    result = thrown as typeof result;
+  }
+
+  return { result, remove, record, listUsers };
+}
+
+describe("Bulk deletion of expired pre-auth keys", () => {
+  test("deletes every expired key and leaves active ones alone", async () => {
+    const { result, remove } = await submitBulkDelete();
+
+    expect(result.init?.status ?? 200).toBe(200);
+    expect(result.data).toEqual({ success: true, deleted: 4, failed: 0 });
+    expect(remove.mock.calls.map(([id]) => id).sort()).toEqual(["2", "3", "4", "5"]);
+  });
+
+  test("records one audit entry per deleted key", async () => {
+    const { record } = await submitBulkDelete();
+
+    expect(record).toHaveBeenCalledTimes(4);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "pre_auth_key.delete",
+        target: "preauthkey:3",
+        result: "success",
+      }),
+    );
+  });
+
+  // A self-service account is scoped to its own user and never sees ownerless
+  // keys, so the cleanup cannot touch another account's records.
+  test("limits a self-service account to its own keys", async () => {
+    const { result, remove } = await submitBulkDelete({
+      canGenerateAny: false,
+      canGenerateOwn: true,
+    });
+
+    expect(result.data).toEqual({ success: true, deleted: 2, failed: 0 });
+    expect(remove.mock.calls.map(([id]) => id).sort()).toEqual(["2", "3"]);
+  });
+
+  // Already gone is the goal of the cleanup, so it is not reported as a failure.
+  test("treats a key Headscale no longer has as deleted", async () => {
+    const { result, remove } = await submitBulkDelete({
+      failWith: {
+        "3": {
+          data: {
+            requestUrl: "DELETE v1/preauthkey?id=3",
+            statusCode: 404,
+            detail: "not found",
+            data: null,
+          },
+          init: { status: 502 },
+        },
+      },
+    });
+
+    expect(result.data).toEqual({ success: true, deleted: 4, failed: 0 });
+    expect(remove).toHaveBeenCalledTimes(4);
+  });
+
+  test("counts any other failure without stopping the cleanup", async () => {
+    const { result, remove, record } = await submitBulkDelete({
+      failWith: { "3": new Error("boom") },
+    });
+
+    expect(result.data).toEqual({ success: true, deleted: 3, failed: 1 });
+    expect(remove).toHaveBeenCalledTimes(4);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "pre_auth_key.delete",
+        target: "preauthkey:3",
+        result: "failure",
+      }),
+    );
+  });
+
+  test("refuses a Headscale that cannot delete pre-auth keys", async () => {
+    const { result, remove } = await submitBulkDelete({ supported: false });
+
+    expect(result.init?.status).toBe(400);
+    expect((result.data as { errorCode: string }).errorCode).toBe("unsupported");
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  test("refuses a self-service account with no linked Headscale user", async () => {
+    const { result, remove } = await submitBulkDelete({
+      canGenerateAny: false,
+      canGenerateOwn: true,
+      missingLink: true,
+    });
+
+    expect(result.init?.status).toBe(403);
+    expect((result.data as { errorCode: string }).errorCode).toBe("forbidden");
+    expect(remove).not.toHaveBeenCalled();
+  });
+});

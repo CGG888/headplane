@@ -120,7 +120,8 @@ services:
     depends_on:
       - headscale
     network_mode: host
-    # 【必须】integration.proc 要读 /proc 找到 headscale serve 并向它发 SIGHUP
+    # 【必须】integration.proc 要读 /proc 找到 headscale serve，才能给它发信号
+    #（SIGHUP 只重载 ACL；要由界面重启进程需设 integration.proc.allow_restart: true）
     pid: host
     volumes:
       # HeadplaneCN 自己的配置（只读即可）
@@ -486,7 +487,7 @@ curl -s http://127.0.0.1:8080/health                # {"status":"pass"}
 - [ ] `设置 → Headscale` 能保存配置，并触发一次成功重载（日志里 `Sent SIGHUP to Headscale`）
 - [ ] **已注册客户端不重新注册即可上线**（`tailscale status` 直接显示已连接）
 - [ ] 内嵌中继真的被使用：`tailscale debug derp-map` 能看到区域，`tailscale debug derp
-    headscale` 能连通，机器详情页的中继卡片显示该区域
+headscale` 能连通，机器详情页的中继卡片显示该区域
 - [ ] 通过 Lucky 能打开 `https://admin.<domain>:8443/admin`
 - [ ] 「官方区域节点筛选」卡片的目标路径是 `/etc/headscale/derp-maps/official-mirror.yaml`，
       并且**这同一条路径**出现在 `derp.paths` 里、文件确实存在
