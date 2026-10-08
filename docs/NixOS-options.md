@@ -205,6 +205,97 @@ _Type:_ absolute path
 
 _Default:_ `"/var/lib/headplane/agent"`
 
+## settings.integration.docker
+
+_Description:_ Docker 容器集成设置。
+
+_Type:_ submodule
+
+_Default:_ `{ }`
+
+## settings.integration.docker.container_label
+
+_Description:_ 未设置 container_name 时用来查找 Headscale 容器的标签。
+未设置时，HeadplaneCN 回退到 me.tale.headplane.target=headscale。
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"me.tale.headplane.target=headscale"`
+
+## settings.integration.docker.container_name
+
+_Description:_ 要管理的 Headscale 容器名称。
+未设置时，HeadplaneCN 改用 container_label 查找该容器。
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"headscale"`
+
+## settings.integration.docker.enabled
+
+_Description:_ 让 HeadplaneCN 通过 Docker 套接字管理 Headscale 容器。
+保存配置改动会重启该容器。
+运行 HeadplaneCN 进程的用户需要能访问该套接字，
+例如把 docker 组加入该用户的 extraGroups。
+当同时启用多个集成时，HeadplaneCN 会优先使用 Docker，
+所以建议把 integration.proc.enabled 设为 false，让这个选择没有歧义。
+
+_Type:_ boolean
+
+_Default:_ `false`
+
+## settings.integration.docker.socket
+
+_Description:_ 要连接的 Docker 套接字。
+未设置时，HeadplaneCN 回退到 unix:///var/run/docker.sock。
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"unix:///var/run/docker.sock"`
+
+## settings.integration.kubernetes
+
+_Description:_ Kubernetes (k8s) 集成设置。
+
+_Type:_ submodule
+
+_Default:_ `{ }`
+
+## settings.integration.kubernetes.enabled
+
+_Description:_ 让 HeadplaneCN 通过它所在集群的 Kubernetes API 管理 Headscale。
+保存配置改动会重启该 Pod。
+
+_Type:_ boolean
+
+_Default:_ `false`
+
+## settings.integration.kubernetes.pod_name
+
+_Description:_ 运行 Headscale 的 Pod 名称。启用该集成时必填，
+因为 HeadplaneCN 会在自己的命名空间里查找该 Pod。
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"headscale-0"`
+
+## settings.integration.kubernetes.validate_manifest
+
+_Description:_ 在向 Pod 发送信号前检查它是否存在且健康。
+只有在 HeadplaneCN 无法列出所在命名空间的 Pod 时才应设为 false。
+
+_Type:_ boolean
+
+_Default:_ `true`
+
 ## settings.integration.proc
 
 _Description:_ 原生进程集成设置。

@@ -48,7 +48,7 @@ async function submit(entries: Record<string, string>, options: SubmitOptions = 
       (() => Promise.resolve({ snapshot: { id: "snap-1" }, restored: ["config.yaml"] })),
   );
   const record = vi.fn(options.record ?? (() => Promise.resolve(undefined)));
-  const onConfigChange = vi.fn().mockResolvedValue(true);
+  const onConfigChange = vi.fn().mockResolvedValue({ ok: true, stage: "healthy" });
 
   const context = {
     get: (key: unknown) => {

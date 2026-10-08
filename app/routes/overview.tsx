@@ -34,12 +34,17 @@ import {
   useOverviewCardVisible,
   useOverviewCardsScope,
 } from "~/components/overview-card-manager";
+import { RegionFlag } from "~/components/region-flag";
 import { SettingsPage, SettingsStatus, type SettingsStatusTone } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 import CopyValue from "~/routes/machines/components/copy-value";
 import { FleetTrendBar } from "~/routes/machines/components/history-bar";
-import { configuredDerpRegion, resolveDerpRegionLabel } from "~/routes/machines/derp-info";
+import {
+  configuredDerpRegion,
+  resolveDerpRegionIdentity,
+  resolveDerpRegionLabel,
+} from "~/routes/machines/derp-info";
 import { relayAddressLines, type RelayAddressLine } from "~/routes/machines/relay-verdicts";
 import {
   agentsContext,
@@ -1086,6 +1091,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             <Fact
               code
               label={t("overview.derp.region")}
+              leading={
+                <RegionFlag
+                  {...resolveDerpRegionIdentity(derp.region?.regionId, {
+                    ...derp.regions,
+                    embedded: derp.region,
+                  })}
+                />
+              }
               text={
                 resolveDerpRegionLabel(
                   derp.region?.regionId,
@@ -1339,6 +1352,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                               addressesHidden || endpoints.length === 0 ? undefined : endpoints
                             }
                           >
+                            <RegionFlag name={region.name} />
                             <span className="font-mono text-xs text-mist-500 dark:text-mist-400">
                               #{region.regionId}
                             </span>
@@ -1705,6 +1719,11 @@ interface FactProps {
   code?: boolean;
   text?: string | number;
   reason?: string;
+  /**
+   * A small decorative mark drawn before the value, e.g. the flag of the region
+   * a DERP region id names. The value keeps its truncation and its alignment.
+   */
+  leading?: ReactNode;
 }
 
 /**
@@ -1719,7 +1738,17 @@ interface FactProps {
  * still truncates, with its full text in the title, in the one case nothing can
  * help: a value longer than the whole row.
  */
-function Fact({ label, source, note, hint, children, code = false, text, reason }: FactProps) {
+function Fact({
+  label,
+  source,
+  note,
+  hint,
+  children,
+  code = false,
+  text,
+  reason,
+  leading,
+}: FactProps) {
   const { t } = useI18n();
 
   return (
@@ -1743,11 +1772,14 @@ function Fact({ label, source, note, hint, children, code = false, text, reason 
               {reason ? t("overview.unavailableReason", { reason }) : t("overview.unavailable")}
             </span>
           ) : (
-            <span
-              className="block truncate text-sm font-medium text-mist-900 dark:text-mist-50"
-              title={String(text)}
-            >
-              {code ? <Code>{String(text)}</Code> : String(text)}
+            <span className="flex min-w-0 items-center gap-x-1.5 sm:justify-end">
+              {leading}
+              <span
+                className="min-w-0 truncate text-sm font-medium text-mist-900 dark:text-mist-50"
+                title={String(text)}
+              >
+                {code ? <Code>{String(text)}</Code> : String(text)}
+              </span>
             </span>
           ))}
       </dd>

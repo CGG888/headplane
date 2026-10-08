@@ -68,7 +68,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   if (auth.can(principal, Capabilities.ui_access)) {
-    return redirect("/machines");
+    // The overview is the one UI page `ui_access` alone opens; the machine list
+    // needs `read_machines`, so it is a safe landing page for every principal.
+    return redirect("/overview");
   }
 
   // No UI access — show the download/connect page

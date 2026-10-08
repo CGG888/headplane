@@ -58,6 +58,10 @@ The file is named `headplane-audit-YYYYMMDD-HHMMSS.csv` (or `.json`), with the
 timestamp in UTC so repeated downloads stay distinct, and is sent with
 `Cache-Control: no-store`.
 
+The list and the **operation detail** dialog render each timestamp in your
+browser's time zone and name that zone (for example `GMT+8`); the `at` value
+inside an export stays an absolute ISO 8601 UTC timestamp.
+
 ::: warning What it does not cover
 Only changes made **through HeadplaneCN** are recorded. Edits made with
 `headscale` on the host, or by hand in `config.yaml`, never pass through

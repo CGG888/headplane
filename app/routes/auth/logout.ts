@@ -43,7 +43,7 @@ export function isSameSiteLogout(request: Request) {
 async function performLogout({ request, context }: ActionFunctionArgs | LoaderFunctionArgs) {
   if (!isSameSiteLogout(request)) {
     log.warn("auth", "Refusing cross-site logout request from %s", request.headers.get("referer"));
-    return redirect("/machines");
+    return redirect("/overview");
   }
 
   const auth = context.get(authContext);

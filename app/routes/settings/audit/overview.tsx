@@ -393,9 +393,11 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
     entry.result === "success"
       ? t("settings.audit.resultSuccess")
       : t("settings.audit.resultFailure");
-  // Pinned to UTC so the server-rendered timestamp matches the browser's: the
-  // two run in different time zones and otherwise disagreed on hydration.
-  const takenAt = new Date(entry.at).toLocaleString(locale, { timeZone: "UTC" });
+  // The log records an instant, so show it in the reader's own time zone and
+  // name that zone. Server and browser run in different zones, so the first
+  // paint disagrees; `suppressHydrationWarning` keeps React from calling that
+  // expected difference a hydration error.
+  const takenAt = new Date(entry.at).toLocaleString(locale, { timeZoneName: "short" });
 
   return (
     <TableList.Item className="p-0">
@@ -417,7 +419,7 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
           {entry.detail ? <span className="text-xs opacity-60">{entry.detail}</span> : undefined}
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1 text-sm">
-          <span>{takenAt}</span>
+          <span suppressHydrationWarning>{takenAt}</span>
           <span className="opacity-80">{entry.actor}</span>
           <span className="text-xs opacity-60">{t(ACTOR_TYPE_KEYS[entry.actorType])}</span>
         </span>
@@ -430,7 +432,7 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
           <dl className="flex flex-col gap-4">
             <DetailRow label={t("settings.audit.detailAction")} value={action} />
             <DetailRow label={t("settings.audit.detailResult")} value={result} />
-            <DetailRow label={t("settings.audit.detailTime")} value={takenAt} />
+            <DetailRow label={t("settings.audit.detailTime")} value={takenAt} isLocalTime />
             <DetailRow label={t("settings.audit.detailActor")} value={entry.actor} />
             <DetailRow
               label={t("settings.audit.detailActorType")}
@@ -451,11 +453,24 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+  label,
+  value,
+  isLocalTime,
+}: {
+  label: string;
+  value: string;
+  isLocalTime?: boolean;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-xs font-medium tracking-wide uppercase opacity-60">{label}</dt>
-      <dd className="text-sm break-words whitespace-pre-wrap">{value}</dd>
+      <dd
+        className="text-sm break-words whitespace-pre-wrap"
+        suppressHydrationWarning={isLocalTime}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

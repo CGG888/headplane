@@ -9,13 +9,12 @@
  * browser bundle.
  *
  * The numbering preview mirrors the server's `assignRegionNumbers` instead of
- * inventing a rule of its own: the loader hands over the ranking order, the
- * pinned anchors and the numbers no region may take, and
- * {@link previewRegionNumbers} numbers exactly the regions that are ticked
- * right now — anchors first, then the numbers the stored assignment already
- * holds for further ticked regions, then the rest in the loader's order. A
- * number the stored assignment keeps for a region that is no longer ticked is
- * never shown, and a cleared selection previews no numbers at all.
+ * inventing a rule of its own: the loader hands over the ranking order and the
+ * numbers no region may take, and {@link previewRegionNumbers} numbers exactly
+ * the regions that are ticked right now — first the numbers the stored
+ * assignment already holds, then the rest in the loader's order starting at
+ * 901. A number the stored assignment keeps for a region that is no longer
+ * ticked is never shown, and a cleared selection previews no numbers at all.
  */
 
 import type { TranslationKey } from "~/i18n";
@@ -188,20 +187,19 @@ export const MIRROR_PROBE_OUTCOME_KEYS: Partial<Record<DerpMirrorProbeOutcome, T
 };
 
 /**
- * The order and the fixed anchors the server's rule produced for the full set of
- * official regions: the two pinned regions (Hong Kong at 901, Singapore at 902)
- * and every region id in the order a fresh ranking numbers them.
+ * The order the server's rule produced for the full set of official regions:
+ * every region id in the order a fresh ranking numbers them, so the first entry
+ * is the one a fresh ranking makes 901.
  */
 export interface MirrorNumbering {
-  fixed: { officialId: number; number: number }[];
-  /** The first number a freely assigned region would get (903 with both anchors). */
+  /** The first number a freely assigned region would get (901). */
   firstFreeNumber: number;
   /** Official region ids in the server's ranking order. */
   order: number[];
   /**
-   * Numbers no ranked region may ever take: the two anchors and Headscale's
-   * embedded region id. The server keeps them free, so a stored assignment that
-   * uses one of them cannot be kept either.
+   * Numbers no ranked region may ever take: Headscale's embedded region id. The
+   * server keeps it free, so a stored assignment that uses it cannot be kept
+   * either.
    */
   reserved: number[];
 }
@@ -273,13 +271,12 @@ export type MirrorRun = DerpMirrorRun;
 /**
  * The live numbering for a selection.
  *
- * The rule is the server's, mirrored: the pinned anchors are numbered only while
- * they are ticked, a ticked region the stored assignment already numbers keeps
- * that number when the server would keep it, and every remaining ticked region
- * is ranked in the loader's order and appended after the highest number in use.
- * Nothing is numbered for a region that is not ticked, so clearing the selection
- * empties the preview immediately and a stored number can never survive a change
- * that dropped the region it belongs to.
+ * The rule is the server's, mirrored: a ticked region the stored assignment
+ * already numbers keeps that number when the server would keep it, and every
+ * remaining ticked region is ranked in the loader's order and numbered from 901
+ * upward, past the numbers already in use. Nothing is numbered for a region that
+ * is not ticked, so clearing the selection empties the preview immediately and a
+ * stored number can never survive a change that dropped the region it belongs to.
  */
 export function previewRegionNumbers(
   numbering: MirrorNumbering,
@@ -288,23 +285,12 @@ export function previewRegionNumbers(
 ): Map<number, number> {
   const numbers = new Map<number, number>();
   const used = new Set<number>(numbering.reserved);
-  for (const entry of numbering.fixed) {
-    used.add(entry.number);
-  }
-
-  const anchors = new Set<number>();
-  for (const entry of numbering.fixed) {
-    anchors.add(entry.officialId);
-    if (selected.has(entry.officialId)) {
-      numbers.set(entry.officialId, entry.number);
-    }
-  }
 
   // The regions the stored assignment cannot keep a number for, in the order a
   // fresh ranking puts them: the loader already ranked every region that way.
   const ranked: number[] = [];
   for (const officialId of numbering.order) {
-    if (!selected.has(officialId) || anchors.has(officialId)) {
+    if (!selected.has(officialId)) {
       continue;
     }
 
@@ -374,29 +360,6 @@ export function storedRegionNumbers(regions: readonly MirrorRegionRow[]): Map<nu
   }
 
   return stored;
-}
-
-/** The selection a fresh card starts from: the two pinned anchors. */
-export function defaultMirrorSelection(numbering: MirrorNumbering): Set<number> {
-  return new Set(fixedRegionIds(numbering));
-}
-
-/** True when the selection holds nothing but the pinned anchors. */
-export function isDefaultMirrorSelection(
-  numbering: MirrorNumbering,
-  selected: ReadonlySet<number>,
-): boolean {
-  const anchors = fixedRegionIds(numbering);
-  return selected.size === anchors.length && anchors.every((id) => selected.has(id));
-}
-
-/**
- * Official ids of the pinned regions. The two anchors cannot be ticked one by
- * one, so the default selection above is how an operator brings them back after
- * clearing, and their numbers are never handed to another region.
- */
-export function fixedRegionIds(numbering: MirrorNumbering): number[] {
-  return numbering.fixed.map((entry) => entry.officialId);
 }
 
 /**

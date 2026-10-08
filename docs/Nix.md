@@ -50,6 +50,8 @@ github:CGG888/headplaneCN/ec6d455461955242393b60d9ce60c5123fa9784f?narHash=sha25
 以 `services.headplane.*` 定义，细节请查看 `./nix/` 目录。\
 由 `mise run nixos-docs` 生成的 `services.headplane.settings.*` 完整选项列表：[./NixOS-options.md](./NixOS-options.md)
 
+`settings.integration` 声明了三种与 Headscale 交互的方式：`proc`（面板与 Headscale 在同一台机器上以原生进程运行，模块默认启用）、`docker`（两者都跑在容器里，面板通过 Docker socket 重启 Headscale 容器）与 `kubernetes`。运行时只会采用其中一个，优先顺序为 `docker` → `kubernetes` → `proc`，所以启用 `docker` 时建议把 `integration.proc.enabled` 设为 `false`；此外，只要系统里存在 `docker` 组，模块就会把它加进服务用户的附加组。
+
 ## 使用方法
 
 1. 添加 `github:CGG888/headplaneCN` flake 输入。

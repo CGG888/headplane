@@ -499,16 +499,18 @@ renumbering them into the 900s. The card starts collapsed; its summary reads
 
 The table lists every official region with the number it would be mirrored as,
 the Chinese name the mirrored file carries, the official code and name, how many
-nodes the region has, the latency the agent measured, and a checkbox. Ticking a
-box only changes the preview: nothing is written until **Save**.
+nodes the region has, the latency the agent measured, and a checkbox. Each name
+is preceded by the **flag** of the country the region sits in, resolved from the
+region's code (`hkg`, `fra`) or name (香港, 东京); a region the tables cannot
+place is left unmarked. Ticking a box only changes the preview: nothing is
+written until **Save**.
 
 Numbers are the point of the card:
 
-| Region                 | Number                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| Hong Kong              | **901**, always — its checkbox cannot be cleared                                                       |
-| Singapore              | **902**, always — its checkbox cannot be cleared                                                       |
-| Everything else ticked | **903** and up, fastest measured latency first; equal latencies go to the lower official id, then code |
+| Region                | Number                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| Every ticked region   | **901** and up, fastest measured latency first; equal latencies go to the lower official id, then code |
+| Every unticked region | no number and no entry in the mirrored file; **nothing is ticked by default**                          |
 
 A number is **sticky**: once a region has one it keeps it across later runs, so a
 client's relay choice does not change just because a latency sample moved. Only
@@ -516,12 +518,12 @@ client's relay choice does not change just because a latency sample moved. Only
 
 The settings, all written by **Save**:
 
-| Setting              | Default                                                   | Notes                                                                                                                                                                                                                                                  |
-| -------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Enable the mirror    | off                                                       | Enabling lets HeadplaneCN rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                                                   |
-| Target file path     | `/vol1/@appdata/headscale/derp-maps/official-mirror.yaml` | An absolute path **on the Headscale host**, inside a directory mounted into the container. This task maintains the file, so edits made by hand are overwritten — use a dedicated file.                                                                 |
-| Refresh interval     | every 24 hours                                            | 6, 12 or 24 hours.                                                                                                                                                                                                                                     |
-| Reload after writing | on                                                        | When a run actually changed the file, HeadplaneCN asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you. |
+| Setting              | Default                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Enable the mirror    | off                                                    | Enabling lets HeadplaneCN rewrite a file Headscale loads, so it is opt-in. A manual run still works while it is off.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Target file path     | **Automatic** (derived from Headscale's configuration) | An absolute path **on the Headscale host**, inside a directory mounted into the container. It is derived by default: the directory of the first absolute `derp.paths` entry plus `official-mirror.yaml`; without a local map file, the data directory inferred from `noise.private_key_path` → `sqlite.path` → `derp.server.private_key_path` → `unix_socket` plus `derp-maps/official-mirror.yaml`; only if none of that works does it fall back to the old native default. Once you pick a path by hand, that choice wins. This task maintains the file, so edits made by hand are overwritten — use a dedicated file. |
+| Refresh interval     | every 24 hours                                         | 6, 12 or 24 hours.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Reload after writing | on                                                     | When a run actually changed the file, HeadplaneCN asks the configured integration to reload Headscale, so clients pick the new map up without a restart. **A reload briefly interrupts connected clients**; turning this off leaves the reload to you.                                                                                                                                                                                                                                                                                                                                                                   |
 
 Its actions:
 

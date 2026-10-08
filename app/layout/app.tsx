@@ -9,6 +9,7 @@ import {
   headscaleConfigContext,
   headscaleContext,
   headscaleLiveStoreContext,
+  integrationContext,
   requestApiContext,
 } from "~/server/context";
 import { isDataUnauthorizedError } from "~/server/headscale/api/error-client";
@@ -46,6 +47,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const headscale = context.get(headscaleContext);
   const headscaleConfig = context.get(headscaleConfigContext);
   const headscaleLiveStore = context.get(headscaleLiveStoreContext);
+  const integration = context.get(integrationContext);
 
   try {
     const { principal, api } = await getRequestApi(request);
@@ -105,6 +107,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       baseUrl: config.headscale.public_url ?? config.headscale.url,
       configAvailable: headscaleConfig.readable(),
       isDebug: config.debug,
+      // Which integration (if any) is managing Headscale, shown in the footer so
+      // the deployment shape is visible without reading the compose file.
+      integrationMode: integration?.kind ?? null,
       isHealthy,
       user,
     };
@@ -151,7 +156,11 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         )}
         <Outlet />
       </main>
-      <Footer isDebug={loaderData.isDebug} baseUrl={loaderData.baseUrl} />
+      <Footer
+        isDebug={loaderData.isDebug}
+        baseUrl={loaderData.baseUrl}
+        mode={loaderData.integrationMode}
+      />
     </>
   );
 }

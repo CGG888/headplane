@@ -3,7 +3,6 @@ import {
   ClipboardPaste,
   Gauge,
   Globe,
-  Lock,
   Plus,
   RefreshCw,
   Search,
@@ -19,6 +18,7 @@ import Button from "~/components/button";
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
 import Link from "~/components/link";
+import { RegionFlag } from "~/components/region-flag";
 import Select from "~/components/select";
 import {
   SettingsActions,
@@ -48,10 +48,7 @@ import {
   MIRROR_REASON_KEYS,
   MIRROR_RELOAD_KEYS,
   MIRROR_SOURCE_KIND_KEYS,
-  defaultMirrorSelection,
-  fixedRegionIds,
   formatMirrorLatency,
-  isDefaultMirrorSelection,
   isMirrorProbeStale,
   mirrorLatencyNotice,
   mirrorOutcomeKey,
@@ -141,7 +138,7 @@ interface DerpRegionMirrorProps {
   isDisabled: boolean;
   /** The newest run or check, or `undefined` when neither has happened yet. */
   last: MirrorRun | undefined;
-  /** The order and the fixed anchors the server's rule produced. */
+  /** The order the server's rule produced for the official regions. */
   numbering: MirrorNumbering;
   /**
    * Whether Headscale's `derp.paths` already lists the mirror's target file,
@@ -440,8 +437,8 @@ function PathReport({ report }: { report: MirrorPathReport }) {
  * mirror only the ones worth keeping into a local map file that Headscale hands
  * to clients. The table ticks a selection, previews the numbers the server's
  * rule assigns to exactly that selection and persists the whole thing in one
- * save; the selection can be cleared or restored to the two pinned anchors, and
- * one click can write the ticked regions into the manual region-name mapping.
+ * save; the selection starts empty, can be cleared at any time and one click can
+ * write the ticked regions into the manual region-name mapping.
  * Check, Update now and Renumber are separate forms, so none of them can nest
  * inside the save.
  */
@@ -476,9 +473,6 @@ export default function DerpRegionMirror({
   const clearPasteFetcher = useFetcher<HeadscaleSettingsResult>();
   const revalidator = useRevalidator();
 
-  const fixedIds = useMemo(() => fixedRegionIds(numbering), [numbering]);
-  const fixed = useMemo(() => new Set(fixedIds), [fixedIds]);
-
   const [enabled, setEnabled] = useState(settings.enabled);
   const [targetPath, setTargetPath] = useState(settings.targetPath);
   // The source list is an ordered, repeatable field, so it lives as one array of
@@ -488,8 +482,8 @@ export default function DerpRegionMirror({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [intervalHours, setIntervalHours] = useState(String(settings.intervalHours));
   const [autoReload, setAutoReload] = useState(settings.autoReload);
-  // The stored selection is the truth: a selection the operator saved as empty
-  // stays empty instead of having the pinned anchors forced back into it.
+  // The stored selection is the truth: a fresh install starts with nothing
+  // ticked, so mirroring only starts once the operator picks regions.
   const [selected, setSelected] = useState<Set<number>>(() => new Set(settings.selectedIds));
   const [sortMode, setSortMode] = useState<MirrorSortMode>("official");
   const [ceiling, setCeiling] = useState("");
@@ -625,9 +619,8 @@ export default function DerpRegionMirror({
     settings.targetPath,
   ]);
 
-  // Selecting is client state: nothing is written until Save. The two pinned
-  // regions are ticked through the default selection and cannot be toggled one
-  // by one, so this only ever changes the region the operator clicked.
+  // Selecting is client state: nothing is written until Save, and every region
+  // is toggled on its own — no region has a fixed number or a locked tick.
   function toggle(officialId: number, next: boolean) {
     setSelected((previous) => {
       const updated = new Set(previous);
@@ -676,10 +669,6 @@ export default function DerpRegionMirror({
   const probeNoticeKey =
     probe.outcome === undefined ? undefined : MIRROR_PROBE_OUTCOME_KEYS[probe.outcome];
   const probeNotice = probeNoticeKey === undefined ? undefined : t(probeNoticeKey);
-  const defaultSelection = useMemo(
-    () => isDefaultMirrorSelection(numbering, selected),
-    [numbering, selected],
-  );
 
   const busy = saveFetcher.state !== "idle";
   const checking = checkFetcher.state !== "idle";
@@ -828,16 +817,10 @@ export default function DerpRegionMirror({
     { value: "latency", label: t("settings.headscale.derp.mirror.sortLatency") },
   ];
 
-  // The fastest three the agent measured; the two pinned regions are always
-  // part of the default selection, so the preset replaces the rest of the
-  // selection with them.
+  // The fastest three the agent measured; the preset replaces the selection with
+  // exactly those regions.
   function applyRecommended() {
-    setSelected(new Set([...fixedIds, ...recommendedRegionIds(regions)]));
-  }
-
-  /** Brings back the two pinned anchors after a cleared selection. */
-  function applyDefaultSelection() {
-    setSelected(defaultMirrorSelection(numbering));
+    setSelected(new Set(recommendedRegionIds(regions)));
   }
 
   /**
@@ -1207,9 +1190,6 @@ export default function DerpRegionMirror({
                 <Button disabled={selected.size === 0} onClick={clearSelection} type="button">
                   {t("settings.headscale.derp.mirror.selectionClear")}
                 </Button>
-                <Button disabled={defaultSelection} onClick={applyDefaultSelection} type="button">
-                  {t("settings.headscale.derp.mirror.selectionDefault")}
-                </Button>
                 <Button
                   disabled={isDisabled || addingNames || numbers.size === 0}
                   onClick={addRegionNames}
@@ -1262,7 +1242,6 @@ export default function DerpRegionMirror({
                 </TableList.Item>
 
                 {rows.map((region) => {
-                  const isFixed = fixed.has(region.officialId);
                   const latency = formatMirrorLatency(region.latencyMs);
                   const number = numbers.get(region.officialId);
                   const keepsOther =
@@ -1273,19 +1252,7 @@ export default function DerpRegionMirror({
                   return (
                     <TableList.Item key={region.officialId}>
                       <span className="w-28 font-mono text-sm">
-                        {number === undefined ? (
-                          <span className="opacity-50">—</span>
-                        ) : (
-                          <>
-                            {number}
-                            {isFixed ? (
-                              <Lock
-                                aria-label={t("settings.headscale.derp.mirror.fixedRegion")}
-                                className="ml-1 inline h-3 w-3 opacity-50"
-                              />
-                            ) : undefined}
-                          </>
-                        )}
+                        {number === undefined ? <span className="opacity-50">—</span> : number}
                         {keepsOther ? (
                           <span className="ml-1 text-xs opacity-60">
                             {t("settings.headscale.derp.mirror.currentNumber", {
@@ -1294,7 +1261,10 @@ export default function DerpRegionMirror({
                           </span>
                         ) : undefined}
                       </span>
-                      <span className="flex-1 truncate text-sm">{region.chineseName}</span>
+                      <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
+                        <RegionFlag code={region.code} name={region.chineseName} />
+                        <span className="min-w-0 truncate text-sm">{region.chineseName}</span>
+                      </span>
                       <span className="w-16 font-mono text-xs opacity-80">{region.code}</span>
                       <span className="flex-1 truncate text-sm text-mist-600 dark:text-mist-400">
                         {region.officialName}
@@ -1325,7 +1295,6 @@ export default function DerpRegionMirror({
                       <span className="flex w-14 justify-end">
                         <RegionCheckbox
                           checked={selected.has(region.officialId)}
-                          disabled={isFixed}
                           label={t("settings.headscale.derp.mirror.selectRegion", {
                             code: region.code,
                           })}

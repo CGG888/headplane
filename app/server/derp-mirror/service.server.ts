@@ -92,6 +92,7 @@ import {
   type OfficialMapReport,
 } from "./sources";
 import { readDerpMirrorDocument, writeDerpMirrorDocument } from "./store";
+import { resolveDerpMirrorTargetPath, type DerpMirrorTargetInput } from "./target-path";
 import type {
   DerpLatencyRegionReading,
   DerpMirrorLatency,
@@ -131,6 +132,14 @@ export interface DerpMirrorConfigPort {
   getDERPSettings(): DerpMirrorCacheSettings & {
     /** `derp.urls`: the remote maps Headscale merges, the official one by default. */
     urls: string[];
+    /** `derp.paths`: the local maps Headscale loads, in configuration order. */
+    paths?: string[];
+    /**
+     * Headscale's data directory, from the file paths its configuration names.
+     * Optional so a test double that only knows the cache still satisfies the
+     * port; without it the mirror falls back to the legacy target.
+     */
+    dataDirectory?: string;
   };
 }
 
@@ -373,6 +382,48 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
   const loadLatencies = options.loadLatencies ?? (async () => ({}));
 
   /**
+   * The configuration the mirror's default target path is derived from. Read on
+   * every resolve — never cached — so moving Headscale between the host and a
+   * container, or adding the first `derp.paths` entry, moves the default with it.
+   */
+  function targetInput(): DerpMirrorTargetInput {
+    try {
+      const derp = options.config.getDERPSettings();
+      return { paths: derp.paths, dataDirectory: derp.dataDirectory };
+    } catch (error) {
+      log.debug(
+        "config",
+        `The DERP mirror target could not be derived from Headscale's configuration: ${errorMessage(error)}`,
+      );
+      return {};
+    }
+  }
+
+  /**
+   * The settings as the rest of the panel reads them: the stored target when the
+   * operator chose one, and otherwise the path derived from Headscale's
+   * configuration. The store is never rewritten with the derived value, so the
+   * derivation keeps following the deployment instead of freezing on the first
+   * read — which is what a panel that moved from a native Headscale to two
+   * containers needs, because the directory it used to write into is no longer
+   * mounted into its own container.
+   */
+  function withResolvedTarget(current: DerpMirrorSettings): DerpMirrorSettings {
+    const targetPath = resolveDerpMirrorTargetPath(current.targetPath, targetInput());
+    return targetPath === current.targetPath ? current : { ...current, targetPath };
+  }
+
+  /** The same resolution for a stored run, whose report names the file it wrote. */
+  function withResolvedRun(run: DerpMirrorRun | undefined): DerpMirrorRun | undefined {
+    if (run === undefined) {
+      return undefined;
+    }
+
+    const targetPath = resolveDerpMirrorTargetPath(run.targetPath, targetInput());
+    return targetPath === run.targetPath ? run : { ...run, targetPath };
+  }
+
+  /**
    * The official map this run reads: the operator's pasted body when one is
    * stored — no source is dialled at all then — otherwise the resolved source
    * chain through the shared cached fetcher. Never throws: a source list that
@@ -417,8 +468,8 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
   function ensureLoaded(): Promise<void> {
     loadPromise ??= readDerpMirrorDocument(options.dataPath)
       .then((document) => {
-        settings = document.settings;
-        last = document.last;
+        settings = withResolvedTarget(document.settings);
+        last = withResolvedRun(document.last);
       })
       .catch(() => undefined);
     return loadPromise;
@@ -448,8 +499,8 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
         };
 
         await writeDerpMirrorDocument(options.dataPath, { settings: merged, last: run });
-        settings = merged;
-        last = run;
+        settings = withResolvedTarget(merged);
+        last = withResolvedRun(run);
       } catch (error) {
         log.warn("config", "Unable to save the DERP region mirror run: %s", errorMessage(error));
       }
@@ -987,8 +1038,12 @@ export function createDerpMirrorService(options: DerpMirrorServiceOptions): Derp
       return { success: false, settings: previous };
     }
 
+    // The store keeps what the operator saved; the service hands out the path
+    // this deployment actually reads, so a target left at the legacy default
+    // follows Headscale instead of freezing on the first save.
+    settings = withResolvedTarget(next);
     schedule();
-    return { success: true, settings: next };
+    return { success: true, settings };
   }
 
   // MARK: The latency probe, as a background run

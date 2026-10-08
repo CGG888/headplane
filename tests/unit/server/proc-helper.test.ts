@@ -2,13 +2,23 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// `signalAndWaitHealthy` imports `kill` from `node:process` as a module binding,
+// so the signal has to be intercepted at the module rather than on `process`.
+const { killMock } = vi.hoisted(() => ({ killMock: vi.fn() }));
+
+vi.mock("node:process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:process")>();
+  return { ...actual, kill: killMock };
+});
 
 import {
   detectHeadscaleSupervisor,
   findHeadscaleServe,
   isHeadscaleServe,
   restartHeadscale,
+  signalAndWaitHealthy,
 } from "~/server/config/integration/proc-helper";
 import type { Headscale } from "~/server/headscale/api";
 
@@ -34,11 +44,62 @@ async function writeProcess(
 }
 
 beforeEach(async () => {
+  killMock.mockReset();
   root = await mkdtemp(join(tmpdir(), "headplane-proc-helper-"));
 });
 
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("signalAndWaitHealthy", () => {
+  /** A Headscale whose /health always answers the same thing. */
+  function headscaleAnswering(answer: boolean): Headscale {
+    return { health: async () => answer } as unknown as Headscale;
+  }
+
+  test("a signal the kernel refuses is a permission problem, not a failure", async () => {
+    killMock.mockImplementation(() => {
+      throw Object.assign(new Error("kill EACCES"), { code: "EACCES" });
+    });
+
+    const result = await signalAndWaitHealthy(headscaleAnswering(true), {
+      pid: 4242,
+      retryDelayMs: 1,
+    });
+
+    expect(result).toEqual({ ok: false, stage: "permission", pid: 4242 });
+  });
+
+  test("an unrelated kill error is reported as a plain failure", async () => {
+    killMock.mockImplementation(() => {
+      throw new Error("ESRCH: no such process");
+    });
+
+    const result = await signalAndWaitHealthy(headscaleAnswering(true), {
+      pid: 4243,
+      retryDelayMs: 1,
+    });
+
+    expect(result).toEqual({ ok: false, stage: "failed", pid: 4243 });
+  });
+
+  test("a delivered signal whose health never answers is not confirmed", async () => {
+    killMock.mockImplementation(() => true);
+
+    const result = await signalAndWaitHealthy(headscaleAnswering(false), {
+      pid: 4244,
+      maxAttempts: 2,
+      retryDelayMs: 1,
+    });
+
+    expect(killMock).toHaveBeenCalledWith(4244, "SIGHUP");
+    expect(result).toEqual({ ok: false, stage: "not-confirmed", pid: 4244 });
+  });
 });
 
 describe("findHeadscaleServe", () => {

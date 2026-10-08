@@ -24,6 +24,8 @@ const en = {
     copyFailed: "Copy failed. Please copy the text manually.",
     copied: "Copied to clipboard",
     copiedName: "Copied {name} to clipboard",
+    hiddenName: "Hidden {name}",
+    showName: "Show {name}",
     noResults: "No results found.",
     increment: "Increment",
     decrement: "Decrement",
@@ -79,6 +81,20 @@ const en = {
     debug: "Debug",
     showServerUrl: "Show server URL",
     hideServerUrl: "Hide server URL",
+    mode: {
+      docker: "Dual-image mode",
+      dockerHint:
+        "Headscale and Headplane both run in containers; saving configuration restarts the Headscale container through the Docker socket.",
+      kubernetes: "Kubernetes mode",
+      kubernetesHint:
+        "Headscale runs as a Kubernetes workload managed through the Kubernetes integration.",
+      proc: "Native mode",
+      procHint:
+        "Headscale runs as a native process outside this container; saving configuration reloads it with SIGHUP.",
+      none: "No integration",
+      noneHint:
+        "No integration is enabled, so Headscale has to be restarted by hand after a configuration change.",
+    },
   },
   app: {
     unhealthy: {
@@ -569,10 +585,14 @@ const en = {
         relaySourceMirror: "Official filter",
         relaySourceOfficial: "Official upstream",
         agentRequired:
-          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read this machine's home region, preferred region, and DERP latency.",
+          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read this machine's home region, the relay region it is using, and DERP latency.",
         empty: "This machine has not reported DERP relay information yet.",
-        homeRegion: "Home region",
-        preferredRegion: "Preferred region",
+        homeRegion: "Home region (assigned)",
+        preferredRegion: "Preferred region (in use)",
+        homeRegionTooltip:
+          "The region the control plane assigned this node (HomeDERP). The client relays through another region only while this one is unreachable.",
+        preferredRegionTooltip:
+          "The relay region the client is using right now (PreferredDERP), picked by its own latency measurements, so it follows the network.",
         latency: "Latency by region",
         latencySourceReported: "Client report",
         latencySourceMeasured: "Measured here",
@@ -591,11 +611,19 @@ const en = {
       },
       diagnostics: {
         title: "Node diagnostics",
-        body: "Read-only details this machine reports through the HeadplaneCN Agent, plus the relays and regions this instance serves, grouped by area. Values that are identifiers or addresses copy themselves; addresses stay hidden until you reveal them.",
+        body: "The few facts no card above already shows: the version strings the agent reported verbatim, its IPv4 ICMP self-test, and how much of this deployment's region inventory the machine accounts for.",
         fields: {
           one: "{count} field",
           other: "{count} fields",
         },
+        groupAgent: "Reported as-is",
+        groupChecks: "Self-test and coverage",
+        version: "Tailscale version (as reported)",
+        osVersion: "OS version (as reported)",
+        icmpv4: "ICMPv4 self-test",
+        coverage: "Region coverage",
+        coverageValue:
+          "Serves {served} regions · {reported} reported by the client · {measured} measured here",
         empty: "Nothing has been reported for this machine.",
         noData: "No data",
         unavailable: "Unavailable",
@@ -603,7 +631,6 @@ const en = {
         noAgent: "The HeadplaneCN Agent is not enabled, so this machine has no reported details.",
         noReport: "This machine has not reported any details to the HeadplaneCN Agent yet.",
         notReported: "not reported",
-        truncated: "Some fields are not shown here to keep the card readable.",
       },
     },
     new: {
@@ -1561,11 +1588,26 @@ const en = {
       restartStage: {
         noProcess: "No running headscale serve process was found.",
         stalePid: "The process that was found is no longer Headscale. Nothing was stopped.",
+        permission:
+          "Headscale is running, but this container is not allowed to signal it (EPERM/EACCES). A host that uses AppArmor needs apparmor=unconfined in the container's security_opt.",
         stopTimeout: "Headscale did not stop in time.",
         notRestarted: "Headscale stopped but has not started again. Check its supervisor.",
         unhealthy: "Headscale started again but its /health endpoint is not answering yet.",
         healthy: "Headscale is running again.",
         unsupported: "This integration cannot restart Headscale.",
+      },
+      reloadStage: {
+        healthy: "Headscale re-read its configuration.",
+        notConfirmed:
+          "The reload signal was sent, but Headscale did not confirm that it came back healthy. The change may still be live; check the HeadplaneCN logs.",
+        noProcess:
+          "No running headscale serve process was found. A container needs pid: host to see the one on its host.",
+        unconfigured:
+          "The integration is not configured yet (for Docker: no socket or no container found).",
+        permission:
+          "Headscale is running, but this container is not allowed to signal it (EPERM/EACCES). A host that uses AppArmor needs apparmor=unconfined in the container's security_opt.",
+        failed: "The reload signal could not be sent. The HeadplaneCN logs name the error.",
+        unsupported: "This integration cannot reload Headscale.",
       },
       errors: {
         invalidAction: "The request was invalid. Reload the page and try again.",
@@ -1575,6 +1617,7 @@ const en = {
           "The integration could not reach Headscale. Check the HeadplaneCN logs for details.",
         notRestartable: "This integration cannot restart Headscale for you.",
         restartFailed: "Headscale was not restarted successfully.",
+        reloadFailed: "Headscale was not told to re-read its configuration.",
       },
       checks: {
         reachable: {
@@ -2045,11 +2088,11 @@ const en = {
         statusBody:
           "Where each machine connects through Headscale's DERP relays. Live relay data comes from the HeadplaneCN Agent.",
         statusAgentRequired:
-          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read each machine's home region, preferred region, and DERP latency.",
+          "Live relay data needs the HeadplaneCN Agent. Enable the agent so HeadplaneCN can read each machine's home region, the relay region it is using, and DERP latency.",
         statusEmpty: "No machines have reported DERP relay information yet.",
         machine: "Machine",
-        homeRegion: "Home region",
-        preferredRegion: "Preferred region",
+        homeRegion: "Home region (assigned)",
+        preferredRegion: "Preferred region (in use)",
         latency: "Best latency",
         unknown: "Unknown",
         noLatency: "No data",
@@ -2212,7 +2255,7 @@ const en = {
           agentRequired:
             "No region has a measurement: the HeadplaneCN Agent is not running, and this server has not tested them. Tick regions by hand, or use Test latency to rank them.",
           numberingNote:
-            "901 is always Hong Kong and 902 always Singapore; the rest of the ticked regions are numbered from 903 upward by measured latency, ties going to the lower official id and then to the code. A region that already has a number keeps it when you save — Renumber applies these numbers to every mirrored region.",
+            "Ticked regions are numbered from 901 upward by measured latency, fastest first, ties going to the lower official id and then to the code; a region nobody measured comes after every measured one. A region that already has a number keeps it when you save — Renumber applies these numbers to every mirrored region. Nothing is ticked by default, so a fresh install mirrors nothing until you pick regions.",
           rankingNever:
             "No ranking has been recorded yet, so the numbers below are a fresh ranking.",
           rankingAt: "Ranked from the latest measurements at {at}.",
@@ -2249,7 +2292,6 @@ const en = {
           selectRegion: "Mirror the {code} region",
           recommended: "Recommended: the fastest three",
           selectionClear: "Clear selection",
-          selectionDefault: "Default selection (Hong Kong 901 + Singapore 902)",
           addRegionNames: "Add region names for the selection",
           addingRegionNames: "Adding region names…",
           namesAdded: {
@@ -2268,7 +2310,6 @@ const en = {
           latencyNoMeasurements:
             "No machine and no test from this server has measured a latency yet.",
           agentSettingsLink: "Open the Agent settings",
-          fixedRegion: "Always mirrored",
           currentNumber: "now {number}",
           selectionNote:
             "Ticking a region only changes this preview. Nothing is written until you save.",

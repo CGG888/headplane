@@ -42,11 +42,7 @@ import {
 import {
   assignRegionNumbers,
   EMBEDDED_REGION_ID,
-  HONG_KONG_MIRROR_NUMBER,
-  HONG_KONG_REGION_ID,
   MIRROR_NUMBER_FIRST_RANKED,
-  SINGAPORE_MIRROR_NUMBER,
-  SINGAPORE_REGION_ID,
 } from "~/server/derp-mirror/generate";
 import {
   locallyMeasuredRegionLatencies,
@@ -291,31 +287,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   });
 
   // One call to the server's rule over every official region yields the ranking
-  // order and the pinned anchors; ticking a subset only filters that order, which
-  // is why the preview matches the numbers a fresh ranking assigns to it. The
-  // local measurements are handed over separately so the rule can prefer them.
+  // order: the region a fresh ranking makes 901 comes first, and ticking a subset
+  // only filters that order, which is why the preview matches the numbers a fresh
+  // ranking assigns to it. The local measurements are handed over separately so
+  // the rule can prefer them.
   const ranked = assignRegionNumbers(
     mirrorRegions.map((region) => String(region.officialId)),
     mirrorLatencies,
     undefined,
     measuredLatencies,
   );
-  const describedIds = new Set(mirrorRegions.map((region) => region.officialId));
   const orderedIds = Object.entries(ranked.assignment)
     .map(([id, number]) => ({ officialId: Number(id), number }))
     .toSorted((a, b) => a.number - b.number || a.officialId - b.officialId)
     .map((entry) => entry.officialId);
   const mirrorNumbering: MirrorNumbering = {
-    fixed: [
-      { officialId: Number(HONG_KONG_REGION_ID), number: HONG_KONG_MIRROR_NUMBER },
-      { officialId: Number(SINGAPORE_REGION_ID), number: SINGAPORE_MIRROR_NUMBER },
-    ].filter((entry) => describedIds.has(entry.officialId)),
     firstFreeNumber: MIRROR_NUMBER_FIRST_RANKED,
     order: orderedIds,
-    // The numbers the rule never hands to a ranked region: the two anchors and
-    // Headscale's own embedded id. The preview needs them to drop a stored number
-    // the server would refuse.
-    reserved: [HONG_KONG_MIRROR_NUMBER, SINGAPORE_MIRROR_NUMBER, EMBEDDED_REGION_ID],
+    // The only number the rule never hands to a ranked region: Headscale's own
+    // embedded id. The preview needs it to drop a stored number the server would
+    // refuse.
+    reserved: [EMBEDDED_REGION_ID],
   };
 
   return {

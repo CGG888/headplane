@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { IntegrationKind } from "~/server/config/integration/abstract";
+import type {
+  IntegrationKind,
+  IntegrationReloadResult,
+} from "~/server/config/integration/abstract";
 import {
   clearLastDerpRefresh,
   decideDerpReload,
@@ -26,10 +29,13 @@ interface TargetOptions {
 function makeTarget(options: TargetOptions = {}) {
   const restartResult = { ok: options.restartOk ?? true, stage: "healthy" as const };
   const onConfigChange = options.reloadThrows
-    ? vi.fn(async (): Promise<boolean> => {
+    ? vi.fn(async (): Promise<IntegrationReloadResult> => {
         throw new Error("reload refused");
       })
-    : vi.fn(async () => options.reloadOk ?? true);
+    : vi.fn(async (): Promise<IntegrationReloadResult> => ({
+        ok: options.reloadOk ?? true,
+        stage: options.reloadOk === false ? "permission" : "healthy",
+      }));
   const restart = vi.fn(async () => restartResult);
 
   const target: DerpReloadTarget = {
@@ -155,8 +161,8 @@ describe("refreshDerpAfterWrite", () => {
     expect(result.pendingRestart).toBe(true);
   });
 
-  test("a Docker reload that says no is not reported as live", async () => {
-    const { target } = makeTarget({ kind: "docker", reloadOk: false });
+  test("a Docker reload that answers ok: false is recorded as a failed refresh", async () => {
+    const { target, onConfigChange } = makeTarget({ kind: "docker", reloadOk: false });
 
     const result = await refreshDerpAfterWrite({
       headscale,
@@ -165,7 +171,10 @@ describe("refreshDerpAfterWrite", () => {
       reason: "add_derp_path",
     });
 
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
     expect(result.outcome).toBe("failed");
+    expect(result.pendingRestart).toBe(true);
+    expect(getLastDerpRefresh()).toEqual(result);
   });
 
   test("the updater covers a map file without touching the integration", async () => {

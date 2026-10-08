@@ -21,6 +21,8 @@ const zhHans = {
     copyFailed: "复制失败，请手动复制文本。",
     copied: "已复制到剪贴板",
     copiedName: "已复制{name}到剪贴板",
+    hiddenName: "已隐藏的{name}",
+    showName: "显示{name}",
     noResults: "未找到结果。",
     increment: "增加",
     decrement: "减少",
@@ -75,6 +77,17 @@ const zhHans = {
     debug: "调试",
     showServerUrl: "显示服务器地址",
     hideServerUrl: "隐藏服务器地址",
+    mode: {
+      docker: "双镜像模式",
+      dockerHint:
+        "Headscale 与 Headplane 都运行在容器中；保存配置后会通过 Docker socket 重启 Headscale 容器。",
+      kubernetes: "Kubernetes 模式",
+      kubernetesHint: "Headscale 作为 Kubernetes 工作负载运行，由 Kubernetes 集成管理。",
+      proc: "原生模式",
+      procHint: "Headscale 以原生进程运行（在本容器之外）；保存配置后通过 SIGHUP 重新加载。",
+      none: "未配置集成",
+      noneHint: "没有启用任何集成，修改配置后需要手动重启 Headscale。",
+    },
   },
   app: {
     unhealthy: {
@@ -539,10 +552,14 @@ const zhHans = {
         relaySourceMirror: "官方筛选",
         relaySourceOfficial: "官方全量",
         agentRequired:
-          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取此机器的归属区域、首选区域和 DERP 延迟。",
+          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取此机器的归属区域、当前使用的中继区域和 DERP 延迟。",
         empty: "此机器还没有上报 DERP 中继信息。",
-        homeRegion: "归属区域",
-        preferredRegion: "首选区域",
+        homeRegion: "归属区域（控制面分配）",
+        preferredRegion: "首选区域（当前使用）",
+        homeRegionTooltip:
+          "控制面分配给该节点的归属区域（HomeDERP）。只有归属区域不可达时，客户端才会暂时改用其他区域中继。",
+        preferredRegionTooltip:
+          "客户端此刻正在使用的中继区域（PreferredDERP），由它自己测速选出，会随网络状况变化。",
         latency: "各区域延迟",
         latencySourceReported: "客户端上报",
         latencySourceMeasured: "本机实测",
@@ -559,11 +576,19 @@ const zhHans = {
       },
       diagnostics: {
         title: "节点诊断",
-        body: "本机通过 HeadplaneCN Agent 上报的只读详情，加上本实例提供的中继与区域，按区块分组。标识符与地址可以直接复制，地址默认隐藏，需要时再显示。",
+        body: "只列出上方卡片没有显示的几项：Agent 原样上报的版本信息、IPv4 ICMP 自检结果，以及本机在本实例区域清单中的覆盖情况。",
         fields: {
           one: "{count} 个字段",
           other: "{count} 个字段",
         },
+        groupAgent: "原始上报",
+        groupChecks: "自检与覆盖",
+        version: "Tailscale 版本（原样上报）",
+        osVersion: "系统版本（原样上报）",
+        icmpv4: "ICMPv4 自检",
+        coverage: "区域覆盖",
+        coverageValue:
+          "本实例服务 {served} 个区域 · 客户端上报 {reported} 个 · 本机实测 {measured} 个",
         empty: "本机目前没有上报任何内容。",
         noData: "无数据",
         unavailable: "不可用",
@@ -571,7 +596,6 @@ const zhHans = {
         noAgent: "HeadplaneCN Agent 未启用，因此没有本机的上报详情。",
         noReport: "本机尚未向 HeadplaneCN Agent 上报任何详情。",
         notReported: "未上报",
-        truncated: "为保持卡片可读，部分字段未显示。",
       },
     },
     new: {
@@ -1463,11 +1487,24 @@ const zhHans = {
       restartStage: {
         noProcess: "没有找到正在运行的 headscale serve 进程。",
         stalePid: "找到的进程已经不再是 Headscale，没有停止任何进程。",
+        permission:
+          "Headscale 正在运行，但这个容器没有权限向它发送信号（EPERM/EACCES）。宿主机使用 AppArmor 时，请在容器的 security_opt 里设置 apparmor=unconfined。",
         stopTimeout: "Headscale 未能在超时前停止。",
         notRestarted: "Headscale 已停止，但还没有重新启动，请检查它的监管程序。",
         unhealthy: "Headscale 已重新启动，但 /health 还没有响应。",
         healthy: "Headscale 已重新运行。",
         unsupported: "当前集成无法重启 Headscale。",
+      },
+      reloadStage: {
+        healthy: "Headscale 已重新读取配置。",
+        notConfirmed:
+          "重载信号已发出，但 Headscale 没有确认恢复健康。改动可能已经生效，详情见 HeadplaneCN 日志。",
+        noProcess: "没有找到正在运行的 headscale serve 进程；容器需要 pid: host 才能看到它。",
+        unconfigured: "集成尚未配置完成（Docker 需要 socket 或容器名）。",
+        permission:
+          "Headscale 正在运行，但这个容器没有权限向它发送信号（EPERM/EACCES）。宿主机使用 AppArmor 时，请在容器的 security_opt 里设置 apparmor=unconfined。",
+        failed: "重载信号发送失败，具体错误见 HeadplaneCN 日志。",
+        unsupported: "当前集成无法让 Headscale 重新读取配置。",
       },
       errors: {
         invalidAction: "请求无效，请重新加载本页后重试。",
@@ -1475,6 +1512,7 @@ const zhHans = {
         failed: "集成无法连接 Headscale，详情请查看 HeadplaneCN 日志。",
         notRestartable: "当前集成无法为你重启 Headscale。",
         restartFailed: "Headscale 未能成功重启。",
+        reloadFailed: "Headscale 没有重新读取配置。",
       },
       checks: {
         reachable: {
@@ -1913,11 +1951,11 @@ const zhHans = {
         statusBody:
           "每台机器通过 Headscale 的 DERP 中继连接的位置。实时中继数据来自 HeadplaneCN Agent。",
         statusAgentRequired:
-          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取每台机器的归属区域、首选区域和 DERP 延迟。",
+          "实时中继数据需要 HeadplaneCN Agent。启用 Agent 后，HeadplaneCN 才能读取每台机器的归属区域、当前使用的中继区域和 DERP 延迟。",
         statusEmpty: "还没有机器上报 DERP 中继信息。",
         machine: "机器",
-        homeRegion: "归属区域",
-        preferredRegion: "首选区域",
+        homeRegion: "归属区域（控制面分配）",
+        preferredRegion: "首选区域（当前使用）",
         latency: "最低延迟",
         unknown: "未知",
         noLatency: "无数据",
@@ -2071,7 +2109,7 @@ const zhHans = {
           agentRequired:
             "没有任何区域有实测延迟：HeadplaneCN Agent 未运行，本服务器也还没有测试过。可以手动勾选，或先点“测试延迟”再按延迟排序。",
           numberingNote:
-            "901 固定为香港、902 固定为新加坡；其余勾选的区域按实测延迟从 903 依次编号，延迟相同时先按官方编号、再按官方 code 排序。已经分配过编号的区域在保存时保持不变——点击“重新编号”才会把这些编号应用到所有已镜像区域。",
+            "勾选的区域按实测延迟从 901 依次编号，延迟相同时先按官方编号、再按官方 code 排序；没有任何实测延迟的区域排在已测得的区域之后。已经分配过编号的区域在保存时保持不变——点击“重新编号”才会把这些编号应用到所有已镜像区域。默认不勾选任何区域，全新安装在你挑选区域之前不会镜像任何内容。",
           rankingNever: "还没有记录过编号排序，下面显示的是全新排序。",
           rankingAt: "按最新实测数据排序于 {at}。",
           probe: "测试延迟",
@@ -2103,7 +2141,6 @@ const zhHans = {
           selectRegion: "镜像 {code} 区域",
           recommended: "推荐：最快的三个",
           selectionClear: "清除选择",
-          selectionDefault: "默认选择（香港 901 + 新加坡 902）",
           addRegionNames: "一键加入区域名称",
           addingRegionNames: "正在加入区域名称…",
           namesAdded: {
@@ -2121,7 +2158,6 @@ const zhHans = {
           latencyUnknown: "未测到",
           latencyNoMeasurements: "还没有任何机器或本服务器的测试报告延迟。",
           agentSettingsLink: "打开 Agent 设置",
-          fixedRegion: "始终镜像",
           currentNumber: "当前 {number}",
           selectionNote: "勾选只会改变这里的预览，保存之前不会写入任何内容。",
           settingsTitle: "镜像设置",

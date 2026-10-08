@@ -13,6 +13,7 @@ import {
 import * as v from "valibot";
 import { Document, parseDocument } from "yaml";
 
+import { deriveHeadscaleDataDirectory } from "~/server/derp-mirror/target-path";
 import log from "~/utils/log";
 
 import { DNSRecord, HeadscaleDNSConfig, loadHeadscaleDNS } from "./config-dns";
@@ -228,6 +229,15 @@ export interface DERPSettingsView {
   serverUrl: string;
   urls: string[];
   paths: string[];
+  /**
+   * Headscale's data directory, derived from the file paths its configuration
+   * names (`noise.private_key_path`, `database.sqlite.path`, the embedded DERP
+   * key, `unix_socket`). The DERP region mirror places the map file it maintains
+   * here when `derp.paths` lists nothing yet, which is what makes the same
+   * default work for a native Headscale and for a container beside the panel.
+   * Empty when the configuration names none of those paths.
+   */
+  dataDirectory: string;
   autoUpdateEnabled: boolean;
   updateFrequency: string;
   server: DERPEmbeddedServerView;
@@ -516,12 +526,21 @@ function getDERPSettings(config: HeadscaleConfigState): DERPSettingsView {
   const root = readObject(config.config) ?? {};
   const derp = readObject(root.derp) ?? {};
   const server = readObject(derp.server) ?? {};
+  const noise = readObject(root.noise) ?? {};
+  const database = readObject(root.database) ?? {};
+  const sqlite = readObject(database.sqlite) ?? {};
   const defaults = DERP_SETTINGS_DEFAULTS;
 
   return {
     serverUrl: readString(root.server_url),
     urls: readStringList(derp.urls),
     paths: readStringList(derp.paths),
+    dataDirectory: deriveHeadscaleDataDirectory({
+      noisePrivateKeyPath: readString(noise.private_key_path),
+      sqlitePath: readString(sqlite.path),
+      derpPrivateKeyPath: readString(server.private_key_path),
+      unixSocket: readString(root.unix_socket),
+    }),
     autoUpdateEnabled: readBoolean(derp.auto_update_enabled, defaults.autoUpdateEnabled),
     updateFrequency: readString(derp.update_frequency, defaults.updateFrequency),
     server: {

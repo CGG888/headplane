@@ -202,7 +202,7 @@ describe("the region filter action keeps derp.paths loaded", () => {
     init?: { status?: number } | null;
   }
 
-  const onConfigChange = vi.fn().mockResolvedValue(true);
+  const onConfigChange = vi.fn().mockResolvedValue({ ok: true, stage: "healthy" });
 
   function createMockContext(
     options: SubmitOptions,

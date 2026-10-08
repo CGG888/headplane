@@ -1,11 +1,13 @@
 import { Activity } from "lucide-react";
 
+import { RegionFlag } from "~/components/region-flag";
 import { SettingsCollapsible } from "~/components/settings-nav";
 import TableList from "~/components/table-list";
 import { useI18n } from "~/i18n/provider";
 import {
   parseDerpRegionId,
   regionLabel,
+  resolveDerpRegionIdentity,
   type DerpEmbeddedServer,
 } from "~/routes/machines/derp-info";
 
@@ -35,7 +37,14 @@ function Region({
     return <span className="opacity-60">{fallback}</span>;
   }
 
-  return <span className="font-mono">{regionLabel(region, embedded, fallback, names).label}</span>;
+  return (
+    <span className="flex items-center gap-x-1.5">
+      <RegionFlag {...resolveDerpRegionIdentity(region, { embedded, manual: names })} />
+      <span className="min-w-0 truncate font-mono">
+        {regionLabel(region, embedded, fallback, names).label}
+      </span>
+    </span>
+  );
 }
 
 /** The agent reports latency keys as strings, so numeric ones are labelled. */
@@ -98,10 +107,22 @@ export default function DerpStatus({ agentEnabled, embedded, regionNames, rows }
                   region={row.preferredRegion}
                 />
               </span>
-              <span className="w-1/4 text-right font-mono text-sm">
-                {row.latency
-                  ? `${latencyLabel(row.latency.region, embedded, regionNames, fallback)} · ${Math.round(row.latency.seconds * 1000)}ms`
-                  : t("settings.headscale.derp.noLatency")}
+              <span className="flex w-1/4 items-center justify-end gap-x-1.5 text-right font-mono text-sm">
+                {row.latency ? (
+                  <>
+                    <RegionFlag
+                      {...resolveDerpRegionIdentity(parseDerpRegionId(row.latency.region), {
+                        embedded,
+                        manual: regionNames,
+                      })}
+                    />
+                    <span className="min-w-0 truncate">
+                      {`${latencyLabel(row.latency.region, embedded, regionNames, fallback)} · ${Math.round(row.latency.seconds * 1000)}ms`}
+                    </span>
+                  </>
+                ) : (
+                  t("settings.headscale.derp.noLatency")
+                )}
               </span>
             </TableList.Item>
           ))}

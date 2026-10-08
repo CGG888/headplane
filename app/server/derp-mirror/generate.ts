@@ -7,12 +7,12 @@
 //
 // Numbering rule
 // --------------
-// Hong Kong (`20`) is always 901 and Singapore (`3`) is always 902, whether or
-// not the operator happened to select them, so the two relays an operator in
-// this region reaches first keep the numbers they are known by. 901, 902 and
-// 999 — Headscale's embedded region id — are never given to anything else. The
-// remaining selected regions are ranked into 903+ by measured latency, fastest
-// first, and equal latencies are settled by official region id. The latencies
+// No region has a fixed number. The selected regions are ranked by measured
+// latency, fastest first, and that ranking hands out the 900s from 901 upward,
+// so a selection of one mirrors it as 901 and a selection of five numbers them
+// 901-905. Equal latencies are settled by official region id. 900 is held back
+// as the fallback slot and 999 — Headscale's embedded region id — is never given
+// to anything else. The latencies
 // this server probed itself take precedence over the ones the agent's machines
 // reported, so a mirror can rank the official regions the clients cannot see.
 // That comparison is a total order over distinct ids, so the result never
@@ -40,16 +40,8 @@ export const MIRROR_NUMBER_MIN = 900;
 /** The highest mirrored number. */
 export const MIRROR_NUMBER_MAX = 999;
 
-/** The first number ranking hands out. */
-export const MIRROR_NUMBER_FIRST_RANKED = 903;
-
-/** The official region id of Hong Kong, pinned to 901. */
-export const HONG_KONG_REGION_ID = "20";
-export const HONG_KONG_MIRROR_NUMBER = 901;
-
-/** The official region id of Singapore, pinned to 902. */
-export const SINGAPORE_REGION_ID = "3";
-export const SINGAPORE_MIRROR_NUMBER = 902;
+/** The first number ranking hands out: the fastest selected region is 901. */
+export const MIRROR_NUMBER_FIRST_RANKED = 901;
 
 /**
  * Headscale's default embedded-region id. The embedded relay is a region of its
@@ -59,16 +51,11 @@ export const SINGAPORE_MIRROR_NUMBER = 902;
 export const EMBEDDED_REGION_ID = 999;
 
 /** Numbers no ranked region may ever take. 900 stays free for a fallback. */
-const RESERVED_NUMBERS: ReadonlySet<number> = new Set([
-  HONG_KONG_MIRROR_NUMBER,
-  SINGAPORE_MIRROR_NUMBER,
-  EMBEDDED_REGION_ID,
-]);
+const RESERVED_NUMBERS: ReadonlySet<number> = new Set([EMBEDDED_REGION_ID]);
 
 /**
- * Whether a mirrored number may appear in the rendered map. 901 and 902 are the
- * pinned home of Hong Kong and Singapore, so they are valid here; 999 is the
- * embedded region's own id and is not.
+ * Whether a mirrored number may appear in the rendered map. Everything in the
+ * 900s counts; 999 is the embedded region's own id and is not one of them.
  */
 function isMirrorNumber(value: unknown): value is number {
   return (
@@ -79,12 +66,6 @@ function isMirrorNumber(value: unknown): value is number {
     value !== EMBEDDED_REGION_ID
   );
 }
-
-/** The numbers that are the fixed home of Hong Kong and Singapore. */
-const FIXED_NUMBERS: ReadonlyArray<readonly [string, number]> = [
-  [HONG_KONG_REGION_ID, HONG_KONG_MIRROR_NUMBER],
-  [SINGAPORE_REGION_ID, SINGAPORE_MIRROR_NUMBER],
-];
 
 /** One official region id as this module uses it, or undefined for junk. */
 function readId(value: unknown): string | undefined {
@@ -235,9 +216,10 @@ export interface RegionNumbering {
  * `measuredMs` are the ones this server probed itself, and a local value wins
  * over a reported one for the same region.
  *
- * When the selection is larger than the 97 numbers the mirrored range offers,
- * the surplus regions are returned in `unassigned` instead of being dropped
- * quietly: the caller turns that into a recorded reason and writes nothing.
+ * When the selection is larger than the 99 numbers the mirrored range offers
+ * (900-998; 999 belongs to the embedded region), the surplus regions are
+ * returned in `unassigned` instead of being dropped quietly: the caller turns
+ * that into a recorded reason and writes nothing.
  */
 export function assignRegionNumbers(
   selectedOfficialIds: string[],
@@ -249,21 +231,10 @@ export function assignRegionNumbers(
   const previous = readExisting(existing);
   const used = new Set<number>(RESERVED_NUMBERS);
 
-  // The two pinned regions first: their numbers are never given away, so a
-  // stored assignment that disagrees with them is corrected below.
+  // The stored assignment first: a region it still numbers keeps that number
+  // unless another region already took it.
   const kept = new Map<string, number>();
-  for (const [id, number] of FIXED_NUMBERS) {
-    if (selected.includes(id)) {
-      kept.set(id, number);
-      used.add(number);
-    }
-  }
-
   for (const id of selected) {
-    if (kept.has(id)) {
-      continue;
-    }
-
     const number = previous.get(id);
     if (number === undefined || used.has(number)) {
       continue;
@@ -304,7 +275,7 @@ export function assignRegionNumbers(
   for (const entry of ranked) {
     const number = takeNumber(next, used);
     if (number === undefined) {
-      // 97 of the 900s are usable and the official map has far fewer regions, so
+      // 99 of the 900s are usable and the official map has far fewer regions, so
       // a pasted map is the only way to get here. The region is reported rather
       // than given a number outside the mirrored range, and the caller refuses
       // to write a map that leaves it out.

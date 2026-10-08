@@ -11,6 +11,7 @@ import { isAbsolute } from "node:path";
 
 import { MAX_DERP_MAP_BYTES } from "~/routes/settings/headscale/derp-map-limits";
 
+import { LEGACY_DERP_MIRROR_TARGET_PATH } from "./target-path";
 import {
   DERP_MIRROR_INTERVAL_HOURS,
   type DerpLatencyNodeReading,
@@ -24,21 +25,24 @@ import {
 } from "./types";
 
 /**
- * Where the mirrored map is written when the operator has not chosen a path.
- * The data directory of a common NAS deployment: the mirror is a file Headscale
- * loads through `derp.paths`, so it has to live where Headscale can read it.
+ * The fallback target, used only when Headscale's configuration names no
+ * directory to derive one from: the data directory of the fnOS package
+ * Headplane grew up on. The real default comes from
+ * `resolveDerpMirrorTargetPath`, which reads `derp.paths` and Headscale's data
+ * directory out of the configuration it is running against.
  */
-export const DEFAULT_DERP_MIRROR_TARGET_PATH =
-  "/vol1/@appdata/headscale/derp-maps/official-mirror.yaml";
+export const DEFAULT_DERP_MIRROR_TARGET_PATH = LEGACY_DERP_MIRROR_TARGET_PATH;
 
-/** The official region mirrored to 901: Hong Kong. */
-export const DEFAULT_DERP_MIRROR_REGION_IDS = ["20", "3"] as const;
+/**
+ * The official regions a fresh install mirrors: none. A mirror rewrites a file
+ * Headscale loads on a schedule, so it starts idle and the operator ticks the
+ * regions worth keeping; the ticked regions are then numbered from 901 upward.
+ * An install that already has a stored selection keeps it.
+ */
+export const DEFAULT_DERP_MIRROR_REGION_IDS: readonly string[] = [];
 
-/** The assignment a fresh install starts from: Hong Kong 901, Singapore 902. */
-export const DEFAULT_DERP_MIRROR_ASSIGNMENT: Record<string, number> = {
-  "20": 901,
-  "3": 902,
-};
+/** The assignment a fresh install starts from: nothing numbered yet. */
+export const DEFAULT_DERP_MIRROR_ASSIGNMENT: Record<string, number> = {};
 
 /** The lowest and highest mirrored numbers; the matcher keeps everything here. */
 export const DERP_MIRROR_NUMBER_MIN = 900;

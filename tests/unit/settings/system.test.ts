@@ -373,11 +373,24 @@ function statusOf(result: ActionResult): number {
 
 describe("system process action", () => {
   test("asks the integration to reload Headscale exactly once", async () => {
-    const onConfigChange = vi.fn().mockResolvedValue(true);
+    const onConfigChange = vi.fn().mockResolvedValue({ ok: true, stage: "healthy" });
     const result = await submit({ integration: { name: "Native Linux (/proc)", onConfigChange } });
 
     expect(statusOf(result)).toBe(200);
-    expect(result.data).toEqual({ success: true });
+    expect(result.data).toEqual({ success: true, reload: { stage: "healthy" } });
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+  });
+
+  test("surfaces the stage a refused reload stopped at", async () => {
+    const onConfigChange = vi.fn().mockResolvedValue({ ok: false, stage: "permission" });
+    const result = await submit({ integration: { name: "Docker", onConfigChange } });
+
+    expect(statusOf(result)).toBe(502);
+    expect(result.data).toMatchObject({
+      success: false,
+      errorCode: "reloadFailed",
+      reloadStage: "permission",
+    });
     expect(onConfigChange).toHaveBeenCalledTimes(1);
   });
 
@@ -420,6 +433,8 @@ describe("system process action", () => {
 
     expect(statusOf(result)).toBe(502);
     expect((result.data as { errorCode: string }).errorCode).toBe("failed");
+    // A throw is not a staged refusal, so there is no stage to show.
+    expect((result.data as { reloadStage?: string }).reloadStage).toBeUndefined();
     expect(onConfigChange).toHaveBeenCalledTimes(1);
   });
 });

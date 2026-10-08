@@ -25,7 +25,19 @@
       }
     ]
     settingsWithAgentExecutablePath;
-  settingsWithoutNulls = filterAttrsRecursive (key: value: value != null) settingsWithoutAgentPackage;
+  settingsWithoutDisabledIntegrations =
+    updateManyAttrsByPath [
+      {
+        path = ["integration" "docker"];
+        update = old: if (old.enabled or false) then old else null;
+      }
+      {
+        path = ["integration" "kubernetes"];
+        update = old: if (old.enabled or false) then old else null;
+      }
+    ]
+    settingsWithoutAgentPackage;
+  settingsWithoutNulls = filterAttrsRecursive (key: value: value != null) settingsWithoutDisabledIntegrations;
   settingsWithoutEmptyOidc = 
     if settingsWithoutNulls ? oidc && 
        ((settingsWithoutNulls.oidc.issuer or "") == "" && (settingsWithoutNulls.oidc.client_id or "") == "") then
@@ -36,6 +48,16 @@
 in {
   imports = [./options.nix];
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !cfg.settings.integration.kubernetes.enabled || cfg.settings.integration.kubernetes.pod_name != null;
+        message = ''
+          services.headplane.settings.integration.kubernetes.pod_name must name the
+          Headscale pod when the Kubernetes integration is enabled.
+        '';
+      }
+    ];
+
     environment = {
       systemPackages = [cfg.package];
       etc."headplane/config.yaml".source = "${settingsFile}";
@@ -54,6 +76,13 @@ in {
         User = config.services.headscale.user;
         Group = config.services.headscale.group;
         StateDirectory = "headplane";
+
+        # The Docker integration needs the socket, which is owned by the docker
+        # group. Only add it when that group exists.
+        SupplementaryGroups =
+          lib.optional
+          (cfg.settings.integration.docker.enabled && config.users.groups ? docker)
+          "docker";
 
         ExecStart = "${cfg.package}/bin/headplane";
         Restart = "always";

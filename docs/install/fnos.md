@@ -17,6 +17,25 @@ outline: [2, 3]
 - 反向代理：Lucky（可以和 HeadplaneCN 不在同一台机器上）
   :::
 
+这份指南讲的是「**Headscale 原生（fnOS 应用）+ 面板容器**」这一种形态：Headscale 由 fnOS 应用中心
+托管、数据在 `/vol1/@appdata/headscale`，面板在容器里用 `integration.proc`（向 `headscale serve`
+发 SIGHUP）重载 ACL。如果你想让 **Docker 连 Headscale 一起管**，请改用
+[双镜像部署](/install/dual-image)：那个形态由面板通过 Docker socket 重启 Headscale 容器（不再发
+SIGHUP、不需要 `pid: host`、也不需要改 AppArmor），并把数据目录按**同一个绝对路径**挂进容器，
+所以 Headscale 配置里的绝对路径一个字都不用改。
+
+## 两种 NAS 形态怎么选
+
+| 对比项                                          | 本页：Headscale 原生 + 面板容器                                     | 双镜像部署                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Headscale 在哪运行                              | fnOS 应用（fpk 包），宿主机上的原生进程                             | 容器                                                                        |
+| 谁管它的生命周期                                | fnOS 应用中心（启动 / 停止 / 升级）                                 | Docker / Docker Compose                                                     |
+| 集成方式                                        | `integration.proc`：向 `headscale serve` 发 SIGHUP 重载 ACL         | `integration.docker`：重启 Headscale 容器                                   |
+| 需要 `pid: host` 吗                             | 需要 —— `integration.proc` 要读 `/proc` 才能找到 `headscale serve`  | 不需要（可选，只为让 Agent 看到宿主机进程）                                 |
+| 需要 `security_opt: ["apparmor=unconfined"]` 吗 | 需要 —— 否则容器无法向 unconfined 的原生进程发信号（`kill EACCES`） | 不需要                                                                      |
+| 挂载 `/var/run/docker.sock` 吗                  | 不挂 —— 本形态从不重启任何容器                                      | 必须挂（`:ro` 只保护 socket 文件本身，挡不住 API 调用，请按 root 权限对待） |
+| 该看哪一页                                      | 本页                                                                | [双镜像部署](/install/dual-image)                                           |
+
 ::: warning 安装 Headscale 必须先添加第三方应用源
 
 fnOS **官方应用中心不提供 headscale**。请先在「飞牛应用中心 → 设置 → 第三方市场 → 添加源」
@@ -32,7 +51,7 @@ fnOS **官方应用中心不提供 headscale**。请先在「飞牛应用中心 
 - 已安装 Docker / Docker Compose（fnOS 自带）
 - HeadplaneCN 镜像：`ghcr.io/cgg888/headplanecn`（本仓库），国内可用加速前缀，例如
   `v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:latest`
-- 建议版本 **0.16.0 或更高**：设置页已是「分段式 Tab + 展开/折叠卡片」，并包含 DERP 面板、
+- 建议版本 **0.22.22 或更高**：设置页已是「分段式 Tab + 展开/折叠卡片」，并包含 DERP 面板、
   操作审计、配置快照与配置检查；**0.8.4 是反代环境的最低要求**（它修复了「保存/切换时报
   `Unexpected Server Error`」这一关键问题，见文末常见问题）
 - 需要进容器排查时，用带 shell 的调试标签 `:<版本>-shell`（官方镜像是 distroless，见第七节）
@@ -230,7 +249,9 @@ derp:
 ::: danger `derp.paths` 里必须写**宿主机路径**，容器挂载点要与它**完全相同**
 这份清单是 **Headscale** 读的；fnOS 上的 Headscale 是**宿主机原生进程**（不是容器），
 它只认宿主机上的绝对路径。HeadplaneCN 在容器里，只有把**同一个宿主机目录挂到容器内的同一个
-绝对路径**，它才看得到、也才改得动同一个文件：
+绝对路径**，它才看得到、也才改得动同一个文件。这个「必须逐字相同」是 Headscale 跑在宿主机上
+带来的结果：[双镜像部署](/install/dual-image) 改成把**整个数据目录**按同一个绝对路径挂进容器，
+所以那边的路径同样一个字都不用改：
 
 ```yaml
 # ① headscale 的配置（/vol1/@appdata/headscale/config.yaml）：写宿主机路径
@@ -306,8 +327,8 @@ DERP** 里「自动同步」正下方的**官方区域节点筛选**卡片（默
 它镜像的是 **Tailscale 官方的公开 DERP 区域**（不是你自己的节点），只保留你勾选的区域，
 统一改号到 900 段，写进一份本地地图文件交给 Headscale 分发给客户端：
 
-- **901 永远是香港、902 永远是新加坡**（这两个勾选框不能取消），其余勾选的区域从 **903**
-  起按实测延迟升序编号；延迟相同则官方 id 小的在前。
+- 勾选的区域统一从 **901** 起按实测延迟升序编号；延迟相同则官方 id 小的在前（没有固定
+  区域，两个勾选框都可以取消，默认一个都不勾选）。
 - 编号是**粘性的**：一旦定下来，后续运行不会因为某次延迟波动就换号，客户端选路因此稳定；
   只有点「重新编号」才会全部重排（对话框会提示客户端可能短暂重选中继）。
 - 设置项：启用开关（默认关）、目标文件路径（默认
@@ -385,7 +406,9 @@ headscale:
 integration:
   # headscale 是 fpk 原生进程 → 用"原生进程"集成：
   # 保存配置 / 系统页的重载按钮会向 headscale serve 发送 SIGHUP
-  # 前置：容器必须 pid: host（见 compose）
+  # 前置：容器必须 pid: host 并放开 AppArmor（security_opt: ["apparmor=unconfined"]）；
+  # 只有这样容器才被允许向宿主机上 unconfined 的 headscale 发信号，否则报 kill EACCES
+  # 这两项都是**本形态**的要求；双镜像部署改用 docker 集成重启容器，两项都不需要
   proc:
     enabled: true
 
@@ -427,7 +450,7 @@ integration:
 services:
   headplane:
     # 国内可用加速前缀，例如 v6.gh-proxy.org/docker/ghcr.io/cgg888/headplanecn:latest
-    # 需要进容器排查时，临时换成带 shell 的调试标签：ghcr.io/cgg888/headplanecn:0.16.0-shell
+    # 需要进容器排查时，临时换成带 shell 的调试标签：ghcr.io/cgg888/headplanecn:0.22.22-shell
     image: ghcr.io/cgg888/headplanecn:latest
     container_name: headplane
     restart: unless-stopped
@@ -436,8 +459,19 @@ services:
     # host 模式下不能再写 ports / extra_hosts
     network_mode: host
 
-    # 共享宿主机 PID 命名空间：integration.proc 需要读 /proc 找到 headscale 进程
+    # 共享宿主机 PID 命名空间：integration.proc 需要读 /proc，才能找到 headscale serve 并给它发信号
+    # 这是**本形态**的要求（Headscale 是宿主机原生进程）；双镜像部署改用 docker 集成重启容器，
+    # 不需要它 —— 那边 pid: host 是可选的，只为让 Agent 看到宿主机进程
     pid: host
+
+    # 【必须，但只在本形态必须】共享 PID 还不够：容器默认的 AppArmor 配置（docker-default）
+    # 只允许向同一配置的进程发信号，而 fpk 安装的 headscale 是 unconfined 的**原生进程**，
+    # 容器必须被允许向它发信号，否则重载会失败：
+    #   Failed to send SIGHUP to PID ...: Error: kill EACCES
+    #   dmesg: apparmor="DENIED" operation="signal" ... signal=hup peer="unconfined"
+    # 双镜像部署不向任何宿主进程发信号（它重启容器），因此不需要这一项
+    security_opt:
+      - "apparmor=unconfined"
 
     volumes:
       # Headplane 主配置（只读即可）
@@ -461,15 +495,19 @@ services:
       # - "/vol1/@appdata/headscale/extra-records.json:/etc/headscale/extra-records.json"
 
       # 【可选】本地 DERP 地图目录（配合 headscale 的 derp.paths）
-      # 【关键】容器内路径必须与宿主机逐字相同：derp.paths 里写的是宿主机路径，
-      # 只有挂到同一个绝对路径，容器里的 Headplane 才看得到、也才改得动 Headscale 读的那份文件
+      # 【关键】容器内路径必须与宿主机逐字相同：derp.paths 里写的是宿主机路径
+      # （因为 Headscale 是宿主机原生进程），只有挂到同一个绝对路径，容器里的 Headplane
+      # 才看得到、也才改得动 Headscale 读的那份文件；双镜像部署把整个数据目录按同一
+      # 绝对路径挂进容器，所以那边同样不用改路径
       # 以读写方式挂（不要 :ro）；它比上面那份数据目录的只读挂载更具体，因此对 derp-maps 生效
       # 只挂这个目录就好，不要为了省事把整个数据目录改成读写
       # - "/vol1/@appdata/headscale/derp-maps:/vol1/@appdata/headscale/derp-maps"
 
-      # 【不需要】docker.sock：headscale 是原生进程而非容器，docker 集成用不上；
-      # 而且挂载它等于把宿主机 root 权限交给容器
-      # - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # 【本形态不需要】docker.sock：headscale 是原生进程而非容器，本形态从不重启任何容器，
+      # docker 集成因此用不上；而且挂载它等于把宿主机 root 权限交给容器。
+      # 双镜像部署则相反 —— 它靠这个 socket 重启 Headscale 容器，必须挂载；
+      # 注意 `:ro` 只保护 socket 文件本身、挡不住 API 调用，所以别把它当安全边界，一律按 root 权限对待
+      # - "/var/run/docker.sock:/var/run/docker.sock"
 
     environment:
       - "TZ=Asia/Shanghai"
@@ -518,7 +556,7 @@ services:
 ::: warning 官方镜像是 distroless，没有 shell
 `docker compose exec headplane ls ...` 会失败：镜像里的 `/bin/sh` 只是一个打印提示的假 shell
 （`Headplane containers do not contain a shell by default.`，退出码 127）。
-要进容器排查，请把 `image:` 临时换成调试标签 `ghcr.io/cgg888/headplanecn:0.16.0-shell`
+要进容器排查，请把 `image:` 临时换成调试标签 `ghcr.io/cgg888/headplanecn:0.22.22-shell`
 （`:<版本>-shell` 是官方发布的带 shell/curl 的调试镜像），排查完再换回 `latest`；
 宿主机侧的检查（`ls`、`ss`、`curl`）本来就不需要进容器。
 :::
@@ -656,18 +694,18 @@ tailscale debug derp <你的 region_code>
 
 ## 十一、功能开启清单
 
-| 功能                   | 怎么开                                                                                                                                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 中英繁切换             | 默认可用：登录后右上角**头像菜单**；登录页右上角地球按钮                                                                                                                                                                |
-| 机器 / 用户管理        | 默认可用                                                                                                                                                                                                                |
-| **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                                                                                                                        |
-| **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 触发重载，但 SIGHUP 只重载 ACL，需要重启的改动请开 `integration.proc.allow_restart` 或用系统方式重启 headscale                                |
-| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 HeadplaneCN                                                                                                                                                        |
-| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径** + 把该目录按**相同绝对路径读写**挂给 HeadplaneCN（见第四节）；保存后 HeadplaneCN 会自动触发重载/重启（原生部署默认只提示，需 `integration.proc.allow_restart` 或手动重启） |
-| **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它                                                                                                         |
-| **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                                                                                                                                 |
-| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **HeadplaneCN 用 OIDC 登录**（API Key 登录不支持）                                                                                                                              |
-| VNC / RDP              | ❌ HeadplaneCN 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole                                                                                                   |
+| 功能                   | 怎么开                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 中英繁切换             | 默认可用：登录后右上角**头像菜单**；登录页右上角地球按钮                                                                                                                                                                                                                                                                         |
+| 机器 / 用户管理        | 默认可用                                                                                                                                                                                                                                                                                                                         |
+| **ACL 编辑**           | headscale 配置 `policy.mode: database` 后**重启 headscale 应用**                                                                                                                                                                                                                                                                 |
+| **DNS / 设置可编辑**   | 本指南第六、七节（`config_path` + 读写挂载）；保存后由 `integration.proc` 触发重载，但 SIGHUP 只重载 ACL，需要重启的改动请开 `integration.proc.allow_restart` 或用系统方式重启 headscale                                                                                                                                         |
+| **DNS 记录即时生效**   | headscale 用 `dns.extra_records_path` + 把该文件挂给 HeadplaneCN                                                                                                                                                                                                                                                                 |
+| **在线编辑 DERP 地图** | headscale 的 `derp.paths` 里写**宿主机路径**（Headscale 是宿主机原生进程，只认宿主机路径）+ 把该目录按**相同绝对路径读写**挂给 HeadplaneCN（见第四节；双镜像部署把数据目录按同一绝对路径挂进容器，路径同样不用改）；保存后 HeadplaneCN 会自动触发重载/重启（原生部署默认只提示，需 `integration.proc.allow_restart` 或手动重启） |
+| **版本 / OS / 中继列** | `integration.agent.enabled: true`（本指南已开）+ 有效 `headscale.api_key`；机器详情页的中继（DERP）面板也来自它                                                                                                                                                                                                                  |
+| **配置快照 / 审计**    | 默认可用（`config_path` 可读后可写快照；快照与审计数据存在 `data_path` 里，务必持久化）                                                                                                                                                                                                                                          |
+| **浏览器 SSH**         | Agent + 目标节点 `tailscale up --ssh` + **HeadplaneCN 用 OIDC 登录**（API Key 登录不支持）                                                                                                                                                                                                                                       |
+| VNC / RDP              | ❌ HeadplaneCN 不含此功能；可另配 [headscale-console](https://github.com/rickli-cloud/headscale-console) 或 Guacamole                                                                                                                                                                                                            |
 
 ## 十二、升级、备份与卸载
 
@@ -852,7 +890,10 @@ HeadplaneCN 的解析结果（包括「没有记录」这类否定结果）**会
 ### 16. 保存本地 DERP 地图时报「看不到该路径 / 无法写入」
 
 **原因**：只挂了 `config.yaml`，没有把 `derp.paths` 指向的目录挂进容器；或者容器内的挂载点
-写成了 `/etc/headscale/derp-maps` 这类**容器专用路径**；又或者这个目录挂成了只读。
+写成了 `/etc/headscale/derp-maps` 这类**容器专用路径**；又或者这个目录挂成了只读。根子在于
+`derp.paths` 由**宿主机上的 Headscale 原生进程**读取，写的必须是宿主机路径，容器里那条路径
+只有 HeadplaneCN 认得；[双镜像部署](/install/dual-image) 把整个数据目录按同一绝对路径挂进
+容器，因此没有这个错位。
 
 **解决**：把**宿主机上的那个目录**按**同一个绝对路径**读写挂进容器，并在 `derp.paths` 里写
 **宿主机路径**：

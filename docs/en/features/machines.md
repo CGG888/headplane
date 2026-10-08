@@ -11,13 +11,13 @@ detail page that gathers everything HeadplaneCN knows about a single one.
 
 ## The machine list
 
-| Column          | Shown                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| Machine name    | The name HeadplaneCN shows, with its owner beneath it; a machine owned by a tag says `tag:…` instead |
-| Addresses       | The machine's Tailscale IPv4 address, and its IPv6 address when it has one                        |
-| Version         | The Tailscale version the machine reports — only with the [HeadplaneCN Agent](/en/features/agent)      |
-| Status          | Online or offline                                                                                 |
-| Last seen       | When the control server last heard from the machine                                               |
+| Column       | Shown                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| Machine name | The name HeadplaneCN shows, with its owner beneath it; a machine owned by a tag says `tag:…` instead |
+| Addresses    | The machine's Tailscale IPv4 address, and its IPv6 address when it has one                           |
+| Version      | The Tailscale version the machine reports — only with the [HeadplaneCN Agent](/en/features/agent)    |
+| Status       | Online or offline                                                                                    |
+| Last seen    | When the control server last heard from the machine                                                  |
 
 The list is searchable, sortable on nearly every column, and filterable by user,
 ACL tag, status and advertised route. Filters combine, and a clear-filters button
@@ -30,16 +30,23 @@ into the selection [bulk operations](/en/features/bulk-operations) act on.
 
 A card per topic, each one degrading on its own when its source is unavailable:
 
-| Card                    | Contents                                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Card                    | Contents                                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Availability**        | Whether the machine was online over the last 24 hours, sampled every few minutes, as an uptime percentage and a timeline; says so rather than guessing when nothing has been recorded yet |
-| **Machine Details**     | Creator, machine name, OS hostname, OS, Tailscale version, ID, node key, creation time, last seen, key expiry and domain                                        |
-| **Addresses**           | Tailscale IPv4 and IPv6, the short and full MagicDNS names, and the endpoints the machine reported                                                              |
-| **DERP Relays**         | The relay address clients reach, the embedded region, and the relays this machine uses                                                                          |
-| **Subnets & Routing**   | The routes the machine advertises, which of them are approved, and whether it may act as an exit node                                                           |
-| **ACL tags**            | The tags the machine carries; a tag nothing in the policy owns is flagged                                                                                       |
-| **Client Connectivity** | The machine's own connectivity self-test: varying NAT, hairpinning, IPv6, UDP, UPnP, PCP and NAT-PMP                                                           |
-| **Danger zone**         | Expire the machine's key, or remove the machine from the tailnet                                                                                                |
+| **Machine Details**     | Creator, machine name, OS hostname, OS, Tailscale version, ID, node key, creation time, last seen, key expiry and domain                                                                  |
+| **Addresses**           | Tailscale IPv4 and IPv6, the short and full MagicDNS names, and the endpoints the machine reported                                                                                        |
+| **DERP Relays**         | The relay address clients reach, the embedded region, and the relays this machine uses                                                                                                    |
+| **Subnets & Routing**   | The routes the machine advertises, which of them are approved, and whether it may act as an exit node                                                                                     |
+| **ACL tags**            | The tags the machine carries; a tag nothing in the policy owns is flagged                                                                                                                 |
+| **Client Connectivity** | The machine's own connectivity self-test: varying NAT, hairpinning, IPv6, UDP, UPnP, PCP and NAT-PMP                                                                                      |
+| **Danger zone**         | Expire the machine's key, or remove the machine from the tailnet                                                                                                                          |
+
+The **node key** is hidden by default like an address or a hostname: the eye
+button at the end of the row reveals that one value, the copy click copies the
+real key either way, and the hover title is dropped while it is hidden so a
+tooltip cannot become a second way to read it. This is a browser-local
+preference and changes no request; the visibility menu in the header shows or
+hides everything at once, and node keys and addresses share the one switch.
 
 The rest of a machine's actions live in the row menu: open an SSH session, rename
 it, turn key expiry on or off, edit its routes and tags, and move it to another

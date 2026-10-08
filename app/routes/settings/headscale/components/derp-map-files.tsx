@@ -26,11 +26,30 @@ import {
 } from "../error-keys";
 
 /**
- * The recommended mount for the directory holding every `derp.paths` file. Only
- * this directory is shared read-write, so the rest of Headscale's data directory
- * stays out of the container.
+ * The recommended mount for the directory holding every `derp.paths` file, built
+ * from the path Headscale actually lists: the directory is shared under the same
+ * absolute path, read-write, so the rest of Headscale's data directory stays out
+ * of the container and the panel reads exactly the files Headscale loads.
+ *
+ * `undefined` when the configuration lists no absolute path yet: there is no
+ * directory to name then, and a guessed path would point at the wrong disk. The
+ * snippet is derived instead of hard-coded because the directory differs between
+ * a native Headscale and one running in a container of its own.
  */
-const MOUNT_SNIPPET = '- "/vol1/@appdata/headscale/derp-maps:/etc/headscale/derp-maps"';
+function mountSnippet(paths: string[]): string | undefined {
+  const listed = paths.map((path) => path.trim()).find((path) => path.startsWith("/"));
+  if (listed === undefined) {
+    return undefined;
+  }
+
+  const cut = listed.lastIndexOf("/");
+  if (cut <= 0) {
+    return undefined;
+  }
+
+  const directory = listed.slice(0, cut);
+  return `- "${directory}:${directory}"`;
+}
 
 const EDITOR_CLASS = cn(
   "min-h-64 w-full rounded-md px-3 py-2 font-mono text-xs",
@@ -75,6 +94,7 @@ export default function DerpMapFiles({
 }: DerpMapFilesProps) {
   const { t } = useI18n();
   const byPath = new Map(files.map((file) => [file.path, file]));
+  const snippet = mountSnippet(paths);
 
   // The rows hold their own forms, so the paths they failed on are collected
   // here and turned into the one report that travels up. A row that stays failing
@@ -102,7 +122,7 @@ export default function DerpMapFiles({
         <p className="text-sm text-mist-600 dark:text-mist-400">
           {t("settings.headscale.derp.mapsMountBody")}
         </p>
-        <CodeBlock>{MOUNT_SNIPPET}</CodeBlock>
+        {snippet === undefined ? undefined : <CodeBlock>{snippet}</CodeBlock>}
         <p className="text-xs text-mist-500 dark:text-mist-400">
           {t("settings.headscale.derp.mapsMountNote")}
         </p>

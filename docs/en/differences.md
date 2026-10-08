@@ -29,6 +29,12 @@ Headscale refuse to start (`getting DERPMap: open …: no such file or
 directory`); the fix is to remove the entry or roll back the pre-write snapshot,
 then restart.
 
+If you want Docker to manage Headscale as well, use
+[dual-image deployment →](/en/install/dual-image): two containers, the data directory mounted at
+the **same absolute path** (not a single character of the configuration changes), and the
+**Docker integration** restarting the Headscale container — a shape that needs neither
+`pid: host` nor the AppArmor exemption.
+
 [fnOS installation →](/en/install/fnos)
 
 </div>
@@ -76,11 +82,10 @@ holds it then. **Off by default** (it contacts a third party) and IPv6-only.
 ### Official region filter
 
 Mirror Tailscale's official public DERP regions into your own local map file,
-keeping only the ones you tick. They are renumbered into the **900s**: **901
-Hong Kong** and **902 Singapore** are pinned, and the rest are ordered by the
-latency your own machines measure (unmeasured regions last). Numbers are stable
-across runs, so clients keep the relay they selected; only **Renumber** re-ranks
-them.
+keeping only the ones you tick. They are renumbered into the **900s** from
+**901** upward, fastest measured latency first (unmeasured regions last) — no
+region is pinned and nothing is ticked by default. Numbers are stable across
+runs, so clients keep the relay they selected; only **Renumber** re-ranks them.
 
 [Headscale settings →](/en/features/headscale-settings)
 

@@ -26,6 +26,10 @@ Headscale **实际生效**的 `config.yaml` 需要以**读写**方式挂载，DN
 （`getting DERPMap: open …: no such file or directory`）。处理办法是删掉该条目、
 或回滚写入前的快照，然后重启。
 
+如果希望 Headscale 也交给 Docker 管理，用[双镜像部署 →](/install/dual-image)：
+两个容器、数据目录以**同一绝对路径**挂载（配置一个字都不用改），并由 **Docker 集成**
+重启 Headscale 容器 —— 那种形态不需要 `pid: host`，也不需要放行 AppArmor。
+
 [fnOS 部署指南 →](/install/fnos)
 
 </div>
@@ -69,8 +73,8 @@ Headscale **实际生效**的 `config.yaml` 需要以**读写**方式挂载，DN
 ### 官方区域节点筛选
 
 把 Tailscale 的官方公共 DERP 区域镜像成你自己的本地地图文件，只保留勾选的区域，
-并**重新编号到 900 段**：**901 固定香港、902 固定新加坡**，其余按你自己的机器实
-测延迟排序（没测过的排最后）。编号会保持稳定，客户端不会因为一次延迟变化就换中继，
+并**重新编号到 900 段**：从 **901** 起按你自己的机器实测延迟排序（没测过的排最后），
+没有固定区域，默认一个都不勾选。编号会保持稳定，客户端不会因为一次延迟变化就换中继，
 只有**重新编号**才会打乱重排。
 
 [Headscale 设置 →](/features/headscale-settings)

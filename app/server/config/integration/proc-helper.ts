@@ -6,7 +6,12 @@ import { setTimeout } from "node:timers/promises";
 import type { Headscale } from "~/server/headscale/api";
 import log from "~/utils/log";
 
-import type { IntegrationRestartResult, IntegrationSupervisor } from "./abstract";
+import type {
+  IntegrationReloadResult,
+  IntegrationReloadStage,
+  IntegrationRestartResult,
+  IntegrationSupervisor,
+} from "./abstract";
 
 /**
  * Does a two-stage scan of /proc to find the headscale process that is running
@@ -76,23 +81,50 @@ export interface SignalHeadscaleOptions {
 }
 
 /**
+ * Why a `kill()` failed, in the terms the operator can act on.
+ *
+ * Linux reports `EPERM` when the target belongs to another user, and `EACCES`
+ * when a mandatory access control policy refuses the signal — which is what a
+ * Docker container hits when AppArmor's `docker-default` profile does not allow
+ * `signal (send) peer=unconfined`. Both mean "the process is there, we are just
+ * not allowed to signal it", never "it is gone".
+ */
+function signalErrorStage(error: unknown): IntegrationReloadStage {
+  const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+  if (code === "EPERM" || code === "EACCES") {
+    return "permission";
+  }
+
+  // Some runtimes only carry the errno in the message ("kill EACCES").
+  const message = error instanceof Error ? error.message : String(error);
+  if (/\bEACCES\b|\bEPERM\b/.test(message)) {
+    return "permission";
+  }
+
+  return "failed";
+}
+
+/**
  * Sends a signal to the headscale process and waits for it to become healthy.
  * @param headscale The Headscale instance to health-check
  * @param options Options for signaling and waiting
- * @returns True if headscale became healthy, false otherwise
+ * @returns The step the reload reached: `healthy` when Headscale answered,
+ *          `permission` when the signal was refused by the kernel or an access
+ *          control policy, `not-confirmed` when it was sent but never answered.
  */
 export async function signalAndWaitHealthy(
   headscale: Headscale,
   options: SignalHeadscaleOptions,
-): Promise<boolean> {
+): Promise<IntegrationReloadResult> {
   const { pid, signal = "SIGHUP", maxAttempts = 10, retryDelayMs = 1000 } = options;
 
   try {
     kill(pid, signal);
     log.info("config", "Sent %s to Headscale (PID %d)", signal, pid);
   } catch (error) {
-    log.error("config", "Failed to send %s to PID %d: %s", signal, pid, error);
-    return false;
+    const stage = signalErrorStage(error);
+    log.error("config", "Failed to send %s to PID %d (%s): %s", signal, pid, stage, error);
+    return { ok: false, stage, pid };
   }
 
   await setTimeout(retryDelayMs);
@@ -100,8 +132,8 @@ export async function signalAndWaitHealthy(
     try {
       const healthy = await headscale.health();
       if (healthy) {
-        log.info("config", "Headscale is healthy after restart");
-        return true;
+        log.info("config", "Headscale is healthy after %s (PID %d)", signal, pid);
+        return { ok: true, stage: "healthy", pid };
       }
     } catch {
       // Still restarting
@@ -112,8 +144,14 @@ export async function signalAndWaitHealthy(
     }
   }
 
-  log.error("config", "Headscale did not become healthy after %d attempts", maxAttempts);
-  return false;
+  log.error(
+    "config",
+    "Sent %s to Headscale (PID %d) but it did not become healthy after %d attempts",
+    signal,
+    pid,
+    maxAttempts,
+  );
+  return { ok: false, stage: "not-confirmed", pid };
 }
 
 /**
@@ -273,8 +311,17 @@ export async function restartHeadscale(
     kill(pid, "SIGTERM");
     log.info("config", "Sent SIGTERM to Headscale (PID %d)", pid);
   } catch (error) {
-    log.error("config", "Failed to stop Headscale (PID %d): %s", pid, error);
-    return { ok: false, stage: "stale-pid", pid, supervisor };
+    // A refused signal is not a stale pid: the process is still there, we are
+    // simply not allowed to stop it (AppArmor on a container, another user).
+    const permission = signalErrorStage(error) === "permission";
+    log.error(
+      "config",
+      "Failed to stop Headscale (PID %d)%s: %s",
+      pid,
+      permission ? " — no permission to signal it" : "",
+      error,
+    );
+    return { ok: false, stage: permission ? "permission" : "stale-pid", pid, supervisor };
   }
 
   if (!(await waitForExit(pid, procPath, stopTimeoutMs, pollIntervalMs))) {

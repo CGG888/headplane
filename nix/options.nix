@@ -330,6 +330,93 @@ in {
                   description = "Agent configuration for the Headplane agent.";
                 };
 
+                docker = mkOption {
+                  type = types.submodule {
+                    options = {
+                      enabled = mkOption {
+                        type = types.bool;
+                        default = false;
+                        description = ''
+                          Let HeadplaneCN manage a Headscale container through the Docker socket.
+                          Saving a configuration change restarts that container.
+                          The user running the HeadplaneCN process needs access to the socket,
+                          for example by adding the docker group to its extraGroups.
+                          HeadplaneCN prefers Docker when more than one integration is enabled,
+                          so set integration.proc.enabled to false to keep this choice unambiguous.
+                        '';
+                      };
+
+                      container_label = mkOption {
+                        type = types.nullOr types.str;
+                        default = null;
+                        example = "me.tale.headplane.target=headscale";
+                        description = ''
+                          Label used to find the Headscale container when container_name is unset.
+                          HeadplaneCN falls back to me.tale.headplane.target=headscale when this is unset.
+                        '';
+                      };
+
+                      container_name = mkOption {
+                        type = types.nullOr types.str;
+                        default = null;
+                        example = "headscale";
+                        description = ''
+                          Name of the Headscale container to manage.
+                          When unset, HeadplaneCN finds the container by container_label instead.
+                        '';
+                      };
+
+                      socket = mkOption {
+                        type = types.nullOr types.str;
+                        default = null;
+                        example = "unix:///var/run/docker.sock";
+                        description = ''
+                          Docker socket to connect to.
+                          HeadplaneCN falls back to unix:///var/run/docker.sock when this is unset.
+                        '';
+                      };
+                    };
+                  };
+                  default = {};
+                  description = "Docker container integration settings.";
+                };
+
+                kubernetes = mkOption {
+                  type = types.submodule {
+                    options = {
+                      enabled = mkOption {
+                        type = types.bool;
+                        default = false;
+                        description = ''
+                          Let HeadplaneCN manage Headscale through the Kubernetes API of the
+                          cluster it runs in. Saving a configuration change restarts that pod.
+                        '';
+                      };
+
+                      pod_name = mkOption {
+                        type = types.nullOr types.str;
+                        default = null;
+                        example = "headscale-0";
+                        description = ''
+                          Name of the pod running Headscale. Required when this integration is
+                          enabled, because HeadplaneCN looks the pod up in its namespace.
+                        '';
+                      };
+
+                      validate_manifest = mkOption {
+                        type = types.bool;
+                        default = true;
+                        description = ''
+                          Check that the pod exists and is healthy before signalling it.
+                          Set to false only when HeadplaneCN cannot list pods in its namespace.
+                        '';
+                      };
+                    };
+                  };
+                  default = {};
+                  description = "Kubernetes (k8s) integration settings.";
+                };
+
                 proc = mkOption {
                   type = types.submodule {
                     options = {

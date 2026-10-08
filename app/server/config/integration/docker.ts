@@ -8,6 +8,7 @@ import type { Headscale } from "~/server/headscale/api";
 import log from "~/utils/log";
 
 import { Integration } from "./abstract";
+import type { IntegrationReloadResult } from "./abstract";
 
 interface DockerContainer {
   Id: string;
@@ -255,10 +256,10 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
     return this.client !== undefined && this.containerId !== undefined;
   }
 
-  async onConfigChange(headscale: Headscale): Promise<boolean> {
+  async onConfigChange(headscale: Headscale): Promise<IntegrationReloadResult> {
     if (!this.client || !this.apiVersion) {
       log.error("config", "Cannot restart Headscale: Docker is not configured");
-      return false;
+      return { ok: false, stage: "unconfigured" };
     }
 
     log.info("config", "Restarting Headscale via Docker");
@@ -297,7 +298,7 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
         }
 
         log.info("config", "Headscale is up and running");
-        return true;
+        return { ok: true, stage: "healthy" };
       } catch {
         if (attempts < this.maxAttempts) {
           attempts++;
@@ -306,10 +307,10 @@ export default class DockerIntegration extends Integration<typeof configSchema.f
         }
 
         log.error("config", "Missed restart deadline for %s", this.containerId);
-        return false;
+        return { ok: false, stage: "not-confirmed" };
       }
     }
 
-    return false;
+    return { ok: false, stage: "not-confirmed" };
   }
 }

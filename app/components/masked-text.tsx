@@ -25,10 +25,16 @@ export function MaskedValue({
   masked,
   value,
   className,
+  label,
 }: {
   masked: boolean;
   value: string;
   className?: string;
+  /**
+   * What the mask stands for, for screen readers. Defaults to the address
+   * wording; a caller hiding something that is not an address passes its own.
+   */
+  label?: string;
 }) {
   const { t } = useI18n();
 
@@ -40,7 +46,7 @@ export function MaskedValue({
   // instead, so it never reads the bullets as the address.
   return (
     <span className={cn("inline-flex min-w-0 items-center", className)}>
-      <span className="sr-only">{t("address.hidden")}</span>
+      <span className="sr-only">{label ?? t("address.hidden")}</span>
       <span aria-hidden="true" className="shrink-0 whitespace-nowrap">
         {ADDRESS_MASK}
       </span>
@@ -53,17 +59,20 @@ export function RevealBadge({
   masked,
   onToggle,
   className,
+  label,
 }: {
   masked: boolean;
   onToggle: () => void;
   className?: string;
+  /** Accessible name and hover title. Defaults to the address wording. */
+  label?: string;
 }) {
   const { t } = useI18n();
-  const label = t("address.reveal");
+  const text = label ?? t("address.reveal");
 
   return (
     <button
-      aria-label={label}
+      aria-label={text}
       aria-pressed={!masked}
       className={cn(
         "flex h-5 w-5 shrink-0 items-center justify-center rounded-md",
@@ -75,7 +84,7 @@ export function RevealBadge({
         className,
       )}
       onClick={onToggle}
-      title={label}
+      title={text}
       type="button"
     >
       {masked ? (

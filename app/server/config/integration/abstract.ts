@@ -9,6 +9,9 @@ export type IntegrationKind = "docker" | "kubernetes" | "proc";
  *
  * - `no-process`: no `headscale serve` process was found at all.
  * - `stale-pid`: the recorded pid is not (or no longer) headscale serve.
+ * - `permission`: the process is there, but the signal was refused
+ *   (`EPERM`/`EACCES`) — a container that shares the host PID namespace can
+ *   still be denied the signal by AppArmor.
  * - `stop-timeout`: the process did not exit within the budget.
  * - `not-restarted`: it exited, but nothing started it again.
  * - `unhealthy`: a new process exists but never answered `/health`.
@@ -18,11 +21,46 @@ export type IntegrationKind = "docker" | "kubernetes" | "proc";
 export type IntegrationRestartStage =
   | "no-process"
   | "stale-pid"
+  | "permission"
   | "stop-timeout"
   | "not-restarted"
   | "unhealthy"
   | "healthy"
   | "unsupported";
+
+/**
+ * How far a reload got, for the same reason the restart stages exist: "the
+ * signal was refused" and "there was nothing to signal" are different problems.
+ * AppArmor is the common one: a container that sees the host's Headscale
+ * through `pid: host` still gets `EACCES` from `kill()` unless its profile
+ * allows `signal (send) peer=unconfined`.
+ *
+ * - `healthy`: the signal (or container restart) was delivered and Headscale
+ *   answered `/health`.
+ * - `not-confirmed`: delivered, but `/health` never came back in time.
+ * - `no-process`: no `headscale serve` process was found to signal.
+ * - `unconfigured`: the integration itself is not configured (Docker without a
+ *   socket or a container).
+ * - `permission`: the signal was refused (`EPERM`/`EACCES`).
+ * - `failed`: the signal failed for any other reason (it exited in between, or
+ *   the platform refused it).
+ * - `unsupported`: this integration cannot reload Headscale.
+ */
+export type IntegrationReloadStage =
+  | "healthy"
+  | "not-confirmed"
+  | "no-process"
+  | "unconfigured"
+  | "permission"
+  | "failed"
+  | "unsupported";
+
+export interface IntegrationReloadResult {
+  ok: boolean;
+  stage: IntegrationReloadStage;
+  /** The process that was signalled, when there was one. */
+  pid?: number;
+}
 
 export interface IntegrationSupervisor {
   /** True when something other than the operator's shell should start it again. */
@@ -53,11 +91,13 @@ export abstract class Integration<T> {
 
   /**
    * Asks the running Headscale to pick up a configuration change, as far as
-   * this deployment can. Returns whether Headscale answered healthy afterwards:
-   * an implementation that cannot do it must return false rather than throwing,
-   * so the caller can report "written but not live" instead of a success.
+   * this deployment can. Answers with the step it reached rather than a bare
+   * boolean, because "the kernel refused the signal" and "there was no process
+   * to signal" need different fixes. An implementation that cannot do it at all
+   * must answer `unsupported` rather than throwing, so the caller can report
+   * "written but not live" instead of a success.
    */
-  abstract onConfigChange(headscale: Headscale): Promise<boolean> | boolean;
+  abstract onConfigChange(headscale: Headscale): Promise<IntegrationReloadResult>;
   abstract get name(): string;
   abstract get kind(): IntegrationKind;
 

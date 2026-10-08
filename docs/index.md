@@ -47,7 +47,7 @@ features:
 
 ### 官方区域节点筛选
 
-只镜像你选中的官方中继，编号固定为 901/902。
+只镜像你选中的官方中继，从 901 起按实测延迟编号。
 
 [Headscale 设置 →](/features/headscale-settings)
 

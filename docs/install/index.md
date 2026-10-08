@@ -15,11 +15,11 @@ HeadplaneCN 需要一份配置文件才能运行。可以使用
 [示例文件](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)作为起点。其中几个
 重要字段：
 
-| 字段                       | 说明                                                                                            |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| 字段                       | 说明                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | **`headscale.url`**        | 指向你的 Headscale 服务器（例如 `http://headscale.example.com`，在 Docker 里是 `http://headscale:8080`）。 |
-| **`server.cookie_secret`** | 用于加密 cookie。可以用 `openssl rand -base64 24` 这类命令生成随机串。                            |
-| **`server.data_path`**     | 只是一个要记住的路径，尤其是使用 Docker 时。                                                      |
+| **`server.cookie_secret`** | 用于加密 cookie。可以用 `openssl rand -base64 24` 这类命令生成随机串。                                     |
+| **`server.data_path`**     | 只是一个要记住的路径，尤其是使用 Docker 时。                                                               |
 
 配置文件的选项远不止这些，也复杂得多。关于所有可用选项的详细说明，以及如何通过密钥文件路径选项
 和环境变量安全地设置这些值，请参考[配置](../configuration/index.md)指南。
@@ -48,6 +48,15 @@ HeadplaneCN 有多种部署方式，各有优缺点。请选择最适合你的�
 
 - 适合测试或简单环境，不适用于生产。
 - 没有任何高级功能或集成，例如网络管理或浏览器远程 SSH。
+
+---
+
+### [双镜像部署](/install/dual-image)：Headscale 与 HeadplaneCN 各跑一个容器
+
+- NAS 上把 Headscale 也交给 Docker 的形态：两个容器都用 host 网络，Headscale 的数据目录以
+  **同一个绝对路径**挂进容器，配置里的绝对路径一个字都不用改。
+- 用 Docker 集成（保存配置即重启 Headscale 容器），不需要 `pid: host` + AppArmor 那套 proc 配置。
+- 包含 `.env`、完整的 compose 与两份配置、**双向迁移**（fnOS 原生 ⇄ 双镜像）、反向代理与验收清单。
 
 ---
 

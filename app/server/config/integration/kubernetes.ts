@@ -9,6 +9,7 @@ import type { Headscale } from "~/server/headscale/api";
 import log from "~/utils/log";
 
 import { Integration } from "./abstract";
+import type { IntegrationReloadResult } from "./abstract";
 import { findHeadscaleServe, signalAndWaitHealthy } from "./proc-helper";
 
 // https://github.com/kubernetes-client/javascript/blob/055b83c6504dfd1b2a2d081efd974163c6cbb808/src/config.ts#L40
@@ -158,10 +159,10 @@ export default class KubernetesIntegration extends Integration<typeof configSche
     }
   }
 
-  async onConfigChange(headscale: Headscale) {
+  async onConfigChange(headscale: Headscale): Promise<IntegrationReloadResult> {
     if (!this.pid) {
       log.error("config", "Cannot signal Headscale: no headscale serve process found");
-      return false;
+      return { ok: false, stage: "no-process" };
     }
 
     return await signalAndWaitHealthy(headscale, {

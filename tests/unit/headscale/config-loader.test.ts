@@ -417,6 +417,7 @@ describe("Headscale config loader", () => {
       serverUrl: "http://localhost:8080",
       urls: [],
       paths: [],
+      dataDirectory: "",
       autoUpdateEnabled: false,
       updateFrequency: "3h",
       server: {
@@ -467,6 +468,7 @@ describe("Headscale config loader", () => {
       serverUrl: "http://localhost:8080",
       urls: ["https://controlplane.tailscale.com/derpmap/default"],
       paths: ["/etc/headscale/derp.yaml"],
+      dataDirectory: "/var/lib/headscale",
       autoUpdateEnabled: false,
       updateFrequency: "30m",
       server: {
@@ -506,6 +508,7 @@ describe("Headscale config loader", () => {
       serverUrl: "http://localhost:8080",
       urls: [],
       paths: [],
+      dataDirectory: "",
       autoUpdateEnabled: false,
       updateFrequency: "3h",
       server: {

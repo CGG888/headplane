@@ -199,14 +199,22 @@ integration:
     # to set this value (refer to docs/Integrated-Mode.md for more info).
     pod_name: "headscale"
 
-  # Proc is the "Native" integration that only works when Headscale and
-  # Headplane are running outside of a container. There is no configuration,
-  # but you need to ensure that the Headplane process can terminate the
-  # Headscale process.
+  # Proc is the "Native" integration for a Headscale running as a process
+  # outside this container (the fnOS app, a systemd unit, ...). Headplane has to
+  # see that process, so a containerised Headplane needs to share the host PID
+  # namespace (`pid: host`) and usually needs
+  # `security_opt: ["apparmor=unconfined"]` to be allowed to signal it.
   #
-  # (If they are both running under systemd as sudo, this will work).
+  # A SIGHUP only re-reads the access policy in place; restarting the process
+  # additionally needs `allow_restart` below and a supervisor (systemd, s6, ...)
+  # that brings Headscale back.
   proc:
     enabled: false
+
+    # Allow Settings → System to restart Headscale: Headplane sends SIGTERM and
+    # then waits for a new `headscale serve` to appear. Off by default, because a
+    # process with no supervisor will not come back.
+    # allow_restart: false
 
 # OIDC Configuration for simpler authentication
 # (This is optional, but recommended for the best experience)

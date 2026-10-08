@@ -51,8 +51,12 @@ export default function ClientConnectivity({ facts }: { facts: ClientConnectivit
  * One yes/no answer. The check and the cross differ in shape as well as colour,
  * and the localized word is always spelled out, so the answer never depends on
  * the reader telling green from grey.
+ *
+ * Exported because the diagnostics card prints the one self-test answer the
+ * connectivity card above it has no row for, and one yes/no answer should read
+ * the same wherever it appears.
  */
-function ConnectivityValue({ value }: { value: boolean }) {
+export function ConnectivityValue({ value }: { value: boolean }) {
   const { t } = useI18n();
   const Icon = value ? Check : X;
 

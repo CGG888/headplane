@@ -1,17 +1,20 @@
-import { Bug } from "lucide-react";
+import { Bug, Info } from "lucide-react";
 
 import { SettingsCollapsible, type SettingsStatusTone } from "~/components/settings-nav";
+import Tooltip from "~/components/tooltip";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
 
 import {
   buildNodeDiagnostics,
+  type NodeDebugField,
   type NodeDebugView,
   type NodeDiagnosticsFailure,
   type NodeDiagnosticsInput,
   type NodeDiagnosticsLabels,
 } from "../diagnostics";
 import MachineAttribute from "./attribute";
+import { ConnectivityValue } from "./client-connectivity";
 
 /** One tone per card state, from the app's one badge helper. */
 const STATUS_TONES: Record<NodeDebugView["status"], SettingsStatusTone> = {
@@ -28,17 +31,17 @@ const FAILURE_KEYS: Record<NodeDiagnosticsFailure, TranslationKey> = {
 
 /**
  * The node diagnostics card: a collapsed-by-default block directly above the
- * danger zone that prints what the Headplane Agent reported about this machine
- * as grouped, labelled rows, together with the relays and regions this
- * deployment serves.
+ * danger zone that prints the few facts no card above it already shows — the
+ * agent's own version strings, its IPv4 ICMP self-test, and how much of this
+ * deployment's region inventory the machine accounts for.
  *
  * The page hands it the data it has already loaded, so the card asks nothing of
  * Headscale. It opens itself when there is nothing to report at all (the same
- * "reveal the problem without a click" rule the settings cards follow), says so
- * when its view held nothing, and never renders raw JSON: the grouping and the
- * field/address shapes are decided by `buildNodeDiagnostics`, so this component
- * only lays them out. Addresses are masked by default through the page's own
- * attribute row, and identifiers and addresses copy themselves.
+ * "reveal the problem without a click" rule the settings cards follow) and says
+ * so when its view held nothing. Everything else the agent reports — the
+ * operating system, the host identity, the end-points, the network booleans and
+ * the relay regions with their latency — is already printed by the cards above,
+ * so repeating it here would only make a reader compare two views of one fact.
  */
 export default function NodeDiagnostics({
   diagnostics,
@@ -48,21 +51,22 @@ export default function NodeDiagnostics({
 }) {
   const { t } = useI18n();
 
-  // The builder is locale-free, so the card supplies the wording. The relay
-  // source and latency source names are the relay card's own keys, so one
-  // region reads the same on both cards.
+  // The builder is locale-free, so the card supplies the wording.
   const labels: NodeDiagnosticsLabels = {
     notReported: t("machines.detail.diagnostics.notReported"),
-    unknown: t("machines.detail.derp.unknown"),
-    latencySources: {
-      reported: t("machines.detail.derp.latencySourceReported"),
-      measured: t("machines.detail.derp.latencySourceMeasured"),
-    },
-    relaySources: {
-      embedded: t("machines.detail.derp.relaySourceEmbedded"),
-      local: t("machines.detail.derp.relaySourceLocal"),
-      mirror: t("machines.detail.derp.relaySourceMirror"),
-      official: t("machines.detail.derp.relaySourceOfficial"),
+    version: t("machines.detail.diagnostics.version"),
+    osVersion: t("machines.detail.diagnostics.osVersion"),
+    icmpv4: t("machines.detail.diagnostics.icmpv4"),
+    coverage: t("machines.detail.diagnostics.coverage"),
+    coverageValue: (counts) =>
+      t("machines.detail.diagnostics.coverageValue", {
+        served: counts.served,
+        reported: counts.reported,
+        measured: counts.measured,
+      }),
+    groups: {
+      agent: t("machines.detail.diagnostics.groupAgent"),
+      checks: t("machines.detail.diagnostics.groupChecks"),
     },
   };
 
@@ -112,12 +116,9 @@ export default function NodeDiagnostics({
  * The grouped rows one successful view prints. It is its own component for the
  * same reason the builder is its own module: the rows are the card's whole
  * payload, and a test can lay them out without the collapsible wrapper's open
- * state. Addresses go through the page's own attribute row, so they stay masked
- * by default, and identifiers and addresses carry the copy control.
+ * state.
  */
 export function NodeDebugRows({ view }: { view: NodeDebugView }) {
-  const { t } = useI18n();
-
   return (
     <div className="flex flex-col gap-4">
       {view.groups.map((group) => (
@@ -126,25 +127,49 @@ export function NodeDebugRows({ view }: { view: NodeDebugView }) {
             {group.label}
           </span>
           <dl className="mt-0.5 flex flex-col">
-            {group.fields.map((field) => (
-              <MachineAttribute
-                isAddress={field.address}
-                isCode={field.copyable}
-                isCopyable={field.copyable}
-                key={`${group.key}.${field.key}`}
-                name={field.label}
-                tooltip={field.path}
-                value={field.value}
-              />
-            ))}
+            {group.fields.map((field) =>
+              field.kind === "boolean" ? (
+                <BooleanRow field={field} key={field.key} />
+              ) : (
+                <MachineAttribute
+                  key={field.key}
+                  name={field.label}
+                  tooltip={field.path}
+                  value={field.value}
+                />
+              ),
+            )}
           </dl>
         </div>
       ))}
-      {view.truncated ? (
-        <p className="text-xs text-mist-500 dark:text-mist-400">
-          {t("machines.detail.diagnostics.truncated")}
-        </p>
-      ) : undefined}
+    </div>
+  );
+}
+
+/**
+ * One yes/no row, laid out like the shared attribute row so the self-test sits
+ * in the same column as the values above it. The answer is the same check or
+ * cross the connectivity card prints, so the schema's `true`/`false` never
+ * reaches the reader raw; an answer nobody reported keeps the card's wording.
+ */
+function BooleanRow({ field }: { field: NodeDebugField }) {
+  return (
+    <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-3 py-1.5 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
+      <dt className="flex items-start gap-x-1 text-mist-600 dark:text-mist-400">
+        <span className="min-w-0">{field.label}</span>
+        {field.path ? (
+          <Tooltip content={field.path}>
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-40 transition-opacity hover:opacity-100" />
+          </Tooltip>
+        ) : undefined}
+      </dt>
+      <dd className="flex min-w-0 items-center gap-x-1.5 px-1.5 py-1">
+        {field.flag === undefined ? (
+          <span className="text-mist-500 dark:text-mist-400">{field.value}</span>
+        ) : (
+          <ConnectivityValue value={field.flag} />
+        )}
+      </dd>
     </div>
   );
 }

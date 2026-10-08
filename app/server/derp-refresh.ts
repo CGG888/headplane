@@ -1,5 +1,6 @@
 import type {
   IntegrationKind,
+  IntegrationReloadResult,
   IntegrationRestartResult,
 } from "~/server/config/integration/abstract";
 import type { Headscale } from "~/server/headscale/api";
@@ -94,7 +95,7 @@ export interface DerpReloadTarget {
   kind: IntegrationKind;
   canRestart(): boolean;
   restart(headscale: Headscale): Promise<IntegrationRestartResult>;
-  onConfigChange(headscale: Headscale): Promise<boolean> | boolean;
+  onConfigChange(headscale: Headscale): Promise<IntegrationReloadResult> | IntegrationReloadResult;
 }
 
 export interface DerpReloadInput {
@@ -184,6 +185,7 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
   const integration = input.integration;
 
   let outcome: DerpReloadOutcome;
+  let failedStage: string | undefined;
   if (action === "none") {
     outcome = input.changeKind === "map-file" ? "ticker" : "not-needed";
   } else if (action === "manual" || !integration) {
@@ -191,11 +193,24 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
   } else {
     let ok = false;
     try {
-      ok =
+      const reloaded =
         action === "restart"
-          ? (await integration.restart(input.headscale)).ok
+          ? await integration.restart(input.headscale)
           : await integration.onConfigChange(input.headscale);
+      ok = reloaded.ok;
+      if (!reloaded.ok) {
+        failedStage = reloaded.stage;
+        log.error(
+          "config",
+          "Integration %s could not %s after %s: %s",
+          integration.name,
+          action,
+          input.reason,
+          reloaded.stage,
+        );
+      }
     } catch (error) {
+      failedStage = "error";
       log.error(
         "config",
         "Integration %s failed to %s after %s: %s",
@@ -224,8 +239,9 @@ export async function refreshDerpAfterWrite(input: DerpRefreshInput): Promise<De
   if (outcome === "failed") {
     log.error(
       "config",
-      "DERP refresh after %s failed: Headscale did not come back (revision %d)",
+      "DERP refresh after %s failed at %s (revision %d)",
       input.reason,
+      failedStage ?? "unknown",
       revision,
     );
   } else {

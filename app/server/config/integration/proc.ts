@@ -6,7 +6,7 @@ import type { Headscale } from "~/server/headscale/api";
 import log from "~/utils/log";
 
 import { Integration } from "./abstract";
-import type { IntegrationRestartResult } from "./abstract";
+import type { IntegrationReloadResult, IntegrationRestartResult } from "./abstract";
 import { findHeadscaleServe, restartHeadscale, signalAndWaitHealthy } from "./proc-helper";
 
 const configSchema = {
@@ -80,11 +80,11 @@ export default class ProcIntegration extends Integration<typeof configSchema.ful
    * *only* — a DERP change never goes live through it. This stays as it is for
    * the policy path; DERP writes use `restart()` or tell the operator instead.
    */
-  async onConfigChange(headscale: Headscale) {
+  async onConfigChange(headscale: Headscale): Promise<IntegrationReloadResult> {
     const pid = await this.resolvePid();
     if (pid === undefined) {
       log.error("config", "Cannot signal Headscale: no headscale serve process found");
-      return false;
+      return { ok: false, stage: "no-process" };
     }
 
     return await signalAndWaitHealthy(headscale, {

@@ -17,11 +17,11 @@ import {
 } from "~/server/derp-mirror/settings";
 
 describe("DERP mirror settings", () => {
-  test("starts disabled with Hong Kong and Singapore selected at 901 and 902", () => {
+  test("starts disabled with no region selected and no numbering", () => {
     expect(DEFAULT_DERP_MIRROR_SETTINGS).toEqual({
       enabled: false,
-      officialRegionIds: ["20", "3"],
-      assignment: { "20": 901, "3": 902 },
+      officialRegionIds: [],
+      assignment: {},
       targetPath: DEFAULT_DERP_MIRROR_TARGET_PATH,
       intervalHours: 24,
       autoReload: true,
@@ -80,7 +80,8 @@ describe("DERP mirror settings", () => {
       "3",
       "20",
     ]);
-    expect(normalizeOfficialRegionIds("20")).toEqual(["20", "3"]);
+    // Anything that is not an array reads as the default, which selects nothing.
+    expect(normalizeOfficialRegionIds("20")).toEqual([]);
     expect(normalizeOfficialRegionIds([])).toEqual([]);
   });
 
@@ -99,11 +100,8 @@ describe("DERP mirror settings", () => {
     expect(settings.assignment).toEqual({ "20": 901, "9": 904 });
   });
 
-  test("a junk assignment falls back to the default numbering", () => {
-    expect(normalizeDerpMirrorSettings({ assignment: "nope" }).assignment).toEqual({
-      "20": 901,
-      "3": 902,
-    });
+  test("a junk assignment falls back to an empty numbering", () => {
+    expect(normalizeDerpMirrorSettings({ assignment: "nope" }).assignment).toEqual({});
     expect(normalizeMirrorNumber(901)).toBe(901);
     expect(normalizeMirrorNumber(899)).toBeUndefined();
     expect(normalizeMirrorNumber(1000)).toBeUndefined();

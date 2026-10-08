@@ -110,7 +110,9 @@ describe("DockerIntegration", () => {
       },
     } as any;
 
-    await integration.onConfigChange(mockHeadscale);
+    const result = await integration.onConfigChange(mockHeadscale);
+
+    expect(result).toMatchObject({ ok: true, stage: "healthy" });
 
     const healthy = await mockHeadscale.health();
     expect(healthy).toBe(true);

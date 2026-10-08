@@ -134,10 +134,12 @@ services:
       # set `headscale.dns_records_path` in your Headplane config.yaml file.
       - "/path/to/headscale/dns_records.json:/etc/headscale/dns_records.json"
 
-      # Read-only access to the Docker socket (or a proxy)
+      # Docker socket (or a socket proxy). Note that `:ro` only protects the socket file itself and
+      # cannot restrict Docker API calls, so do not treat it as a security boundary: this socket is
+      # root-equivalent on the host.
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   headscale:
-    image: headscale/headscale:0.27.1
+    image: headscale/headscale:0.29.4
     container_name: headscale
     restart: unless-stopped
     command: serve
@@ -165,10 +167,10 @@ for more details on setting it up.
 
 You'll also need to enable a few fields in your HeadplaneCN configuration file:
 
-| Field                            | Description                                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.docker.enabled`** | Set to `true` to enable Docker integration.                                                                                    |
-| **`headscale.config_path`**      | Path to your Head**scale** configuration file within the container (e.g., `/etc/headscale/config.yaml`).                       |
+| Field                            | Description                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **`integration.docker.enabled`** | Set to `true` to enable Docker integration.                                                                                        |
+| **`headscale.config_path`**      | Path to your Head**scale** configuration file within the container (e.g., `/etc/headscale/config.yaml`).                           |
 | `headscale.dns_records_path`     | _Optional_. Refer to the [example configuration](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml) for details. |
 
 With these settings in place, restart HeadplaneCN. You should now see additional
@@ -244,7 +246,7 @@ services:
       - "traefik.http.routers.headplane.entrypoints=websecure"
       - "traefik.http.routers.headplane.tls=true"
   headscale:
-    image: headscale/headscale:0.27.1
+    image: headscale/headscale:0.29.4
     container_name: headscale
     restart: unless-stopped
     command: serve

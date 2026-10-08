@@ -28,7 +28,7 @@ export async function loader({ request, context, url }: Route.LoaderArgs) {
 
   try {
     await auth.require(request);
-    return redirect("/machines");
+    return redirect("/overview");
   } catch {}
 
   const qp = url.searchParams;

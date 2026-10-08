@@ -42,7 +42,7 @@ interface ActionResult {
   init?: { status?: number } | null;
 }
 
-const onConfigChange = vi.fn().mockResolvedValue(true);
+const onConfigChange = vi.fn().mockResolvedValue({ ok: true, stage: "healthy" });
 
 // React Router delivers context values through context.get(contextKey), so the
 // mock answers whichever key the action asks for.

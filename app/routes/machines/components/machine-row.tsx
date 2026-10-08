@@ -1,4 +1,5 @@
 import Link from "~/components/link";
+import { RegionFlag } from "~/components/region-flag";
 import { ExitNodeTag } from "~/components/tags/ExitNode";
 import { ExpiryTag } from "~/components/tags/Expiry";
 import { HeadplaneAgentTag } from "~/components/tags/HeadplaneAgent";
@@ -13,6 +14,7 @@ import { formatTimeDelta } from "~/utils/time";
 import { getUserDisplayName } from "~/utils/user";
 
 import {
+  preferredRelayIdentity,
   preferredRelayLabel,
   type DerpEmbeddedServer,
   type DerpRegionNameData,
@@ -112,6 +114,8 @@ export default function MachineRow({
     t("machines.detail.derp.unknown"),
     relayRegions,
   );
+  // The same region's code and name, so the cell can draw its flag.
+  const derpIdentity = preferredRelayIdentity(node.hostInfo, relayServer, relayRegions);
 
   return (
     <tr
@@ -267,10 +271,11 @@ export default function MachineRow({
           </span>
         ) : (
           <span
-            className="block truncate text-sm text-mist-700 dark:text-mist-300"
+            className="flex min-w-0 items-center gap-x-1.5 text-sm text-mist-700 dark:text-mist-300"
             title={derpNode}
           >
-            {derpNode}
+            <RegionFlag {...derpIdentity} />
+            <span className="min-w-0 truncate">{derpNode}</span>
           </span>
         )}
       </td>

@@ -75,7 +75,12 @@ import {
   type DiagnosticStatus,
   type OidcStatus,
 } from "./diagnostics";
-import { RESTART_STAGE_KEYS, SYSTEM_ERROR_KEYS, type SystemResult } from "./error-keys";
+import {
+  RELOAD_STAGE_KEYS,
+  RESTART_STAGE_KEYS,
+  SYSTEM_ERROR_KEYS,
+  type SystemResult,
+} from "./error-keys";
 import MetricsPanel from "./metrics-panel";
 import { loadMetrics } from "./metrics-probe";
 import { headplaneReleaseChecker, headscaleReleaseChecker } from "./release-check";
@@ -533,9 +538,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
                   {error}
                 </p>
-                {result && !result.success && result.stage ? (
+                {result && !result.success && (result.stage || result.reloadStage) ? (
                   <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-                    {t(RESTART_STAGE_KEYS[result.stage])}
+                    {result.stage
+                      ? t(RESTART_STAGE_KEYS[result.stage])
+                      : t(RELOAD_STAGE_KEYS[result.reloadStage ?? "failed"])}
                   </p>
                 ) : undefined}
               </>

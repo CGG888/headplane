@@ -239,7 +239,7 @@ export async function loginAction({ request, context }: Route.LoaderArgs) {
       result: "success",
     });
 
-    return redirect("/machines", {
+    return redirect("/overview", {
       headers: {
         "Set-Cookie": await auth.createApiKeySession(
           apiKey,

@@ -5,10 +5,8 @@ import {
   assignRegionNumbers,
   buildMirrorMap,
   EMBEDDED_REGION_ID,
-  HONG_KONG_MIRROR_NUMBER,
   mirrorMapChanged,
   renderMirrorYaml,
-  SINGAPORE_MIRROR_NUMBER,
 } from "~/server/derp-mirror/generate";
 import { CHINESE_REGION_NAMES, chineseRegionName } from "~/server/derp-mirror/names";
 import type { OfficialRegion } from "~/server/derp-mirror/types";
@@ -53,13 +51,14 @@ const OFFICIAL: OfficialRegion[] = [
 ];
 
 describe("mirror region numbering", () => {
-  test("Hong Kong is always 901 and Singapore is always 902", () => {
+  test("gives the fastest selected region 901, whatever region it is", () => {
     const { assignment } = assignRegionNumbers([HKG, SIN], { [SIN]: 5, [HKG]: 400 });
 
-    expect(assignment).toEqual({ [HKG]: HONG_KONG_MIRROR_NUMBER, [SIN]: SINGAPORE_MIRROR_NUMBER });
+    // No region is pinned any more: Singapore was measured faster, so it takes 901.
+    expect(assignment).toEqual({ [SIN]: 901, [HKG]: 902 });
   });
 
-  test("pins the two fixed regions even when the ranking would order them otherwise", () => {
+  test("numbers the whole selection by latency, with no fixed region", () => {
     const { assignment } = assignRegionNumbers([HKG, SIN, TOK, FRA], {
       [HKG]: 500,
       [SIN]: 900,
@@ -67,14 +66,14 @@ describe("mirror region numbering", () => {
       [FRA]: 10,
     });
 
-    expect(assignment[HKG]).toBe(901);
-    expect(assignment[SIN]).toBe(902);
-    // The rest rank by latency: Frankfurt (10ms) before Tokyo (20ms).
-    expect(assignment[FRA]).toBe(903);
-    expect(assignment[TOK]).toBe(904);
+    // Frankfurt (10 ms), Tokyo (20 ms), Hong Kong (500 ms), Singapore (900 ms).
+    expect(assignment[FRA]).toBe(901);
+    expect(assignment[TOK]).toBe(902);
+    expect(assignment[HKG]).toBe(903);
+    expect(assignment[SIN]).toBe(904);
   });
 
-  test("ranks the remaining regions by ascending latency", () => {
+  test("ranks the regions by ascending latency", () => {
     const { assignment } = assignRegionNumbers([HKG, SIN, TOK, FRA, NYC, LAX], {
       [FRA]: 120,
       [TOK]: 30,
@@ -83,28 +82,30 @@ describe("mirror region numbering", () => {
     });
 
     expect(assignment).toEqual({
-      [HKG]: 901,
-      [SIN]: 902,
-      [TOK]: 903,
-      [LAX]: 904,
-      [FRA]: 905,
-      [NYC]: 906,
+      [TOK]: 901,
+      [LAX]: 902,
+      [FRA]: 903,
+      [NYC]: 904,
+      [SIN]: 905,
+      [HKG]: 906,
     });
   });
 
-  test("breaks ties by official region id, then by the order the selection lists them", () => {
+  test("breaks ties by official region id, and ranks unmeasured regions last", () => {
     const { assignment } = assignRegionNumbers([HKG, SIN, NYC, FRA, LAX, TOK], {
       [FRA]: 50,
       [TOK]: 50,
       [NYC]: 50,
     });
 
-    // Equal latencies: id 7 (fra), 9 (tok), 25 (nyc); lax has no sample at all
-    // and ranks behind every measured region.
-    expect(assignment[FRA]).toBe(903);
-    expect(assignment[TOK]).toBe(904);
-    expect(assignment[NYC]).toBe(905);
-    expect(assignment[LAX]).toBe(906);
+    // Equal latencies: id 7 (fra), 9 (tok), 25 (nyc); the regions nobody
+    // measured (sin 3, lax 12, hkg 20) rank behind every measured region, by id.
+    expect(assignment[FRA]).toBe(901);
+    expect(assignment[TOK]).toBe(902);
+    expect(assignment[NYC]).toBe(903);
+    expect(assignment[SIN]).toBe(904);
+    expect(assignment[LAX]).toBe(905);
+    expect(assignment[HKG]).toBe(906);
   });
 
   test("keeps a stored assignment that already covers the selection, and its timestamp", () => {
@@ -141,13 +142,17 @@ describe("mirror region numbering", () => {
         [TOK]: 42,
         // The embedded region's own id is never handed to a mirror.
         [FRA]: EMBEDDED_REGION_ID,
-        // A duplicate of Hong Kong's number loses to the pinned one.
+        // A duplicate of Hong Kong's number loses to the region already holding it.
         [NYC]: 901,
       },
     );
 
     expect(assignment[HKG]).toBe(901);
     expect(assignment[SIN]).toBe(902);
+    // The three renumbered regions rank by id, since none of them was measured.
+    expect(assignment[FRA]).toBe(903);
+    expect(assignment[TOK]).toBe(904);
+    expect(assignment[NYC]).toBe(905);
     for (const value of Object.values(assignment)) {
       expect(value).toBeGreaterThanOrEqual(900);
       expect(value).toBeLessThanOrEqual(999);
@@ -161,7 +166,7 @@ describe("mirror region numbering", () => {
     const existing = { [HKG]: 901, [SIN]: 902, [FRA]: 998 };
     const { assignment } = assignRegionNumbers([HKG, SIN, FRA, TOK], { [TOK]: 1 }, existing);
 
-    // The tail of the range is taken, so the only free slots are below 903.
+    // The tail of the range is taken, so the free slots wrap to the bottom.
     expect(assignment[TOK]).toBe(900);
     expect(assignment[FRA]).toBe(998);
   });
@@ -182,8 +187,8 @@ describe("mirror region numbering", () => {
       { [TOK]: 500 },
     );
 
-    expect(assignment[FRA]).toBe(903);
-    expect(assignment[TOK]).toBe(904);
+    expect(assignment[FRA]).toBe(901);
+    expect(assignment[TOK]).toBe(902);
   });
 
   test("falls back to the reported value for a region this server did not measure", () => {
@@ -196,8 +201,8 @@ describe("mirror region numbering", () => {
 
     // Frankfurt is measured here at 30 ms; Tokyo keeps the 5 ms its machines
     // reported, so it still takes the lower number.
-    expect(assignment[TOK]).toBe(903);
-    expect(assignment[FRA]).toBe(904);
+    expect(assignment[TOK]).toBe(901);
+    expect(assignment[FRA]).toBe(902);
   });
 
   test("still ranks an unmeasured region last when only part of the selection was measured", () => {
@@ -206,21 +211,26 @@ describe("mirror region numbering", () => {
       [NYC]: 20,
     });
 
-    expect(assignment[NYC]).toBe(903);
-    expect(assignment[FRA]).toBe(904);
-    expect(assignment[TOK]).toBe(905);
+    // New York (20 ms) and Frankfurt (30 ms) first; the unmeasured regions rank
+    // behind them by id: Singapore (3), Tokyo (9), Hong Kong (20).
+    expect(assignment[NYC]).toBe(901);
+    expect(assignment[FRA]).toBe(902);
+    expect(assignment[SIN]).toBe(903);
+    expect(assignment[TOK]).toBe(904);
+    expect(assignment[HKG]).toBe(905);
   });
 
   test("reports the regions the 900s cannot number instead of dropping them", () => {
-    // 900 and 903-998 are the only numbers ranking may hand out (901, 902 and
-    // 999 are reserved), so a selection of 100 regions leaves three over.
+    // Every number from 901 to 998 is handed out first, and 900 is the only slot
+    // left for the wrap-around (999 belongs to the embedded region), so a
+    // selection of 100 regions leaves one over.
     const ids = Array.from({ length: 100 }, (_, index) => String(1000 + index));
     const latencies = Object.fromEntries(ids.map((id) => [id, 10]));
     const { assignment, unassigned } = assignRegionNumbers(ids, latencies);
 
-    expect(Object.keys(assignment)).toHaveLength(97);
-    // Equal latencies are settled by official id, so the highest ids lose out.
-    expect(unassigned).toEqual(["1097", "1098", "1099"]);
+    expect(Object.keys(assignment)).toHaveLength(99);
+    // Equal latencies are settled by official id, so the last region loses out.
+    expect(unassigned).toEqual(["1099"]);
   });
 
   test("reports nothing unassigned for a selection the stored assignment covers", () => {

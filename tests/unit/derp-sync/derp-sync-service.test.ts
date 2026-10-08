@@ -72,7 +72,7 @@ describe("DERP address sync service", () => {
     const audit: Array<Record<string, unknown>> = [];
     const alerts: Array<{ failed: boolean; reason?: string }> = [];
     const snapshot = vi.fn(async () => ({ id: "snap-1" }));
-    const reload = vi.fn(async () => true);
+    const reload = vi.fn(async () => ({ ok: true, stage: "healthy" as const }));
 
     const service = createDerpSyncService({
       dataPath: dir,

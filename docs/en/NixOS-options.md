@@ -205,6 +205,97 @@ _Type:_ absolute path
 
 _Default:_ `"/var/lib/headplane/agent"`
 
+## settings.integration.docker
+
+_Description:_ Docker container integration settings.
+
+_Type:_ submodule
+
+_Default:_ `{ }`
+
+## settings.integration.docker.container_label
+
+_Description:_ Label used to find the Headscale container when container_name is unset.
+HeadplaneCN falls back to me.tale.headplane.target=headscale when this is unset.
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"me.tale.headplane.target=headscale"`
+
+## settings.integration.docker.container_name
+
+_Description:_ Name of the Headscale container to manage.
+When unset, HeadplaneCN finds the container by container_label instead.
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"headscale"`
+
+## settings.integration.docker.enabled
+
+_Description:_ Let HeadplaneCN manage a Headscale container through the Docker socket.
+Saving a configuration change restarts that container.
+The user running the HeadplaneCN process needs access to the socket,
+for example by adding the docker group to its extraGroups.
+HeadplaneCN prefers Docker when more than one integration is enabled,
+so set integration.proc.enabled to false to keep this choice unambiguous.
+
+_Type:_ boolean
+
+_Default:_ `false`
+
+## settings.integration.docker.socket
+
+_Description:_ Docker socket to connect to.
+HeadplaneCN falls back to unix:///var/run/docker.sock when this is unset.
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"unix:///var/run/docker.sock"`
+
+## settings.integration.kubernetes
+
+_Description:_ Kubernetes (k8s) integration settings.
+
+_Type:_ submodule
+
+_Default:_ `{ }`
+
+## settings.integration.kubernetes.enabled
+
+_Description:_ Let HeadplaneCN manage Headscale through the Kubernetes API of the
+cluster it runs in. Saving a configuration change restarts that pod.
+
+_Type:_ boolean
+
+_Default:_ `false`
+
+## settings.integration.kubernetes.pod_name
+
+_Description:_ Name of the pod running Headscale. Required when this integration is
+enabled, because HeadplaneCN looks the pod up in its namespace.
+
+_Type:_ null or string
+
+_Default:_ `null`
+
+_Example:_ `"headscale-0"`
+
+## settings.integration.kubernetes.validate_manifest
+
+_Description:_ Check that the pod exists and is healthy before signalling it.
+Set to false only when HeadplaneCN cannot list pods in its namespace.
+
+_Type:_ boolean
+
+_Default:_ `true`
+
 ## settings.integration.proc
 
 _Description:_ Native process integration settings.

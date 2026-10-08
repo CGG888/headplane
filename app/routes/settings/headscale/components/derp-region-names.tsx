@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 import Button from "~/components/button";
 import Dialog, { DialogPanel } from "~/components/dialog";
 import Input from "~/components/input";
+import { RegionFlag } from "~/components/region-flag";
 import TableList from "~/components/table-list";
 import Text from "~/components/text";
 import Title from "~/components/title";
@@ -116,8 +117,11 @@ export default function DerpRegionNames({
         ) : (
           entries.map(([id, name]) => (
             <TableList.Item key={id}>
-              <p className="font-mono text-sm">
-                #{id} · {name}
+              <p className="flex min-w-0 items-center gap-x-1.5 font-mono text-sm">
+                <RegionFlag name={name} />
+                <span className="min-w-0 truncate">
+                  #{id} · {name}
+                </span>
               </p>
               <removeFetcher.Form method="post">
                 <input name="action_id" type="hidden" value="remove_derp_region_name" />

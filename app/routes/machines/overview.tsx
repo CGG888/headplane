@@ -764,7 +764,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   {/* The relay each machine is using now. Read-only and not
                       sortable, because the list only sorts the columns whose
                       header already offers it. */}
-                  <th className={cn(HEADER_CELL, "w-36")} scope="col">
+                  <th className={cn(HEADER_CELL, "w-40")} scope="col">
                     {t("machines.list.columnDerpNode")}
                   </th>
                   <SortHeader

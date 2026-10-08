@@ -152,7 +152,7 @@ describe("DERP region mirror service", () => {
         throw new Error("reload refused");
       }
 
-      return true;
+      return { ok: true, stage: "healthy" as const };
     });
     const urls: string[] = ["https://controlplane.tailscale.com/derpmap/default"];
     const source: Harness["source"] = { regions: OFFICIAL, latencies: {} };
@@ -272,7 +272,9 @@ describe("DERP region mirror service", () => {
     expect(run?.outcome).toBe("changed");
     expect(run?.changed).toBe(true);
     expect(run?.mirrored).toEqual([HKG, SIN, TOK]);
-    expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [TOK]: 903 });
+    // Nothing was measured, so the ids settle it: Singapore (3), Tokyo (9),
+    // Hong Kong (20).
+    expect(run?.assignment).toEqual({ [SIN]: 901, [TOK]: 902, [HKG]: 903 });
     expect(run?.reload).toBe("triggered");
     expect(h.reload).toHaveBeenCalledTimes(1);
     expect(h.snapshot).toHaveBeenCalledWith(DERP_MIRROR_SNAPSHOT_REASON, [
@@ -290,7 +292,7 @@ describe("DERP region mirror service", () => {
     // The run and the numbering it settled on are both persisted.
     const document = await readDerpMirrorDocument(dir);
     expect(document.last?.outcome).toBe("changed");
-    expect(document.settings.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [TOK]: 903 });
+    expect(document.settings.assignment).toEqual({ [SIN]: 901, [TOK]: 902, [HKG]: 903 });
     expect(typeof document.settings.assignmentRankedAt).toBe("string");
   });
 
@@ -403,7 +405,7 @@ describe("DERP region mirror service", () => {
 
   test("a selection larger than the 900s records the regions it cannot number", async () => {
     const h = build();
-    // The mirrored range holds 97 usable numbers, so a map with 100 regions
+    // Every number from 900 to 998 can be handed out, so a map with 100 regions
     // (only a pasted one is this large) cannot be numbered completely.
     h.source.regions = Array.from({ length: 100 }, (_, index) =>
       region(String(1000 + index), `r${index}`, `Region ${index}`),
@@ -416,8 +418,8 @@ describe("DERP region mirror service", () => {
 
     expect(run?.outcome).toBe("skipped");
     expect(run?.reason).toBe("numbering-exhausted");
-    // The three highest ids rank last and are the ones left without a number.
-    expect(run?.detail).toBe("1097, 1098, 1099");
+    // The highest id ranks last and is the one left without a number.
+    expect(run?.detail).toBe("1099");
     expect(run?.mirrored).toHaveLength(100);
     expect(await readFile(h.target, "utf8")).toBe("previous: map\n");
     expect(h.snapshot).not.toHaveBeenCalled();
@@ -552,7 +554,7 @@ describe("DERP region mirror service", () => {
 
     expect(run?.mode).toBe("check");
     expect(run?.outcome).toBe("changed");
-    expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [TOK]: 903 });
+    expect(run?.assignment).toEqual({ [SIN]: 901, [TOK]: 902, [HKG]: 903 });
     await expect(readFile(h.target, "utf8")).rejects.toBeDefined();
     expect(h.snapshot).not.toHaveBeenCalled();
     expect(h.audit).toEqual([]);
@@ -583,20 +585,21 @@ describe("DERP region mirror service", () => {
     await configure(h, { officialRegionIds: [HKG, SIN, FRA, NYC] });
     h.source.latencies = { [FRA]: 100, [NYC]: 1 };
 
-    // The first run ranks New York (1ms) before Frankfurt (100ms).
+    // The first run ranks New York (1ms) before Frankfurt (100ms), and the two
+    // regions nobody measured (Singapore 3, Hong Kong 20) behind both by id.
     const first = await h.service.runNow();
-    expect(first?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [NYC]: 903, [FRA]: 904 });
+    expect(first?.assignment).toEqual({ [NYC]: 901, [FRA]: 902, [SIN]: 903, [HKG]: 904 });
 
     // Today's measurements would swap them; the stable run does not.
     h.source.latencies = { [FRA]: 1, [NYC]: 100 };
     const stable = await h.service.runNow();
     expect(stable?.outcome).toBe("unchanged");
-    expect(stable?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [NYC]: 903, [FRA]: 904 });
+    expect(stable?.assignment).toEqual({ [NYC]: 901, [FRA]: 902, [SIN]: 903, [HKG]: 904 });
 
     // Reassigning is the explicit way to adopt the new order.
     const reranked = await h.service.reassign();
     expect(reranked?.outcome).toBe("changed");
-    expect(reranked?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [FRA]: 903, [NYC]: 904 });
+    expect(reranked?.assignment).toEqual({ [FRA]: 901, [NYC]: 902, [SIN]: 903, [HKG]: 904 });
     expect(await readFile(h.target, "utf8")).toContain("regioncode: fra");
   });
 
@@ -610,7 +613,9 @@ describe("DERP region mirror service", () => {
 
     const run = await h.service.runNow();
 
-    expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [NYC]: 903, [TOK]: 904 });
+    // The three regions stored before keep their numbers; only Tokyo is new, and
+    // it is appended after the highest number in use.
+    expect(run?.assignment).toEqual({ [SIN]: 901, [HKG]: 902, [NYC]: 903, [TOK]: 904 });
   });
 
   test("a manual run still works while the schedule is disabled", async () => {
@@ -702,7 +707,7 @@ describe("DERP region mirror service", () => {
     expect(run?.attempts).toEqual([{ url: PASTED_MAP_SOURCE }]);
     // No source was dialled at all while a paste is stored.
     expect(h.loads).toEqual([]);
-    expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902 });
+    expect(run?.assignment).toEqual({ [SIN]: 901, [HKG]: 902 });
     expect(await readFile(h.target, "utf8")).toContain("regioncode: hkg");
     expect((await readDerpMirrorDocument(dir)).settings.pastedMap?.body).toBe(OFFICIAL_BODY);
 
@@ -1706,8 +1711,10 @@ describe("DERP region mirror latency probe", () => {
   test("ranks a region by the value this server measured itself", async () => {
     const clock = makeClock();
     // Five regions, in the order the map lists them: Hong Kong (two nodes, four
-    // attempts), Singapore, Tokyo, Frankfurt, New York. Tokyo answers slowly and
-    // Frankfurt quickly, so a fresh ranking puts Frankfurt first of the two.
+    // attempts), Singapore, Tokyo, Frankfurt, New York. This server measured
+    // Singapore at 1 ms and the rest at 5 ms, so Singapore takes 901 and the
+    // three 5 ms regions follow by official id: Frankfurt (7), Tokyo (9), Hong
+    // Kong (20).
     const scripted = [5, 5, 5, 5, 5, 5, 500, 500, 1, 1, 5, 5];
     let index = 0;
     const instance = service({
@@ -1732,7 +1739,7 @@ describe("DERP region mirror latency probe", () => {
       // values it ranks on are the ones this server just measured.
       const run = await instance.reassign();
 
-      expect(run?.assignment).toEqual({ [HKG]: 901, [SIN]: 902, [FRA]: 903, [TOK]: 904 });
+      expect(run?.assignment).toEqual({ [SIN]: 901, [FRA]: 902, [TOK]: 903, [HKG]: 904 });
     } finally {
       instance.dispose();
     }

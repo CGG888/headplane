@@ -54,12 +54,14 @@ setting that quietly does nothing:
 
 ::: tip Paths a container cannot see
 HeadplaneCN can only inspect the paths it can actually reach. When it is given
-Headscale's `config.yaml` but not the directories that file points at, a path
-like `/vol1/@appdata/headscale/db.sqlite` does not exist _inside the container_
-even though it is perfectly healthy on the host. Those checks are reported as
-**unverifiable** — with the path and a hint to mount the directory — instead of
-being called failures. Mount the directory read-only into the container to turn
-them into real checks.
+Headscale's `config.yaml` but not the directories that file points at, the
+host-absolute paths inside it (for example `db.sqlite`, or the map files listed
+in `derp.paths`) do not exist _inside the container_ even though they are
+perfectly healthy on the host. Those checks are reported as **unverifiable** —
+with the path and a hint to mount the directory — instead of being called
+failures. Mount the directory read-only into the container to turn them into
+real checks. In the dual-image shape the data directory is mounted at the **same
+absolute path**, so none of them is missing.
 :::
 
 | Check                | Why it matters                                                                                                                                                                                                                                               |
@@ -137,6 +139,21 @@ The button follows whatever integration is configured:
 
 With no integration enabled the button is disabled and the page says so; restart
 Headscale however your service manager does it.
+
+A failed reload or restart now names the step that stopped: no `headscale serve` process
+was found, the integration is not configured, permission to send the signal was denied
+(inside a container that is the `kill EACCES` AppArmor refuses — Docker's default
+`docker-default` profile may not signal an `unconfined` process, and `dmesg` shows
+`apparmor="DENIED" operation="signal" ... signal=hup peer="unconfined"`), the signal was
+sent but `/health` never confirmed it, the signal could not be sent at all, or the
+integration does not support the operation. Before 0.22.21 a refused reload was reported
+as a success.
+
+When HeadplaneCN runs in a container next to a native Headscale (the fnOS fpk install), the
+container needs `security_opt: ["apparmor=unconfined"]` in addition to `pid: host`; otherwise
+AppArmor refuses the SIGHUP and the reload fails. The dual-image setup does not need it: there
+Headscale is a container too, and the panel restarts it through the Docker socket, with no
+cross-process signal at all.
 
 ::: tip Native installs and "Restart Headscale now"
 SIGHUP only reloads the access policy, so it does not make a DNS, OIDC or

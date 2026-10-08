@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import Link from "~/components/link";
 import MaskedText from "~/components/masked-text";
+import { RegionFlag } from "~/components/region-flag";
 import { SettingsStatus } from "~/components/settings-nav";
 import type { TranslationKey } from "~/i18n";
 import { useI18n } from "~/i18n/provider";
@@ -18,6 +19,7 @@ import {
   embeddedDerpRegion,
   latencySourceTone,
   relaySourceTone,
+  resolveDerpRegionIdentity,
   resolveDerpRegionLabel,
   type DerpEmbeddedServer,
   type DerpRegionLabel,
@@ -315,16 +317,25 @@ export default function DerpInfo({
           ) : (
             <div className="mt-1 flex flex-col gap-2.5">
               {/* The relay in use leads, then the region this machine calls
-                  home; both keep the badges that say what serves them. */}
+                  home. Each row's label says which of the two it is, and only
+                  the relay actually in use carries the "in use" badge. */}
               <dl className="flex flex-col">
                 <MachineAttribute
                   badges={relayBadges(usage.preferred)}
+                  leading={
+                    <RegionFlag {...resolveDerpRegionIdentity(usage.preferred.regionId, sources)} />
+                  }
                   name={t("machines.detail.derp.preferredRegion")}
+                  tooltip={t("machines.detail.derp.preferredRegionTooltip")}
                   value={markedLabel(view.preferred, embeddedMarker)}
                 />
                 <MachineAttribute
                   badges={relayBadges(usage.home)}
+                  leading={
+                    <RegionFlag {...resolveDerpRegionIdentity(usage.home.regionId, sources)} />
+                  }
                   name={t("machines.detail.derp.homeRegion")}
+                  tooltip={t("machines.detail.derp.homeRegionTooltip")}
                   value={markedLabel(view.home, embeddedMarker)}
                 />
               </dl>
@@ -391,6 +402,7 @@ export default function DerpInfo({
                           {/* Region name and, when this is the relay the agent
                               reports as preferred, the badge that says so. */}
                           <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
+                            <RegionFlag {...resolveDerpRegionIdentity(row.regionId, sources)} />
                             <span
                               className="min-w-0 truncate text-sm text-mist-900 dark:text-mist-50"
                               title={row.label}

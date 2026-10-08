@@ -84,6 +84,28 @@ describe("buildMachineRelayUse", () => {
     });
   });
 
+  test("marks only the relay in use when the home region serves it", () => {
+    // The healthy case: the client relays through its home region. Only the
+    // preferred row is the relay in use, because "home" describes the region the
+    // control plane assigned, not a second relay the client is connected to.
+    const info = { HomeDERP: 901, NetInfo: { PreferredDERP: 901 } };
+    const view = buildDerpInfo(info, { ...EMBEDDED, enabled: false }, UNKNOWN);
+    const usage = buildMachineRelayUse(info, view);
+
+    expect(usage.home).toEqual({
+      key: "id:901",
+      label: "#901",
+      regionId: 901,
+      inUse: false,
+    });
+    expect(usage.preferred).toEqual({
+      key: "id:901",
+      label: "#901",
+      regionId: 901,
+      inUse: true,
+    });
+  });
+
   test("names the embedded region the agent reports as preferred", () => {
     const info = { NetInfo: { PreferredDERP: 999 } };
     const view = buildDerpInfo(info, EMBEDDED, UNKNOWN);

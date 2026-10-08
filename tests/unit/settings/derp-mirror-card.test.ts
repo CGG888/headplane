@@ -1,9 +1,6 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  defaultMirrorSelection,
-  fixedRegionIds,
-  isDefaultMirrorSelection,
   isMirrorProbeStale,
   MIRROR_LATENCY_SOURCE_KEYS,
   MIRROR_MAX_SOURCES,
@@ -25,17 +22,13 @@ import {
 import { DERP_MIRROR_MAX_SOURCES } from "~/server/derp-mirror/settings";
 
 /**
- * A ranking the server produced for five official regions: the two anchors first
- * (Hong Kong 20 and Singapore 3), then whatever the measured latency ordered.
+ * A ranking the server produced for five official regions: `order` is the order
+ * a fresh ranking numbers them in, so region 5 is the one that becomes 901.
  */
 const numbering: MirrorNumbering = {
-  fixed: [
-    { officialId: 20, number: 901 },
-    { officialId: 3, number: 902 },
-  ],
-  firstFreeNumber: 903,
+  firstFreeNumber: 901,
   order: [5, 20, 3, 7, 9],
-  reserved: [901, 902, 999],
+  reserved: [999],
 };
 
 function row(officialId: number, storedNumber?: number, latencyMs?: number): MirrorRegionRow {
@@ -73,12 +66,11 @@ describe("map sources", () => {
 });
 
 describe("region numbering preview", () => {
-  test("numbers the pinned anchors the default selection ticks", () => {
-    const selection = defaultMirrorSelection(numbering);
+  test("numbers the ticked regions from 901 in the ranking order", () => {
+    const numbers = previewRegionNumbers(numbering, new Set([20, 3]));
 
-    expect(fixedRegionIds(numbering)).toEqual([20, 3]);
-    expect(isDefaultMirrorSelection(numbering, selection)).toBe(true);
-    expect(numbersOf(previewRegionNumbers(numbering, selection))).toEqual({ "20": 901, "3": 902 });
+    // No region is pinned: 20 comes before 3 in the ranking, so it takes 901.
+    expect(numbersOf(numbers)).toEqual({ "20": 901, "3": 902 });
   });
 
   test("previews nothing at all once the selection is cleared", () => {
@@ -87,11 +79,16 @@ describe("region numbering preview", () => {
     const stored = storedRegionNumbers([row(20, 901), row(3, 902), row(5, 903)]);
 
     expect(numbersOf(previewRegionNumbers(numbering, new Set(), stored))).toEqual({});
-    expect(isDefaultMirrorSelection(numbering, new Set())).toBe(false);
   });
 
   test("keeps the stored number of a ticked region, as the server's rule does", () => {
-    const stored = storedRegionNumbers([row(5, 903), row(9, 904), row(7)]);
+    const stored = storedRegionNumbers([
+      row(20, 901),
+      row(3, 902),
+      row(5, 903),
+      row(9, 904),
+      row(7),
+    ]);
 
     const numbers = previewRegionNumbers(numbering, new Set([20, 3, 5, 7, 9]), stored);
 
@@ -100,12 +97,11 @@ describe("region numbering preview", () => {
     expect(numbersOf(numbers)).toEqual({ "20": 901, "3": 902, "5": 903, "9": 904, "7": 905 });
   });
 
-  test("ranks a ticked region the stored assignment numbers below its anchors", () => {
-    // No number is shown for the unticked region 5, even though it has one.
+  test("shows no number for a stored region that is not ticked", () => {
     const stored = storedRegionNumbers([row(5, 903), row(7, 904)]);
-    const numbers = previewRegionNumbers(numbering, new Set([20, 3, 7]), stored);
+    const numbers = previewRegionNumbers(numbering, new Set([7]), stored);
 
-    expect(numbersOf(numbers)).toEqual({ "20": 901, "3": 902, "7": 904 });
+    expect(numbersOf(numbers)).toEqual({ "7": 904 });
   });
 
   test("re-ranks stored numbers the server would refuse", () => {
@@ -115,14 +111,14 @@ describe("region numbering preview", () => {
 
     const numbers = previewRegionNumbers(numbering, new Set([20, 3, 5, 7, 9]), stored);
 
-    expect(numbersOf(numbers)).toEqual({ "20": 901, "3": 902, "7": 903, "5": 904, "9": 905 });
+    expect(numbersOf(numbers)).toEqual({ "7": 903, "5": 904, "20": 905, "3": 906, "9": 907 });
   });
 
-  test("numbers a ticked region even when the anchors are not ticked", () => {
+  test("gives the fastest region 901 when it is the only one ticked", () => {
     const numbers = previewRegionNumbers(numbering, new Set([5]));
 
-    // 901 and 902 stay reserved for the anchors, so the first free number is 903.
-    expect(numbersOf(numbers)).toEqual({ "5": 903 });
+    // 5 is first in the ranking, and nothing is reserved for another region.
+    expect(numbersOf(numbers)).toEqual({ "5": 901 });
   });
 
   test("storedRegionNumbers reads the assignment off the rows", () => {

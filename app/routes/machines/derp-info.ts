@@ -247,6 +247,40 @@ export function regionLabel(
   return resolveDerpRegionLabel(region, { embedded, manual: names }, unknown);
 }
 
+/**
+ * The code and name a region is known by, resolved through the same precedence
+ * chain as its label: the operator's manual mapping first, then the local and
+ * remote maps, then Headscale's embedded region. A region no source describes
+ * (a bare `#id`, or an id the agent never reported) has neither.
+ *
+ * Surfaces that render a region's flag take this rather than the label: the
+ * label is already formatted for a reader (`#901 · ams · Amsterdam`), while a
+ * flag needs the parts — `~/utils/region-country` turns them into a country.
+ */
+export function resolveDerpRegionIdentity(
+  region: number | undefined,
+  sources: DerpRegionLabelSources,
+): Pick<DerpRegionInfo, "code" | "name"> | undefined {
+  if (region === undefined || !Number.isFinite(region)) {
+    return undefined;
+  }
+
+  const manual = mappedRegionName(sources.manual, region);
+  if (manual !== undefined) {
+    return { name: manual };
+  }
+
+  for (const map of [sources.local, sources.remote]) {
+    const info = mappedRegionInfo(map, region);
+    if (info !== undefined) {
+      return { code: info.code, name: info.name };
+    }
+  }
+
+  const embedded = sources.embedded?.regionId === region ? sources.embedded : undefined;
+  return embedded === undefined ? undefined : { code: embedded.code, name: embedded.name };
+}
+
 /** True when no source has anything to say about a region but its id. */
 function isUnresolvedRegion(region: number | undefined, sources: DerpRegionLabelSources): boolean {
   if (region === undefined) {
@@ -568,8 +602,11 @@ function sourceOf(
 
 /**
  * The relays this machine uses, as the card's summary rows: the agent's home and
- * preferred regions, each carrying the source that serves it and whether it is
- * the one currently in use.
+ * preferred regions, each carrying the source that serves it. The "in use" flag
+ * belongs to the preferred row alone — the home region is the one the control
+ * plane assigned, and it is only a coincidence (the healthy case) when the
+ * client is relaying through it, so marking both rows at once told the operator
+ * nothing.
  *
  * The labels come from {@link buildDerpInfo}'s view, so a row words its region
  * exactly like every other row, and "in use" is the agent's own `PreferredDERP`
@@ -589,17 +626,23 @@ export function buildMachineRelayUse(
     regionId: number | undefined,
     label: string,
     fallbackKey: string,
+    inUse: boolean,
   ): MachineRelayUse => ({
     key: regionId === undefined ? fallbackKey : `id:${regionId}`,
     label,
     ...(regionId === undefined ? {} : { regionId }),
-    inUse: regionId !== undefined && regionId === preferredId,
+    inUse,
     ...sourceOf(relaySources, regionId),
   });
 
   return {
-    home: regionRow(homeId, view.home.label, "key:home"),
-    preferred: regionRow(preferredId, view.preferred.label, "key:preferred"),
+    home: regionRow(homeId, view.home.label, "key:home", false),
+    preferred: regionRow(
+      preferredId,
+      view.preferred.label,
+      "key:preferred",
+      preferredId !== undefined,
+    ),
   };
 }
 
@@ -967,4 +1010,25 @@ export function preferredRelayLabel(
     { ...regions, embedded: embeddedDerpRegion(server) },
     unknown,
   ).label;
+}
+
+/**
+ * The code and name behind that same label, so the list's relay cell can draw
+ * the region's flag beside it. `undefined` when the agent reports no preferred
+ * region, or when no source describes the region it names.
+ */
+export function preferredRelayIdentity(
+  info: HostInfo | undefined,
+  server: DerpEmbeddedServer | undefined,
+  regions: DerpRegionNameData = {},
+): Pick<DerpRegionInfo, "code" | "name"> | undefined {
+  const preferred = readRegionId(info?.NetInfo?.PreferredDERP);
+  if (preferred === undefined) {
+    return undefined;
+  }
+
+  return resolveDerpRegionIdentity(preferred, {
+    ...regions,
+    embedded: embeddedDerpRegion(server),
+  });
 }

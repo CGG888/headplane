@@ -47,7 +47,7 @@ features:
 
 ### Official region filter
 
-Mirror only the official relays you pick, numbered 901/902.
+Mirror only the official relays you pick, numbered from 901 by measured latency.
 
 [Headscale settings →](/en/features/headscale-settings)
 

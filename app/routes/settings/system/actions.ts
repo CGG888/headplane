@@ -62,14 +62,23 @@ export async function systemAction({ request, context }: Route.ActionArgs) {
   }
 
   try {
-    // A refused reload must not be reported as a success: the integration knows
-    // it could not reach Headscale, and the operator needs to know as well.
+    // A refused reload must not be reported as a success, and the reason
+    // matters: a container that is not allowed to signal the host's Headscale
+    // (AppArmor) is a different problem from "the process is not there".
     const reloaded = await integration.onConfigChange(headscale);
-    if (!reloaded) {
-      return failure("failed", 502);
+    if (!reloaded.ok) {
+      log.error("server", "Reloading Headscale stopped at %s", reloaded.stage);
+      return data(
+        {
+          success: false,
+          errorCode: "reloadFailed",
+          reloadStage: reloaded.stage,
+        } satisfies SystemFailure,
+        { status: 502 },
+      );
     }
 
-    return data({ success: true } satisfies SystemSuccess);
+    return data({ success: true, reload: { stage: reloaded.stage } } satisfies SystemSuccess);
   } catch (error) {
     log.error("server", "Integration %s failed to reach Headscale: %s", integration.name, error);
     return failure("failed", 502);

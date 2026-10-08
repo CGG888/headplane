@@ -46,9 +46,10 @@ HeadplaneCN 也会对**自己**做同样的比较，对象是 GitHub 上的最�
 
 ::: tip 容器看不到的路径
 HeadplaneCN 只能检查它真正能访问到的路径。当它拿到 Headscale 的 `config.yaml`、却没有拿到
-该文件指向的目录时，`/vol1/@appdata/headscale/db.sqlite` 这类路径**在容器里**并不存在，
-尽管它在宿主机上完全健康。这类检查会报成**无法验证**（并给出路径和挂载提示），而不是判为
-失败。把该目录以只读方式挂进容器，它们就会变成真正的检查。
+该文件指向的目录时，配置里那些**宿主机绝对路径在容器里并不存在**（例如 `db.sqlite`、
+`derp.paths` 里的地图文件），尽管它们在宿主机上完全健康。这类检查会报成**无法验证**
+（并给出路径和挂载提示），而不是判为失败。把该目录以只读方式挂进容器，它们就会变成真正的检查。
+双镜像形态下数据目录以**同一绝对路径**挂载，所以不会缺这些路径。
 :::
 
 | 检查               | 为什么重要                                                                                                                                                                                   |
@@ -114,6 +115,18 @@ HeadplaneCN 尝试的端点以及推导出的地址 —— 最常见的原因是
 | `integration.kubernetes`       | 重启 Headscale Pod。                                                                  |
 
 没有启用任何集成时按钮是禁用的，页面也会说明；请按你服务管理器的方式重启 Headscale。
+
+重载或重启失败时页面会说明卡在哪一步：没找到 `headscale serve` 进程、集成尚未配置、没有权限
+发送信号（容器里的面板向宿主机原生进程发信号时就是 `kill EACCES` —— Docker 默认的 AppArmor
+配置 `docker-default` 不允许向 `unconfined` 的进程发信号，`dmesg` 里是
+`apparmor="DENIED" operation="signal" ... signal=hup peer="unconfined"`）、信号已发出但
+`/health` 没有确认、信号发不出去，以及该集成不支持这个操作。0.22.21 之前，被拒绝的重载会被当成
+成功。
+
+HeadplaneCN 跑在容器里、Headscale 以原生进程运行（fnOS 的 fpk 安装）时，容器除了
+`pid: host` 还必须写 `security_opt: ["apparmor=unconfined"]`，否则 AppArmor 会拒绝 SIGHUP，重载
+只能以失败告终。双镜像部署不需要这一条：那边 Headscale 也是容器，面板通过 Docker socket 重启
+它，全程没有跨进程信号。
 
 ::: tip 原生安装与「立即重启 Headscale」
 SIGHUP 只重载访问策略：改完 DNS、OIDC 或 `trusted_proxies` 之后它不会让改动生效，只有重新读取

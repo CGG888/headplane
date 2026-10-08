@@ -57,6 +57,19 @@ advantages and trade-offs. Choose the method that best fits your needs:
 
 ---
 
+### [Dual-image deployment](./dual-image.md): Headscale and HeadplaneCN as two containers
+
+- The NAS shape that hands Headscale to Docker as well: both containers use host
+  networking, and Headscale's data directory is mounted at the **same absolute
+  path** inside the container, so no absolute path in its configuration changes.
+- Uses the Docker integration (saving configuration restarts the Headscale
+  container), so no `pid: host` + AppArmor proc setup is needed.
+- Includes `.env`, the complete compose file and both configuration files,
+  migration in **both directions** (fnOS native ⇄ dual image), reverse proxy
+  notes and a verification checklist.
+
+---
+
 ### [fnOS (飞牛)](./fnos.md): Deployment on an fnOS NAS
 
 - For NAS setups that run Headscale natively from an fnOS app source and

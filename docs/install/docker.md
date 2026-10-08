@@ -122,10 +122,11 @@ services:
       # config.yaml 里设置 `headscale.dns_records_path`。
       - "/path/to/headscale/dns_records.json:/etc/headscale/dns_records.json"
 
-      # 对 Docker socket 的只读访问（或使用代理）
+      # Docker socket（或使用 socket 代理）。注意 `:ro` 只保护 socket 文件本身、
+      # 挡不住 Docker API 调用，所以别把它当安全边界：拿到这个 socket 等于拿到宿主 root
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   headscale:
-    image: headscale/headscale:0.27.1
+    image: headscale/headscale:0.29.4
     container_name: headscale
     restart: unless-stopped
     command: serve
@@ -151,11 +152,11 @@ services:
 
 还需要在 HeadplaneCN 配置文件里启用几个字段：
 
-| 字段                             | 说明                                                                                                                           |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **`integration.docker.enabled`** | 设为 `true` 以启用 Docker 集成。                                                                                                |
-| **`headscale.config_path`**      | 容器内 Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                                                      |
-| `headscale.dns_records_path`     | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。                                  |
+| 字段                             | 说明                                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **`integration.docker.enabled`** | 设为 `true` 以启用 Docker 集成。                                                                    |
+| **`headscale.config_path`**      | 容器内 Head**scale** 配置文件的路径（例如 `/etc/headscale/config.yaml`）。                          |
+| `headscale.dns_records_path`     | _可选_。细节请参考[示例配置](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)。 |
 
 设置好这些之后重启 HeadplaneCN。你应该会在界面导航栏里看到「DNS」和「设置」这样的新入口，可以在
 那里管理 Tailnet 配置。
@@ -218,7 +219,7 @@ services:
       - "traefik.http.routers.headplane.entrypoints=websecure"
       - "traefik.http.routers.headplane.tls=true"
   headscale:
-    image: headscale/headscale:0.27.1
+    image: headscale/headscale:0.29.4
     container_name: headscale
     restart: unless-stopped
     command: serve
