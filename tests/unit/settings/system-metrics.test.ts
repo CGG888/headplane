@@ -356,11 +356,13 @@ describe("headplane self-update notice", () => {
         get: (name: string) =>
           name === "location" ? "https://github.com/CGG888/headplaneCN/releases/tag/v0.6.1" : null,
       },
+      text: () => Promise.resolve(""),
     } as unknown as Response);
 
     const checker = createReleaseChecker({
       url: HEADPLANE_RELEASES_URL,
       label: "Headplane",
+      mirrors: [],
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 

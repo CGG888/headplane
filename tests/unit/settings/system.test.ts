@@ -8,7 +8,13 @@ import {
   type Diagnostic,
   type DiagnosticsInput,
 } from "~/routes/settings/system/diagnostics";
-import { createReleaseChecker, RELEASES_URL } from "~/routes/settings/system/release-check";
+import {
+  createReleaseChecker,
+  DEFAULT_RELEASE_MIRRORS,
+  RELEASE_MIRROR_ENV,
+  RELEASES_URL,
+  releaseMirrorPrefixes,
+} from "~/routes/settings/system/release-check";
 import { authContext, headscaleContext, integrationContext } from "~/server/context";
 import { parseServerVersion } from "~/server/headscale/api/server-version";
 
@@ -238,6 +244,7 @@ describe("headscale release check", () => {
       status,
       url: RELEASES_URL,
       headers: { get: (name: string) => (name === "location" ? location : null) },
+      text: () => Promise.resolve(""),
     } as unknown as Response;
   }
 
@@ -247,6 +254,29 @@ describe("headscale release check", () => {
       status,
       url: RELEASES_URL,
       headers: { get: () => null },
+      text: () => Promise.resolve(""),
+    } as unknown as Response;
+  }
+
+  /** Some mirrors answer with the API payload instead of the redirect. */
+  function jsonResponse(payload: unknown, status = 200) {
+    return {
+      ok: status < 400,
+      status,
+      url: RELEASES_URL,
+      headers: { get: () => null },
+      text: () => Promise.resolve(JSON.stringify(payload)),
+    } as unknown as Response;
+  }
+
+  /** Others follow the redirect and hand back the release page itself. */
+  function pageResponse(html: string, status = 200, url = RELEASES_URL) {
+    return {
+      ok: status < 400,
+      status,
+      url,
+      headers: { get: () => null },
+      text: () => Promise.resolve(html),
     } as unknown as Response;
   }
 
@@ -270,6 +300,7 @@ describe("headscale release check", () => {
 
   test("fails soft on a blocked network, a bad status, and an unusable answer", async () => {
     const blocked = createReleaseChecker({
+      mirrors: [],
       fetchImpl: vi
         .fn()
         .mockRejectedValue(
@@ -280,12 +311,14 @@ describe("headscale release check", () => {
 
     // "API rate limit exceeded" is a 403 with no Location to read.
     const refused = createReleaseChecker({
+      mirrors: [],
       fetchImpl: vi.fn().mockResolvedValue(errorResponse(403)) as unknown as typeof fetch,
     });
     expect(await refused.latest()).toBeUndefined();
 
     // A redirect that does not point at a tag is just as useless.
     const notATag = createReleaseChecker({
+      mirrors: [],
       fetchImpl: vi
         .fn()
         .mockResolvedValue(
@@ -295,16 +328,27 @@ describe("headscale release check", () => {
     expect(await notATag.latest()).toBeUndefined();
 
     const unusable = createReleaseChecker({
+      mirrors: [],
       fetchImpl: vi
         .fn()
         .mockResolvedValue(redirectResponse(releaseTag("nightly"))) as unknown as typeof fetch,
     });
     expect(await unusable.latest()).toBeUndefined();
+
+    // A mirror that also refuses leaves the page without a version.
+    const allBlocked = createReleaseChecker({
+      mirrors: ["https://mirror.example/"],
+      fetchImpl: vi.fn().mockRejectedValue(new Error("fetch failed")) as unknown as typeof fetch,
+    });
+    expect(await allBlocked.latest()).toBeUndefined();
   });
 
   test("caches a hit and shares one request between concurrent callers", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
-    const checker = createReleaseChecker({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const checker = createReleaseChecker({
+      mirrors: [],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
 
     const [first, second] = await Promise.all([checker.latest(), checker.latest()]);
     expect(first?.raw).toBe("v0.29.2");
@@ -323,6 +367,7 @@ describe("headscale release check", () => {
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
     const checker = createReleaseChecker({
+      mirrors: [],
       fetchImpl: fetchImpl as unknown as typeof fetch,
       successTtlMs: 6 * 60 * 60 * 1000,
       failureTtlMs: 60_000,
@@ -336,6 +381,92 @@ describe("headscale release check", () => {
     now += 61_000;
     expect((await checker.latest())?.raw).toBe("v0.29.2");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  test("falls back to a mirror when github.com is unreachable", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND github.com"))
+      .mockResolvedValue(redirectResponse(releaseTag("v0.29.2")));
+    const checker = createReleaseChecker({
+      mirrors: ["https://mirror.example/"],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect((await checker.latest())?.raw).toBe("v0.29.2");
+
+    // The original address is still asked first; the mirror is the fallback.
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(RELEASES_URL);
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe(`https://mirror.example/${RELEASES_URL}`);
+  });
+
+  test("reads the tag out of the API payload a mirror serves", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(errorResponse(403))
+      .mockResolvedValueOnce(jsonResponse({ tag_name: "v0.29.4" }));
+    const checker = createReleaseChecker({
+      mirrors: ["https://mirror.example/"],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect((await checker.latest())?.raw).toBe("v0.29.4");
+    expect(fetchImpl.mock.calls[2]?.[0]).toBe(
+      "https://mirror.example/https://api.github.com/repos/juanfont/headscale/releases/latest",
+    );
+  });
+
+  test("scans the page a mirror hands back instead of a redirect", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(
+        pageResponse('<a href="/juanfont/headscale/releases/tag/v0.29.4">v0.29.4</a>'),
+      );
+    const checker = createReleaseChecker({
+      mirrors: ["https://mirror.example/"],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect((await checker.latest())?.raw).toBe("v0.29.4");
+  });
+
+  test("tries the route that worked first on the next lookup", async () => {
+    const calls: string[] = [];
+    let now = 0;
+    const fetchImpl = vi.fn(async (input: string) => {
+      calls.push(input);
+      if (input === RELEASES_URL) {
+        throw new Error("offline");
+      }
+
+      return redirectResponse(releaseTag("v0.29.2"));
+    });
+    const checker = createReleaseChecker({
+      mirrors: ["https://mirror.example/"],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      now: () => now,
+      successTtlMs: 1_000,
+    });
+
+    expect((await checker.latest())?.raw).toBe("v0.29.2");
+    expect(calls).toEqual([RELEASES_URL, `https://mirror.example/${RELEASES_URL}`]);
+
+    now += 2_000;
+    expect((await checker.latest())?.raw).toBe("v0.29.2");
+    expect(calls[2]).toBe(`https://mirror.example/${RELEASES_URL}`);
+  });
+
+  test("takes the mirror list from the environment", () => {
+    expect(releaseMirrorPrefixes({})).toEqual(DEFAULT_RELEASE_MIRRORS);
+    expect(releaseMirrorPrefixes({ [RELEASE_MIRROR_ENV]: "https://my.example" })).toEqual([
+      "https://my.example/",
+    ]);
+    expect(
+      releaseMirrorPrefixes({ [RELEASE_MIRROR_ENV]: "https://a.example/, https://b.example/" }),
+    ).toEqual(["https://a.example/", "https://b.example/"]);
+    expect(releaseMirrorPrefixes({ [RELEASE_MIRROR_ENV]: "off" })).toEqual([]);
   });
 });
 

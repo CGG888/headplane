@@ -19,6 +19,12 @@ outline: [2, 3]
 带短超时并缓存数小时；在离线或受限网络上查询只会没有结果，也不显示任何标记，因此页面从不
 依赖互联网访问。
 
+查询先走原地址（`https://github.com/<owner>/<repo>/releases/latest` 的 302），只有连不上时才
+按顺序走内置镜像前缀（把原地址接在镜像后面，例如 `https://ghproxy.net/https://github.com/...`），
+成功过的那条路线下次会先试。要换成自己的镜像，设 `HEADPLANE_RELEASE_MIRROR=https://你的镜像/`
+（多个用逗号分隔，`off` 关闭镜像回退）；如果你有真正的 HTTP 代理，给面板进程加上
+`NODE_USE_ENV_PROXY=1` 与 `HTTPS_PROXY=http://代理地址:端口` 即可，Node 24 会让查询走代理。
+
 HeadplaneCN 也会对**自己**做同样的比较，对象是 GitHub 上的最新 HeadplaneCN 版本，超时与缓存
 相同。只有当本构建上报的版本（构建时写入）严格更旧时，页面顶部才会出现提示并链接到该发布
 版本。查询失败、没有打标签的开发构建，以及已经上报该版本或更新版本的构建都保持沉默，因此

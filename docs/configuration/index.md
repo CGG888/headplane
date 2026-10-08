@@ -34,6 +34,10 @@ HeadplaneCN 默认还会把数据存放在 `/var/lib/headplane` 目录。这个�
 > 另外请注意，这只适用于**配置覆盖**，而不是普通环境变量 —— 也就是说你不能用它指定
 > `HEADPLANE_DEBUG_LOG=true` 或 `HEADPLANE_CONFIG_PATH=/etc/headplane/config.yaml` 这类变量。
 
+面板还认几个普通环境变量：`HEADPLANE_DEBUG_LOG`（调试日志）、`HEADPLANE_RELEASE_MIRROR`（版本查询
+用的镜像前缀，见[设置 → 系统](/features/system-status)），以及想走真实 HTTP 代理时给 Node 用的
+`NODE_USE_ENV_PROXY=1` 和 `HTTPS_PROXY=http://代理地址:端口`。
+
 ## 敏感值
 
 对于密钥、私钥和私有证书这类敏感配置，HeadplaneCN 支持「值 / 文件路径」双模式。每个这样的字段，

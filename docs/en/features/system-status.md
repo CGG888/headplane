@@ -23,6 +23,16 @@ timeout and cached for a few hours; on an offline or restricted network the
 lookup simply yields nothing and no badge is shown, so the page never depends on
 internet access.
 
+The lookup asks the original address first (the 302 from
+`https://github.com/<owner>/<repo>/releases/latest`) and only falls back to the
+built-in mirror prefixes — the original URL appended to the mirror, e.g.
+`https://ghproxy.net/https://github.com/...` — when that fails, remembering the
+route that worked for next time. Point it at your own mirror with
+`HEADPLANE_RELEASE_MIRROR=https://your-mirror/` (comma-separated prefixes, `off`
+disables the fallback), or give the panel process a real HTTP proxy with
+`NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY=http://proxy:port`, which Node 24 makes
+`fetch` honour.
+
 HeadplaneCN runs the same comparison for **itself**, against the latest HeadplaneCN
 release on GitHub and with the same timeout and cache. The notice appears above
 the page only when the version this build reports — stamped in at build time —

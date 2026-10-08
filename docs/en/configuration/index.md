@@ -33,6 +33,11 @@ Setting this also tells HeadplaneCN to load the relative `.env` file into the en
 > environment variables meaning you cannot specify variables such as
 > `HEADPLANE_DEBUG_LOG=true` or `HEADPLANE_CONFIG_PATH=/etc/headplane/config.yaml`.
 
+A few plain environment variables are still read by the panel: `HEADPLANE_DEBUG_LOG` (debug logging),
+`HEADPLANE_RELEASE_MIRROR` (the mirror prefix used by the version lookup, see
+[Settings → System](/en/features/system-status)), and `NODE_USE_ENV_PROXY=1` with
+`HTTPS_PROXY=http://proxy:port` when you want Node to send that lookup through a real HTTP proxy.
+
 ## Sensitive Values
 
 HeadplaneCN supports a dual-mode pattern for providing certain sensitive configuration values, such as secrets, keys, and private certificates. For each such field, you can either:

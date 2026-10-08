@@ -6,7 +6,7 @@
 
 ## Fixes
 
-- **The version card no longer reads "not reported" on a rate-limited address.** The panel asked the GitHub REST API for the newest Headscale and Headplane releases, and that endpoint allows only 60 unauthenticated requests per hour per address: on a shared connection it answers HTTP 403 `API rate limit exceeded`, so both **Latest version** rows rendered `— (not reported)` while the panel itself was healthy. The lookup now asks `https://github.com/<owner>/<repo>/releases/latest` and reads the tag out of the 302's `Location` header, which is not subject to that limit and needs no token, mirror or proxy.
+- **The version card no longer reads "not reported" on a rate-limited or blocked address.** The panel asked the GitHub REST API for the newest Headscale and Headplane releases, and that endpoint allows only 60 unauthenticated requests per hour per address: on a shared connection it answers HTTP 403 `API rate limit exceeded`, so both **Latest version** rows rendered `— (not reported)` while the panel itself was healthy. The lookup now asks `https://github.com/<owner>/<repo>/releases/latest` and reads the tag out of the 302's `Location` header — not subject to that limit and no token needed — and when github.com cannot be reached at all it retries the same lookup through a mirror (`https://ghproxy.net/`, `https://ghfast.top/`, `https://v6.gh-proxy.org/`, `https://gh-proxy.com/`), accepting either the redirect, the API payload or a proxied release page, then tries the route that worked first. Set `HEADPLANE_RELEASE_MIRROR` to your own prefix (comma-separated, `off` disables the fallback), or start the panel with `NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY` to send the lookup through a real proxy.
 
 # 0.22.23 (October 8, 2026)
 
