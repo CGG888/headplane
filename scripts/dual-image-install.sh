@@ -73,6 +73,8 @@ DEFAULT_BASE_DIR="/vol1/1000/APP/headplaneCN"
 DEFAULT_SERVER_URL="https://ha.example.com:8443"
 DEFAULT_ADMIN_PORT="4100"
 DEFAULT_HS_PORT="8480"
+DEFAULT_CADDY_IMAGE="v6.gh-proxy.org/docker/caddy:2-alpine"
+DEFAULT_CADDY_PORT="8444"
 DEFAULT_METRICS_PORT="8481"
 DEFAULT_STUN_PORT="3478"
 DEFAULT_HS_UID="0"
@@ -117,6 +119,9 @@ OPT_REGION_ID=""
 BASE_DIR=""
 ENV_FILE=""
 COMPOSE_FILE=""
+CADDY_DIR=""
+CADDY_FILE=""
+OPT_CADDY_PORT=""
 BACKUP_DIR=""
 HP_CONFIG=""
 HP_DATA=""
@@ -1400,6 +1405,19 @@ step_base_dir() {
 
 	DERP_MAP_HOST="$DERP_MAP_DIR/$DEFAULT_DERP_MAP_NAME"
 	DERP_MAP_CTR="$DERP_MAP_HOST"
+
+	# Caddy does the /admin path split in front of the panel, so its Caddyfile
+	# lives in the same deployment directory as the panel's config.  Only the
+	# Lucky layout needs the service; the port / two-domain layouts delete it.
+	CADDY_DIR="$BASE_DIR/caddy"
+	CADDY_FILE="$CADDY_DIR/Caddyfile"
+	CADDY_IMAGE="$DEFAULT_CADDY_IMAGE"
+	if [[ -n ${OPT_CADDY_PORT:-} ]]; then
+		v_port "$OPT_CADDY_PORT" || die "invalid --caddy-port: $OPT_CADDY_PORT"
+		CADDY_PORT="$OPT_CADDY_PORT"
+	else
+		CADDY_PORT="$DEFAULT_CADDY_PORT"
+	fi
 	v_container_path "$DERP_MAP_CTR" ||
 		die "internal error: the derived DERP map path is not below $HS_DIR: $DERP_MAP_CTR"
 	ENV_FILE="$BASE_DIR/.env"
@@ -2043,6 +2061,14 @@ PANEL_PORT=$PANEL_PORT
 
 # --- 时区 / timezone ---
 TZ=$TZONE
+
+# --- Caddy：面板前面的路径分流 / the /admin path split in front of the panel ---
+# 只有 Lucky 路径分流方案需要它；端口方案 / 多域名方案把这两行和 docker-compose.yml
+# 里的 caddy 服务一起删掉。
+# Only the Lucky layout needs this: the port / two-domain layouts delete these two
+# lines together with the caddy: service.
+CADDY_IMAGE=$CADDY_IMAGE
+CADDY_PORT=$CADDY_PORT
 EOF
 	return 0
 }
@@ -2055,7 +2081,7 @@ build_compose_content() {
 #
 # Everything that varies lives in .env next to this file:
 #   HEADSCALE_VERSION, HEADPLANE_VERSION, HEADSCALE_UID, HEADSCALE_GID,
-#   BASE_DIR, PANEL_BIND, PANEL_PORT, TZ
+#   BASE_DIR, PANEL_BIND, PANEL_PORT, TZ, CADDY_IMAGE, CADDY_PORT
 #
 # Both services use host networking and mount \${BASE_DIR}/headscale at that
 # SAME absolute path, so the absolute paths inside the Headscale config.yaml
@@ -2137,6 +2163,70 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # --- Caddy：/admin 路径分流 / the /admin path split -----------------------
+  # 只有 Lucky 方案需要它（TLS 在路由器那层终止，Caddy 只做明文分流）；
+  # 端口方案 / 多域名方案把这一整段和 .env 里的两行 CADDY_* 一起删掉。
+  caddy:
+    image: "\${CADDY_IMAGE:-$DEFAULT_CADDY_IMAGE}"
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - "TZ=\${TZ}"
+      - "CADDY_PORT=\${CADDY_PORT:-$DEFAULT_CADDY_PORT}"
+    volumes:
+      - "$(compose_path "$CADDY_FILE"):/etc/caddy/Caddyfile:ro"
+      - "$(compose_path "$CADDY_DIR")/data:/data"
+      - "$(compose_path "$CADDY_DIR")/config:/config"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+EOF
+	return 0
+}
+
+# The Caddyfile does one thing: it keeps /admin (the panel) separate from
+# everything else (Headscale).  TLS is terminated one layer up, so this
+# listener speaks plain HTTP and must not ask for a certificate.
+caddyfile_content() {
+	cat <<EOF
+# Caddyfile - /admin 路径分流 / the /admin path split.
+# 证书在上一层（路由器上的 Lucky）终止，这里只说明文 HTTP，所以 auto_https off。
+# TLS is terminated one layer up (Lucky on the router); this listener is plain
+# HTTP, hence "auto_https off".
+
+{
+	# 不签发也不加载证书 / no certificate is requested or loaded here
+	auto_https off
+}
+
+:{\$CADDY_PORT:$DEFAULT_CADDY_PORT} {
+	# 浏览器打开根路径时进面板；客户端从不用 GET /
+	@browserRoot {
+		path /
+		header Accept *text/html*
+	}
+	redir @browserRoot /admin/ 302
+
+	# /admin* 不改写路径，原样转给面板 / the panel keeps its /admin prefix
+	handle /admin* {
+		reverse_proxy $PANEL_BIND:$PANEL_PORT {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# 其余全部原样透传给 Headscale（/ts2021、/key、/register、/health、/derp …）；
+	# flush_interval -1 关掉缓冲，长连接才不会被切断。
+	handle {
+		reverse_proxy 127.0.0.1:$DEFAULT_HS_PORT {
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
 EOF
 	return 0
 }
@@ -2354,6 +2444,8 @@ print_layout() {
 	info "        -> /etc/headplane/config.yaml (ro)"
 	info "  HeadplaneCN data     : $HP_DATA"
 	info "        -> /var/lib/headplane (rw)"
+	info "  Caddyfile            : $CADDY_FILE"
+	info "        -> /etc/caddy/Caddyfile (ro; the /admin path split)"
 	info "  .env file            : $ENV_FILE"
 	info "  compose file         : $COMPOSE_FILE"
 	info "  backups              : $BACKUP_DIR"
@@ -2392,6 +2484,7 @@ print_plan() {
 	emit "    mkdir -p -m 755 $HS_DIR"
 	emit "    mkdir -p -m 755 $DERP_MAP_DIR"
 	emit "    mkdir -p -m 700 $BACKUP_DIR"
+	emit "    mkdir -p -m 755 $CADDY_DIR   (with data/ and config/)"
 	info ""
 	info "files:"
 	emit "    $ENV_FILE   (mode 600)"
@@ -2399,6 +2492,7 @@ print_plan() {
 	emit "    $HP_CONFIG   (kept and patched, or written new; mode 600)"
 	emit "    $DERP_MAP_HOST   (empty placeholder, only when missing)"
 	emit "    $COMPOSE_FILE   (mode 644)"
+	emit "    $CADDY_FILE   (mode 644; the /admin path split)"
 	if ((MIGRATE_ACTIVE)); then
 		info ""
 		info "migration:"
@@ -2410,6 +2504,9 @@ print_plan() {
 	info ""
 	info "the .env file that will be written:"
 	env_content | sed 's/^/    /'
+	info ""
+	info "the caddy/Caddyfile that will be written:"
+	caddyfile_content | sed 's/^/    /'
 	info ""
 	info "permissions:"
 	emit "    chmod 600 $ENV_FILE $HS_CONFIG $HP_CONFIG"
@@ -2440,6 +2537,7 @@ print_summary() {
 	emit "  HeadplaneCN config   : $HP_CONFIG   -> /etc/headplane/config.yaml (ro)"
 	emit "  HeadplaneCN data     : $HP_DATA   -> /var/lib/headplane"
 	emit "  DERP map directory   : $DERP_MAP_DIR   -> the SAME absolute path (rw)"
+	emit "  Caddyfile            : $CADDY_FILE   -> /etc/caddy/Caddyfile (ro)"
 	emit "  backups              : $BACKUP_DIR"
 	emit "  images               : headscale=$HS_IMAGE  panel=$HP_IMAGE"
 	emit "  clients use          : $SERVER_URL"
@@ -2461,7 +2559,7 @@ print_summary() {
 	emit "backup    : tar -czf $BACKUP_DIR/headplaneCN-\$(date +%Y%m%d-%H%M%S).tar.gz -C $BASE_DIR ."
 	emit "rollback  : put the two old versions back in $ENV_FILE, then: cd $BASE_DIR && docker compose up -d"
 	emit ""
-	emit "  * both containers use the host network: docker publishes nothing, so a"
+	emit "  * all three containers use the host network (the port / two-domain"
 	emit "    reverse proxy (or a firewall) has to front http://$PANEL_BIND:$PANEL_PORT."
 	emit "  * the panel reaches Headscale on 127.0.0.1:$DEFAULT_HS_PORT inside the host."
 	emit "  * $HS_DIR is the single source of Headscale state; back it up before upgrades."
@@ -2576,6 +2674,8 @@ FLAGS
       --admin-bind ADDR   address the panel binds: 0.0.0.0 (not recommended),
                           127.0.0.1 (reverse proxy on this host) or a specific
                           address such as 192.168.1.10 (default)
+      --caddy-port PORT   plain-HTTP port of the bundled Caddy path splitter
+                          (default: 8444; only the Lucky layout needs it)
       --stun-port PORT    STUN port of the embedded DERP server (default: 3478)
       --region-id N       embedded DERP region id (default: 999)
       --tz ZONE           timezone for both containers (default: the host's)
@@ -2594,6 +2694,7 @@ PROMPTS
 
 WHAT IT WRITES
   * .env and docker-compose.yml in the deployment directory (600 / 644)
+  * caddy/Caddyfile: the /admin path split in front of the panel (644)
   * the panel config.yaml, patching only the keys this installer owns
   * the Headscale config.yaml, keeping every absolute path inside the
     deployment directory: nothing is rewritten to /etc/headscale/... or
@@ -2935,6 +3036,10 @@ YAML
 	HP_IMAGE_VERSION="0.22.23"
 	PANEL_BIND="192.168.1.10"
 	PANEL_PORT="4100"
+	CADDY_DIR="$BASE_DIR/caddy"
+	CADDY_FILE="$CADDY_DIR/Caddyfile"
+	CADDY_IMAGE="$DEFAULT_CADDY_IMAGE"
+	CADDY_PORT="8444"
 	HEADSCALE_UID="0"
 	HEADSCALE_GID="0"
 	STUN_PORT="3478"
@@ -2947,7 +3052,7 @@ YAML
 	AGENT_ENABLED="0"
 
 	env_content >"$T/env"
-	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ; do
+	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ CADDY_IMAGE CADDY_PORT; do
 		if grep -Eq "^$_k=" "$T/env"; then
 			_ok ".env defines $_k"
 		else
@@ -2956,11 +3061,11 @@ YAML
 	done
 
 	build_compose_content >"$T/compose.yml"
-	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ; do
+	for _k in HEADSCALE_VERSION HEADPLANE_VERSION HEADSCALE_UID HEADSCALE_GID BASE_DIR PANEL_BIND PANEL_PORT TZ CADDY_IMAGE CADDY_PORT; do
 		_has "$T/compose.yml" "\${$_k" "the compose file reads \${$_k...} from .env"
 	done
 	_count "exactly one pid: host (the panel only)" "1" "$T/compose.yml" "    pid: host"
-	_count "network_mode: host on both services" "2" "$T/compose.yml" "    network_mode: host"
+	_count "network_mode: host on all three services" "3" "$T/compose.yml" "    network_mode: host"
 	_count "read_only: true on headscale" "1" "$T/compose.yml" "    read_only: true"
 	_has "$T/compose.yml" "      - /var/run/headscale" "headscale gets a writable /var/run/headscale"
 	_has "$T/compose.yml" "      - /tmp" "headscale gets a writable /tmp"
@@ -2978,6 +3083,16 @@ YAML
 	_has "$T/compose.yml" "me.tale.headplane.target: \"headscale\"" "the headscale container carries the integration label"
 	_hasnt "$T/compose.yml" "    ports:" "host networking needs no ports: section"
 	_has "$T/compose.yml" "/admin/healthz" "the panel healthcheck probes its own bind address"
+	_has "$T/compose.yml" "container_name: caddy" "the caddy container keeps its fixed name"
+	_has "$T/compose.yml" "caddy/Caddyfile:/etc/caddy/Caddyfile:ro" "caddy reads the Caddyfile from the deployment directory"
+	_has "$T/compose.yml" "CADDY_PORT=\${CADDY_PORT:-8444}" "caddy's port comes from .env"
+
+	caddyfile_content >"$T/Caddyfile"
+	_has "$T/Caddyfile" "auto_https off" "the Caddyfile never asks for a certificate"
+	_has "$T/Caddyfile" "handle /admin*" "the Caddyfile keeps the panel's /admin prefix"
+	_has "$T/Caddyfile" "reverse_proxy $PANEL_BIND:$PANEL_PORT" "the Caddyfile sends /admin to the panel"
+	_has "$T/Caddyfile" "reverse_proxy 127.0.0.1:$DEFAULT_HS_PORT" "the Caddyfile sends everything else to Headscale"
+	_has "$T/Caddyfile" "flush_interval -1" "the Caddyfile leaves long-lived connections unbuffered"
 
 	hs_config_skeleton >"$T/hs-skeleton.yaml"
 	_eq "the skeleton keeps the Headscale key path in the deployment directory" "$HS_DIR/noise_private.key" "$(yaml_get "$T/hs-skeleton.yaml" noise.private_key_path)"
@@ -3110,6 +3225,11 @@ parse_args() {
 			OPT_ADMIN_BIND="$2"
 			shift
 			;;
+		--caddy-port)
+			[[ $# -ge 2 ]] || die "--caddy-port needs a value"
+			OPT_CADDY_PORT="$2"
+			shift
+			;;
 		--stun-port)
 			[[ $# -ge 2 ]] || die "--stun-port needs a value"
 			OPT_STUN_PORT="$2"
@@ -3200,6 +3320,9 @@ main() {
 		act_mkdir "$HS_DIR" 755
 		act_mkdir "$DERP_MAP_DIR" 755
 		act_mkdir "$BACKUP_DIR" 700
+		act_mkdir "$CADDY_DIR" 755
+		act_mkdir "$CADDY_DIR/data" 755
+		act_mkdir "$CADDY_DIR/config" 755
 
 		if ((MIGRATE_ACTIVE)); then
 			run_migration "$RUN_STAMP"
@@ -3232,6 +3355,12 @@ YAML
 			act_backup_file "$COMPOSE_FILE" "$RUN_STAMP"
 		fi
 		build_compose_content | stage_file "$COMPOSE_FILE" 644
+
+		dim "  --- caddy/Caddyfile (the /admin path split) ---"
+		if [[ -e $CADDY_FILE ]]; then
+			act_backup_file "$CADDY_FILE" "$RUN_STAMP"
+		fi
+		caddyfile_content | stage_file "$CADDY_FILE" 644
 
 		dim "  --- permissions ---"
 		chmod 600 "$ENV_FILE" 2>/dev/null || warn "could not chmod 600 $ENV_FILE"

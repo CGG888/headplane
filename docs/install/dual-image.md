@@ -178,12 +178,12 @@ docker compose exec headscale headscale configtest    # 只校验，不启动
 
 ## 四、准备目录
 
-所有路径以 `/vol1/1000/APP/headplaneCN` 为例，按你的实际存储位置替换。**两个容器、一个目录**，
+所有路径以 `/vol1/1000/APP/headplaneCN` 为例，按你的实际存储位置替换。**三个容器、一个目录**，
 配置、数据、备份都在一处，`tar` 一次就是完整备份。
 
 | 宿主机路径                                         | 用途                                                                                                  | 容器内路径                                          |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `/vol1/1000/APP/headplaneCN/docker-compose.yml`    | 两个容器的定义                                                                                        | —                                                   |
+| `/vol1/1000/APP/headplaneCN/docker-compose.yml`    | 三个容器的定义（Headscale、面板、Caddy）                                                              | —                                                   |
 | `/vol1/1000/APP/headplaneCN/.env`                  | 版本号、运行用户、绑定地址                                                                            | —                                                   |
 | `/vol1/1000/APP/headplaneCN/config.yaml`           | HeadplaneCN 自己的配置                                                                                | `/etc/headplane/config.yaml`（只读）                |
 | `/vol1/1000/APP/headplaneCN/data/`                 | 面板数据：会话、内部库、快照、Agent 状态                                                              | `/var/lib/headplane`                                |
@@ -191,10 +191,12 @@ docker compose exec headscale headscale configtest    # 只校验，不启动
 | `/vol1/1000/APP/headplaneCN/headscale/`            | `db.sqlite`、`noise_private.key`、`derp_server_private.key`、`headscale.sock`、`cache/`、`derp-maps/` | **同一个绝对路径**（headscale 读写 / 面板只读）     |
 | `/vol1/1000/APP/headplaneCN/headscale/derp-maps/`  | 本地 DERP 地图                                                                                        | **同一个绝对路径**（面板读写）                      |
 | `/vol1/1000/APP/headplaneCN/backup/`               | 迁移与升级前的 `tar.gz` 备份                                                                          | —                                                   |
+| `/vol1/1000/APP/headplaneCN/caddy/`                | Caddy 的路径分流：`Caddyfile`、`data/`、`config/`（只有 Lucky 方案需要）                              | `/etc/caddy/Caddyfile`（只读）+ `/data`、`/config`  |
 
 ```bash
 mkdir -p /vol1/1000/APP/headplaneCN/{data,backup} \
-         /vol1/1000/APP/headplaneCN/headscale/derp-maps
+         /vol1/1000/APP/headplaneCN/headscale/derp-maps \
+         /vol1/1000/APP/headplaneCN/caddy/{data,config}
 
 cd /vol1/1000/APP/headplaneCN
 openssl rand -base64 24        # 生成 cookie_secret，记下来（正好 32 字符）
@@ -290,6 +292,12 @@ PANEL_BIND=192.168.1.10         # ← 必须改（NAS 的局域网 IP）
 PANEL_PORT=4100                 # ← 可改（默认 4100）
 
 TZ=Asia/Shanghai                # ← 可改
+
+# --- Caddy：NAS 内的路径分流 -------------------------------------------------
+# 只有「Lucky + Caddy」这一种访问方式需要它（见 /install/reverse-proxy-lucky）；
+# 用端口方案或多域名方案时，把这两行和 compose 里的 caddy 服务一起删掉。
+CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← 可改（换成你能用的镜像代理前缀）
+CADDY_PORT=8444                                     # ← 可改（上一节确认过没被占用）
 ```
 
 ::: warning 绑定具体 IP 时，两个地方要跟着改
@@ -418,25 +426,95 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Caddy：NAS 内的路径分流（只有 /install/reverse-proxy-lucky 的 Lucky 方案需要）
+  # ---------------------------------------------------------------------------
+  # 它只监听明文 HTTP，证书在路由器那层；/admin* 原样转给面板，其余全部转给 Headscale。
+  # 用端口方案或多域名方案时，把这一段和 .env 里的 CADDY_* 一起删掉。
+  caddy:
+    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← 可改（走 .env 的代理前缀）
+    container_name: caddy
+    restart: unless-stopped
+
+    # 与 headscale、面板一致：宿主网络 —— 直接监听在 NAS 上，容器内也能用 127.0.0.1 回源
+    # host 模式下不要再写 ports
+    network_mode: host
+
+    environment:
+      - "TZ=${TZ}"
+      - "CADDY_PORT=${CADDY_PORT:-8444}" # Caddyfile 里的 {$CADDY_PORT:8444} 读的就是它
+
+    volumes:
+      - "${BASE_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" # 分流规则（见下一小节）
+      - "${BASE_DIR}/caddy/data:/data"
+      - "${BASE_DIR}/caddy/config:/config"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
 
 ### 每个挂载的作用（一行一条）
 
-| 挂载                                                       | 作用                                                                                 |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `config.yaml:/etc/headscale/config.yaml:ro`（headscale）   | Headscale 的生效配置，只读挂载；面板改的是同一个宿主文件                             |
-| `headscale:${BASE_DIR}/headscale`（headscale）             | 数据库、私钥、socket、地图的读写位置，**路径与宿主机逐字一致**                       |
-| `config.yaml:/etc/headplane/config.yaml:ro`（面板）        | 面板自己的配置，只读即可                                                             |
-| `data:/var/lib/headplane`（面板）                          | 面板的持久化数据（会话、内部库、快照、Agent 状态）                                   |
-| `headscale/config.yaml:/etc/headscale/config.yaml`（面板） | 面板在这里读写 Headscale 配置（系统页、DERP 页、ACL 等）                             |
-| `headscale/derp-maps:${BASE_DIR}/.../derp-maps`（面板）    | DERP 地图的查看 / 编辑 / 保存；Headscale 读的是同一个文件                            |
-| `headscale:${BASE_DIR}/headscale:ro`（面板）               | 同一绝对路径 + 只读：配置检查与快照能看到 `db.sqlite`、私钥等                        |
-| `/var/run/docker.sock`（面板）                             | Docker 集成用它重启 Headscale 容器；`:ro` 并不能限制 socket 通信，请按 root 权限对待 |
+| 挂载                                                          | 作用                                                                                 |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `config.yaml:/etc/headscale/config.yaml:ro`（headscale）      | Headscale 的生效配置，只读挂载；面板改的是同一个宿主文件                             |
+| `headscale:${BASE_DIR}/headscale`（headscale）                | 数据库、私钥、socket、地图的读写位置，**路径与宿主机逐字一致**                       |
+| `config.yaml:/etc/headplane/config.yaml:ro`（面板）           | 面板自己的配置，只读即可                                                             |
+| `data:/var/lib/headplane`（面板）                             | 面板的持久化数据（会话、内部库、快照、Agent 状态）                                   |
+| `headscale/config.yaml:/etc/headscale/config.yaml`（面板）    | 面板在这里读写 Headscale 配置（系统页、DERP 页、ACL 等）                             |
+| `headscale/derp-maps:${BASE_DIR}/.../derp-maps`（面板）       | DERP 地图的查看 / 编辑 / 保存；Headscale 读的是同一个文件                            |
+| `headscale:${BASE_DIR}/headscale:ro`（面板）                  | 同一绝对路径 + 只读：配置检查与快照能看到 `db.sqlite`、私钥等                        |
+| `/var/run/docker.sock`（面板）                                | Docker 集成用它重启 Headscale 容器；`:ro` 并不能限制 socket 通信，请按 root 权限对待 |
+| `${BASE_DIR}/caddy/Caddyfile:ro`（caddy）                     | 路径分流规则；改完必须重启 caddy 容器才生效                                          |
+| `${BASE_DIR}/caddy/data`、`${BASE_DIR}/caddy/config`（caddy） | Caddy 自己的运行数据（证书在路由器那层，这里只是状态）                               |
 
 ::: info 只读的数据目录是刻意的
 HeadplaneCN 的用户不是 Headscale 的用户。把数据目录挂成只读，配置检查里「数据库目录」一项会显示
 **无法验证写入权限** —— 这是预期结果，不是故障。
 :::
+
+### Caddy 的分流规则：`caddy/Caddyfile`
+
+路径：`/vol1/1000/APP/headplaneCN/caddy/Caddyfile`（**只有 Lucky 路径分流方案需要**）。照抄即可，只需把
+`reverse_proxy` 里的面板地址改成你的 `${PANEL_BIND}:${PANEL_PORT}`：
+
+```caddyfile
+{
+	# 这个容器不签发也不加载证书（证书在路由器那一层）
+	auto_https off
+}
+
+:{$CADDY_PORT:8444} {
+	# 浏览器打开根路径时进面板；客户端从不用 GET /
+	@browserRoot {
+		path /
+		header Accept *text/html*
+	}
+	redir @browserRoot /admin/ 302
+
+	handle /admin* {
+		reverse_proxy 192.168.1.10:4100 {        # ← 改成 ${PANEL_BIND}:${PANEL_PORT}
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8480 {           # ← 别动（Headscale 在同一台机器上监听 8480）
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+```
+
+它一次做三件事：`auto_https off` 表示证书在 Lucky 那层；`/admin*` **不改写路径**转给面板，并告诉面板
+外面是 HTTPS（否则 `cookie_secure: true` 会出问题）；兜底的 `handle` 把 `/ts2021`、`/key`、
+`/register`、`/verify`、`/api/v1/*`、`/health`、`/derp` 原样透传，`flush_interval -1` 关掉缓冲，长连接
+才不会被切断。改完 Caddyfile 要 `docker compose restart caddy` 才生效。
 
 ### host 网络的限制
 
@@ -446,13 +524,14 @@ HeadplaneCN 的用户不是 Headscale 的用户。把数据目录挂成只读，
 
 于是对外端口完全由容器里监听什么决定：
 
-| 端口        | 谁在听                     | 怎么对外                                                                  |
-| ----------- | -------------------------- | ------------------------------------------------------------------------- |
-| `tcp/8480`  | Headscale 控制服务         | 反代回源到 `127.0.0.1:8480`（控制路径与 `/derp` 都在这个端口上）          |
-| `tcp/8481`  | Headscale 指标             | 默认只听 `127.0.0.1`；不要发布到公网                                      |
-| `tcp/50443` | gRPC（`grpc_listen_addr`） | 默认只听 `127.0.0.1`，给本机 `headscale` CLI 用；不用对外                 |
-| `udp/3478`  | 内嵌 DERP 的 STUN          | 在路由器 / 防火墙上把 `udp/3478` 直接放开到这台 NAS，**不能**走 HTTP 反代 |
-| `tcp/4100`  | HeadplaneCN                | 反代回源到 `${PANEL_BIND}:${PANEL_PORT}`（默认 `4100`，改了要同步改回源） |
+| 端口        | 谁在听                     | 怎么对外                                                                                  |
+| ----------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| `tcp/8480`  | Headscale 控制服务         | 反代回源到 `127.0.0.1:8480`（控制路径与 `/derp` 都在这个端口上）                          |
+| `tcp/8481`  | Headscale 指标             | 默认只听 `127.0.0.1`；不要发布到公网                                                      |
+| `tcp/50443` | gRPC（`grpc_listen_addr`） | 默认只听 `127.0.0.1`，给本机 `headscale` CLI 用；不用对外                                 |
+| `udp/3478`  | 内嵌 DERP 的 STUN          | 在路由器 / 防火墙上把 `udp/3478` 直接放开到这台 NAS，**不能**走 HTTP 反代                 |
+| `tcp/4100`  | HeadplaneCN                | 反代回源到 `${PANEL_BIND}:${PANEL_PORT}`（默认 `4100`，改了要同步改回源）                 |
+| `tcp/8444`  | Caddy（NAS 内路径分流）    | 路由器把 HTTPS 转到这里；Caddy 自己不做 TLS（明文 HTTP），见 /install/reverse-proxy-lucky |
 
 > 这里用 `8480 / 8481`（很多 fnOS 原生安装的历史端口）；官方默认是 `8080 / 9090`。用哪个都行，
 > 只要**全程一致**：`config.yaml` 的 `listen_addr`、反代回源、健康检查。
@@ -468,7 +547,7 @@ HeadplaneCN 的用户不是 Headscale 的用户。把数据目录挂成只读，
 cd /vol1/1000/APP/headplaneCN
 docker compose config --quiet        # 语法与变量都齐了吗（没有输出就是没问题）
 docker compose up -d
-docker compose ps                    # 两个服务都应是 Up (healthy)
+docker compose ps                    # 三个服务都应是 Up (healthy)（用端口 / 多域名方案时没有 caddy）
 
 docker compose logs headscale | tail -n 50
 # 期望：version=v0.29.4、DB 打开在 …/headscale/db.sqlite、
@@ -482,13 +561,15 @@ docker compose logs headplaneCN | tail -n 50
 #       Found a valid Headscale configuration file at /etc/headscale/config.yaml、
 #       Using Docker integration、Listening on http://192.168.1.10:4100
 curl -s http://192.168.1.10:4100/admin/healthz    # {"status":"OK"}
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8444/admin/   # 302（Caddy 已起，端口按 .env）
 ```
 
 浏览器打开 `http://192.168.1.10:4100/admin`，用第二节的 API Key 登录。进 **设置 → 系统**：集成应
 显示 **Docker**，保存配置后 Headscale 容器会重启（日志里能看到 `Found container` / 容器重启）。
 
 ::: tip 下一步：发布到外网
-容器本身只在局域网里监听，对外要靠一层反向代理（TLS 在那一层终止），怎么填见
+容器本身只在局域网里监听，对外要靠一层反向代理（TLS 在那一层终止）。这个 compose 里已经带了
+Caddy（第六节），Lucky 那层只管 TLS 与端口，两端怎么对接见
 [Lucky 反向代理](/install/reverse-proxy-lucky)；域名、证书与端口规划见
 [域名与访问方式](/install/domains)。记住两件事：反代要**原样透传路径**（`/key`、`/ts2021`、
 `/api/v1/*`、`/health`），`udp/3478`（STUN）**不能**走 HTTP 反代，必须在路由器上单独转发。

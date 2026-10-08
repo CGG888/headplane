@@ -195,12 +195,12 @@ maps, the official region filter) are not covered here: see [DERP & relays](/en/
 ## 4. Prepare the directories
 
 All paths use `/vol1/1000/APP/headplaneCN` as the example; substitute your actual storage location.
-**Two containers, one directory**: configuration, data and backups all live in one place, so a single
+**Three containers, one directory**: configuration, data and backups all live in one place, so a single
 `tar` is a complete backup.
 
 | Host path                                          | Purpose                                                                                               | Path inside the container                                                             |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `/vol1/1000/APP/headplaneCN/docker-compose.yml`    | The definition of both containers                                                                     | —                                                                                     |
+| `/vol1/1000/APP/headplaneCN/docker-compose.yml`    | The definition of all three containers (Headscale, the panel, Caddy)                                  | —                                                                                     |
 | `/vol1/1000/APP/headplaneCN/.env`                  | Version numbers, run user, bind addresses                                                             | —                                                                                     |
 | `/vol1/1000/APP/headplaneCN/config.yaml`           | HeadplaneCN's own configuration                                                                       | `/etc/headplane/config.yaml` (read-only)                                              |
 | `/vol1/1000/APP/headplaneCN/data/`                 | Panel data: sessions, internal database, snapshots, agent state                                       | `/var/lib/headplane`                                                                  |
@@ -208,10 +208,12 @@ All paths use `/vol1/1000/APP/headplaneCN` as the example; substitute your actua
 | `/vol1/1000/APP/headplaneCN/headscale/`            | `db.sqlite`, `noise_private.key`, `derp_server_private.key`, `headscale.sock`, `cache/`, `derp-maps/` | **The same absolute path** (read-write for headscale / read-only for the panel)       |
 | `/vol1/1000/APP/headplaneCN/headscale/derp-maps/`  | Local DERP maps                                                                                       | **The same absolute path** (read-write for the panel)                                 |
 | `/vol1/1000/APP/headplaneCN/backup/`               | `tar.gz` backups taken before migrations and upgrades                                                 | —                                                                                     |
+| `/vol1/1000/APP/headplaneCN/caddy/`                | Caddy's path split: `Caddyfile`, `data/`, `config/` (Lucky layout only)                               | `/etc/caddy/Caddyfile` (read-only) + `/data`, `/config`                               |
 
 ```bash
 mkdir -p /vol1/1000/APP/headplaneCN/{data,backup} \
-         /vol1/1000/APP/headplaneCN/headscale/derp-maps
+         /vol1/1000/APP/headplaneCN/headscale/derp-maps \
+         /vol1/1000/APP/headplaneCN/caddy/{data,config}
 
 cd /vol1/1000/APP/headplaneCN
 openssl rand -base64 24        # generate the cookie_secret and note it down (exactly 32 characters)
@@ -312,6 +314,13 @@ PANEL_BIND=192.168.1.10         # ← must change (the NAS LAN IP)
 PANEL_PORT=4100                 # ← may change (default 4100)
 
 TZ=Asia/Shanghai                # ← may change
+
+# --- Caddy: the NAS-side path split -----------------------------------------
+# Only the "Lucky + Caddy" layout needs it (see /en/install/reverse-proxy-lucky);
+# with the port layout or the two-domain layout delete these two lines together
+# with the caddy service in the compose file.
+CADDY_IMAGE=v6.gh-proxy.org/docker/caddy:2-alpine   # ← may change (another mirror prefix)
+CADDY_PORT=8444                                     # ← may change (confirmed free above)
 ```
 
 ::: warning Binding a specific IP means two places must change with it
@@ -442,26 +451,100 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Caddy: the NAS-side path split (only the Lucky layout of
+  # /en/install/reverse-proxy-lucky needs it)
+  # ---------------------------------------------------------------------------
+  # It serves plain HTTP only, the certificates live on the router; /admin* goes to
+  # the panel with the prefix intact and everything else goes to Headscale.
+  # With the port layout or the two-domain layout, delete this service together with
+  # the CADDY_* lines in .env.
+  caddy:
+    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← may change (proxy prefix from .env)
+    container_name: caddy
+    restart: unless-stopped
+
+    # Same as headscale and the panel: host networking — listen on the NAS itself and
+    # still reach 127.0.0.1 from inside. In host mode do not add a ports section.
+    network_mode: host
+
+    environment:
+      - "TZ=${TZ}"
+      - "CADDY_PORT=${CADDY_PORT:-8444}" # {$CADDY_PORT:8444} in the Caddyfile reads this
+
+    volumes:
+      - "${BASE_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" # the routing rules (next subsection)
+      - "${BASE_DIR}/caddy/data:/data"
+      - "${BASE_DIR}/caddy/config:/config"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
 
 ### What each mount does (one line each)
 
-| Mount                                                      | Purpose                                                                                                                               |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.yaml:/etc/headscale/config.yaml:ro` (headscale)    | Headscale's effective configuration, mounted read-only; the panel edits the same host file                                            |
-| `headscale:${BASE_DIR}/headscale` (headscale)              | The read-write home of the database, private keys, socket and maps; **the path is character-for-character the same as on the host**   |
-| `config.yaml:/etc/headplane/config.yaml:ro` (panel)        | HeadplaneCN's own configuration; read-only is enough                                                                                  |
-| `data:/var/lib/headplane` (panel)                          | HeadplaneCN's persisted data (sessions, internal database, snapshots, agent state)                                                    |
-| `headscale/config.yaml:/etc/headscale/config.yaml` (panel) | HeadplaneCN reads and writes Headscale's configuration here (system page, DERP page, ACL, …)                                          |
-| `headscale/derp-maps:${BASE_DIR}/.../derp-maps` (panel)    | Viewing/editing/saving DERP maps; Headscale reads that same file                                                                      |
-| `headscale:${BASE_DIR}/headscale:ro` (panel)               | The same absolute path, read-only: configuration checks and snapshots can see `db.sqlite`, the private keys and so on                 |
-| `/var/run/docker.sock` (panel)                             | Docker integration uses it to restart the Headscale container; `:ro` does not restrict socket traffic, so treat it as root-equivalent |
+| Mount                                                        | Purpose                                                                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.yaml:/etc/headscale/config.yaml:ro` (headscale)      | Headscale's effective configuration, mounted read-only; the panel edits the same host file                                            |
+| `headscale:${BASE_DIR}/headscale` (headscale)                | The read-write home of the database, private keys, socket and maps; **the path is character-for-character the same as on the host**   |
+| `config.yaml:/etc/headplane/config.yaml:ro` (panel)          | HeadplaneCN's own configuration; read-only is enough                                                                                  |
+| `data:/var/lib/headplane` (panel)                            | HeadplaneCN's persisted data (sessions, internal database, snapshots, agent state)                                                    |
+| `headscale/config.yaml:/etc/headscale/config.yaml` (panel)   | HeadplaneCN reads and writes Headscale's configuration here (system page, DERP page, ACL, …)                                          |
+| `headscale/derp-maps:${BASE_DIR}/.../derp-maps` (panel)      | Viewing/editing/saving DERP maps; Headscale reads that same file                                                                      |
+| `headscale:${BASE_DIR}/headscale:ro` (panel)                 | The same absolute path, read-only: configuration checks and snapshots can see `db.sqlite`, the private keys and so on                 |
+| `/var/run/docker.sock` (panel)                               | Docker integration uses it to restart the Headscale container; `:ro` does not restrict socket traffic, so treat it as root-equivalent |
+| `${BASE_DIR}/caddy/Caddyfile:ro` (caddy)                     | The path split rules; restart the caddy container after editing it                                                                    |
+| `${BASE_DIR}/caddy/data`, `${BASE_DIR}/caddy/config` (caddy) | Caddy's own runtime data (the certificates live on the router; this is just state)                                                    |
 
 ::: info The read-only data directory is deliberate
 HeadplaneCN's user is not Headscale's user. Mounting the data directory read-only makes the "database
 directory" item in the configuration check report **cannot verify write permission** — that is the
 expected result, not a fault.
 :::
+
+### Caddy's routing rules: `caddy/Caddyfile`
+
+Path: `/vol1/1000/APP/headplaneCN/caddy/Caddyfile` (**only the Lucky path-split layout needs it**). Copy it
+as-is and change the panel address in `reverse_proxy` to your `${PANEL_BIND}:${PANEL_PORT}`:
+
+```caddyfile
+{
+	# this container neither issues nor loads certificates (they live on the router)
+	auto_https off
+}
+
+:{$CADDY_PORT:8444} {
+	# opening the root path in a browser lands on the panel; clients never GET /
+	@browserRoot {
+		path /
+		header Accept *text/html*
+	}
+	redir @browserRoot /admin/ 302
+
+	handle /admin* {
+		reverse_proxy 192.168.1.10:4100 {        # ← change to ${PANEL_BIND}:${PANEL_PORT}
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8480 {           # ← leave as is (Headscale listens on 8480 on the same host)
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+```
+
+It does three things at once: `auto_https off` says the certificates live on the Lucky layer; `/admin*`
+reaches the panel **without rewriting the path** and tells it that the outside is HTTPS (otherwise
+`cookie_secure: true` breaks); the catch-all `handle` passes `/ts2021`, `/key`, `/register`, `/verify`,
+`/api/v1/*`, `/health` and `/derp` through unchanged, and `flush_interval -1` disables buffering so long
+connections survive. After editing the Caddyfile run `docker compose restart caddy`.
 
 ### Host networking restrictions
 
@@ -472,13 +555,14 @@ nor is it needed, since `127.0.0.1` inside the container already is the host.
 
 So the externally reachable ports are decided entirely by what is listening inside the containers:
 
-| Port        | Who is listening          | How it is exposed                                                                                                                |
-| ----------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `tcp/8480`  | Headscale control service | The reverse proxy points at `127.0.0.1:8480` (both the control paths and `/derp` are on this port)                               |
-| `tcp/8481`  | Headscale metrics         | Listens only on `127.0.0.1` by default; do not publish it to the internet                                                        |
-| `tcp/50443` | gRPC (`grpc_listen_addr`) | Listens only on `127.0.0.1` by default, for the local `headscale` CLI; no external exposure needed                               |
-| `udp/3478`  | STUN of the embedded DERP | Open `udp/3478` straight to this NAS on the router/firewall; it **cannot** go through an HTTP reverse proxy                      |
-| `tcp/4100`  | HeadplaneCN               | The reverse proxy points at `${PANEL_BIND}:${PANEL_PORT}` (the default is `4100`; if you change it, change the backend to match) |
+| Port        | Who is listening            | How it is exposed                                                                                                                |
+| ----------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `tcp/8480`  | Headscale control service   | The reverse proxy points at `127.0.0.1:8480` (both the control paths and `/derp` are on this port)                               |
+| `tcp/8481`  | Headscale metrics           | Listens only on `127.0.0.1` by default; do not publish it to the internet                                                        |
+| `tcp/50443` | gRPC (`grpc_listen_addr`)   | Listens only on `127.0.0.1` by default, for the local `headscale` CLI; no external exposure needed                               |
+| `udp/3478`  | STUN of the embedded DERP   | Open `udp/3478` straight to this NAS on the router/firewall; it **cannot** go through an HTTP reverse proxy                      |
+| `tcp/4100`  | HeadplaneCN                 | The reverse proxy points at `${PANEL_BIND}:${PANEL_PORT}` (the default is `4100`; if you change it, change the backend to match) |
+| `tcp/8444`  | Caddy (NAS-side path split) | The router forwards HTTPS here; Caddy does no TLS itself (plain HTTP), see /en/install/reverse-proxy-lucky                       |
 
 > This page uses `8480 / 8481` (the historical ports of many fnOS native installs); the official
 > defaults are `8080 / 9090`. Either pair works, as long as you are **consistent all the way
@@ -495,7 +579,7 @@ to `127.0.0.1` is safer; in either case, never expose `tcp/4100` directly to the
 cd /vol1/1000/APP/headplaneCN
 docker compose config --quiet        # are the syntax and every variable in place? (no output means yes)
 docker compose up -d
-docker compose ps                    # both services should be Up (healthy)
+docker compose ps                    # all three services should be Up (healthy) (no caddy in the port / two-domain layout)
 
 docker compose logs headscale | tail -n 50
 # expect: version=v0.29.4, DB opened at …/headscale/db.sqlite,
@@ -509,6 +593,7 @@ docker compose logs headplaneCN | tail -n 50
 #         Found a valid Headscale configuration file at /etc/headscale/config.yaml,
 #         Using Docker integration, Listening on http://192.168.1.10:4100
 curl -s http://192.168.1.10:4100/admin/healthz    # {"status":"OK"}
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8444/admin/   # 302 (Caddy is up; port comes from .env)
 ```
 
 Open `http://192.168.1.10:4100/admin` in a browser and log in with the API key from section 2. Go to
@@ -517,7 +602,8 @@ the Headscale container (the log shows `Found container` / the container restart
 
 ::: tip Next step: publishing it to the internet
 The containers only listen on the LAN; reaching them from outside needs a reverse proxy on top (TLS
-terminates there). How to fill it in is in
+terminates there). This compose file already ships Caddy (section 6), so the Lucky layer only owns TLS
+and the ports; the two ends meet in
 [Lucky reverse proxy](/en/install/reverse-proxy-lucky); domains, certificates and the port plan are in
 [Domains & access](/en/install/domains). Two things to remember: the proxy must pass paths through
 **unchanged** (`/key`, `/ts2021`, `/api/v1/*`, `/health`), and `udp/3478` (STUN) **cannot** go through

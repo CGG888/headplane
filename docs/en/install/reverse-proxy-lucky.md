@@ -78,18 +78,31 @@ ss -lntp | grep -E ':8443|:8444'
 
 ## 2. Install Caddy on the NAS
 
+Caddy **does not need a stack of its own**: the native-mode (`/en/install/fnos`) and dual-image
+(`/en/install/dual-image`) compose files already define the `caddy` service and the `.env` already carries
+`CADDY_IMAGE` / `CADDY_PORT`, and `scripts/dual-image-install.sh` generates all of it. **If you installed
+from one of those pages, only one thing is left here**: write the `caddy/Caddyfile` from section 3 and
+bring the service up:
+
+```bash
+mkdir -p /vol1/1000/APP/headplaneCN/caddy
+cd /vol1/1000/APP/headplaneCN
+docker compose up -d caddy
+```
+
+::: info The standalone stack below still works
+Keeping Caddy in `/vol1/1000/APP/caddy/` on its own is equivalent to merging it into the panel's compose
+file; it is worth it when you want to restart or back up Caddy separately.
+:::
+
 ::: tip Rather not run one more container?
 Then skip path routing and use **layout B (one domain + two ports)** or **layout C (two domains)** from
 [Domains and access](/en/install/domains): two Lucky sub-rules are enough and no Caddy is needed. The
 price is that the panel is no longer hidden under `/admin`, and layout C needs a second certificate.
 :::
 
-```bash
-mkdir -p /vol1/1000/APP/caddy
-cd /vol1/1000/APP/caddy
-```
-
-**① `.env`** (`/vol1/1000/APP/caddy/.env`) — two values only; changing the mirror or the port edits this one file:
+**① `.env`** (in the merged layout it is `/vol1/1000/APP/headplaneCN/.env`, in the standalone stack
+`/vol1/1000/APP/caddy/.env`) — two values only; changing the mirror or the port edits this one file:
 
 ```bash
 # A direct connection to registry-1.docker.io usually does not work in mainland China; this line is the mirror proxy prefix
@@ -127,7 +140,8 @@ It does not need it, and mounting it hands out root on the NAS. The Caddy on thi
 
 ## 3. Caddyfile {#path-routing}
 
-Path: `/vol1/1000/APP/caddy/Caddyfile`. This is the file that **only splits plain HTTP**; copy it as-is:
+Path: in the merged layout `/vol1/1000/APP/headplaneCN/caddy/Caddyfile` (in the standalone stack
+`/vol1/1000/APP/caddy/Caddyfile`). This is the file that **only splits plain HTTP**; copy it as-is:
 
 ```caddyfile
 {
@@ -168,10 +182,10 @@ cut.
 ## 4. Start it and check it yourself
 
 ```bash
-cd /vol1/1000/APP/caddy
-docker compose up -d
+cd /vol1/1000/APP/headplaneCN         # the standalone stack uses /vol1/1000/APP/caddy
+docker compose up -d caddy
 
-docker compose ps                     # expect: caddy is running / Up
+docker compose ps caddy               # expect: caddy is running / Up
 docker compose logs caddy --tail=30   # expect: serving ... on :8444, no error
 ss -lntp | grep 8444                  # expect: *:8444 (both v4 and v6 are listening)
 ```

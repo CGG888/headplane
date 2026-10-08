@@ -161,6 +161,9 @@ invalid values` 退出。`openssl rand -base64 24` 正好生成 32 字符，别�
 
 路径：`/vol1/1000/APP/headplaneCN/docker-compose.yml`
 
+路径：`/vol1/1000/APP/headplaneCN/caddy/Caddyfile`（只做明文路径分流，**只有 Lucky 方案需要**，见
+[Lucky 反向代理](/install/reverse-proxy-lucky)）
+
 ```yaml
 services:
   headplane:
@@ -198,11 +201,65 @@ services:
         retries: 3,
       }
     logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
+
+  # ---------------------------------------------------------------------------
+  # Caddy：NAS 内的路径分流（只有 Lucky 方案需要）
+  # ---------------------------------------------------------------------------
+  # 跟面板在同一个 compose 文件里，不需要第二个目录、第二个栈；用端口方案或多域名方案时整段删掉。
+  caddy:
+    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← 可改（镜像代理前缀）
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host # ← 别动（host 模式不能再写 ports；容器内用 127.0.0.1 回源头原生 Headscale）
+    environment:
+      - "TZ=Asia/Shanghai" # ← 可改
+      - "CADDY_PORT=8444" # ← 可改（Caddyfile 里的 {$CADDY_PORT:8444} 读的就是它）
+    volumes:
+      - "/vol1/1000/APP/headplaneCN/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" # ← 可改：分流规则
+      - "/vol1/1000/APP/headplaneCN/caddy/data:/data"
+      - "/vol1/1000/APP/headplaneCN/caddy/config:/config"
+    logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
 ```
 
 本形态不挂 `/var/run/docker.sock`（headscale 是原生进程，面板从不重启容器）。`HEADPLANE_*` 环境变量会
 覆盖 `config.yaml`，两处写同样的值不会冲突；但数组型配置项（如 `allowed_action_origins`）**不支持**
 环境变量，只能写在 `config.yaml` 里。
+
+### `caddy/Caddyfile`（路径分流规则）
+
+Caddy 只监听明文 HTTP，证书在路由器那层。`/admin` 开头的请求原样转给面板，其余全部转给原生
+Headscale（`127.0.0.1:8480`）。照抄即可，只需把面板地址改成你的 NAS 局域网 IP：
+
+```caddyfile
+{
+	# 这个容器不签发也不加载证书（证书在路由器那一层）
+	auto_https off
+}
+
+:{$CADDY_PORT:8444} {
+	# 浏览器打开根路径时进面板；客户端从不用 GET /
+	@browserRoot {
+		path /
+		header Accept *text/html*
+	}
+	redir @browserRoot /admin/ 302
+
+	handle /admin* {
+		reverse_proxy 192.168.1.10:4100 {        # ← 改成 NAS 的局域网 IP（面板端口 4100 一般别动）
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8480 {           # ← 别动（原生 Headscale 就监听在同一台机器的 8480）
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+```
+
+改完 Caddyfile 要 `docker compose restart caddy` 才生效。
 
 ::: warning 官方镜像没有 shell
 `docker compose exec headplane sh` 会失败：镜像是 distroless，`/bin/sh` 是个假 shell（退出码 127，提示
@@ -222,6 +279,7 @@ docker compose logs headplane | grep -i 'Found headscale serve'   # 期望 Found
 docker compose logs headplane | grep -iE 'Agent|Tailnet'
 #    期望：Connecting to Tailnet at http://127.0.0.1:8480 as headplane-agent
 curl -I http://192.168.1.10:4100/admin                # 本地面板能应答
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8444/admin/   # 302（Caddy 已起，端口按 compose）
 ```
 
 浏览器打开 `http://192.168.1.10:4100/admin`，用第二节的 API Key 登录。登录后导航栏应有

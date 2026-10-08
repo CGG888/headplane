@@ -71,18 +71,30 @@ ss -lntp | grep -E ':8443|:8444'
 
 ## 二、在 NAS 上装 Caddy
 
+Caddy **不需要单独一个栈**：[原生模式](/install/fnos) 与 [双镜像模式](/install/dual-image) 的
+`docker-compose.yml` 里都已经写好 `caddy` 服务，`.env` 里也已经有 `CADDY_IMAGE` / `CADDY_PORT` 两行，
+安装脚本 `scripts/dual-image-install.sh` 也会直接生成。**如果照那两页装，本节只剩一件事**：写第三节的
+`caddy/Caddyfile`，然后把它拉起来：
+
+```bash
+mkdir -p /vol1/1000/APP/headplaneCN/caddy
+cd /vol1/1000/APP/headplaneCN
+docker compose up -d caddy
+```
+
+::: info 下面这套「独立栈」写法仍然有效
+把 Caddy 单独放在 `/vol1/1000/APP/caddy/` 与合并在面板 compose 里完全等价，适合想单独重启、单独备份
+Caddy 的场景；合并不方便时才用它。
+:::
+
 ::: tip 不想再装一个容器？
 那就别用路径分流，改用[域名与访问方式](/install/domains)里的**方案 B（一个域名 + 两个端口）**
 或**方案 C（多域名）**：只用 Lucky 的**两条子规则**，不需要 Caddy。代价是面板不再藏在 `/admin`
 下，方案 C 还要多一张证书。
 :::
 
-```bash
-mkdir -p /vol1/1000/APP/caddy
-cd /vol1/1000/APP/caddy
-```
-
-**① `.env`**（`/vol1/1000/APP/caddy/.env`）—— 只放两个值，换代理 / 换端口都只改这里：
+**① `.env`**（合并写法是 `/vol1/1000/APP/headplaneCN/.env`，独立栈是 `/vol1/1000/APP/caddy/.env`）
+—— 只放两个值，换代理 / 换端口都只改这里：
 
 ```bash
 # 国内直连 registry-1.docker.io 通常不通，这一行是镜像代理前缀
@@ -119,7 +131,8 @@ services:
 
 ## 三、Caddyfile {#路径分流}
 
-路径：`/vol1/1000/APP/caddy/Caddyfile`。这就是**只做明文 HTTP 分流**的那份，照抄即可：
+路径：合并写法是 `/vol1/1000/APP/headplaneCN/caddy/Caddyfile`（独立栈则是
+`/vol1/1000/APP/caddy/Caddyfile`）。这就是**只做明文 HTTP 分流**的那份，照抄即可：
 
 ```caddyfile
 {
@@ -158,10 +171,10 @@ services:
 ## 四、启动与自检
 
 ```bash
-cd /vol1/1000/APP/caddy
-docker compose up -d
+cd /vol1/1000/APP/headplaneCN         # 独立栈则是 /vol1/1000/APP/caddy
+docker compose up -d caddy
 
-docker compose ps                     # 期望：caddy 是 running / Up
+docker compose ps caddy               # 期望：caddy 是 running / Up
 docker compose logs caddy --tail=30   # 期望：有 serving ... on :8444，没有 error
 ss -lntp | grep 8444                  # 期望：*:8444（v4 与 v6 都在听）
 ```

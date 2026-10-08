@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **Caddy ships with the panel in both NAS layouts.** The native-mode (`/install/fnos`) and dual-image (`/install/dual-image`) compose files now define the `caddy` service and carry the `CADDY_IMAGE` / `CADDY_PORT` lines in `.env`, so the Lucky route no longer needs a second stack under `/vol1/1000/APP/caddy`: the Caddyfile lives in `caddy/` next to the panel, `/install/reverse-proxy-lucky` documents the merged layout first and `scripts/dual-image-install.sh` generates the service, the `.env` keys and the Caddyfile.
+
 # 0.22.23 (October 8, 2026)
 
 ## Changes

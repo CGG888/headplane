@@ -169,6 +169,9 @@ Headscale config` and exits immediately. Set both or neither.
 
 Path: `/vol1/1000/APP/headplaneCN/docker-compose.yml`
 
+Path: `/vol1/1000/APP/headplaneCN/caddy/Caddyfile` (plain-HTTP path split, **only the Lucky layout needs
+it**, see [Lucky reverse proxy](/en/install/reverse-proxy-lucky))
+
 ```yaml
 services:
   headplane:
@@ -207,11 +210,67 @@ services:
         retries: 3,
       }
     logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
+
+  # ---------------------------------------------------------------------------
+  # Caddy: the NAS-side path split (only the Lucky layout needs it)
+  # ---------------------------------------------------------------------------
+  # It lives in this same compose file: no second directory, no second stack. Delete this
+  # whole service with the port or two-domain layout.
+  caddy:
+    image: "${CADDY_IMAGE:-v6.gh-proxy.org/docker/caddy:2-alpine}" # ← may change (mirror prefix)
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host # ← leave as is (no ports with host networking; 127.0.0.1 reaches the native Headscale)
+    environment:
+      - "TZ=Asia/Shanghai" # ← may change
+      - "CADDY_PORT=8444" # ← may change ({$CADDY_PORT:8444} in the Caddyfile reads this)
+    volumes:
+      - "/vol1/1000/APP/headplaneCN/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" # ← may change: the routing rules
+      - "/vol1/1000/APP/headplaneCN/caddy/data:/data"
+      - "/vol1/1000/APP/headplaneCN/caddy/config:/config"
+    logging: { driver: "json-file", options: { max-size: "10m", max-file: "3" } }
 ```
 
 This shape does not mount `/var/run/docker.sock` (headscale is a host process; the panel never restarts
 containers). `HEADPLANE_*` variables override `config.yaml`; array-valued options (such as
 `allowed_action_origins`) **cannot** be set from the environment and belong in `config.yaml`.
+
+### `caddy/Caddyfile` (the path-split rules)
+
+Caddy serves plain HTTP only; the certificates live on the router. Requests starting with `/admin` go to
+the panel unchanged and everything else goes to the native Headscale (`127.0.0.1:8480`). Copy it as-is and
+only change the panel address to your NAS LAN IP:
+
+```caddyfile
+{
+	# this container neither issues nor loads certificates (they live on the router)
+	auto_https off
+}
+
+:{$CADDY_PORT:8444} {
+	# opening the root path in a browser lands on the panel; clients never GET /
+	@browserRoot {
+		path /
+		header Accept *text/html*
+	}
+	redir @browserRoot /admin/ 302
+
+	handle /admin* {
+		reverse_proxy 192.168.1.10:4100 {        # ← change to the NAS LAN IP (panel port 4100 stays)
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8480 {           # ← leave as is (the native Headscale listens on 8480 on this host)
+			flush_interval -1
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+```
+
+After editing the Caddyfile run `docker compose restart caddy`.
 
 ::: warning The official image has no shell
 `docker compose exec headplane sh` fails: the image is distroless and `/bin/sh` is a stub (exit code 127)
@@ -232,6 +291,7 @@ docker compose logs headplane | grep -i 'Found headscale serve'   # expect: Foun
 docker compose logs headplane | grep -iE 'Agent|Tailnet'
 #    expect: Connecting to Tailnet at http://127.0.0.1:8480 as headplane-agent
 curl -I http://192.168.1.10:4100/admin                # the local panel answers
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8444/admin/   # 302 (Caddy is up; port comes from the compose file)
 ```
 
 Open `http://192.168.1.10:4100/admin` in a browser and log in with the API key from section 2. The navigation
