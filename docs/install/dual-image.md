@@ -240,6 +240,12 @@ integration:
     executable_path: "/usr/libexec/headplane/agent" # ← 别动（镜像里 Agent 的实际路径）
 ```
 
+::: tip 想要一份「全字段」模板？
+仓库根目录就有 [`config.example.yaml`](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)
+（`pnpm run dev:app` 用的就是它，每个键都带注释，含 OIDC、Kubernetes、`proxy_auth` 等本文没展开的键）。
+上面这段只是为了跑起来的最小子集，没写的键一律走默认值。
+:::
+
 ::: danger `cookie_secret` 必须正好 32 个字符
 校验写死了长度等于 32；多了少了容器都会带着
 `The configuration is missing required fields or has invalid values` 退出。

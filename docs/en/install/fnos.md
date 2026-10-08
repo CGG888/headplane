@@ -147,6 +147,12 @@ integration:
 # proxy_auth: { enabled: true, user_header: "Remote-User", trusted_proxy_cidrs: ["127.0.0.1/32"] }
 ```
 
+::: tip Want the full-field template?
+The repository root ships [`config.example.yaml`](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)
+(the file `pnpm run dev:app` uses; every key is commented, including OIDC, Kubernetes and `proxy_auth`).
+The snippet above is only the minimum needed to boot — any key you leave out falls back to its default.
+:::
+
 ::: danger `cookie_secret` must be exactly 32 characters
 The length check is hard-coded to 32; anything shorter or longer makes the container exit with
 `The configuration is missing required fields or has invalid values`. `openssl rand -base64 24` produces

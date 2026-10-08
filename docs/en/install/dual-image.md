@@ -257,6 +257,12 @@ integration:
     executable_path: "/usr/libexec/headplane/agent" # ← do not touch (where the agent actually lives in the image)
 ```
 
+::: tip Want the full-field template?
+The repository root ships [`config.example.yaml`](https://github.com/CGG888/headplaneCN/blob/main/config.example.yaml)
+(the file `pnpm run dev:app` uses; every key is commented, including OIDC, Kubernetes and `proxy_auth`).
+The snippet above is only the minimum needed to boot — any key you leave out falls back to its default.
+:::
+
 ::: danger `cookie_secret` must be exactly 32 characters
 The validation hard-codes a length of 32; anything else and the container exits with
 `The configuration is missing required fields or has invalid values`.
