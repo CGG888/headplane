@@ -2112,6 +2112,31 @@ const zhHans = {
           "在同一次保存中清空 derp.urls，客户端只会获得你在这里运行的中继。",
         presetClearMapWarning:
           "去掉公开地图后，内嵌服务器会成为唯一的中继：一旦它不可达，客户端之间就无法通过 DERP 互联。请确保客户端能访问它的 TCP 443（DERP over HTTPS）和 UDP 3478（STUN）。",
+        mapFreshness: {
+          title: "远程地图新鲜度",
+          body: "上方每个 DERP 地图 URL 上次是什么时候获取的、Headscale 自己的更新器下次什么时候再获取。这些结果按进程缓存并与区域列表共用，所以这里显示的就是当前页面上那份地图的年龄；上次获取失败的 URL 也会列出，因为只看空的区域列表分不清这两种情况。",
+          status: {
+            one: "{count} 个地图 URL",
+            other: "{count} 个地图 URL",
+          },
+          never: "本进程还没有获取过这个 URL。下次查询或点「立即刷新」就会获取。",
+          fetchedAt: "获取于 {at}（{ago}）",
+          attemptedAt: "上次尝试 {at}（{ago}）",
+          nextRefresh: "下次获取 {in}",
+          stale: "已到刷新时间",
+          regions: {
+            one: "{count} 个区域",
+            other: "{count} 个区域",
+          },
+          failureTimeout: "获取超时",
+          failureNetwork: "连接失败",
+          failureStatus: "状态码错误",
+          failureTooLarge: "地图超出大小限制",
+          failureUnreadable: "不是可读的 DERP 地图",
+          empty: "没有配置任何远程 DERP 地图 URL，暂时没有可获取的内容。",
+          refreshNow: "立即刷新",
+          refreshing: "刷新中…",
+        },
         mirror: {
           title: "官方区域节点筛选",
           intro:

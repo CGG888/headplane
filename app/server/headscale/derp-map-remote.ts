@@ -137,6 +137,8 @@ export interface RemoteDerpMapOptions {
 interface CacheEntry {
   /** The last answer, with the regions absent and a reason set when it failed. */
   outcome: RemoteDerpMapOutcome;
+  /** When that answer arrived, so a card can say how old the map on screen is. */
+  fetchedAt: number;
   expiresAt: number;
 }
 
@@ -183,6 +185,56 @@ export function clearRemoteDerpMapCache(): void {
   cache.clear();
   inFlight.clear();
   generation += 1;
+}
+
+/**
+ * What this process remembers about one remote map, as plain values the page can
+ * render. The times are epoch milliseconds; `fresh` says whether a lookup right
+ * now would reuse the answer instead of dialling again.
+ */
+export interface RemoteDerpMapCacheStatus {
+  /** When the last answer arrived. */
+  fetchedAt: number;
+  /** When that answer stops being reused. */
+  expiresAt: number;
+  fresh: boolean;
+  /** Present when the last answer described regions. */
+  regionCount?: number;
+  /** Present when the last answer failed, in the codes the cards already show. */
+  reason?: RemoteDerpMapFailure;
+}
+
+/**
+ * Reads the cache without fetching anything, for the freshness card: the map a
+ * card renders is whatever the last lookup left here, and this is the only way
+ * to say how old that is. `undefined` means nothing was fetched for the URL in
+ * this process — a cache cleared by a write reads the same way until the next
+ * lookup fills it.
+ */
+export function readRemoteDerpMapCache(
+  url: string,
+  now: number = Date.now(),
+): RemoteDerpMapCacheStatus | undefined {
+  const entry = cache.get(url.trim());
+  if (entry === undefined) {
+    return undefined;
+  }
+
+  const status: RemoteDerpMapCacheStatus = {
+    fetchedAt: entry.fetchedAt,
+    expiresAt: entry.expiresAt,
+    fresh: entry.expiresAt > now,
+  };
+
+  if (entry.outcome.regions === undefined) {
+    if (entry.outcome.reason !== undefined) {
+      status.reason = entry.outcome.reason;
+    }
+  } else {
+    status.regionCount = entry.outcome.regions.length;
+  }
+
+  return status;
 }
 
 interface ResolvedOptions {
@@ -384,9 +436,11 @@ export async function loadRemoteDerpMapOutcome(
   const started = (async () => {
     const outcome = await downloadDerpMap(trimmed, deps);
     if (generation === startedGeneration) {
+      const now = deps.now();
       rememberOutcome(trimmed, {
         outcome,
-        expiresAt: deps.now() + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
+        fetchedAt: now,
+        expiresAt: now + (outcome.regions === undefined ? deps.failureTtlMs : deps.ttlMs),
       });
     }
 

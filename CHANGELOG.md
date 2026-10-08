@@ -1,5 +1,9 @@
 # Next
 
+## Changes
+
+- **The DERP tab now says when each remote map was fetched, and can fetch it again on demand.** The remote maps that get merged into the region table come from `derp.urls`, and the table itself cannot say whether it is showing a map that answered a minute ago or one this process cached hours earlier — a source whose last fetch failed looked exactly like a source that is simply not in use. A new card lists every configured URL with the time its answer arrived and how long ago that was, when the cached entry is fetched again, and the reason when the last attempt failed. **Refresh now** clears the cached answers and dials every URL again, which picks up a map that changed without waiting for `derp.update_frequency` or restarting Headscale.
+
 ## Fixes
 
 - **A DERP change Headscale did not pick up now says which step failed.** When a DERP tab saved something and the configured integration could not reload or restart Headscale, the notice on the page only said that Headscale had not come back healthy and pointed at the HeadplaneCN logs. It now names the step that failed — no running process found, not allowed to signal it, the process did not stop in time, it stopped but did not start again — using the same wording as Settings → System, so the next thing to do is usually obvious from the notice itself.

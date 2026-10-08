@@ -59,7 +59,10 @@ import {
 import { getLastDerpRefresh } from "~/server/derp-refresh";
 import { inspectDerpMapFiles } from "~/server/headscale/derp-map-files";
 import type { DerpMapRegionDetail } from "~/server/headscale/derp-map-nodes";
-import { loadRemoteDerpMapOutcome } from "~/server/headscale/derp-map-remote";
+import {
+  loadRemoteDerpMapOutcome,
+  readRemoteDerpMapCache,
+} from "~/server/headscale/derp-map-remote";
 import { readDerpRegionNames } from "~/server/headscale/derp-region-names";
 import { nodesResource } from "~/server/headscale/live-store";
 import {
@@ -72,6 +75,7 @@ import { Capabilities } from "~/server/web/roles";
 import type { Route } from "./+types/overview";
 import { headscaleSettingsAction } from "./actions";
 import AdvancedSettings from "./components/advanced-settings";
+import DerpMapFreshness from "./components/derp-map-freshness";
 import DerpRegionMirror from "./components/derp-region-mirror";
 import DerpRegionNames from "./components/derp-region-names";
 import DerpSettings from "./components/derp-settings";
@@ -386,6 +390,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       ),
       paths: [...derp.paths],
     },
+    // What this process has cached for every configured remote map, so the DERP
+    // tab can date the map it is showing and fetch it again on demand. A URL
+    // nothing has fetched yet has no entry, and a write clears the answers until
+    // the next lookup fills them in.
+    mapFreshness: derp.urls.map((url) => {
+      const cache = readRemoteDerpMapCache(url);
+      return cache === undefined ? { url } : { url, cache };
+    }),
     oidc: headscaleConfig.getOIDCSettings() ?? null,
     advanced: headscaleConfig.getAdvancedSettings(),
     derp,
@@ -443,6 +455,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     advanced,
     derp,
     derpMapFiles,
+    mapFreshness,
     overview,
     derpRegionNames,
     derpPrivateKeyDefault,
@@ -650,6 +663,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             relaySourceSummary={relaySourceSummary}
             settings={derp}
           />
+          <DerpMapFreshness entries={mapFreshness} isDisabled={!access} />
           <DerpSyncSettings
             echo={derpSync.hostEcho}
             isDisabled={isDisabled}

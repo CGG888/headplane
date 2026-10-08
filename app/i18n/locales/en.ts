@@ -2258,6 +2258,32 @@ const en = {
           "Clears derp.urls in the same save, so clients are handed only the relay you run here.",
         presetClearMapWarning:
           "Without the public map, your embedded server becomes the only relay: if it is down or unreachable, clients cannot reach each other over DERP. Make sure clients can reach it on TCP 443 (DERP over HTTPS) and UDP 3478 (STUN).",
+        mapFreshness: {
+          title: "Remote map freshness",
+          body: "When each DERP map URL above was last fetched, and when Headscale's own updater fetches it again. The answers are cached per process and shared with the region table, so this is the age of the map the page is showing; a URL whose last attempt failed is listed too, because an empty region table cannot tell the two apart.",
+          status: {
+            one: "{count} map URL",
+            other: "{count} map URLs",
+          },
+          never:
+            "Nothing fetched this URL in this process yet. The next lookup, or Refresh now, fetches it.",
+          fetchedAt: "Fetched {at} ({ago})",
+          attemptedAt: "Last attempt {at} ({ago})",
+          nextRefresh: "Next fetch {in}",
+          stale: "Refresh due",
+          regions: {
+            one: "{count} region",
+            other: "{count} regions",
+          },
+          failureTimeout: "fetch timed out",
+          failureNetwork: "connection failed",
+          failureStatus: "bad status",
+          failureTooLarge: "map too large",
+          failureUnreadable: "not a DERP map",
+          empty: "No remote DERP map URLs are configured, so there is nothing to fetch.",
+          refreshNow: "Refresh now",
+          refreshing: "Refreshing…",
+        },
         mirror: {
           title: "Official region filter",
           intro:

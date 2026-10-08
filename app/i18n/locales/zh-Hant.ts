@@ -2111,6 +2111,31 @@ const zhHant = {
           "在同一次儲存中清空 derp.urls，用戶端只會取得你在這裡執行的中繼。",
         presetClearMapWarning:
           "移除公開地圖後，內嵌伺服器會成為唯一的中繼：一旦它無法連線，用戶端之間就無法透過 DERP 互通。請確認用戶端能存取它的 TCP 443（DERP over HTTPS）與 UDP 3478（STUN）。",
+        mapFreshness: {
+          title: "遠端地圖新鮮度",
+          body: "上方每個 DERP 地圖 URL 上次是什麼時候取得的、Headscale 自己的更新器下次什麼時候再取得。這些結果按行程快取並與區域清單共用，所以這裡顯示的就是目前頁面上那份地圖的年齡；上次取得失敗的 URL 也會列出，因為只看空的區域清單分不清這兩種情況。",
+          status: {
+            one: "{count} 個地圖 URL",
+            other: "{count} 個地圖 URL",
+          },
+          never: "本行程還沒有取得過這個 URL。下次查詢或點「立即重新整理」就會取得。",
+          fetchedAt: "取得於 {at}（{ago}）",
+          attemptedAt: "上次嘗試 {at}（{ago}）",
+          nextRefresh: "下次取得 {in}",
+          stale: "已到重新整理時間",
+          regions: {
+            one: "{count} 個區域",
+            other: "{count} 個區域",
+          },
+          failureTimeout: "取得逾時",
+          failureNetwork: "連線失敗",
+          failureStatus: "狀態碼錯誤",
+          failureTooLarge: "地圖超出大小限制",
+          failureUnreadable: "不是可讀的 DERP 地圖",
+          empty: "沒有設定任何遠端 DERP 地圖 URL，暫時沒有可取得的內容。",
+          refreshNow: "立即重新整理",
+          refreshing: "重新整理中…",
+        },
         mirror: {
           title: "官方區域節點篩選",
           intro:

@@ -35,6 +35,7 @@ import {
   parseDerpSyncIntervalHours,
 } from "~/server/derp-sync/settings";
 import { restoreDerpMapFile, saveDerpMapFile } from "~/server/headscale/derp-map-files";
+import { loadRemoteDerpMapOutcome } from "~/server/headscale/derp-map-remote";
 import {
   DERP_REGION_NAMES_SNAPSHOT_REASON,
   mergeMissingDerpRegionNames,
@@ -109,6 +110,7 @@ const READ_ONLY_TOLERANT_ACTIONS = new Set([
   "clear_derp_mirror_paste",
   "check_derp_mirror",
   "run_derp_mirror",
+  "refresh_derp_maps",
   "reassign_derp_mirror",
   "probe_derp_latency",
   "derp_latency_probe_status",
@@ -1046,6 +1048,24 @@ export async function headscaleSettingsAction({ request, context }: Route.Action
         mirror: run,
         ...(pathReport === undefined ? {} : { mirrorPath: pathReport }),
       } satisfies HeadscaleSettingsSuccess);
+    }
+
+    case "refresh_derp_maps": {
+      // The freshness card's "Refresh now": drop every cached answer and dial
+      // each configured URL again, so the region table stops showing a map that
+      // changed since it was fetched. Nothing in Headscale's configuration
+      // changes, which is why a read-only configuration is not refused, and the
+      // reload the page does afterwards re-reads the answers this just stored.
+      const derpSettings = headscaleConfig.getDERPSettings();
+      invalidateDerpData();
+
+      const cache = {
+        autoUpdateEnabled: derpSettings.autoUpdateEnabled,
+        updateFrequency: derpSettings.updateFrequency,
+      };
+      await Promise.all(derpSettings.urls.map((url) => loadRemoteDerpMapOutcome(url, cache)));
+
+      return success();
     }
 
     case "reassign_derp_mirror": {

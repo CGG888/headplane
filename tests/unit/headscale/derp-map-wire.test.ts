@@ -13,6 +13,7 @@ import {
   loadRemoteDerpMap,
   loadRemoteDerpMapDetail,
   loadRemoteDerpMapOutcome,
+  readRemoteDerpMapCache,
   type DerpMapFetch,
   type DerpMapResponse,
 } from "~/server/headscale/derp-map-remote";
@@ -428,5 +429,58 @@ describe("remote reading of a wire-format official map", () => {
     now += 5 * 60 * 1000;
     await loadRemoteDerpMapOutcome("https://example.com/down.yaml", SETTINGS, options);
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe("readRemoteDerpMapCache", () => {
+  test("dates a stored map and says when it goes stale, without fetching", async () => {
+    const url = "https://example.com/fresh.yaml";
+    const { calls, fetch } = countingFetch(WIRE_EXCERPT);
+
+    await loadRemoteDerpMapOutcome(url, SETTINGS, { fetch, now: () => 1_000_000 });
+
+    const status = readRemoteDerpMapCache(url, 1_000_000);
+    expect(status?.fetchedAt).toBe(1_000_000);
+    expect(status?.fresh).toBe(true);
+    expect(status?.regionCount).toBe(2);
+    expect(status?.reason).toBeUndefined();
+
+    // Reading the status never dials: the card must be able to date a map that
+    // is already on screen.
+    expect(calls).toHaveLength(1);
+
+    // A second lookup inside the window answers from the cache, so the time the
+    // map actually arrived does not move.
+    await loadRemoteDerpMapOutcome(url, SETTINGS, { fetch, now: () => 1_500_000 });
+    expect(readRemoteDerpMapCache(url, 1_500_000)?.fetchedAt).toBe(1_000_000);
+
+    // The entry goes stale exactly when its TTL runs out.
+    const expiresAt = status?.expiresAt ?? 0;
+    expect(readRemoteDerpMapCache(url, expiresAt - 1)?.fresh).toBe(true);
+    expect(readRemoteDerpMapCache(url, expiresAt)?.fresh).toBe(false);
+  });
+
+  test("keeps a failure's reason, and only a failure has one", async () => {
+    const url = "https://example.com/broken.yaml";
+    const { fetch } = countingFetch("", 503);
+
+    await loadRemoteDerpMapOutcome(url, SETTINGS, { fetch, now: () => 2_000 });
+
+    const status = readRemoteDerpMapCache(url, 2_000);
+    expect(status?.reason).toBe("status");
+    expect(status?.regionCount).toBeUndefined();
+    expect(status?.fresh).toBe(true);
+  });
+
+  test("knows nothing about a URL that was never fetched, and forgets on a write", async () => {
+    const url = "https://example.com/never.yaml";
+    expect(readRemoteDerpMapCache(url)).toBeUndefined();
+
+    const { fetch } = countingFetch(WIRE_EXCERPT);
+    await loadRemoteDerpMapOutcome(url, SETTINGS, { fetch, now: () => 3_000 });
+    expect(readRemoteDerpMapCache(url, 3_000)?.regionCount).toBe(2);
+
+    clearRemoteDerpMapCache();
+    expect(readRemoteDerpMapCache(url, 3_000)).toBeUndefined();
   });
 });
